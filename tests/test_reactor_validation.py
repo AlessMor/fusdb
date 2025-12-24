@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from fusiondb.geometry import plasma_surface_area, plasma_volume
-from fusiondb.loader import load_reactor_yaml
+from fusdb.geometry import plasma_surface_area, plasma_volume
+from fusdb.loader import load_reactor_yaml
 
 
 def test_missing_required_metadata_raises(tmp_path: Path) -> None:

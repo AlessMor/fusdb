@@ -2,7 +2,7 @@ import math
 from pathlib import Path
 import pytest
 
-from fusiondb.loader import find_reactor_dirs, load_all_reactors, load_reactor_yaml
+from fusdb.loader import find_reactor_dirs, load_all_reactors, load_reactor_yaml
 
 
 def _write_sample_reactor(tmp_path: Path) -> Path:

@@ -1,5 +1,5 @@
 # fusdb
-FusionDB is a small toolkit for storing and validating fusion reactor scenarios. Each scenario is described by a `reactor.yaml` containing metadata plus grouped parameters (geometry, plasma, power, etc.) and optional artifacts (e.g., profile files). Relations encoded in Python modules cross-check values, infer missing ones, and flag inconsistencies with configurable tolerances.
+Fusdb is a small toolkit for storing and validating fusion reactor scenarios. Each scenario is described by a `reactor.yaml` containing metadata plus grouped parameters (geometry, plasma, power, etc.) and optional artifacts (e.g., profile files). Relations encoded in Python modules cross-check values, infer missing ones, and flag inconsistencies with configurable tolerances.
 
 ## What’s inside
 - A `Reactor` dataclass that normalizes inputs, applies constraint systems, and exposes a convenient Python API.
@@ -17,5 +17,5 @@ FusionDB is a small toolkit for storing and validating fusion reactor scenarios.
 See `reactors/example_reactor.yaml` for an annotated template listing all supported fields and confinement scaling method names.
 
 ## Usage
-- CLI: install editable (`pip install -e .`) then list or show reactors with the bundled commands.
-- Python: `from fusiondb.loader import load_all_reactors` to load scenarios, then access attributes on the returned `Reactor` objects.
+- CLI: install editable (`pip install -e .`) then list or show reactors with the bundled `fusdb` commands.
+- Python: `from fusdb.loader import load_all_reactors` to load scenarios, then access attributes on the returned `Reactor` objects.

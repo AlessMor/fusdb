@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from fusiondb.relations_values import PRIORITY_STRICT, Relation, RelationSystem
+from fusdb.relations_values import PRIORITY_STRICT, Relation, RelationSystem
 
 
 ASPECT_REL = Relation(

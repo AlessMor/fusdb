@@ -3,11 +3,11 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fusiondb"
+name = "fusdb"
 version = "0.1.0"
 description = "Fusion reactor scenario database with per-folder YAML and a single Reactor class."
 requires-python = ">=3.10"
 dependencies = ["PyYAML>=6.0"]
 
 [project.scripts]
-fusiondb = "fusiondb.cli:main"
+fusdb = "fusdb.cli:main"
