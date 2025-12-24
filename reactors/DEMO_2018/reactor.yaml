@@ -1,0 +1,38 @@
+id: "DEMO_2018"
+reactor_class: "DEMO"
+name: "EU-DEMO Physics Baseline 2018"
+reactor_configuration: "tokamak"
+organization: "EUROFUSION"
+country: "EU"
+
+design_year: 2018
+doi: "10.1016/j.fusengdes.2022.113080"
+notes: "EU-DEMO Physics Baseline 2018"
+
+plasma_geometry:
+  R: 9.0
+  a: 2.9
+  A: 3.1
+  kappa: 1.65
+  delta_95: 0.33
+
+plasma_parameters:
+  B0: 5.86
+  I_p: 17.75
+  f_BS: 0.39
+  f_NI: 0.39
+  f_CD: 0.05
+  beta_N: 2.5
+  q95: 3.89
+  T_avg: 12.49
+  f_GW: 1.2
+  Z_eff: 2.12
+  H98_y2: 0.98
+  tau_pulse: 7200
+
+power_and_efficiency:
+  P_fus: 2000
+  P_LH: 120.8
+  P_sep: 170.4
+  P_sep_B_over_q95AR: 9.2
+  P_sep_over_R: 18.9

@@ -1,0 +1,2 @@
+[console_scripts]
+fusiondb = fusiondb.cli:main
