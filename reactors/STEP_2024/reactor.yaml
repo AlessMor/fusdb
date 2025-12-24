@@ -4,7 +4,6 @@ name: "STEP 2024"
 reactor_configuration: "spherical tokamak"
 organization: "UKAEA"
 country: "UK"
-site: "N/A"
 
 design_year: 2024
 doi: "10.1088/1741-4326/ad6ea2"

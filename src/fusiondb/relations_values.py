@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import warnings
 from dataclasses import dataclass, field
 from typing import Callable, Mapping, Sequence
@@ -80,7 +81,7 @@ class Relation:
             max_solve_iterations=self.max_solve_iterations,
         )
 
-    def apply(self, var_map: dict[str, Variable], warn: WarnFunc) -> bool:
+    def apply(self, var_map: dict[str, Variable], warn: WarnFunc, *, lock_explicit: bool = False) -> bool:
         changed = False
         targets = self.solve_for or self.variables
         for target in targets:
@@ -88,6 +89,23 @@ class Relation:
             if any(var_map.get(i) is None or var_map[i].value is None for i in inputs):
                 continue
             known = {i: var_map[i].value for i in inputs}  # type: ignore[arg-type]
+            existing = var_map.get(target)
+            base_priority = self.priority if self.priority is not None else PRIORITY_RELATION
+
+            # If target already explicitly provided and we are locking explicit values, only check consistency.
+            if lock_explicit and existing is not None and existing.value is not None and existing.priority >= PRIORITY_EXPLICIT:
+                all_vals = dict(known)
+                all_vals[target] = existing.value
+                if all(v is not None for v in all_vals.values()):
+                    scale = max([abs(v) for v in all_vals.values() if v is not None and math.isfinite(v)] + [1.0])
+                    residual = float(self.equation(all_vals))
+                    if not math.isclose(residual, 0.0, rel_tol=self.rel_tol, abs_tol=0.0):
+                        warn(
+                            f"{target} violates {self.name}: residual {residual} (tol {self.rel_tol * scale})",
+                            UserWarning,
+                        )
+                continue
+
             guess = (self.initial_guesses or {}).get(target)
             # inline seed + secant solve to avoid extra helpers
             seed = guess(known) if callable(guess) else guess
@@ -135,7 +153,7 @@ class Relation:
             var = var_map.setdefault(target, Variable(target))
             changed |= var.assign(
                 result,
-                self.priority if self.priority is not None else PRIORITY_RELATION,
+                base_priority,
                 self.name,
                 self.rel_tol,
                 warn,
@@ -146,7 +164,9 @@ class Relation:
 class RelationSystem:
     """Minimal wrapper to solve a set of relations as a system."""
 
-    def __init__(self, relations: Sequence[Relation], *, rel_tol: float = REL_TOL_DEFAULT, warn: WarnFunc = warnings.warn) -> None:
+    def __init__(
+        self, relations: Sequence[Relation], *, rel_tol: float = REL_TOL_DEFAULT, warn: WarnFunc = warnings.warn, lock_explicit: bool = False
+    ) -> None:
         self.relations = relations
         self.rel_tol = rel_tol
         self.warn_sink = warn
@@ -154,6 +174,7 @@ class RelationSystem:
         self.var_map: dict[str, Variable] = {}
         self._pending_warnings: list[tuple[str, type[Warning] | None]] = []
         self._seen_warnings: set[tuple[str, type[Warning] | None]] = set()
+        self.lock_explicit = lock_explicit
 
     @property
     def values(self) -> dict[str, float | None]:
@@ -174,12 +195,15 @@ class RelationSystem:
         self._pending_warnings.append(key)
 
     def _flush_warnings(self) -> None:
-        emitted_vars: set[str] = set()
+        emitted_relations: set[str] = set()
+        rel_match = re.compile(r"(?:from|over|violates) ([^:]+)")
         for message, category in self._pending_warnings:
-            var_name = message.split(" ", 1)[0]
-            if var_name in emitted_vars:
+            match = rel_match.search(message)
+            rel_name = match.group(1) if match else None
+            if rel_name and rel_name in emitted_relations:
                 continue
-            emitted_vars.add(var_name)
+            if rel_name:
+                emitted_relations.add(rel_name)
             self.warn_sink(message, UserWarning if category is None else category)
         self._pending_warnings.clear()
         self._seen_warnings.clear()
@@ -190,7 +214,7 @@ class RelationSystem:
         for _ in range(max_iterations):
             changed = False
             for rel in self.relations:
-                changed |= rel.apply(self.var_map, self._collect_warn)
+                changed |= rel.apply(self.var_map, self._collect_warn, lock_explicit=self.lock_explicit)
             if not changed:
                 break
         self._flush_warnings()

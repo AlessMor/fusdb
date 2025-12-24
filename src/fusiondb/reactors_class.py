@@ -42,6 +42,7 @@ class Reactor:
     design_year: int | None = field(default=None, metadata={"section": "metadata_optional"})
     doi: str | list[str] | None = field(default=None, metadata={"section": "metadata_optional"})
     notes: str | None = field(default=None, metadata={"section": "metadata_optional"})
+    allow_relation_overrides: bool | None = field(default=False, metadata={"section": "metadata_optional"})
 
     # plasma geometry
     R: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "m"})  # major radius
@@ -122,8 +123,11 @@ class Reactor:
 
     # internal
     root_dir: Path | None = field(default=None, metadata={"section": "internal"})
+    _sources: dict[str, str] = field(default_factory=dict, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        if self.allow_relation_overrides is None:
+            self.allow_relation_overrides = False
         self.reactor_class = self._normalize_choice(
             self.reactor_class, self.ALLOWED_REACTOR_CLASSES, "reactor_class"
         )
@@ -135,13 +139,21 @@ class Reactor:
         self._apply_tokamak_shape(rel_tol)
         self._apply_plasma_parameters(rel_tol)
         self._apply_power_exhaust(rel_tol)
+        # final source map cleanup
+        self._sources = dict(self._sources)
+
+    def _record_sources(self, var_map: dict[str, Any]) -> None:
+        for name, var in var_map.items():
+            if hasattr(var, "source"):
+                self._sources[name] = var.source
 
     def _apply_geometry(self, rel_tol: float) -> None:
+        lock = not bool(self.allow_relation_overrides)
         relations = [rel.with_tol(rel_tol) for rel in GEOMETRY_RELATIONS]
         config = (self.reactor_configuration or "").lower()
         if "spherical tokamak" in config:
             relations.extend(rel.with_tol(rel_tol) for rel in SPHERICAL_TOKAMAK_SHAPE_RELATIONS)
-        system = RelationSystem(relations, rel_tol=rel_tol, warn=warnings.warn)
+        system = RelationSystem(relations, rel_tol=rel_tol, warn=warnings.warn, lock_explicit=lock)
         for k, v in {
             "R": self.R,
             "a": self.a,
@@ -169,13 +181,17 @@ class Reactor:
         self.kappa_95 = values["kappa_95"]
         self.delta = values["delta"]
         self.delta_95 = values["delta_95"]
+        self._record_sources(system.var_map)
 
     def _apply_tokamak_shape(self, rel_tol: float) -> None:
         concept = (self.reactor_configuration or "").lower()
+        lock = not bool(self.allow_relation_overrides)
         if "tokamak" not in concept:
             return
 
-        system = RelationSystem([rel.with_tol(rel_tol) for rel in TOKAMAK_SHAPE_RELATIONS], rel_tol=rel_tol, warn=warnings.warn)
+        system = RelationSystem(
+            [rel.with_tol(rel_tol) for rel in TOKAMAK_SHAPE_RELATIONS], rel_tol=rel_tol, warn=warnings.warn, lock_explicit=lock
+        )
         for k, v in {
             "R": self.R,
             "a": self.a,
@@ -195,9 +211,11 @@ class Reactor:
         self.squareness = values["squareness"]
         self.kappa_95 = values.get("kappa_95")
         self.delta = values.get("delta")
+        self._record_sources(system.var_map)
 
     def _apply_power_exhaust(self, rel_tol: float) -> None:
-        system = RelationSystem([rel.with_tol(rel_tol) for rel in PSEP_RELATIONS], rel_tol=rel_tol, warn=warnings.warn)
+        lock = not bool(self.allow_relation_overrides)
+        system = RelationSystem([rel.with_tol(rel_tol) for rel in PSEP_RELATIONS], rel_tol=rel_tol, warn=warnings.warn, lock_explicit=lock)
         for k, v in {
             "P_sep": self.P_sep,
             "P_sep_over_R": self.P_sep_over_R,
@@ -212,8 +230,10 @@ class Reactor:
         self.P_sep = values["P_sep"]
         self.P_sep_over_R = values["P_sep_over_R"]
         self.P_sep_B_over_q95AR = values["P_sep_B_over_q95AR"]
+        self._record_sources(system.var_map)
 
     def _apply_plasma_parameters(self, rel_tol: float) -> None:
+        lock = not bool(self.allow_relation_overrides)
         relations = [rel.with_tol(rel_tol) for rel in PLASMA_RELATIONS]
         confinement_var = None
         if self.tau_E_method:
@@ -231,7 +251,7 @@ class Reactor:
                 ).with_tol(rel_tol)
             )
 
-        system = RelationSystem(relations, rel_tol=rel_tol, warn=warnings.warn)
+        system = RelationSystem(relations, rel_tol=rel_tol, warn=warnings.warn, lock_explicit=lock)
         values_to_set = {
             "n_e": self.n_e,
             "n_i": self.n_i,
@@ -267,6 +287,7 @@ class Reactor:
         self.beta_T = values["beta_T"]
         self.beta_p = values["beta_p"]
         self.beta = values["beta"]
+        self._record_sources(system.var_map)
 
 
     def has_density_profile(self) -> bool:

@@ -32,10 +32,11 @@ def test_optional_metadata_defaults_to_none(tmp_path: Path) -> None:
     path.write_text(
         "\n".join(
             [
-                'id: "ARC_2018"',
-                'name: "ARC 2018 baseline"',
-                'reactor_configuration: "tokamak"',
-                'organization: "Example Lab"',
+                    'id: "ARC_2018"',
+                    'name: "ARC 2018 baseline"',
+                    'reactor_configuration: "tokamak"',
+                    'allow_relation_overrides: true',
+                    'organization: "Example Lab"',
             ]
         )
     )
@@ -53,10 +54,11 @@ def test_doi_can_be_list(tmp_path: Path) -> None:
     path.write_text(
         "\n".join(
             [
-                'id: "ARC_2018"',
-                'name: "ARC 2018 baseline"',
-                'reactor_configuration: "tokamak"',
-                'organization: "Example Lab"',
+                    'id: "ARC_2018"',
+                    'name: "ARC 2018 baseline"',
+                    'reactor_configuration: "tokamak"',
+                    'allow_relation_overrides: true',
+                    'organization: "Example Lab"',
                 "",
                 "doi:",
                 "  - 10.1234/one",
@@ -76,10 +78,11 @@ def test_parameters_and_artifacts_missing_defaults(tmp_path: Path) -> None:
     path.write_text(
         "\n".join(
             [
-                'id: "ARC_2018"',
-                'name: "ARC 2018 baseline"',
-                'reactor_configuration: "tokamak"',
-                'organization: "Example Lab"',
+                    'id: "ARC_2018"',
+                    'name: "ARC 2018 baseline"',
+                    'reactor_configuration: "tokamak"',
+                    'allow_relation_overrides: true',
+                    'organization: "Example Lab"',
                 "",
                 "plasma_parameters: {}",  # explicitly empty
                 "",
@@ -101,11 +104,12 @@ def test_aspect_ratio_and_minor_radius_are_backfilled(tmp_path: Path) -> None:
     path = reactor_dir / "reactor.yaml"
     path.write_text(
         "\n".join(
-            [
-                'id: "ARC_2018"',
-                'name: "ARC 2018 baseline"',
-                'reactor_configuration: "tokamak"',
-                'organization: "Example Lab"',
+                [
+                    'id: "ARC_2018"',
+                    'name: "ARC 2018 baseline"',
+                    'reactor_configuration: "tokamak"',
+                    'allow_relation_overrides: true',
+                    'organization: "Example Lab"',
                 "",
                 "plasma_geometry:",
                 "  R: 6.0",
@@ -126,11 +130,12 @@ def test_inconsistent_geometry_warns_and_sets_computed(tmp_path: Path) -> None:
     path = reactor_dir / "reactor.yaml"
     path.write_text(
         "\n".join(
-            [
-                'id: "ARC_2018"',
-                'name: "ARC 2018 baseline"',
-                'reactor_configuration: "tokamak"',
-                'organization: "Example Lab"',
+                [
+                    'id: "ARC_2018"',
+                    'name: "ARC 2018 baseline"',
+                    'reactor_configuration: "tokamak"',
+                    'allow_relation_overrides: true',
+                    'organization: "Example Lab"',
                 "",
                 "plasma_geometry:",
                 "  R: 3.0",
@@ -153,11 +158,12 @@ def test_geometry_within_tolerance_warns(tmp_path: Path) -> None:
     path = reactor_dir / "reactor.yaml"
     path.write_text(
         "\n".join(
-            [
-                'id: "ARC_2018"',
-                'name: "ARC 2018 baseline"',
-                'reactor_configuration: "tokamak"',
-                'organization: "Example Lab"',
+                [
+                    'id: "ARC_2018"',
+                    'name: "ARC 2018 baseline"',
+                    'reactor_configuration: "tokamak"',
+                    'allow_relation_overrides: true',
+                    'organization: "Example Lab"',
                 "",
                 "plasma_geometry:",
                 "  R: 9.0",
@@ -212,6 +218,7 @@ def test_power_relations_computed_and_validated(tmp_path: Path) -> None:
                 'name: "ARC 2018 baseline"',
                 'reactor_configuration: "tokamak"',
                 'organization: "Example Lab"',
+                "allow_relation_overrides: true",
                 "",
                 "plasma_geometry:",
                 "  R: 3.0",
@@ -245,6 +252,7 @@ def test_inconsistent_power_relation_warns_and_sets_computed(tmp_path: Path) -> 
                 'name: "ARC 2018 baseline"',
                 'reactor_configuration: "tokamak"',
                 'organization: "Example Lab"',
+                "allow_relation_overrides: true",
                 "",
                 "plasma_geometry:",
                 "  R: 3.0",
@@ -304,6 +312,7 @@ def test_tokamak_volume_inconsistency_warns(tmp_path: Path) -> None:
                 'name: "ARC 2018 baseline"',
                 'reactor_configuration: "tokamak"',
                 'organization: "Example Lab"',
+                "allow_relation_overrides: true",
                 "",
                 "plasma_geometry:",
                 "  R: 4.0",
