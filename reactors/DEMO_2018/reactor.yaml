@@ -1,6 +1,6 @@
 id: "DEMO_2018"
-reactor_class: "DEMO"
-name: "EU-DEMO Physics Baseline 2018"
+reactor_class: "DEMO-class"
+name: "EU-DEMO 2018"
 reactor_configuration: "tokamak"
 organization: "EUROFUSION"
 country: "EU"

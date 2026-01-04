@@ -5,6 +5,9 @@ import pytest
 
 from fusdb.geometry import plasma_surface_area, plasma_volume
 from fusdb.loader import load_reactor_yaml
+from fusdb.reactors_class import Reactor
+from fusdb import reactors_class as reactors_module
+from fusdb.relation_class import Relation
 
 
 def test_missing_required_metadata_raises(tmp_path: Path) -> None:
@@ -205,6 +208,42 @@ def test_geometry_from_extents_and_kappa(tmp_path: Path) -> None:
 
     assert math.isclose(reactor.R, 4.0)
     assert math.isclose(reactor.kappa, 2.0)
+
+
+def test_confinement_method_picks_closest_scaling(monkeypatch: pytest.MonkeyPatch) -> None:
+    rel1 = Relation(
+        "tau_E_rel1",
+        ("tau_E_rel1", "a"),
+        lambda v: v["tau_E_rel1"] - 2.0 * v["a"],
+        solve_for=("tau_E_rel1",),
+    )
+    rel2 = Relation(
+        "tau_E_rel2",
+        ("tau_E_rel2", "a"),
+        lambda v: v["tau_E_rel2"] - 5.0 * v["a"],
+        solve_for=("tau_E_rel2",),
+    )
+    rel_map = {rel.variables[0]: rel for rel in (rel1, rel2)}
+    monkeypatch.setattr(reactors_module, "confinement_relations_by_name", lambda: rel_map)
+    monkeypatch.setattr(
+        reactors_module,
+        "confinement_relations",
+        lambda tags=("confinement",), require_all=True, exclude=None: (rel1, rel2),
+    )
+
+    reactor = Reactor(
+        id="TEST",
+        name="Test reactor",
+        reactor_configuration="tokamak",
+        organization="Example Lab",
+        R=6.0,
+        a=2.0,
+        A=3.0,
+        tau_E=4.0,  # matches rel1 (2 * a)
+        tau_E_method="tau_E_rel2",  # deliberately incorrect
+    )
+
+    assert reactor.tau_E_method == "tau_E_rel1"
 
 
 def test_power_relations_computed_and_validated(tmp_path: Path) -> None:

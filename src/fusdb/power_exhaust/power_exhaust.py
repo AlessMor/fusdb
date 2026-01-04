@@ -1,6 +1,6 @@
 """Power exhaust relations defined once."""
 
-from fusdb.relations_values import PRIORITY_STRICT, Relation
+from fusdb.relation_class import PRIORITY_STRICT, Relation
 from fusdb.relations_util import require_nonzero
 
 PSEP_RELATIONS: tuple[Relation, ...] = (

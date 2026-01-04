@@ -3,71 +3,36 @@ from __future__ import annotations
 import math
 import re
 import warnings
-from dataclasses import dataclass, field
 from typing import Callable, Mapping, Sequence
 
 from fusdb.relations_util import REL_TOL_DEFAULT, coerce_number
+from fusdb.value_class import PRIORITY_EXPLICIT, PRIORITY_RELATION, PRIORITY_STRICT, Variable
 
 WarnFunc = Callable[[str, type[Warning] | None], None]
 
-PRIORITY_EXPLICIT = 100
-PRIORITY_RELATION = 10
-PRIORITY_STRICT = 120
 
-
-@dataclass
-class Variable:
-    name: str
-    value: float | None = None
-    priority: int = PRIORITY_RELATION
-    source: str = "unknown"
-    _warned_sources: set[str] = field(default_factory=set, init=False, repr=False)
-
-    def assign(self, candidate: float, priority: int, source: str, rel_tol: float, warn: WarnFunc) -> bool:
-        if candidate is None or not math.isfinite(candidate):
-            return False
-
-        def warn_once(message: str) -> None:
-            if source in self._warned_sources:
-                return
-            self._warned_sources.add(source)
-            warn(message, UserWarning)
-
-        if self.value is None:
-            self.value, self.priority, self.source = candidate, priority, source
-            return True
-
-        if math.isclose(self.value, candidate, rel_tol=rel_tol, abs_tol=0.0):
-            if candidate != self.value:
-                warn_once(
-                    f"{self.name} differs from {source} but is within tolerance: existing {self.value}, new {candidate}"
-                )
-            if priority > self.priority:
-                self.priority, self.source = priority, source
-                return True
-            return False
-
-        if priority > self.priority:
-            warn_once(f"{self.name} updated from {self.value} ({self.source}) to {candidate} ({source})")
-            self.value, self.priority, self.source = candidate, priority, source
-            return True
-
-        warn_once(f"Inconsistent {self.name}: keeping {self.value} ({self.source}) over {candidate} ({source})")
-        return False
-
-
-@dataclass
 class Relation:
     """Implicit relation defined by a zero-residual equation."""
 
-    name: str
-    variables: tuple[str, ...]
-    equation: Callable[[Mapping[str, float]], float]
-    priority: int | None = None
-    rel_tol: float = REL_TOL_DEFAULT
-    solve_for: tuple[str, ...] | None = None
-    initial_guesses: Mapping[str, float | Callable[[Mapping[str, float]], float]] | None = None
-    max_solve_iterations: int = 25
+    def __init__(
+        self,
+        name: str,
+        variables: tuple[str, ...],
+        equation: Callable[[Mapping[str, float]], float],
+        priority: int | None = None,
+        rel_tol: float = REL_TOL_DEFAULT,
+        solve_for: tuple[str, ...] | None = None,
+        initial_guesses: Mapping[str, float | Callable[[Mapping[str, float]], float]] | None = None,
+        max_solve_iterations: int = 25,
+    ) -> None:
+        self.name = name
+        self.variables = variables
+        self.equation = equation
+        self.priority = priority
+        self.rel_tol = rel_tol
+        self.solve_for = solve_for
+        self.initial_guesses = initial_guesses
+        self.max_solve_iterations = max_solve_iterations
 
     def with_tol(self, rel_tol: float, priority: int | None = None) -> Relation:
         return Relation(
@@ -97,13 +62,27 @@ class Relation:
                 all_vals = dict(known)
                 all_vals[target] = existing.value
                 if all(v is not None for v in all_vals.values()):
-                    scale = max([abs(v) for v in all_vals.values() if v is not None and math.isfinite(v)] + [1.0])
                     residual = float(self.equation(all_vals))
-                    if not math.isclose(residual, 0.0, rel_tol=self.rel_tol, abs_tol=0.0):
-                        warn(
-                            f"{target} violates {self.name}: residual {residual} (tol {self.rel_tol * scale})",
-                            UserWarning,
+                    actual = all_vals[target]
+                    expected = actual - residual if actual is not None else None
+                    scale_all = max([abs(v) for v in all_vals.values() if v is not None and math.isfinite(v)] + [1.0])
+                    if expected is not None and math.isfinite(expected):
+                        tol_scale = max(abs(expected), 1.0)
+                    elif actual is not None and math.isfinite(actual):
+                        tol_scale = max(abs(actual), 1.0)
+                    else:
+                        tol_scale = scale_all
+                    tolerance = self.rel_tol * tol_scale
+                    if abs(residual) > tolerance:
+                        message = (
+                            f"{target} violates {self.name} relation: expected value is {expected}, got {actual}"
+                            if expected is not None and math.isfinite(expected)
+                            else f"{target} violates {self.name} relation"
                         )
+                        context_vals = [f"{i}={known[i]}" for i in inputs if i in known and known[i] is not None]
+                        if context_vals:
+                            message = f"{message} (holding {', '.join(context_vals)})"
+                        warn(message, UserWarning)
                 continue
 
             guess = (self.initial_guesses or {}).get(target)
@@ -196,7 +175,7 @@ class RelationSystem:
 
     def _flush_warnings(self) -> None:
         emitted_relations: set[str] = set()
-        rel_match = re.compile(r"(?:from|over|violates) ([^:]+)")
+        rel_match = re.compile(r"(?:from|over|violates) ([^:]+?)(?: relation)?(?::|$)")
         for message, category in self._pending_warnings:
             match = rel_match.search(message)
             rel_name = match.group(1) if match else None
@@ -219,3 +198,13 @@ class RelationSystem:
                 break
         self._flush_warnings()
         return self.values
+
+
+__all__ = [
+    "Relation",
+    "RelationSystem",
+    "PRIORITY_EXPLICIT",
+    "PRIORITY_RELATION",
+    "PRIORITY_STRICT",
+    "Variable",
+]

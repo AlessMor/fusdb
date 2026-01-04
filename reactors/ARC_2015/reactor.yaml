@@ -1,5 +1,5 @@
 id: "ARC_2015"
-reactor_class: "ARC"
+reactor_class: "ARC-class"
 name: "ARC 2015"
 reactor_configuration: "compact tokamak"
 organization: "MIT"
@@ -36,7 +36,6 @@ plasma_parameters:
   TBR: 1.1
   confinement_time:
     value: 0.64
-    method: tau_E_mirnov
   H89: 2.8
   H98_y2: 1.8
   G89: 0.14
