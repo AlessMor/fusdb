@@ -1,42 +1,43 @@
-from dataclasses import dataclass, field, fields as dataclass_fields
+from dataclasses import dataclass, field
 import importlib
 import inspect
-import math
+import sympy as sp
+from sympy.core.relational import Relational
 from pathlib import Path
 from typing import Any, ClassVar
 
 import warnings
 
 from fusdb.power_exhaust.power_exhaust import PSEP_RELATIONS
-from fusdb.relation_class import PRIORITY_RELATION, Relation, RelationSystem
-from fusdb.relations_util import REL_TOL_DEFAULT
+from fusdb.relation_class import Relation, RelationSystem
+from fusdb.relation_util import REL_TOL_DEFAULT, symbol
+from fusdb.reactor_util import (
+    ALLOWED_CONFINEMENT_MODES,
+    ALLOWED_REACTOR_FAMILIES,
+    ALLOWED_REACTOR_CONFIGURATIONS,
+    ALLOWED_RELATION_DOMAINS,
+    RELATION_MODULES,
+    config_exclude_tags,
+    configuration_tags,
+    normalize_allowed,
+    relation_domain_stages,
+    relations_with_tags,
+    select_relations,
+)
+
+
+Scalar = float | sp.Expr
 
 
 @dataclass
 class Reactor:
-    ALLOWED_REACTOR_CLASSES: ClassVar[tuple[str, ...]] = (
-        "ARC-class",
-        "ARC",
-        "STEP-class",
-        "STEP",
-        "DEMO-class",
-        "DEMO",
-    )
-    ALLOWED_REACTOR_CONFIGURATIONS: ClassVar[tuple[str, ...]] = (
-        "tokamak",
-        "compact tokamak",
-        "spherical tokamak",
-        "stellarator",
-    )
-    _RELATION_MODULES: ClassVar[tuple[str, ...]] = (
-        "fusdb.geometry.plasma_geometry",
-        "fusdb.plasma_pressure.beta",
-        "fusdb.confinement.plasma_stored_energy",
-        "fusdb.confinement.scalings",
-    )
+    """Reactor metadata and parameter container that resolves relations on load."""
+    ALLOWED_CONFINEMENT_MODES: ClassVar[tuple[str, ...]] = ALLOWED_CONFINEMENT_MODES
+    ALLOWED_REACTOR_FAMILIES: ClassVar[tuple[str, ...]] = ALLOWED_REACTOR_FAMILIES
+    ALLOWED_REACTOR_CONFIGURATIONS: ClassVar[tuple[str, ...]] = ALLOWED_REACTOR_CONFIGURATIONS
+    _RELATION_MODULES: ClassVar[tuple[str, ...]] = RELATION_MODULES
     _RELATIONS: ClassVar[list[tuple[tuple[str, ...], Relation]]] = []
     _RELATIONS_IMPORTED: ClassVar[bool] = False
-    ALLOWED_VARS: ClassVar[set[str]] = set()
 
     # required identity
     id: str = field(metadata={"section": "metadata_required"})
@@ -45,7 +46,7 @@ class Reactor:
     organization: str = field(metadata={"section": "metadata_required"})
 
     # optional general/scenario metadata
-    reactor_class: str | None = field(default=None, metadata={"section": "metadata_optional"})
+    reactor_family: str | None = field(default=None, metadata={"section": "metadata_optional"})
     country: str | None = field(default=None, metadata={"section": "metadata_optional"})
     site: str | None = field(default=None, metadata={"section": "metadata_optional"})
     design_year: int | None = field(default=None, metadata={"section": "metadata_optional"})
@@ -53,287 +54,221 @@ class Reactor:
     notes: str | None = field(default=None, metadata={"section": "metadata_optional"})
     allow_relation_overrides: bool | None = field(default=False, metadata={"section": "metadata_optional"})
 
-    # plasma geometry
-    R: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "m"})  # major radius
-    a: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "m"})  # minor radius
-    A: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "1"})  # aspect ratio
-    kappa: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "1"})  # elongation κ
-    kappa_95: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "1"})  # elongation at 95%
-    delta_95: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "1"})  # triangularity δ95
-    delta: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "1"})  # triangularity core
-    V_p: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "m^3"})  # plasma volume
-    S_p: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "m^2"})  # plasma surface area
-    squareness: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "1"})  # squareness ξ
-    R_max: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "m"})  # outer major radius
-    R_min: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "m"})  # inner major radius
-    Z_max: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "m"})  # top vertical extent
-    Z_min: float | None = field(default=None, metadata={"section": "plasma_geometry", "unit": "m"})  # bottom vertical extent
-
-    # plasma parameters
-    B0: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "T"})  # toroidal field on axis
-    B_max: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "T"})  # peak field on coil
-    B_p: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "T"})  # poloidal field
-    I_p: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "MA"})  # plasma current
-    f_BS: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # bootstrap fraction
-    f_NI: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # non-inductive fraction
-    f_CD: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # driven current fraction
-    q95: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # q at r/a = 0.95
-    q_a: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # edge q
-    q_min: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # minimum q
-    li: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # internal inductance
-    beta_N: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # normalized beta βN
-    beta_T: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # toroidal beta (fraction)
-    beta_p: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # poloidal beta
-    beta: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # total beta
-    T_avg: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "keV"})  # ⟨T⟩
-    T0: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "keV"})  # T0
-    T_e: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "keV"})  # electron temperature
-    T_i: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "keV"})  # ion temperature
-    n_avg: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1/m^3"})  # ⟨n⟩
-    n0: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1/m^3"})  # n0
-    n_e: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1/m^3"})  # electron density
-    n_i: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1/m^3"})  # ion density
-    f_GW: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # Greenwald fraction
-    Z_eff: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # effective charge
-    p_th: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "Pa"})  # thermal pressure
-    W_th: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "J"})  # thermal stored energy
-    P_loss: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "W"})  # power loss for confinement
-    TBR: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # tritium breeding ratio
-    tau_E: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "s"})  # energy confinement time
-    tau_E_method: str | None = field(
-        default=None, metadata={"section": "plasma_parameters", "unit": "method"}
-    )  # chosen confinement scaling name (e.g., tau_E_mirnov)
-    H89: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # H89 confinement factor
-    H98_y2: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # H98(y,2) confinement factor
-    G89: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "1"})  # G89 gain factor
-    tau_pulse: float | None = field(default=None, metadata={"section": "plasma_parameters", "unit": "s"})  # pulse length
-
-    # power and efficiency
-    P_fus: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW"})  # fusion power
-    P_th_tot: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW"})  # total thermal power
-    P_elec_tot: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW"})  # total electric power
-    P_elec_net: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW"})  # net electric power
-    eta_th: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "1"})  # plant thermal efficiency
-    Q_e: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "1"})  # electric power multiplication
-    P_wall: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW/m^2"})  # Pf/Sb
-    P_LHCD: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW"})  # LHCD coupled
-    P_ICRF: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW"})  # ICRF coupled
-    P_LH: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW"})  # LH threshold
-    P_sep: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW"})  # power across separatrix
-    P_sep_over_R: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW/m"})  # Psep/R
-    P_sep_B_over_q95AR: float | None = field(default=None, metadata={"section": "power_and_efficiency", "unit": "MW*T/m"})  # Psep*B/(q95*A*R)
-
-    # density profile artifact
-    density_profile_file: str | None = field(default=None, metadata={"section": "artifact"})
-    density_profile_x_axis: str | None = field(default=None, metadata={"section": "artifact"})
-    density_profile_y_dataset: str | None = field(default=None, metadata={"section": "artifact"})
-    density_profile_x_unit: str | None = field(default=None, metadata={"section": "artifact"})
-    density_profile_y_unit: str | None = field(default=None, metadata={"section": "artifact"})
+    confinement_mode: str | None = field(default=None, metadata={"section": "metadata_optional"})
+    solve_strategy: str | list[str] | None = field(default=None, metadata={"section": "metadata_optional"})
+    parameters: dict[str, Scalar | None] = field(default_factory=dict)
+    parameter_tolerances: dict[str, float] = field(default_factory=dict)
+    parameter_methods: dict[str, str] = field(default_factory=dict)
+    parameter_defaults: dict[str, Scalar] = field(default_factory=dict)
+    explicit_parameters: set[str] = field(default_factory=set)
 
     # internal
     root_dir: Path | None = field(default=None, metadata={"section": "internal"})
-    _sources: dict[str, str] = field(default_factory=dict, init=False, repr=False, compare=False)
+    relations_used: list[tuple[tuple[str, ...], Relation]] = field(
+        default_factory=list, metadata={"section": "internal"}, repr=False
+    )
 
     def __post_init__(self) -> None:
-        type(self)._ensure_allowed_vars()
+        """Normalize metadata and solve configured relations in stages."""
         if self.allow_relation_overrides is None:
             self.allow_relation_overrides = False
-        self.reactor_class = self._normalize_choice(
-            self.reactor_class, self.ALLOWED_REACTOR_CLASSES, "reactor_class"
+        if self.parameter_methods is None:
+            self.parameter_methods = {}
+        if self.parameter_defaults is None:
+            self.parameter_defaults = {}
+        if self.explicit_parameters is None:
+            self.explicit_parameters = set()
+        self.relations_used = []
+        self.reactor_family = normalize_allowed(
+            self.reactor_family, self.ALLOWED_REACTOR_FAMILIES, field_name="reactor_family"
         )
-        self.reactor_configuration = self._normalize_choice(
-            self.reactor_configuration, self.ALLOWED_REACTOR_CONFIGURATIONS, "reactor_configuration"
+        self.reactor_configuration = normalize_allowed(
+            self.reactor_configuration,
+            self.ALLOWED_REACTOR_CONFIGURATIONS,
+            field_name="reactor_configuration",
         )
+        if self.confinement_mode and self.ALLOWED_CONFINEMENT_MODES:
+            self.confinement_mode = normalize_allowed(
+                self.confinement_mode,
+                self.ALLOWED_CONFINEMENT_MODES,
+                field_name="confinement_mode",
+            )
         rel_tol = REL_TOL_DEFAULT
         lock = not bool(self.allow_relation_overrides)
-        self._solve_geometry(rel_tol, lock)
-        self._solve_plasma(rel_tol, lock)
-        self._solve_power_exhaust(rel_tol, lock)
-        # final source map cleanup
-        self._sources = dict(self._sources)
+        config_tags = configuration_tags(self.reactor_configuration)
+        exclude_tags = config_exclude_tags(self.reactor_configuration)
 
-    def _record_sources(self, var_map: dict[str, Any]) -> None:
-        for name, var in var_map.items():
-            if hasattr(var, "source"):
-                self._sources[name] = var.source
+        def apply_relations(tagged_relations: tuple[tuple[tuple[str, ...], Relation], ...]) -> None:
+            relations = select_relations(
+                tagged_relations,
+                parameter_methods=self.parameter_methods,
+                config_tags=config_tags,
+                warn=warnings.warn,
+            )
+            if relations:
+                self.relations_used.extend(
+                    (tags, rel) for (tags, _rel), rel in zip(tagged_relations, relations)
+                )
+            self._solve_relations(relations, rel_tol, lock)
 
-    def _is_tokamak_config(self) -> bool:
-        concept = (self.reactor_configuration or "").lower()
-        return "tokamak" in concept
+        strategy_raw = self.solve_strategy
+        strategy: str
+        user_steps: list[str] | None = None
+        if strategy_raw is None:
+            strategy = "default"
+        elif isinstance(strategy_raw, str):
+            strategy = strategy_raw.strip().lower()
+            if not strategy:
+                strategy = "default"
+        elif isinstance(strategy_raw, (list, tuple)):
+            strategy = "user"
+            user_steps = [str(step) for step in strategy_raw]
+        else:
+            raise ValueError("solve_strategy must be a string, list, or omitted")
 
-    def _is_spherical_tokamak(self) -> bool:
-        concept = (self.reactor_configuration or "").lower()
-        return "spherical tokamak" in concept
+        if strategy in ("default", "staged"):
+            for groups in relation_domain_stages():
+                tagged = list(relations_with_tags(groups, require_all=False, exclude=exclude_tags))
+                if "power_exhaust" in groups:
+                    tagged.extend((("power_exhaust",), rel) for rel in PSEP_RELATIONS)
+                apply_relations(tuple(tagged))
+        elif strategy == "global":
+            tagged = list(
+                relations_with_tags(ALLOWED_RELATION_DOMAINS, require_all=False, exclude=exclude_tags)
+            )
+            tagged.extend((("power_exhaust",), rel) for rel in PSEP_RELATIONS)
+            apply_relations(tuple(tagged))
+        elif strategy == "user":
+            if not user_steps:
+                raise ValueError(
+                    "solve_strategy set to 'user' but no steps were provided; use a list of domains or relation names"
+                )
 
-    def _is_stellarator_config(self) -> bool:
-        concept = (self.reactor_configuration or "").lower()
-        return "stellarator" in concept
+            def normalize_key(value: str) -> str:
+                return "".join(ch for ch in value.lower() if ch.isalnum())
 
-    def _config_exclude_tags(self) -> tuple[str, ...]:
-        if self._is_spherical_tokamak():
-            return ("stellarator", "frc", "mirror")
-        if self._is_stellarator_config():
-            return ("tokamak", "spherical_tokamak", "frc", "mirror")
-        if self._is_tokamak_config():
-            return ("stellarator", "spherical_tokamak", "frc", "mirror")
-        return ()
+            domain_lookup = {domain.lower(): domain for domain in ALLOWED_RELATION_DOMAINS}
+            self._ensure_relation_modules_loaded()
+            name_map: dict[str, list[tuple[tuple[str, ...], Relation]]] = {}
+            for tags, rel in self._RELATIONS:
+                name_map.setdefault(normalize_key(rel.name), []).append((tags, rel))
+            for rel in PSEP_RELATIONS:
+                name_map.setdefault(normalize_key(rel.name), []).append((("power_exhaust",), rel))
+
+            for step in user_steps:
+                step_text = step.strip()
+                if not step_text:
+                    raise ValueError("solve_strategy steps must be non-empty strings")
+                domain = domain_lookup.get(step_text.lower())
+                if domain:
+                    tagged = list(relations_with_tags(domain, require_all=False, exclude=exclude_tags))
+                    if domain == "power_exhaust":
+                        tagged.extend((("power_exhaust",), rel) for rel in PSEP_RELATIONS)
+                    apply_relations(tuple(tagged))
+                    continue
+                step_key = normalize_key(step_text)
+                matches = name_map.get(step_key)
+                if not matches:
+                    raise ValueError(f"solve_strategy step {step_text!r} did not match a domain or relation name")
+                for tags, rel in matches:
+                    if exclude_tags and exclude_tags.intersection(tags):
+                        warnings.warn(
+                            f"Relation {rel.name!r} selected by name but excluded for configuration "
+                            f"{self.reactor_configuration!r}.",
+                            UserWarning,
+                        )
+                apply_relations(tuple(matches))
+        else:
+            raise ValueError(
+                "solve_strategy must be 'default', 'global', or a list of domains/relation names"
+            )
+
+    def __getattr__(self, name: str) -> Any:
+        """Expose parameters as attributes when present in the parameter map."""
+        params = self.__dict__.get("parameters", {})
+        if name in params:
+            return params[name]
+        raise AttributeError(f"{type(self).__name__!s} has no attribute {name!r}")
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Route unknown attributes into the parameter map."""
+        if name.startswith("_") or name in type(self).__dataclass_fields__:
+            object.__setattr__(self, name, value)
+            return
+        params = self.__dict__.setdefault("parameters", {})
+        params[name] = value
+
+    def __dir__(self) -> list[str]:
+        """Include parameter names in attribute completion."""
+        base = set(super().__dir__())
+        params = self.__dict__.get("parameters", {})
+        return sorted(base | set(params.keys()))
 
     def _solve_relations(
         self,
         relations: tuple[Relation, ...],
         rel_tol: float,
         lock: bool,
-        seed_overrides: dict[str, float] | None = None,
-    ) -> dict[str, float | None]:
+    ) -> dict[str, Scalar | None]:
+        """Apply a set of relations and update parameter values in place."""
+        _ = lock
         if not relations:
             return {}
 
-        system = RelationSystem(
-            [rel.with_tol(rel_tol) for rel in relations], rel_tol=rel_tol, warn=warnings.warn, lock_explicit=lock
-        )
+        system = RelationSystem(relations, rel_tol=rel_tol, warn=warnings.warn, lock_explicit=lock)
         seen_vars: set[str] = set()
+        explicit_params = self.explicit_parameters or set(self.parameters.keys())
+        # Seed explicit values first, respecting any explicit tolerances.
         for rel in relations:
             for var in rel.variables:
                 if var in seen_vars:
                     continue
                 seen_vars.add(var)
-                value = getattr(self, var, None) if var in self.ALLOWED_VARS else None
-                if value is None and seed_overrides and var in seed_overrides:
-                    value = seed_overrides[var]
-                system.set(var, value)
+                if var in self.parameters:
+                    value = self.parameters[var]
+                    if isinstance(value, Relational):
+                        continue
+                    if var in explicit_params:
+                        system.set(var, value, tol=self.parameter_tolerances.get(var))
+
+        # Seed defaults only when a variable is present in this relation set.
+        for name, value in self.parameter_defaults.items():
+            if name in explicit_params:
+                continue
+            if name not in seen_vars:
+                continue
+            system.seed(name, value)
 
         values = system.solve()
+        rel_by_output = {rel.variables[0]: rel for rel in relations if rel.variables}
         for var in seen_vars:
-            if var not in self.ALLOWED_VARS:
+            new_value = values.get(var)
+            if new_value is None:
                 continue
-            current = getattr(self, var, None)
-            new_value = values.get(var, current)
-            if new_value is not None:
-                setattr(self, var, new_value)
+            if isinstance(new_value, sp.Symbol) and new_value == symbol(var):
+                rel = rel_by_output.get(var)
+                if rel is not None:
+                    new_value = sp.Eq(symbol(var), sp.simplify(symbol(var) - rel.expr))
+            self.parameters[var] = new_value
+            # Promote numeric results to explicit so later groups do not overwrite them.
+            if isinstance(new_value, Relational):
+                continue
+            if isinstance(new_value, sp.Expr):
+                if not new_value.free_symbols:
+                    self.explicit_parameters.add(var)
+            elif isinstance(new_value, (int, float)):
+                self.explicit_parameters.add(var)
 
-        self._record_sources(system.var_map)
         return values
-
-    def _solve_geometry(self, rel_tol: float, lock: bool) -> None:
-        relations = relations_for(("geometry",), require_all=False, exclude=self._config_exclude_tags())
-        seeds = {"delta_95": 0.0, "squareness": 0.0} if self._is_tokamak_config() else None
-        self._solve_relations(relations, rel_tol, lock, seed_overrides=seeds)
-
-    def _solve_power_exhaust(self, rel_tol: float, lock: bool) -> None:
-        self._solve_relations(tuple(PSEP_RELATIONS), rel_tol, lock)
-
-    def _config_confinement_relations(self) -> tuple[Relation, ...]:
-        if self._is_tokamak_config():
-            return confinement_relations(("confinement", "tokamak"), require_all=True)
-        if self._is_stellarator_config():
-            return confinement_relations(("confinement", "stellarator"), require_all=True)
-        return ()
-
-    def _select_confinement_relation(self, rel_tol: float) -> Relation | None:
-        if self.tau_E is None:
-            return None
-
-        candidates = self._config_confinement_relations()
-        best: Relation | None = None
-        best_diff = math.inf
-
-        for rel in candidates:
-            system = RelationSystem([rel.with_tol(rel_tol)], rel_tol=rel_tol, warn=warnings.warn)
-            target_var = rel.variables[0]
-            for var in rel.variables:
-                if var == target_var:
-                    continue
-                system.set(var, getattr(self, var, None))
-            try:
-                values = system.solve()
-            except Exception:
-                continue
-            predicted = values.get(target_var)
-            if predicted is None:
-                continue
-            diff = abs(predicted - self.tau_E)
-            if diff < best_diff:
-                best_diff = diff
-                best = rel
-
-        return best
-
-    def _solve_plasma(self, rel_tol: float, lock: bool) -> None:
-        relations: list[Relation] = list(relations_for(("plasma",), require_all=True))
-        confinement_var = None
-
-        if self.tau_E is not None:
-            chosen_rel = self._select_confinement_relation(rel_tol)
-            if chosen_rel:
-                if self.tau_E_method and self.tau_E_method != chosen_rel.variables[0]:
-                    warnings.warn(
-                        f"tau_E_method {self.tau_E_method!r} adjusted to {chosen_rel.variables[0]!r} to match tau_E",
-                        UserWarning,
-                    )
-                self.tau_E_method = chosen_rel.variables[0]
-
-        if self.tau_E_method:
-            method_rel = confinement_relations_by_name().get(self.tau_E_method)
-            if method_rel is None:
-                raise ValueError(f"Unknown tau_E_method {self.tau_E_method!r}. Must match a confinement relation name.")
-            relations.append(method_rel)
-            confinement_var = method_rel.variables[0]
-            relations.append(
-                Relation(
-                    f"Energy confinement method {self.tau_E_method}",
-                    ("tau_E", confinement_var),
-                    lambda v: v["tau_E"] - v[confinement_var],
-                    priority=PRIORITY_RELATION,
-                )
-            )
-
-        seed_overrides = {confinement_var: self.tau_E} if confinement_var and self.tau_E is not None else None
-        self._solve_relations(tuple(relations), rel_tol, lock, seed_overrides=seed_overrides)
-
-
-    def has_density_profile(self) -> bool:
-        return self.density_profile_file is not None
-
-    def summary_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "reactor_class": self.reactor_class,
-            "name": self.name,
-            "reactor_configuration": self.reactor_configuration,
-            "organization": self.organization,
-            "country": self.country,
-            "design_year": self.design_year,
-            "doi": self.doi,
-            "P_fus": self.P_fus,
-            "R": self.R,
-            "n_avg": self.n_avg,
-        }
-
-    @staticmethod
-    def _normalize_choice(value: str | None, allowed: tuple[str, ...], field_name: str) -> str | None:
-        if value is None:
-            return None
-        mapping = {entry.lower(): entry for entry in allowed}
-        key = value.lower()
-        if key not in mapping:
-            allowed_list = ", ".join(allowed)
-            raise ValueError(f"{field_name} must be one of {allowed_list} (case-insensitive); got {value!r}")
-        return mapping[key]
 
     @classmethod
     def _ensure_relation_modules_loaded(cls) -> None:
+        """Import relation modules once to register decorated relations."""
         if cls._RELATIONS_IMPORTED:
             return
-        cls._ensure_allowed_vars()
         for module_name in cls._RELATION_MODULES:
             importlib.import_module(module_name)
         cls._RELATIONS_IMPORTED = True
-
-    @classmethod
-    def _ensure_allowed_vars(cls) -> None:
-        if cls.ALLOWED_VARS:
-            return
-        cls.ALLOWED_VARS = {f.name for f in dataclass_fields(cls)}
 
     @classmethod
     def relation(
@@ -348,35 +283,37 @@ class Reactor:
         rel_tol: float = REL_TOL_DEFAULT,
         initial_guesses: dict[str, Any] | None = None,
         max_solve_iterations: int = 25,
+        constraints: tuple[str | Relational, ...] | None = None,
     ):
+        """Decorate a function as a symbolic relation registered on the class."""
         group_tuple = (groups,) if isinstance(groups, str) else tuple(groups)
 
         def decorator(func):
-            cls._ensure_allowed_vars()
+            """Wrap the function in a Relation and attach it to the class registry."""
             arg_names = tuple(variables) if variables is not None else tuple(inspect.signature(func).parameters.keys())
             output_name = output or func.__name__
             all_vars = (output_name, *arg_names)
-            solve_targets = solve_for or (output_name,)
-            unknown = [v for v in all_vars if v not in cls.ALLOWED_VARS]
-            if unknown:
-                warnings.warn(
-                    f"Relation variables {unknown!r} are not Reactor fields; they will not be auto-assigned",
-                    UserWarning,
-                )
+            solve_targets = solve_for or all_vars
 
-            def equation(values, *, _func=func, _args=arg_names, _out=output_name):
-                inputs = [values[arg] for arg in _args]
-                return values[_out] - _func(*inputs)
-
+            arg_syms = [symbol(arg) for arg in arg_names]
+            output_sym = symbol(output_name)
+            expr = output_sym - func(*arg_syms)
+            if constraints is None:
+                merged_constraints = []
+            elif isinstance(constraints, (str, Relational)):
+                merged_constraints = [constraints]
+            else:
+                merged_constraints = list(constraints)
             relation = Relation(
                 name,
                 all_vars,
-                equation,
+                expr,
                 priority=priority,
                 rel_tol=rel_tol,
                 solve_for=solve_targets,
                 initial_guesses=initial_guesses,
                 max_solve_iterations=max_solve_iterations,
+                constraints=tuple(merged_constraints),
             )
             cls._RELATIONS.append((group_tuple, relation))
             setattr(func, "relation", relation)
@@ -385,18 +322,19 @@ class Reactor:
         return decorator
 
     @classmethod
-    def get_relations(
+    def get_relations_with_tags(
         cls,
         groups: str | tuple[str, ...],
         *,
         require_all: bool = True,
         exclude: tuple[str, ...] | None = None,
-    ) -> tuple[Relation, ...]:
+    ) -> tuple[tuple[tuple[str, ...], Relation], ...]:
+        """Return relations with their tag tuples for filtering or diagnostics."""
         cls._ensure_relation_modules_loaded()
         requested = (groups,) if isinstance(groups, str) else tuple(groups)
         exclude_set = set(exclude or ())
 
-        matches: list[Relation] = []
+        matches: list[tuple[tuple[str, ...], Relation]] = []
         seen: set[int] = set()
         for tags, rel in cls._RELATIONS:
             if exclude_set and exclude_set.intersection(tags):
@@ -410,27 +348,5 @@ class Reactor:
             if id(rel) in seen:
                 continue
             seen.add(id(rel))
-            matches.append(rel)
+            matches.append((tags, rel))
         return tuple(matches)
-
-
-def relations_for(
-    groups: str | tuple[str, ...],
-    *,
-    require_all: bool = True,
-    exclude: tuple[str, ...] | None = None,
-) -> tuple[Relation, ...]:
-    return Reactor.get_relations(groups, require_all=require_all, exclude=exclude)
-
-
-def confinement_relations(
-    groups: str | tuple[str, ...] = ("confinement",),
-    *,
-    require_all: bool = True,
-    exclude: tuple[str, ...] | None = None,
-) -> tuple[Relation, ...]:
-    return relations_for(groups, require_all=require_all, exclude=exclude)
-
-
-def confinement_relations_by_name() -> dict[str, Relation]:
-    return {rel.variables[0]: rel for rel in relations_for(("confinement",), require_all=False)}

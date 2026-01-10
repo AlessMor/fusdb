@@ -1,90 +1,12 @@
 import argparse
 import sys
 from pathlib import Path
-from typing import Iterable
 
-from .loader import (
-    OPTIONAL_METADATA_FIELDS,
-    PARAMETER_SECTIONS,
-    REQUIRED_FIELDS,
-    SECTION_FIELDS,
-    load_all_reactors,
-    reactor_table,
-)
-
-
-def _format_table(rows: list[dict[str, object]], columns: Iterable[str]) -> str:
-    cols = list(columns)
-    str_rows = [
-        ["" if row.get(col) is None else str(row.get(col)) for col in cols] for row in rows
-    ]
-    widths = [
-        max(len(col), *(len(r[i]) for r in str_rows)) if str_rows else len(col)
-        for i, col in enumerate(cols)
-    ]
-
-    header = " | ".join(col.ljust(widths[i]) for i, col in enumerate(cols))
-    separator = "-+-".join("-" * widths[i] for i in range(len(cols)))
-    body_lines = [" | ".join(r[i].ljust(widths[i]) for i in range(len(cols))) for r in str_rows]
-
-    table_lines = [header, separator, *body_lines]
-    return "\n".join(table_lines)
-
-
-def _cmd_list(root: Path) -> int:
-    reactors = load_all_reactors(root)
-    rows = reactor_table(reactors)
-    columns = ["id", "reactor_class", "name", "reactor_configuration", "organization", "design_year", "P_fus"]
-    table = _format_table(rows, columns)
-    print(table)
-    return 0
-
-
-def _cmd_show(root: Path, reactor_id: str) -> int:
-    reactors = load_all_reactors(root)
-    reactor = reactors.get(reactor_id)
-    if reactor is None:
-        print(f"Reactor '{reactor_id}' not found under {root / 'reactors'}", file=sys.stderr)
-        return 1
-
-    print("Metadata:")
-    metadata_fields = REQUIRED_FIELDS + OPTIONAL_METADATA_FIELDS
-    for field in metadata_fields:
-        value = getattr(reactor, field)
-        label = field
-        print(f"  {label}: {'' if value is None else value}")
-
-    print("\nParameters:")
-    printed_scalar = False
-    for section in PARAMETER_SECTIONS:
-        section_fields = SECTION_FIELDS.get(section, [])
-        section_label = section.replace("_", " ")
-        section_printed = False
-        for field in section_fields:
-            value = getattr(reactor, field)
-            if value is not None:
-                if not section_printed:
-                    print(f"  {section_label}:")
-                    section_printed = True
-                printed_scalar = True
-                print(f"    {field}: {value}")
-    if not printed_scalar:
-        print("  (none)")
-
-    print("\nArtifacts:")
-    if reactor.has_density_profile():
-        print(f"  density_profile_file: {reactor.density_profile_file}")
-        print(f"  density_profile_x_axis: {reactor.density_profile_x_axis}")
-        print(f"  density_profile_y_dataset: {reactor.density_profile_y_dataset}")
-        print(f"  density_profile_x_unit: {reactor.density_profile_x_unit}")
-        print(f"  density_profile_y_unit: {reactor.density_profile_y_unit}")
-    else:
-        print("  density_profile: none")
-
-    return 0
+from .loader import OPTIONAL_METADATA_FIELDS, REQUIRED_FIELDS, load_all_reactors, reactor_table
 
 
 def main() -> None:
+    """Entry point for the fusdb command-line interface."""
     parser = argparse.ArgumentParser(prog="fusdb", description="Fusion reactor scenario database CLI.")
     parser.add_argument("--root", type=Path, default=Path("."), help="Project root (default: current directory).")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -98,13 +20,60 @@ def main() -> None:
     root = args.root
 
     if args.command == "list":
-        exit_code = _cmd_list(root)
-    elif args.command == "show":
-        exit_code = _cmd_show(root, args.reactor_id)
-    else:
-        exit_code = 1
+        # Build a simple fixed-width table for quick CLI inspection.
+        reactors = load_all_reactors(root)
+        rows = reactor_table(reactors)
+        columns = [
+            "id",
+            "reactor_family",
+            "name",
+            "reactor_configuration",
+            "organization",
+            "design_year",
+            "P_fus",
+        ]
+        cols = list(columns)
+        str_rows = [[("" if row.get(col) is None else str(row.get(col))) for col in cols] for row in rows]
+        widths = [
+            max(len(col), *(len(r[i]) for r in str_rows)) if str_rows else len(col)
+            for i, col in enumerate(cols)
+        ]
 
-    sys.exit(exit_code)
+        header = " | ".join(col.ljust(widths[i]) for i, col in enumerate(cols))
+        separator = "-+-".join("-" * widths[i] for i in range(len(cols)))
+        body_lines = [" | ".join(r[i].ljust(widths[i]) for i in range(len(cols))) for r in str_rows]
+        print("\n".join([header, separator, *body_lines]))
+        sys.exit(0)
+
+    if args.command == "show":
+        # Dump metadata, parameters, and artifact info for a single reactor.
+        reactors = load_all_reactors(root)
+        reactor = reactors.get(args.reactor_id)
+        if reactor is None:
+            print(f"Reactor '{args.reactor_id}' not found under {root / 'reactors'}", file=sys.stderr)
+            sys.exit(1)
+
+        print("Metadata:")
+        metadata_fields = REQUIRED_FIELDS + OPTIONAL_METADATA_FIELDS
+        for field in metadata_fields:
+            value = getattr(reactor, field)
+            print(f"  {field}: {'' if value is None else value}")
+
+        print("\nParameters:")
+        if reactor.parameters:
+            for key in sorted(reactor.parameters.keys()):
+                value = reactor.parameters.get(key)
+                tol = reactor.parameter_tolerances.get(key)
+                if tol is not None:
+                    print(f"  {key}: {value} (tol={tol})")
+                else:
+                    print(f"  {key}: {value}")
+        else:
+            print("  (none)")
+
+        sys.exit(0)
+
+    sys.exit(1)
 
 
 if __name__ == "__main__":

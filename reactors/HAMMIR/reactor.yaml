@@ -1,0 +1,14 @@
+id: Hammir2024
+name: Hammir 2024
+reactor_configuration: spherical tokamak
+organization: Realta
+country: 
+
+design_year: 2024
+doi: 10.1088/1741-4326/ad3fcb
+
+# plasma geometry
+V_p: 46
+
+n_avg: 7.5e19
+T_avg: 150

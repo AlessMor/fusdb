@@ -1,0 +1,29 @@
+# Default parameter values layered by tags.
+layers:
+  - name: base-geometry
+    priority: 0
+    tags: []
+    defaults:
+      #kappa: 1.0
+      #delta: 1.0
+      squareness: 0.0
+
+  # Example extensions:
+  # - name: tokamak
+  #   priority: 10
+  #   tags: ["tokamak"]
+  #   defaults:
+  #     kappa: 1.7
+  #     delta: 0.3
+  #
+  # - name: tokamak-hmode
+  #   priority: 20
+  #   tags: ["tokamak", "H-mode"]
+  #   defaults:
+  #     H98_y2: 1.0
+  #
+  # - name: DEMO
+  #   priority: 100
+  #   tags: ["DEMO"]
+  #   defaults:
+  #     q95: 3.5

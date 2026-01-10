@@ -2,7 +2,7 @@
 
 # Import scalings to register decorated relations when confinement is imported first.
 from . import scalings  # noqa: F401
-from fusdb import reactors_class as _rc
+from fusdb.reactor_util import relations_for
 
 __all__ = [
     "relations",
@@ -16,8 +16,10 @@ def relations(
     require_all: bool = True,
     exclude: tuple[str, ...] | None = None,
 ):
-    return _rc.confinement_relations(tags, require_all=require_all, exclude=exclude)
+    """Return confinement relations matching the requested tags."""
+    return relations_for(tags, require_all=require_all, exclude=exclude)
 
 
 def relations_by_name():
-    return _rc.confinement_relations_by_name()
+    """Map confinement relation outputs to their Relation objects."""
+    return {rel.variables[0]: rel for rel in relations_for(("confinement",), require_all=False)}

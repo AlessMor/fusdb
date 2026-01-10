@@ -3,12 +3,12 @@ Most of them are taken as-is from the PROCESS code (UKAEA)."""
 
 from __future__ import annotations
 
-import math
+import sympy as sp
 
 from fusdb.reactors_class import Reactor
-from fusdb.relations_util import require_nonzero
+from fusdb.relation_util import require_nonzero
 
-# Add @Reactor.relation(("confinement", "tokamak"), name="tau_E itpa20_il") for the used relations
+# Only the active default scaling is decorated for relation discovery.
 
 
 
@@ -259,6 +259,7 @@ def tau_E_itpa_2018_std5_wls(
 def tau_E_menard_nstx_petty08_hybrid(
     I_p: float, B0: float, dnla19: float, P_loss_MW: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
+    """Return tau E menard nstx petty08 hybrid scaling."""
     invA = 1.0 / A
     if invA <= 0.4:
         return tau_E_petty08(I_p, B0, dnla19, P_loss_MW, R, kappa_ipb, A)
@@ -273,6 +274,7 @@ def tau_E_menard_nstx_petty08_hybrid(
 def tau_E_menard_nstx(
     I_p: float, B0: float, dnla19: float, P_loss_MW: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
+    """Return tau E menard nstx scaling."""
     return (
         0.095
         * I_p ** 0.57
@@ -337,7 +339,11 @@ def tau_E_hubbard_lower(I_p: float, B0: float, dnla20: float, P_loss_MW: float) 
 
 
 
-
+@Reactor.relation(
+    ("confinement", "tokamak", "I-mode"),
+    name="tau_E_hubbard_nominal",
+    output="tau_E",
+)
 def tau_E_hubbard_nominal(I_p: float, B0: float, dnla20: float, P_loss_MW: float) -> float:
     """
         Calculate the Hubbard 2017 I-mode confinement time scaling - nominal
@@ -403,8 +409,9 @@ def tau_E_lang_high_density(
     afuel: float,
     kappa_ipb: float,
 ) -> float:
+    """Return tau E lang high density scaling."""
     qratio = q / require_nonzero(q_star, "q_star", "Lang scaling")
-    n_gw = 1.0e14 * I_p / (math.pi * a * a)
+    n_gw = 1.0e14 * I_p / (sp.pi * a * a)
     nratio = nd_line / n_gw
     return (
         6.94e-7
@@ -417,8 +424,8 @@ def tau_E_lang_high_density(
         * A ** 2.48205
         * afuel ** 0.2
         * qratio ** 0.77
-        * A ** (-0.9 * math.log(A))
-        * nratio ** (-0.22 * math.log(nratio))
+        * A ** (-0.9 * sp.log(A))
+        * nratio ** (-0.22 * sp.log(nratio))
     )
 
 
@@ -499,7 +506,7 @@ def tau_E_murari(I_p: float, R: float, kappa_ipb: float, dnla19: float, B0: floa
         * R ** 1.731
         * kappa_ipb ** 1.450
         * P_loss_MW ** (-0.735)
-        * (dnla19 ** 0.448 / (1.0 + math.exp(-9.403 * (dnla19 / B0) ** -1.365)))
+        * (dnla19 ** 0.448 / (1.0 + sp.exp(-9.403 * (dnla19 / B0) ** -1.365)))
     )
 
 
@@ -688,6 +695,11 @@ def tau_E_iter_ipb98y3(
 
 
 
+@Reactor.relation(
+    ("confinement", "tokamak"),
+    name="tau_E_iter_ipb98y2",
+    output="tau_E",
+)
 def tau_E_iter_ipb98y2(
     I_p: float, B0: float, dnla19: float, P_loss_MW: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
@@ -777,6 +789,7 @@ def tau_E_iter_ipb98y1(
 def iter_ipb98y_confinement_time(
     I_p: float, B0: float, dnla19: float, P_loss_MW: float, R: float, kappa: float, A: float, afuel: float
 ) -> float:
+    """Return iter ipb98y confinement time scaling."""
     return (
         0.0365
         * I_p ** 0.97
@@ -795,6 +808,7 @@ tau_E_ipb98y = iter_ipb98y_confinement_time
 def iter_pb98py_confinement_time(
     I_p: float, B0: float, dnla19: float, P_loss_MW: float, R: float, kappa: float, A: float, afuel: float
 ) -> float:
+    """Return iter pb98py confinement time scaling."""
     return (
         0.0615
         * I_p ** 0.9
@@ -812,6 +826,7 @@ tau_E_pb98py = iter_pb98py_confinement_time
 def kaye_confinement_time(
     I_p: float, B0: float, kappa: float, R: float, A: float, dnla19: float, afuel: float, P_loss_MW: float
 ) -> float:
+    """Return kaye confinement time scaling."""
     return (
         0.021
         * I_p ** 0.81
@@ -828,6 +843,7 @@ def kaye_confinement_time(
 def valovic_elmy_confinement_time(
     I_p: float, B0: float, dnla19: float, afuel: float, R: float, a: float, kappa: float, P_loss_MW: float
 ) -> float:
+    """Return valovic elmy confinement time scaling."""
     return (
         0.067
         * I_p ** 0.9
@@ -845,6 +861,7 @@ def valovic_elmy_confinement_time(
 def iter_96p_confinement_time(
     I_p: float, B0: float, kappa_95: float, R: float, A: float, dnla19: float, afuel: float, P_loss_MW: float
 ) -> float:
+    """Return iter 96p confinement time scaling."""
     return (
         0.023
         * I_p ** 0.96
@@ -881,6 +898,7 @@ def tau_E_iter97L(
 def iter_h97p_elmy_confinement_time(
     I_p: float, B0: float, P_loss_MW: float, dnla19: float, R: float, A: float, kappa: float, afuel: float
 ) -> float:
+    """Return iter h97p elmy confinement time scaling."""
     return (
         0.029
         * I_p ** 0.90
@@ -899,6 +917,7 @@ tau_E_iter_h97p_elmy = iter_h97p_elmy_confinement_time
 def iter_h97p_confinement_time(
     I_p: float, B0: float, P_loss_MW: float, dnla19: float, R: float, A: float, kappa: float, afuel: float
 ) -> float:
+    """Return iter h97p confinement time scaling."""
     return (
         0.031
         * I_p ** 0.95
@@ -917,6 +936,7 @@ tau_E_iter_h97p = iter_h97p_confinement_time
 def iter_93h_confinement_time(
     I_p: float, B0: float, P_loss_MW: float, afuel: float, R: float, dnla20: float, A: float, kappa: float
 ) -> float:
+    """Return iter 93h confinement time scaling."""
     return (
         0.036
         * I_p ** 1.06
@@ -935,22 +955,26 @@ tau_E_iter93h = iter_93h_confinement_time
 def lackner_gottardi_stellarator_confinement_time(
     R: float, a: float, dnla20: float, B0: float, P_loss_MW: float, q: float
 ) -> float:
+    """Return lackner gottardi stellarator confinement time scaling."""
     return 0.17 * R * a**2 * dnla20 ** 0.6 * B0 ** 0.8 * P_loss_MW ** (-0.6) * q ** 0.4
 
 
 
 def gyro_reduced_bohm_confinement_time(B0: float, dnla20: float, P_loss_MW: float, a: float, R: float) -> float:
+    """Return gyro reduced bohm confinement time scaling."""
     return 0.25 * B0 ** 0.8 * dnla20 ** 0.6 * P_loss_MW ** (-0.6) * a ** 2.4 * R ** 0.6
 
 
 
 def sudo_et_al_confinement_time(R: float, a: float, dnla20: float, B0: float, P_loss_MW: float) -> float:
+    """Return sudo et al confinement time scaling."""
     return 0.17 * R ** 0.75 * a**2 * dnla20 ** 0.69 * B0 ** 0.84 * P_loss_MW ** (-0.58)
 
 
 
 def iter_h90p_amended_confinement_time(I_p: float, B0: float, afuel: float, R: float, P_loss_MW: float, kappa: float) -> float:
-    return 0.082 * I_p ** 1.02 * B0 ** 0.15 * math.sqrt(afuel) * R ** 1.60 / (P_loss_MW ** 0.47 * kappa ** 0.19)
+    """Return iter h90p amended confinement time scaling."""
+    return 0.082 * I_p ** 1.02 * B0 ** 0.15 * sp.sqrt(afuel) * R ** 1.60 / (P_loss_MW ** 0.47 * kappa ** 0.19)
 
 tau_E_iter_h90p_amended = iter_h90p_amended_confinement_time
 
@@ -958,9 +982,10 @@ tau_E_iter_h90p_amended = iter_h90p_amended_confinement_time
 def riedel_h_confinement_time(
     I_p: float, R: float, a: float, kappa_95: float, dnla20: float, B0: float, afuel: float, P_loss_MW: float
 ) -> float:
+    """Return riedel h confinement time scaling."""
     return (
         0.1
-        * math.sqrt(afuel)
+        * sp.sqrt(afuel)
         * I_p ** 0.884
         * R ** 1.24
         * a ** (-0.23)
@@ -975,6 +1000,7 @@ def riedel_h_confinement_time(
 def neo_kaye_confinement_time(
     I_p: float, R: float, a: float, kappa_95: float, dnla20: float, B0: float, P_loss_MW: float
 ) -> float:
+    """Return neo kaye confinement time scaling."""
     return (
         0.063
         * I_p ** 1.12
@@ -991,6 +1017,7 @@ def neo_kaye_confinement_time(
 def lackner_gottardi_confinement_time(
     I_p: float, R: float, a: float, kappa_95: float, dnla20: float, B0: float, P_loss_MW: float
 ) -> float:
+    """Return lackner gottardi confinement time scaling."""
     qhat = ((1.0 + kappa_95**2) * a * a * B0) / (0.4 * I_p * R)
     return (
         0.12
@@ -1009,6 +1036,7 @@ def lackner_gottardi_confinement_time(
 def christiansen_confinement_time(
     I_p: float, R: float, a: float, kappa_95: float, dnla20: float, B0: float, P_loss_MW: float, afuel: float
 ) -> float:
+    """Return christiansen confinement time scaling."""
     return (
         0.24
         * I_p ** 0.79
@@ -1025,6 +1053,7 @@ def christiansen_confinement_time(
 def riedel_l_confinement_time(
     I_p: float, R: float, a: float, kappa_95: float, dnla20: float, B0: float, P_loss_MW: float
 ) -> float:
+    """Return riedel l confinement time scaling."""
     return (
         0.044
         * I_p ** 0.93
@@ -1041,6 +1070,7 @@ def riedel_l_confinement_time(
 def iter_h90p_confinement_time(
     I_p: float, R: float, a: float, kappa: float, dnla20: float, B0: float, afuel: float, P_loss_MW: float
 ) -> float:
+    """Return iter h90p confinement time scaling."""
     return (
         0.064
         * I_p ** 0.87
@@ -1049,8 +1079,8 @@ def iter_h90p_confinement_time(
         * kappa ** 0.35
         * dnla20 ** 0.09
         * B0 ** 0.15
-        * math.sqrt(afuel)
-        / math.sqrt(P_loss_MW)
+        * sp.sqrt(afuel)
+        / sp.sqrt(P_loss_MW)
     )
 
 tau_E_iter_h90p = iter_h90p_confinement_time
@@ -1059,16 +1089,17 @@ tau_E_iter_h90p = iter_h90p_confinement_time
 def kaye_big_confinement_time(
     R: float, a: float, B0: float, kappa_95: float, I_p: float, n20: float, afuel: float, P_loss_MW: float
 ) -> float:
+    """Return kaye big confinement time scaling."""
     return (
         0.105
-        * math.sqrt(R)
+        * sp.sqrt(R)
         * a ** 0.8
         * B0 ** 0.3
         * kappa_95 ** 0.25
         * I_p ** 0.85
         * n20 ** 0.1
-        * math.sqrt(afuel)
-        / math.sqrt(P_loss_MW)
+        * sp.sqrt(afuel)
+        / sp.sqrt(P_loss_MW)
     )
 
 
@@ -1085,20 +1116,21 @@ def jaeri_confinement_time(
     Z_eff: float,
     P_loss_MW: float,
 ) -> float:
+    """Return jaeri confinement time scaling."""
     gjaeri = (
         Z_eff**0.4
         * ((15.0 - Z_eff) / 20.0) ** 0.6
         * (3.0 * q_star * (q_star + 5.0) / ((q_star + 2.0) * (q_star + 7.0))) ** 0.6
     )
     return (
-        0.085 * kappa_95 * a**2 * math.sqrt(afuel)
+        0.085 * kappa_95 * a**2 * sp.sqrt(afuel)
         + 0.069
         * n20 ** 0.6
         * I_p
         * B0 ** 0.2
         * a ** 0.4
         * R ** 1.6
-        * math.sqrt(afuel)
+        * sp.sqrt(afuel)
         * gjaeri
         * kappa_95 ** 0.2
         / P_loss_MW
@@ -1117,6 +1149,7 @@ def t10_confinement_time(
     Z_eff: float,
     I_p: float,
 ) -> float:
+    """Return t10 confinement time scaling."""
     denfac = dnla20 * R * q_star / (1.3 * B0)
     denfac = min(1.0, denfac)
     return (
@@ -1124,7 +1157,7 @@ def t10_confinement_time(
         * R
         * a
         * B0
-        * math.sqrt(kappa_95)
+        * sp.sqrt(kappa_95)
         * denfac
         / (P_loss_MW ** 0.4)
         * (Z_eff**2 * I_p**4 / (R * a * q_star**3 * kappa_95 ** 1.5)) ** 0.08
@@ -1133,7 +1166,8 @@ def t10_confinement_time(
 tau_E_t10 = t10_confinement_time
 
 def goldston_confinement_time(I_p: float, R: float, a: float, kappa_95: float, afuel: float, P_loss_MW: float) -> float:
-    return 0.037 * I_p * R ** 1.75 * a ** (-0.37) * math.sqrt(kappa_95) * math.sqrt(afuel / 1.5) / math.sqrt(P_loss_MW)
+    """Return goldston confinement time scaling."""
+    return 0.037 * I_p * R ** 1.75 * a ** (-0.37) * sp.sqrt(kappa_95) * sp.sqrt(afuel / 1.5) / sp.sqrt(P_loss_MW)
 
 
 
@@ -1169,9 +1203,9 @@ def rebut_lallia_confinement_time(
         - T.C.Hender et.al., 'Physics Assesment of the European Reactor Study', AEA FUS 172, 1992
     """
     rll = (a * a * R * kappa) ** (1.0 / 3.0)
-    term1 = 1.2e-2 * I_p * rll ** 1.5 / math.sqrt(Z_eff)
-    term2 = 0.146 * dnla20 ** 0.75 * math.sqrt(I_p) * math.sqrt(B0) * rll ** 2.75 * Z_eff ** 0.25 / P_loss_MW
-    return 1.65 * math.sqrt(afuel / 2.0) * (term1 + term2)
+    term1 = 1.2e-2 * I_p * rll ** 1.5 / sp.sqrt(Z_eff)
+    term2 = 0.146 * dnla20 ** 0.75 * sp.sqrt(I_p) * sp.sqrt(B0) * rll ** 2.75 * Z_eff ** 0.25 / P_loss_MW
+    return 1.65 * sp.sqrt(afuel / 2.0) * (term1 + term2)
 
 
 
@@ -1240,11 +1274,11 @@ def iter_89p_confinement_time(I_p: float, R: float, a: float, kappa: float, dnla
         * I_p ** 0.85
         * R ** 1.2
         * a ** 0.3
-        * math.sqrt(kappa)
+        * sp.sqrt(kappa)
         * dnla20 ** 0.1
         * B0 ** 0.2
-        * math.sqrt(afuel)
-        / math.sqrt(P_loss_MW)
+        * sp.sqrt(afuel)
+        / sp.sqrt(P_loss_MW)
     )
 
 
@@ -1267,7 +1301,7 @@ def tau_E_iter89P(
         * a ** 0.3
         * kappa_sep ** 0.5
         * dnla20 ** 0.1
-        / math.sqrt(P_loss_MW)
+        / sp.sqrt(P_loss_MW)
     )
 
 
@@ -1290,7 +1324,7 @@ def tau_E_iter89P_ka(
         * a ** 0.3
         * kappa_A ** 0.5
         * dnla20 ** 0.1
-        / math.sqrt(P_loss_MW)
+        / sp.sqrt(P_loss_MW)
     )
 
 
@@ -1311,7 +1345,7 @@ def tau_E_mirnov(a: float, kappa_95: float, I_p: float) -> float:
         - N. A. Uckan, International Atomic Energy Agency, Vienna (Austria)and ITER Physics Group,
          "ITER physics design guidelines: 1989", no. No. 10. Feb. 1990.
     """
-    return 0.2 * a * math.sqrt(kappa_95) * I_p
+    return 0.2 * a * sp.sqrt(kappa_95) * I_p
 
 
 
@@ -1334,4 +1368,3 @@ def tau_E_neo_alcator(dene20: float, a: float, R: float, q_star: float) -> float
          "ITER physics design guidelines: 1989", no. No. 10. Feb. 1990.
     """
     return 0.07 * dene20 * a * R * R * q_star
-

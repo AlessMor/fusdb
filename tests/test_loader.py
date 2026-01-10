@@ -13,31 +13,24 @@ def _write_sample_reactor(tmp_path: Path) -> Path:
         "\n".join(
             [
                 'id: "ARC_2018"',
-                'reactor_class: "ARC"',
+                'reactor_family: "ARC"',
                 'name: "ARC 2018 baseline"',
                 'reactor_configuration: "tokamak"',
                 'organization: "Example Lab"',
                 "",
-                "plasma_geometry:",
-                "  R: 3.3",
-                "  a: 1.13",
+                "# plasma geometry",
+                "R: 3.3",
+                "a: 1.13",
                 "",
-                "plasma_parameters:",
-                "  B0: 5.0",
-                "  n_avg: 1.1e20",
+                "# plasma parameters",
+                "B0: 5.0",
+                "n_avg: 1.1e20",
                 "",
-                "power_and_efficiency:",
-                "  P_fus: 525",
-                "",
-                "artifacts:",
-                "  density_profile:",
-                '    file: "density_profile.h5"',
-                '    x_axis: "rho"',
-                '    y_dataset: "ne"',
+                "# power and efficiency",
+                "P_fus: 525",
             ]
         )
     )
-    (reactor_dir / "density_profile.h5").touch()
     return reactor_yaml
 
 
@@ -50,15 +43,12 @@ def test_load_reactor_yaml(tmp_path: Path) -> None:
     assert reactor.name == "ARC 2018 baseline"
     assert reactor.reactor_configuration == "tokamak"
     assert reactor.organization == "Example Lab"
-    assert reactor.P_fus == 525
-    assert reactor.R == 3.3
-    assert reactor.a == 1.13
-    assert math.isclose(reactor.A, reactor.R / reactor.a)
-    assert reactor.B0 == 5.0
-    assert reactor.n_avg == "1.1e20"
-    assert reactor.density_profile_file == "density_profile.h5"
-    assert reactor.density_profile_x_axis == "rho"
-    assert reactor.density_profile_y_dataset == "ne"
+    assert float(reactor.P_fus) == 525.0
+    assert math.isclose(float(reactor.R), 3.3)
+    assert math.isclose(float(reactor.a), 1.13)
+    assert math.isclose(float(reactor.A), float(reactor.R) / float(reactor.a))
+    assert math.isclose(float(reactor.B0), 5.0)
+    assert math.isclose(float(reactor.n_avg), 1.1e20)
     assert reactor.root_dir == yaml_path.parent
 
 
@@ -69,39 +59,109 @@ def test_find_reactor_dirs_and_load_all(tmp_path: Path) -> None:
 
     reactors = load_all_reactors(tmp_path)
     assert set(reactors.keys()) == {"ARC_2018"}
-    assert reactors["ARC_2018"].P_fus == 525
+    assert float(reactors["ARC_2018"].P_fus) == 525.0
 
 
-def test_missing_density_profile_file_warns(tmp_path: Path) -> None:
-    reactor_dir = tmp_path / "reactors" / "ARC_2019"
+def test_parameter_tolerance_parsing(tmp_path: Path) -> None:
+    reactor_dir = tmp_path / "reactors" / "ARC_2020"
     reactor_dir.mkdir(parents=True)
     path = reactor_dir / "reactor.yaml"
     path.write_text(
         "\n".join(
             [
-                'id: "ARC_2019"',
-                'reactor_class: "ARC"',
-                'name: "ARC 2019 baseline"',
+                'id: "ARC_2020"',
+                'name: "ARC 2020 baseline"',
                 'reactor_configuration: "tokamak"',
                 'organization: "Example Lab"',
                 "",
-                "plasma_geometry:",
-                "  R: 3.3",
-                "  a: 1.13",
-                "",
-                "power_and_efficiency:",
-                "  P_fus: 525",
-                "",
-                "artifacts:",
-                "  density_profile:",
-                '    file: "missing_profile.h5"',
-                '    x_axis: "rho"',
-                '    y_dataset: "ne"',
+                "# plasma geometry",
+                "R:",
+                "  value: 3.3",
+                "  tol: 0.05",
             ]
         )
     )
 
-    with pytest.warns(UserWarning):
-        reactor = load_reactor_yaml(path)
+    reactor = load_reactor_yaml(path)
 
-    assert reactor.density_profile_file == "missing_profile.h5"
+    assert math.isclose(float(reactor.R), 3.3)
+    assert math.isclose(reactor.parameter_tolerances["R"], 0.05)
+
+
+def test_parameter_method_parsing(tmp_path: Path) -> None:
+    reactor_dir = tmp_path / "reactors" / "ARC_2021"
+    reactor_dir.mkdir(parents=True)
+    path = reactor_dir / "reactor.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                'id: "ARC_2021"',
+                'name: "ARC 2021 baseline"',
+                'reactor_configuration: "tokamak"',
+                'organization: "Example Lab"',
+                "",
+                "custom_param:",
+                "  method: IPB98",
+                "tau_E:",
+                "  value: 3.2",
+                "  method: tau_E_iter_ipb98y2",
+            ]
+        )
+    )
+
+    reactor = load_reactor_yaml(path)
+
+    assert reactor.parameters.get("custom_param") is None
+    assert reactor.parameter_methods["custom_param"] == "IPB98"
+    assert reactor.parameter_methods["tau_E"] == "tau_E_iter_ipb98y2"
+
+
+def test_parameter_alias_mapping(tmp_path: Path) -> None:
+    reactor_dir = tmp_path / "reactors" / "ARC_2022"
+    reactor_dir.mkdir(parents=True)
+    path = reactor_dir / "reactor.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                'id: "ARC_2022"',
+                'name: "ARC 2022 baseline"',
+                'reactor_configuration: "tokamak"',
+                'organization: "Example Lab"',
+                "",
+                "elongation: 1.7",
+                "triangularity:",
+                "  value: 0.3",
+                "  tol: 0.05",
+                "xi: 0.9",
+            ]
+        )
+    )
+
+    reactor = load_reactor_yaml(path)
+
+    assert math.isclose(float(reactor.parameters["kappa"]), 1.7)
+    assert math.isclose(float(reactor.parameters["delta"]), 0.3)
+    assert math.isclose(reactor.parameter_tolerances["delta"], 0.05)
+    assert math.isclose(float(reactor.parameters["squareness"]), 0.9)
+
+
+def test_duplicate_alias_raises(tmp_path: Path) -> None:
+    reactor_dir = tmp_path / "reactors" / "ARC_2023"
+    reactor_dir.mkdir(parents=True)
+    path = reactor_dir / "reactor.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                'id: "ARC_2023"',
+                'name: "ARC 2023 baseline"',
+                'reactor_configuration: "tokamak"',
+                'organization: "Example Lab"',
+                "",
+                "kappa: 1.8",
+                "elongation: 1.9",
+            ]
+        )
+    )
+
+    with pytest.raises(ValueError, match="Duplicate parameter 'kappa'"):
+        load_reactor_yaml(path)

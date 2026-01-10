@@ -1,0 +1,21 @@
+id: InfinityTwo2025
+name: INFINITY TWO 2025
+reactor_configuration: stellarator
+organization: TypeOne Energy
+country: 
+
+design_year: 2025
+doi: 10.1017/S0022377825000364
+
+# plasma geometry
+R: 6.25 
+a: 2.0 
+
+n_avg: 1.88e20
+T_avg: 6.8
+
+tau_E: 1.7
+
+P_aux: 20e6
+
+TBR: 1.3

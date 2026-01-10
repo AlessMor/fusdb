@@ -1,0 +1,295 @@
+# Allowed parameter variables.
+################ GEOMETRIC PARAMETERS ################
+R:
+  default_unit: m
+  constraints:
+    - R > 0
+  description:
+    - Major radius.
+a:
+  default_unit: m
+  constraints:
+    - a > 0
+  description:
+    - Minor radius.
+A:
+  default_unit: dimensionless
+  constraints:
+    - A > 0
+  description:
+    - Aspect ratio (R/a).
+kappa:
+  default_unit: dimensionless
+  aliases:
+    - elongation
+  constraints:
+    - kappa > 0
+  description:
+    - Elongation.
+kappa_95:
+  default_unit: dimensionless
+  description:
+    - Elongation at 95% flux surface.
+delta_95:
+  default_unit: dimensionless
+  description:
+    - Triangularity at 95% flux surface.
+delta:
+  default_unit: dimensionless
+  aliases:
+    - triangularity
+  constraints:
+    - delta >= 0
+    - delta <= 1
+  description:
+    - Core triangularity.
+V_p:
+  default_unit: m^3
+  constraints:
+    - V_p > 0
+  description:
+    - Plasma volume.
+S_p:
+  default_unit: m^2
+  constraints:
+    - S_p > 0
+  description:
+    - Plasma surface area.
+squareness:
+  default_unit: dimensionless
+  aliases:
+    - xi
+  constraints:
+    - squareness >= -0.5
+  description:
+    - Squareness (xi).
+R_max:
+  default_unit: m
+  description:
+    - Outboard major radius extent from the center of the torus.
+R_min:
+  default_unit: m
+  description:
+    - Inboard major radius extent from the center of the torus.
+Z_max:
+  default_unit: m
+  description:
+    - Upper vertical extent.
+Z_min:
+  default_unit: m
+  description:
+    - Lower vertical extent.
+################ MAGNETIC FIELD & CURRENT ################
+B0:
+  default_unit: T
+  description:
+    - Toroidal field on axis.
+B_max:
+  default_unit: T
+  description:
+    - Peak field on coil.
+B_p:
+  default_unit: T
+  description:
+    - Poloidal field.
+I_p:
+  default_unit: MA
+  description:
+    - Plasma current.
+f_BS:
+  default_unit: dimensionless
+  description:
+    - Bootstrap current fraction.
+f_NI:
+  default_unit: dimensionless
+  description:
+    - Non-inductive current fraction.
+f_CD:
+  default_unit: dimensionless
+  description:
+    - Driven current fraction (excluding bootstrap).
+q95:
+  default_unit: dimensionless
+  description:
+    - Safety factor at 95% flux surface.
+q_a:
+  default_unit: dimensionless
+  description:
+    - Edge safety factor.
+q_min:
+  default_unit: dimensionless
+  description:
+    - Minimum safety factor.
+li:
+  default_unit: dimensionless
+  description:
+    - Internal inductance.
+################ PLASMA PRESSURE & ENERGY ################
+beta_N:
+  default_unit: dimensionless
+  description:
+    - Normalized beta.
+beta_T:
+  default_unit: dimensionless
+  description:
+    - Toroidal beta (fraction).
+beta_p:
+  default_unit: dimensionless
+  description:
+    - Poloidal beta.
+beta:
+  default_unit: dimensionless
+  description:
+    - Total beta.
+beta_limit:
+  default_unit: dimensionless
+  description:
+    - Troyon beta limit.
+p_th:
+  default_unit: Pa
+  description:
+    - Thermal pressure.
+W_th:
+  default_unit: J
+  description:
+    - Thermal stored energy.
+################ TEMPERATURE & DENSITY ################
+T_avg:
+  default_unit: keV
+  description:
+    - Volume-averaged electron temperature.
+T0:
+  default_unit: keV
+  description:
+    - On-axis electron temperature.
+T_e:
+  default_unit: keV
+  description:
+    - Electron temperature.
+T_i:
+  default_unit: keV
+  description:
+    - Ion temperature.
+n_avg:
+  default_unit: 1/m^3
+  description:
+    - Volume-averaged electron density.
+n0:
+  default_unit: 1/m^3
+  description:
+    - On-axis electron density.
+n_e:
+  default_unit: 1/m^3
+  description:
+    - Electron density.
+n_i:
+  default_unit: 1/m^3
+  description:
+    - Ion density.
+f_GW:
+  default_unit: dimensionless
+  description:
+    - Greenwald fraction.
+Z_eff:
+  default_unit: dimensionless
+  description:
+    - Effective charge.
+################ CONFINEMENT & PERFORMANCE ################
+TBR:
+  default_unit: dimensionless
+  description:
+    - Tritium breeding ratio.
+tau_E:
+  default_unit: s
+  description:
+    - Energy confinement time.
+tau_pulse:
+  default_unit: s
+  description:
+    - Pulse length.
+H89:
+  default_unit: dimensionless
+  description:
+    - H89 confinement enhancement factor.
+H98_y2:
+  default_unit: dimensionless
+  description:
+    - H98(y,2) confinement enhancement factor.
+G89:
+  default_unit: dimensionless
+  description:
+    - G89 gain factor.
+################ POWER & EXHAUST ################
+P_fus:
+  default_unit: MW
+  description:
+    - Fusion power.
+P_th_tot:
+  default_unit: MW
+  description:
+    - Total thermal power.
+P_elec_tot:
+  default_unit: MW
+  description:
+    - Gross electric power.
+P_elec_net:
+  default_unit: MW
+  description:
+    - Net electric power.
+eta_th:
+  default_unit: dimensionless
+  description:
+    - Plant thermal/electric efficiency.
+Q_e:
+  default_unit: dimensionless
+  description:
+    - Electric power multiplication.
+P_wall:
+  default_unit: MW/m^2
+  description:
+    - Fusion power wall loading.
+P_LHCD:
+  default_unit: MW
+  description:
+    - Lower hybrid coupled power.
+P_ICRF:
+  default_unit: MW
+  description:
+    - ICRF coupled power.
+P_LH:
+  default_unit: MW
+  description:
+    - L-H transition threshold power.
+P_sep:
+  default_unit: MW
+  description:
+    - Power across the separatrix.
+P_sep_over_R:
+  default_unit: MW/m
+  description:
+    - P_sep divided by major radius.
+P_sep_B_over_q95AR:
+  default_unit: MW*T/m
+  description:
+    - P_sep * B0 / (q95 * A * R).
+P_loss:
+  default_unit: W
+  description:
+    - Power loss across the plasma boundary.
+P_loss_MW:
+  default_unit: MW
+  description:
+    - Power loss in MW (scaling input).
+################ SCALING INPUTS ################
+dnla19:
+  default_unit: 1e19 m^-3
+  description:
+    - Line-averaged electron density (1e19 m^-3).
+kappa_ipb:
+  default_unit: dimensionless
+  description:
+    - IPB-specific elongation at separatrix.
+afuel:
+  default_unit: amu
+  description:
+    - Average fuel mass number.

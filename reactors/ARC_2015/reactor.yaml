@@ -1,52 +1,52 @@
-id: "ARC_2015"
-reactor_class: "ARC-class"
-name: "ARC 2015"
-reactor_configuration: "compact tokamak"
-organization: "MIT"
-country: "USA"
+id: ARC_2015
+reactor_family: ARC
+name: ARC 2015
+reactor_configuration: compact tokamak
+organization: MIT
+country: USA
 
 design_year: 2015
-doi: "10.1016/j.fusengdes.2015.07.008"
-notes: "Conceptual compact tokamak from MIT."
+doi: 10.1016/j.fusengdes.2015.07.008
+notes: Conceptual compact tokamak from MIT.
+solve_strategy: global
 
-plasma_geometry:
-  R: 3.3
-  a: 1.13
-  A: 2.92
-  kappa: 1.84
-  V_p: 153.0
-  S_p: 215.23
+# plasma geometry
+R: 3.3
+a: 1.13
+A: 2.92
+kappa: 1.84
+V_p: 153.0
+S_p: 215.23
 
-plasma_parameters:
-  B0: 9.2
-  B_max: 23
-  I_p: 7.8
-  f_BS: 0.63
-  q95: 7.2
-  q_a: 4.7
-  q_min: 3.5
-  li: 0.67
-  beta_N: 2.59
-  beta_T: 0.019
-  T_avg: 14
-  T0: 27
-  n_avg: 1.3e20
-  n0: 1.8e20
-  f_GW: 0.67
-  TBR: 1.1
-  confinement_time:
-    value: 0.64
-  H89: 2.8
-  H98_y2: 1.8
-  G89: 0.14
+# plasma parameters
+B0: 9.2
+B_max: 23
+I_p: 7.8
+f_BS: 0.63
+q95: 7.2
+q_a: 4.7
+q_min: 3.5
+li: 0.67
+beta_N: 2.59
+beta_T: 0.019
+T_avg: 14
+T0: 27
+n_avg: 1.3e20
+n0: 1.8e20
+f_GW: 0.67
+TBR: 1.1
+tau_E: 0.64
+H89: 2.8
+H98_y2: 1.8
+G89: 0.14
 
-power_and_efficiency:
-  P_fus: 525
-  P_th_tot: 708
-  P_elec_tot: 283
-  P_elec_net: 190
-  eta_th: 0.40
-  Q_e: 3.0
-  P_wall: 2.5
-  P_LHCD: 25
-  P_ICRF: 13.6
+# power and efficiency
+P_fus: 525
+P_th_tot: 708
+P_elec_tot: 283
+P_elec_net: 190
+eta_th: 0.40
+Q_e: 3.0
+P_wall: 2.5
+P_LHCD: 25
+P_ICRF: 13.6

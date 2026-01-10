@@ -1,24 +1,24 @@
-id: "STEP2024"
-reactor_class: "STEP-class"
-name: "STEP 2024"
-reactor_configuration: "spherical tokamak"
-organization: "UKAEA"
-country: "UK"
+id: STEP2024
+reactor_family: STEP
+name: STEP 2024
+reactor_configuration: spherical tokamak
+organization: UKAEA
+country: UK
 
 design_year: 2024
-doi: "10.1088/1741-4326/ad6ea2"
+doi: 10.1088/1741-4326/ad6ea2
 
-plasma_geometry:
-  R: 3.6 # Major radius [m]
-  A: 1.8 # Aspect ratio A = R/a [-]
-  kappa: 3.0 # Elongation kappa [-]
-  kappa_95: 2.8
-  
-plasma_parameters:
-  B0: 3.2 # Toroidal field on axis [T]
-  B_max: 12.0 # Peak field on coil [T]
-  I_p: 22.7 # Plasma current [MA]
-  H98_y2: 1.03 # H98(y,2) confinement enhancement factor [-]
+# plasma geometry
+R: 3.6 # Major radius [m]
+A: 1.8 # Aspect ratio A = R/a [-]
+kappa: 3.0 # Elongation kappa [-]
+kappa_95: 2.8
 
-power_and_efficiency:
-  P_fus: 1560 # Fusion power [MW]
+# plasma parameters
+B0: 3.2 # Toroidal field on axis [T]
+B_max: 12.0 # Peak field on coil [T]
+I_p: 22.7 # Plasma current [MA]
+H98_y2: 1.03 # H98(y,2) confinement enhancement factor [-]
+
+# power and efficiency
+P_fus: 1560 # Fusion power [MW]

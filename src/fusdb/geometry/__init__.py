@@ -1,5 +1,5 @@
-from fusdb.relations_util import REL_TOL_DEFAULT
-from fusdb import reactors_class as _rc
+from fusdb.relation_util import REL_TOL_DEFAULT
+from fusdb.reactor_util import relations_for
 
 # Import plasma_geometry to register decorated relations when geometry is imported first.
 from . import plasma_geometry  # noqa: F401
@@ -19,4 +19,5 @@ def relations(
     require_all: bool = True,
     exclude: tuple[str, ...] | None = None,
 ):
-    return _rc.relations_for(tags, require_all=require_all, exclude=exclude)
+    """Return geometry relations matching the requested tags."""
+    return relations_for(tags, require_all=require_all, exclude=exclude)

@@ -1,0 +1,23 @@
+id: Stellaris2025
+name: Stellaris 2025
+reactor_configuration: stellarator
+organization: Proxima
+country: 
+
+design_year: 2025
+doi: 10.1016/j.fusengdes.2025.114868
+
+# plasma geometry
+V_p: 428
+S_p: 940
+R: 12.7
+a: 1.3
+
+n_avg: 3.17
+T_avg: 12
+
+tau_p: 11
+tau_E: 1.5
+P_aux: 50e6
+
+P_wall: 4.05e6

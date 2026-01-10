@@ -1,0 +1,109 @@
+# Example reactor definition
+#
+# Parameters can be provided as scalars:
+#   R: 3.3
+#
+# Or as mappings with optional entries:
+#   R:
+#     value: 3.3
+#     unit: m
+#     tol: 0.02
+#     method: IPB98
+#
+# Units are converted to the default_unit in allowed_variables.yaml when provided.
+
+id: "EXAMPLE"
+name: "Example Reactor"
+reactor_configuration: "tokamak"
+organization: "Example Organization"
+
+# Optional metadata
+# reactor_family: Example
+# country: ITA # please use ISO 3166-1 alpha-3 country codes
+# site:
+# design_year: 2026
+# doi:
+# notes:
+# allow_relation_overrides: false # allows to override set values if not conforming to relations
+# confinement_mode: H-mode
+# solve_strategy: default # choose from 'default', 'global' or user-defined. user defined requires a list of relations or groups of relations to be specified
+
+# GEOMETRIC PARAMETERS
+# R: [m] Major radius.
+# a: [m] Minor radius.
+# A: [dimensionless] Aspect ratio (R/a).
+# kappa: [dimensionless] Elongation.
+# kappa_95: [dimensionless] Elongation at 95% flux surface.
+# delta_95: [dimensionless] Triangularity at 95% flux surface.
+# delta: [dimensionless] Core triangularity.
+# V_p: [m^3] Plasma volume.
+# S_p: [m^2] Plasma surface area.
+# squareness: [dimensionless] Squareness (xi).
+# R_max: [m] Outboard major radius extent from the center of the torus.
+# R_min: [m] Inboard major radius extent from the center of the torus.
+# Z_max: [m] Upper vertical extent.
+# Z_min: [m] Lower vertical extent.
+
+# MAGNETIC FIELD & CURRENT
+# B0: [T] Toroidal field on axis.
+# B_max: [T] Peak field on coil.
+# B_p: [T] Poloidal field.
+# I_p: [MA] Plasma current.
+# f_BS: [dimensionless] Bootstrap current fraction.
+# f_NI: [dimensionless] Non-inductive current fraction.
+# f_CD: [dimensionless] Driven current fraction (excluding bootstrap).
+# q95: [dimensionless] Safety factor at 95% flux surface.
+# q_a: [dimensionless] Edge safety factor.
+# q_min: [dimensionless] Minimum safety factor.
+# li: [dimensionless] Internal inductance.
+
+# PLASMA PRESSURE & ENERGY
+# beta_N: [dimensionless] Normalized beta.
+# beta_T: [dimensionless] Toroidal beta (fraction).
+# beta_p: [dimensionless] Poloidal beta.
+# beta: [dimensionless] Total beta.
+# beta_limit: [dimensionless] Troyon beta limit.
+# p_th: [Pa] Thermal pressure.
+# W_th: [J] Thermal stored energy.
+
+# TEMPERATURE & DENSITY
+# T_avg: [keV] Volume-averaged electron temperature.
+# T0: [keV] On-axis electron temperature.
+# T_e: [keV] Electron temperature.
+# T_i: [keV] Ion temperature.
+# n_avg: [1/m^3] Volume-averaged electron density.
+# n0: [1/m^3] On-axis electron density.
+# n_e: [1/m^3] Electron density.
+# n_i: [1/m^3] Ion density.
+# f_GW: [dimensionless] Greenwald fraction.
+# Z_eff: [dimensionless] Effective charge.
+
+# CONFINEMENT & PERFORMANCE
+# TBR: [dimensionless] Tritium breeding ratio.
+# tau_E: [s] Energy confinement time.
+# tau_pulse: [s] Pulse length.
+# H89: [dimensionless] H89 confinement enhancement factor.
+# H98_y2: [dimensionless] H98(y,2) confinement enhancement factor.
+# G89: [dimensionless] G89 gain factor.
+
+# POWER & EXHAUST
+# P_fus: [MW] Fusion power.
+# P_th_tot: [MW] Total thermal power.
+# P_elec_tot: [MW] Gross electric power.
+# P_elec_net: [MW] Net electric power.
+# eta_th: [dimensionless] Plant thermal/electric efficiency.
+# Q_e: [dimensionless] Electric power multiplication.
+# P_wall: [MW/m^2] Fusion power wall loading.
+# P_LHCD: [MW] Lower hybrid coupled power.
+# P_ICRF: [MW] ICRF coupled power.
+# P_LH: [MW] L-H transition threshold power.
+# P_sep: [MW] Power across the separatrix.
+# P_sep_over_R: [MW/m] P_sep divided by major radius.
+# P_sep_B_over_q95AR: [MW*T/m] P_sep * B0 / (q95 * A * R).
+# P_loss: [W] Power loss across the plasma boundary.
+# P_loss_MW: [MW] Power loss in MW (scaling input).
+
+# SCALING INPUTS
+# dnla19: [1e19 m^-3] Line-averaged electron density (1e19 m^-3).
+# kappa_ipb: [dimensionless] IPB-specific elongation at separatrix.
+# afuel: [amu] Average fuel mass number.
