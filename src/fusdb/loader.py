@@ -1,31 +1,35 @@
 from pathlib import Path
+import math
 from typing import Any
+import warnings
 
 import pint
 import yaml
 
-from .reactors_class import Reactor
+from .reactor_class import Reactor
 from .reactor_util import (
     ALLOWED_CONFINEMENT_MODES,
     ALLOWED_REACTOR_FAMILIES,
     ALLOWED_VARIABLES,
-    ARTIFACT_FIELDS,
     OPTIONAL_METADATA_FIELDS,
     REQUIRED_FIELDS,
     RESERVED_KEYS,
     configuration_tags,
     default_parameters_for_tags,
     normalize_allowed,
+    normalize_country,
     variable_aliases,
 )
 
 _UNIT_REGISTRY = pint.UnitRegistry()
+
 def load_reactor_yaml(path: Path | str) -> Reactor:
     """Load a reactor YAML file and return a fully solved Reactor instance."""
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"reactor.yaml not found at {path}")
 
+    # Load YAML and validate required fields.
     data = yaml.safe_load(path.read_text()) or {}
     if not isinstance(data, dict):
         raise ValueError(f"reactor.yaml at {path} must contain a mapping at the top level")
@@ -35,14 +39,15 @@ def load_reactor_yaml(path: Path | str) -> Reactor:
         missing_list = ", ".join(missing)
         raise ValueError(f"Missing required field(s) in {path}: {missing_list}")
 
+    # Collect metadata (country normalization happens in Reactor.__post_init__).
     kwargs: dict[str, Any] = {field: data.get(field) for field in REQUIRED_FIELDS}
     for field in OPTIONAL_METADATA_FIELDS:
         if field in data:
             kwargs[field] = data.get(field)
-    for field in ARTIFACT_FIELDS:
-        if field in data:
-            kwargs[field] = data.get(field)
+    if "country" in kwargs:
+        kwargs["country"] = normalize_country(kwargs.get("country"), warn=warnings.warn)
 
+    # Parse parameters (value/tolerance/method/unit) and convert units when provided.
     parameters: dict[str, Any] = {}
     tolerances: dict[str, float] = {}
     parameter_methods: dict[str, str] = {}
@@ -78,6 +83,17 @@ def load_reactor_yaml(path: Path | str) -> Reactor:
             param_method = None if method_raw is None else str(method_raw)
             unit_raw = value.get("unit")
             param_unit = None if unit_raw is None else str(unit_raw)
+        # Coerce numeric strings (e.g., 7.8e6) into floats when no explicit unit is provided.
+        if isinstance(param_value, str) and param_unit is None:
+            try:
+                numeric_value = float(param_value)
+            except ValueError:
+                pass
+            else:
+                if not math.isfinite(numeric_value):
+                    raise ValueError(f"Parameter {canonical!r} must be finite in {path}")
+                param_value = numeric_value
+        # Unit conversion uses allowed_variables default_unit definitions.
         if param_unit is not None:
             if param_value is None:
                 raise ValueError(f"Parameter {canonical!r} unit provided without a value in {path}")
@@ -102,6 +118,7 @@ def load_reactor_yaml(path: Path | str) -> Reactor:
         if param_method is not None:
             parameter_methods[canonical] = param_method
 
+    # Normalize tag-driven metadata to build default parameter layers.
     reactor_family = data.get("reactor_family")
     confinement_mode = data.get("confinement_mode")
     normalized_family = reactor_family
@@ -135,9 +152,9 @@ def load_reactor_yaml(path: Path | str) -> Reactor:
     return Reactor(**kwargs)
 
 
-def find_reactor_dirs(root: Path) -> list[Path]:
+def find_reactor_dirs(root: Path, reactor_folder: str = "reactors") -> list[Path]:
     """Return reactor directories containing a reactor.yaml under the given root."""
-    reactors_dir = root / "reactors"
+    reactors_dir = root / reactor_folder
     if not reactors_dir.is_dir():
         return []
 
@@ -159,25 +176,3 @@ def load_all_reactors(root: Path) -> dict[str, Reactor]:
             raise ValueError(f"Duplicate reactor id detected: {reactor.id}")
         reactors[reactor.id] = reactor
     return reactors
-
-
-def reactor_table(reactors: dict[str, Reactor]) -> list[dict[str, Any]]:
-    """Build a summary table of selected metadata and parameters."""
-    rows: list[dict[str, Any]] = []
-    for reactor in sorted(reactors.values(), key=lambda r: r.id):
-        rows.append(
-            {
-                "id": reactor.id,
-                "reactor_family": reactor.reactor_family,
-                "name": reactor.name,
-                "reactor_configuration": reactor.reactor_configuration,
-                "organization": reactor.organization,
-                "country": reactor.country,
-                "design_year": reactor.design_year,
-                "doi": reactor.doi,
-                "P_fus": reactor.parameters.get("P_fus"),
-                "R": reactor.parameters.get("R"),
-                "n_avg": reactor.parameters.get("n_avg"),
-            }
-        )
-    return rows

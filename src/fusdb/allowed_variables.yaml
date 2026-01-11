@@ -1,12 +1,16 @@
 # Allowed parameter variables.
 ################ GEOMETRIC PARAMETERS ################
 R:
+  aliases:
+    - major_radius
   default_unit: m
   constraints:
     - R > 0
   description:
     - Major radius.
 a:
+  aliases:
+    - minor_radius
   default_unit: m
   constraints:
     - a > 0
@@ -93,7 +97,7 @@ B_p:
   description:
     - Poloidal field.
 I_p:
-  default_unit: MA
+  default_unit: A
   description:
     - Plasma current.
 f_BS:
@@ -186,6 +190,14 @@ n_i:
   default_unit: 1/m^3
   description:
     - Ion density.
+n_GW:
+  default_unit: 1/m^3
+  description:
+    - Greenwald density limit.
+n_SUDO:
+  default_unit: 1/m^3
+  description:
+    - Sudo density limit.
 f_GW:
   default_unit: dimensionless
   description:
@@ -221,21 +233,25 @@ G89:
     - G89 gain factor.
 ################ POWER & EXHAUST ################
 P_fus:
-  default_unit: MW
+  default_unit: W
   description:
     - Fusion power.
 P_th_tot:
-  default_unit: MW
+  default_unit: W
   description:
     - Total thermal power.
 P_elec_tot:
-  default_unit: MW
+  default_unit: W
   description:
     - Gross electric power.
 P_elec_net:
-  default_unit: MW
+  default_unit: W
   description:
     - Net electric power.
+P_aux:
+  default_unit: W
+  description:
+    - Total auxiliary heating power.
 eta_th:
   default_unit: dimensionless
   description:
@@ -245,41 +261,49 @@ Q_e:
   description:
     - Electric power multiplication.
 P_wall:
-  default_unit: MW/m^2
+  default_unit: W/m^2
   description:
     - Fusion power wall loading.
+P_NBI:
+  default_unit: W
+  description:
+    - Neutral beam injected power.
 P_LHCD:
-  default_unit: MW
+  default_unit: W
   description:
     - Lower hybrid coupled power.
 P_ICRF:
-  default_unit: MW
+  default_unit: W
   description:
     - ICRF coupled power.
 P_LH:
-  default_unit: MW
+  default_unit: W
   description:
     - L-H transition threshold power.
 P_sep:
-  default_unit: MW
+  default_unit: W
   description:
     - Power across the separatrix.
 P_sep_over_R:
-  default_unit: MW/m
+  default_unit: W/m
   description:
     - P_sep divided by major radius.
 P_sep_B_over_q95AR:
-  default_unit: MW*T/m
+  default_unit: W*T/m
   description:
     - P_sep * B0 / (q95 * A * R).
 P_loss:
   default_unit: W
   description:
     - Power loss across the plasma boundary.
-P_loss_MW:
-  default_unit: MW
+P_rad:
+  default_unit: W
   description:
-    - Power loss in MW (scaling input).
+    - Total radiated power.
+Q_sci:
+  default_unit: dimensionless
+  description:
+    - Scientific Q
 ################ SCALING INPUTS ################
 dnla19:
   default_unit: 1e19 m^-3

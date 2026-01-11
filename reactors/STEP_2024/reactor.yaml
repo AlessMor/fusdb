@@ -1,12 +1,13 @@
-id: STEP2024
+id: STEP2024EBCC
 reactor_family: STEP
-name: STEP 2024
+name: STEP 2024 EB-CC
 reactor_configuration: spherical tokamak
 organization: UKAEA
-country: UK
+country: GBR
 
 design_year: 2024
 doi: 10.1088/1741-4326/ad6ea2
+notes: Refers to EC+EBW heating scenario with Conservative Confinement conditions
 
 # plasma geometry
 R: 3.6 # Major radius [m]
@@ -17,8 +18,23 @@ kappa_95: 2.8
 # plasma parameters
 B0: 3.2 # Toroidal field on axis [T]
 B_max: 12.0 # Peak field on coil [T]
-I_p: 22.7 # Plasma current [MA]
+I_p:
+  value: 22.7
+  unit: MA
 H98_y2: 1.03 # H98(y,2) confinement enhancement factor [-]
+T_avg: 9.69
+n_avg: 16.4e19
+beta_T: 0.139
+beta_N: 0.0393
+q95: 8.03
+Z_eff: 2.31
 
 # power and efficiency
-P_fus: 1560 # Fusion power [MW]
+P_fus: 
+  value: 1.56
+  unit: GW
+Q_sci: 12.0
+P_rad: 
+  value: 297
+  unit: MW
+

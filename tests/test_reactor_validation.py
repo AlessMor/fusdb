@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 import sympy as sp
 
-from fusdb.geometry import plasma_surface_area, plasma_volume
+from fusdb.relations.geometry import plasma_surface_area, plasma_volume
 from fusdb.loader import load_reactor_yaml
-from fusdb.reactors_class import Reactor
-from fusdb import reactors_class as reactors_module
+from fusdb.reactor_class import Reactor
+from fusdb import reactor_class as reactors_module
 from fusdb.relation_class import Relation
 from fusdb.relation_util import symbol
 
@@ -76,7 +76,7 @@ def test_doi_can_be_list(tmp_path: Path) -> None:
     assert reactor.doi == ["10.1234/one", "10.1234/two"]
 
 
-def test_parameters_and_artifacts_missing_defaults(tmp_path: Path) -> None:
+def test_parameters_missing_defaults(tmp_path: Path) -> None:
     reactor_dir = tmp_path / "reactors" / "ARC_2018"
     reactor_dir.mkdir(parents=True)
     path = reactor_dir / "reactor.yaml"
@@ -261,7 +261,7 @@ def test_power_relations_computed_and_validated(tmp_path: Path) -> None:
                 "q95: 5.0",
                 "",
                 "# power and efficiency",
-                "P_sep: 150.0",
+                "P_sep: 150e6",
             ]
         )
     )
@@ -269,10 +269,10 @@ def test_power_relations_computed_and_validated(tmp_path: Path) -> None:
     reactor = load_reactor_yaml(path)
 
     assert math.isclose(float(reactor.A), 3.0)
-    assert math.isclose(float(reactor.P_sep_over_R), 50.0)
+    assert math.isclose(float(reactor.P_sep_over_R), 50e6)
     assert math.isclose(
         float(reactor.P_sep_B_over_q95AR),
-        150.0 * 5.0 / (5.0 * float(reactor.A) * float(reactor.R)),
+        150e6 * 5.0 / (5.0 * float(reactor.A) * float(reactor.R)),
     )
 
 
@@ -294,8 +294,8 @@ def test_inconsistent_power_relation_warns_and_keeps_explicit(tmp_path: Path) ->
                 "a: 1.0",
                 "",
                 "# power and efficiency",
-                "P_sep: 120.0",
-                "P_sep_over_R: 30.0",  # should be 40
+                "P_sep: 120e6",
+                "P_sep_over_R: 30e6",  # should be 40e6
             ]
         )
     )
@@ -303,7 +303,7 @@ def test_inconsistent_power_relation_warns_and_keeps_explicit(tmp_path: Path) ->
     with pytest.warns(UserWarning):
         reactor = load_reactor_yaml(path)
 
-    assert math.isclose(float(reactor.P_sep_over_R), 30.0)
+    assert math.isclose(float(reactor.P_sep_over_R), 30e6)
 
 
 def test_tokamak_volume_and_surface_backfilled(tmp_path: Path) -> None:

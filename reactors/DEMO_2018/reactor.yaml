@@ -3,7 +3,7 @@ reactor_family: DEMO
 name: EU-DEMO 2018
 reactor_configuration: tokamak
 organization: EUROFUSION
-country: EU
+country: EUU
 
 design_year: 2018
 doi: 10.1016/j.fusengdes.2022.113080
@@ -13,12 +13,12 @@ notes: EU-DEMO Physics Baseline 2018
 R: 9.0
 a: 2.9
 A: 3.1
-kappa: 1.65
+kappa_95: 1.65
 delta_95: 0.33
 
 # plasma parameters
 B0: 5.86
-I_p: 17.75
+I_p: 17.75e6
 f_BS: 0.39
 f_NI: 0.39
 f_CD: 0.05
@@ -31,8 +31,18 @@ H98_y2: 0.98
 tau_pulse: 7200
 
 # power and efficiency
-P_fus: 2000
-P_LH: 120.8
-P_sep: 170.4
-P_sep_B_over_q95AR: 9.2
-P_sep_over_R: 18.9
+P_fus:
+  value: 2
+  unit: GW
+P_LH:
+  value: 120.8
+  unit: MW
+P_sep:
+  value: 170.4
+  unit: MW
+P_sep_B_over_q95AR:
+  value: 9.2
+  unit: MW*T/m
+P_sep_over_R:
+  value: 18.9
+  unit: MW/m

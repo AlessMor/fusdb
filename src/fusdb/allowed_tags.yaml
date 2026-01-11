@@ -32,4 +32,3 @@ optional_metadata_fields:
   - allow_relation_overrides
   - confinement_mode
   - solve_strategy
-artifact_fields: []

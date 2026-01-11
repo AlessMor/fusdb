@@ -1,4 +1,5 @@
 import math
+import warnings
 from pathlib import Path
 import pytest
 
@@ -27,7 +28,25 @@ def _write_sample_reactor(tmp_path: Path) -> Path:
                 "n_avg: 1.1e20",
                 "",
                 "# power and efficiency",
-                "P_fus: 525",
+                "P_fus: 525e6",
+            ]
+        )
+    )
+    return reactor_yaml
+
+
+def _write_country_reactor(tmp_path: Path, country: str) -> Path:
+    reactor_dir = tmp_path / "reactors" / "COUNTRY_TEST"
+    reactor_dir.mkdir(parents=True)
+    reactor_yaml = reactor_dir / "reactor.yaml"
+    reactor_yaml.write_text(
+        "\n".join(
+            [
+                'id: "COUNTRY_TEST"',
+                'name: "Country Test"',
+                'reactor_configuration: "tokamak"',
+                'organization: "Example Lab"',
+                f"country: {country}",
             ]
         )
     )
@@ -43,13 +62,49 @@ def test_load_reactor_yaml(tmp_path: Path) -> None:
     assert reactor.name == "ARC 2018 baseline"
     assert reactor.reactor_configuration == "tokamak"
     assert reactor.organization == "Example Lab"
-    assert float(reactor.P_fus) == 525.0
+    assert float(reactor.P_fus) == 525e6
     assert math.isclose(float(reactor.R), 3.3)
     assert math.isclose(float(reactor.a), 1.13)
     assert math.isclose(float(reactor.A), float(reactor.R) / float(reactor.a))
     assert math.isclose(float(reactor.B0), 5.0)
     assert math.isclose(float(reactor.n_avg), 1.1e20)
     assert reactor.root_dir == yaml_path.parent
+
+
+def test_country_alpha3_preserved(tmp_path: Path) -> None:
+    yaml_path = _write_country_reactor(tmp_path, "USA")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        reactor = load_reactor_yaml(yaml_path)
+
+    assert reactor.country == "USA"
+    assert not any("Normalized country" in str(w.message) for w in caught)
+
+
+def test_country_alpha2_normalized(tmp_path: Path) -> None:
+    yaml_path = _write_country_reactor(tmp_path, "US")
+
+    with pytest.warns(UserWarning, match="Normalized country"):
+        reactor = load_reactor_yaml(yaml_path)
+
+    assert reactor.country == "USA"
+
+
+def test_country_name_normalized(tmp_path: Path) -> None:
+    yaml_path = _write_country_reactor(tmp_path, "United States")
+
+    with pytest.warns(UserWarning, match="Normalized country"):
+        reactor = load_reactor_yaml(yaml_path)
+
+    assert reactor.country == "USA"
+
+
+def test_country_unknown_raises(tmp_path: Path) -> None:
+    yaml_path = _write_country_reactor(tmp_path, "Atlantis")
+
+    with pytest.raises(ValueError, match="country must be ISO"):
+        load_reactor_yaml(yaml_path)
 
 
 def test_find_reactor_dirs_and_load_all(tmp_path: Path) -> None:
@@ -59,7 +114,7 @@ def test_find_reactor_dirs_and_load_all(tmp_path: Path) -> None:
 
     reactors = load_all_reactors(tmp_path)
     assert set(reactors.keys()) == {"ARC_2018"}
-    assert float(reactors["ARC_2018"].P_fus) == 525.0
+    assert float(reactors["ARC_2018"].P_fus) == 525e6
 
 
 def test_parameter_tolerance_parsing(tmp_path: Path) -> None:

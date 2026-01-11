@@ -2,14 +2,46 @@ import argparse
 import sys
 from pathlib import Path
 
-from .loader import OPTIONAL_METADATA_FIELDS, REQUIRED_FIELDS, load_all_reactors, reactor_table
+from .loader import OPTIONAL_METADATA_FIELDS, REQUIRED_FIELDS, load_all_reactors
+
+
+def _print_reactor_columns(reactors: dict[str, object]) -> None:
+    if not reactors:
+        print("(no reactors)")
+        return
+
+    reactor_ids: list[str] = []
+    columns: list[list[str]] = []
+    max_lines = 0
+    for rid, reactor in sorted(reactors.items(), key=lambda item: item[0]):
+        lines = repr(reactor).splitlines()
+        reactor_ids.append(rid)
+        columns.append(lines)
+        max_lines = max(max_lines, len(lines))
+
+    widths = []
+    for idx, lines in enumerate(columns):
+        width = max(len(reactor_ids[idx]), *(len(line) for line in lines)) if lines else len(reactor_ids[idx])
+        widths.append(width)
+
+    header = " | ".join(reactor_ids[idx].ljust(widths[idx]) for idx in range(len(reactor_ids)))
+    separator = "-+-".join("-" * widths[idx] for idx in range(len(reactor_ids)))
+    body = []
+    for row in range(max_lines):
+        row_cells = []
+        for col, lines in enumerate(columns):
+            value = lines[row] if row < len(lines) else ""
+            row_cells.append(value.ljust(widths[col]))
+        body.append(" | ".join(row_cells))
+
+    print("\n".join([header, separator, *body]))
 
 
 def main() -> None:
     """Entry point for the fusdb command-line interface."""
     parser = argparse.ArgumentParser(prog="fusdb", description="Fusion reactor scenario database CLI.")
     parser.add_argument("--root", type=Path, default=Path("."), help="Project root (default: current directory).")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("list", help="List available reactors found under root/ reactors.")
 
@@ -19,34 +51,18 @@ def main() -> None:
     args = parser.parse_args()
     root = args.root
 
-    if args.command == "list":
-        # Build a simple fixed-width table for quick CLI inspection.
-        reactors = load_all_reactors(root)
-        rows = reactor_table(reactors)
-        columns = [
-            "id",
-            "reactor_family",
-            "name",
-            "reactor_configuration",
-            "organization",
-            "design_year",
-            "P_fus",
-        ]
-        cols = list(columns)
-        str_rows = [[("" if row.get(col) is None else str(row.get(col))) for col in cols] for row in rows]
-        widths = [
-            max(len(col), *(len(r[i]) for r in str_rows)) if str_rows else len(col)
-            for i, col in enumerate(cols)
-        ]
+    if args.command is None:
+        parser.print_help()
+        sys.exit(0)
 
-        header = " | ".join(col.ljust(widths[i]) for i, col in enumerate(cols))
-        separator = "-+-".join("-" * widths[i] for i in range(len(cols)))
-        body_lines = [" | ".join(r[i].ljust(widths[i]) for i in range(len(cols))) for r in str_rows]
-        print("\n".join([header, separator, *body_lines]))
+    if args.command == "list":
+        # Print one column per reactor using Reactor.__repr__ output.
+        reactors = load_all_reactors(root)
+        _print_reactor_columns(reactors)
         sys.exit(0)
 
     if args.command == "show":
-        # Dump metadata, parameters, and artifact info for a single reactor.
+        # Dump metadata and parameters for a single reactor.
         reactors = load_all_reactors(root)
         reactor = reactors.get(args.reactor_id)
         if reactor is None:
