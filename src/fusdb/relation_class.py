@@ -55,7 +55,13 @@ class Relation:
 
 
 class RelationSystem:
-    """Solve a set of relations as a symbolic system."""
+    """Iteratively solve simple relation chains without full global Sympy solving.
+
+    Each relation is treated as an implicit equation with a preferred output
+    variable (the first in relation.variables). The solver walks relations,
+    substitutes known numeric values, and tries to solve for a single missing
+    variable at a time (linear extraction first, then Sympy solve fallback).
+    """
 
     def __init__(
         self,
@@ -371,12 +377,3 @@ class RelationSystem:
             emitted_relations.add(rel.name)
 
         return {name: solution[symbols[name]] for name in names}
-
-
-__all__ = [
-    "Relation",
-    "RelationSystem",
-    "PRIORITY_EXPLICIT",
-    "PRIORITY_RELATION",
-    "PRIORITY_STRICT",
-]

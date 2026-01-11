@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 import importlib
 import inspect
+import math
 import sympy as sp
 from sympy.core.relational import Relational
 from pathlib import Path
@@ -8,7 +9,7 @@ from typing import Any, ClassVar
 
 import warnings
 
-from fusdb.power_exhaust.power_exhaust import PSEP_RELATIONS
+from fusdb.relations.power_exhaust import PSEP_RELATIONS
 from fusdb.relation_class import Relation, RelationSystem
 from fusdb.relation_util import REL_TOL_DEFAULT, symbol
 from fusdb.reactor_util import (
@@ -17,6 +18,8 @@ from fusdb.reactor_util import (
     ALLOWED_REACTOR_CONFIGURATIONS,
     ALLOWED_RELATION_DOMAINS,
     RELATION_MODULES,
+    REQUIRED_FIELDS,
+    OPTIONAL_METADATA_FIELDS,
     config_exclude_tags,
     configuration_tags,
     normalize_allowed,
@@ -32,40 +35,39 @@ Scalar = float | sp.Expr
 @dataclass
 class Reactor:
     """Reactor metadata and parameter container that resolves relations on load."""
-    ALLOWED_CONFINEMENT_MODES: ClassVar[tuple[str, ...]] = ALLOWED_CONFINEMENT_MODES
-    ALLOWED_REACTOR_FAMILIES: ClassVar[tuple[str, ...]] = ALLOWED_REACTOR_FAMILIES
-    ALLOWED_REACTOR_CONFIGURATIONS: ClassVar[tuple[str, ...]] = ALLOWED_REACTOR_CONFIGURATIONS
-    _RELATION_MODULES: ClassVar[tuple[str, ...]] = RELATION_MODULES
-    _RELATIONS: ClassVar[list[tuple[tuple[str, ...], Relation]]] = []
-    _RELATIONS_IMPORTED: ClassVar[bool] = False
+    ALLOWED_CONFINEMENT_MODES: ClassVar[tuple[str, ...]] = ALLOWED_CONFINEMENT_MODES  # Allowed confinement modes.
+    ALLOWED_REACTOR_FAMILIES: ClassVar[tuple[str, ...]] = ALLOWED_REACTOR_FAMILIES  # Allowed reactor families.
+    ALLOWED_REACTOR_CONFIGURATIONS: ClassVar[tuple[str, ...]] = ALLOWED_REACTOR_CONFIGURATIONS  # Allowed types.
+    _RELATION_MODULES: ClassVar[tuple[str, ...]] = RELATION_MODULES  # Module paths to import relations from.
+    _RELATIONS: ClassVar[list[tuple[tuple[str, ...], Relation]]] = []  # Registered relation catalog.
+    _RELATIONS_IMPORTED: ClassVar[bool] = False  # Guard for one-time relation imports.
 
     # required identity
-    id: str = field(metadata={"section": "metadata_required"})
-    name: str = field(metadata={"section": "metadata_required"})
-    reactor_configuration: str = field(metadata={"section": "metadata_required"})
-    organization: str = field(metadata={"section": "metadata_required"})
+    id: str = field(metadata={"section": "metadata_required"})  # Unique reactor identifier.
+    name: str = field(metadata={"section": "metadata_required"})  # Human-readable reactor name.
+    reactor_configuration: str = field(metadata={"section": "metadata_required"})  # Reactor type/configuration.
+    organization: str = field(metadata={"section": "metadata_required"})  # Owning organization/lab.
 
-    # optional general/scenario metadata
-    reactor_family: str | None = field(default=None, metadata={"section": "metadata_optional"})
-    country: str | None = field(default=None, metadata={"section": "metadata_optional"})
-    site: str | None = field(default=None, metadata={"section": "metadata_optional"})
-    design_year: int | None = field(default=None, metadata={"section": "metadata_optional"})
-    doi: str | list[str] | None = field(default=None, metadata={"section": "metadata_optional"})
-    notes: str | None = field(default=None, metadata={"section": "metadata_optional"})
-    allow_relation_overrides: bool | None = field(default=False, metadata={"section": "metadata_optional"})
-
-    confinement_mode: str | None = field(default=None, metadata={"section": "metadata_optional"})
-    solve_strategy: str | list[str] | None = field(default=None, metadata={"section": "metadata_optional"})
-    parameters: dict[str, Scalar | None] = field(default_factory=dict)
-    parameter_tolerances: dict[str, float] = field(default_factory=dict)
-    parameter_methods: dict[str, str] = field(default_factory=dict)
-    parameter_defaults: dict[str, Scalar] = field(default_factory=dict)
-    explicit_parameters: set[str] = field(default_factory=set)
+    # optional metadata
+    reactor_family: str | None = field(default=None, metadata={"section": "metadata_optional"})  # Program/family label.
+    country: str | None = field(default=None, metadata={"section": "metadata_optional"})  # ISO alpha-3 country code.
+    site: str | None = field(default=None, metadata={"section": "metadata_optional"})  # Site name or location.
+    design_year: int | None = field(default=None, metadata={"section": "metadata_optional"})  # Design year.
+    doi: str | list[str] | None = field(default=None, metadata={"section": "metadata_optional"})  # DOI(s).
+    notes: str | None = field(default=None, metadata={"section": "metadata_optional"})  # Free-form notes.
+    allow_relation_overrides: bool | None = field(default=False, metadata={"section": "metadata_optional"})  # Allow explicit overrides.
+    confinement_mode: str | None = field(default=None, metadata={"section": "metadata_optional"})  # H/L/I-mode, etc.
+    solve_strategy: str | list[str] | None = field(default=None, metadata={"section": "metadata_optional"})  # Solve strategy: default, global, or list of domains/relation names.
+    parameters: dict[str, Scalar | None] = field(default_factory=dict)  # Parameter values (explicit or solved).
+    parameter_tolerances: dict[str, float] = field(default_factory=dict)  # Tolerances for explicit values.
+    parameter_methods: dict[str, str] = field(default_factory=dict)  # Method overrides by output name.
+    parameter_defaults: dict[str, Scalar] = field(default_factory=dict)  # Default seeds by tags.
+    explicit_parameters: set[str] = field(default_factory=set)  # Explicit (or promoted) parameter names. They’re the values the solver locks and checks relations against.
 
     # internal
-    root_dir: Path | None = field(default=None, metadata={"section": "internal"})
+    root_dir: Path | None = field(default=None, metadata={"section": "internal"})  # Source directory.
     relations_used: list[tuple[tuple[str, ...], Relation]] = field(
-        default_factory=list, metadata={"section": "internal"}, repr=False
+        default_factory=list, metadata={"section": "internal"}, repr=False  # Relations applied.
     )
 
     def __post_init__(self) -> None:
@@ -82,11 +84,14 @@ class Reactor:
         self.reactor_family = normalize_allowed(
             self.reactor_family, self.ALLOWED_REACTOR_FAMILIES, field_name="reactor_family"
         )
+        
+        # SET REACTOR CONFIGURATION (tokamak, stellarator, etc)
         self.reactor_configuration = normalize_allowed(
             self.reactor_configuration,
             self.ALLOWED_REACTOR_CONFIGURATIONS,
             field_name="reactor_configuration",
         )
+        # SET CONFINEMENT MODE (L-mode, H-mode, etc)
         if self.confinement_mode and self.ALLOWED_CONFINEMENT_MODES:
             self.confinement_mode = normalize_allowed(
                 self.confinement_mode,
@@ -94,7 +99,6 @@ class Reactor:
                 field_name="confinement_mode",
             )
         rel_tol = REL_TOL_DEFAULT
-        lock = not bool(self.allow_relation_overrides)
         config_tags = configuration_tags(self.reactor_configuration)
         exclude_tags = config_exclude_tags(self.reactor_configuration)
 
@@ -109,7 +113,7 @@ class Reactor:
                 self.relations_used.extend(
                     (tags, rel) for (tags, _rel), rel in zip(tagged_relations, relations)
                 )
-            self._solve_relations(relations, rel_tol, lock)
+            self._solve_relations(relations, rel_tol, not bool(self.allow_relation_overrides))
 
         strategy_raw = self.solve_strategy
         strategy: str
@@ -184,7 +188,8 @@ class Reactor:
             )
 
     def __getattr__(self, name: str) -> Any:
-        """Expose parameters as attributes when present in the parameter map."""
+        """Expose parameters as attributes when present in the parameter map.
+        So that reactor.major_radius works as a shortcut for reactor.parameters["major_radius"]."""
         params = self.__dict__.get("parameters", {})
         if name in params:
             return params[name]
@@ -203,6 +208,84 @@ class Reactor:
         base = set(super().__dir__())
         params = self.__dict__.get("parameters", {})
         return sorted(base | set(params.keys()))
+
+    @classmethod
+    def from_yaml(cls, path: Path | str) -> "Reactor":
+        """Load a reactor YAML file and return a Reactor instance."""
+        from fusdb.loader import load_reactor_yaml
+
+        return load_reactor_yaml(path)
+
+    def __repr__(self) -> str:
+        """Return a column-style representation of metadata and parameters."""
+        lines: list[str] = []
+        for field in REQUIRED_FIELDS + OPTIONAL_METADATA_FIELDS:
+            value = getattr(self, field, None)
+            text = "" if value is None else str(value)
+            lines.append(f"{field}: {text}")
+        for name in sorted(self.parameters.keys(), key=lambda val: (val.lower(), val)):
+            value = self.parameters.get(name)
+            text = "" if value is None else str(value)
+            lines.append(f"{name}: {text}")
+        return "\n".join(lines)
+
+    def sauter_cross_section(self, n: int = 256) -> tuple[list[float], list[float]]:
+        """Return Sauter-style (R, Z) points for the plasma cross-section."""
+        if n < 8:
+            raise ValueError("n must be >= 8 for a meaningful cross-section")
+
+        def numeric_param(*names: str, default: float | None = None) -> float | None:
+            for name in names:
+                value = self.parameters.get(name)
+                if value is None or isinstance(value, Relational):
+                    continue
+                if isinstance(value, sp.Expr):
+                    if value.free_symbols:
+                        continue
+                    try:
+                        return float(value)
+                    except (TypeError, ValueError):
+                        continue
+                if isinstance(value, (int, float)):
+                    return float(value)
+            return default
+
+        major_radius = numeric_param("R")
+        minor_radius = numeric_param("a")
+        if major_radius is None or minor_radius is None:
+            raise ValueError("Sauter cross-section requires numeric R and a")
+        kappa = numeric_param("kappa", "kappa_95", default=1.0)
+        delta = numeric_param("delta", "delta_95", default=0.0)
+        squareness = numeric_param("squareness", default=0.0)
+
+        two_pi = 2.0 * math.pi
+        r_vals: list[float] = []
+        z_vals: list[float] = []
+        for i in range(n):
+            theta = two_pi * i / (n - 1)
+            angle = theta + delta * math.sin(theta) - squareness * math.sin(2.0 * theta)
+            r_vals.append(major_radius + minor_radius * math.cos(angle))
+            z_vals.append(kappa * minor_radius * math.sin(theta + squareness * math.sin(2.0 * theta)))
+        return r_vals, z_vals
+
+    def plot_sauter_cross_section(
+        self,
+        ax: Any | None = None,
+        *,
+        n: int = 256,
+        label: str | None = None,
+        **plot_kwargs: Any,
+    ):
+        """Plot the Sauter cross-section using matplotlib."""
+        import matplotlib.pyplot as plt
+
+        r_vals, z_vals = self.sauter_cross_section(n=n)
+        if ax is None:
+            _, ax = plt.subplots()
+        if label is None:
+            label = self.id
+        ax.plot(r_vals, z_vals, label=label, **plot_kwargs)
+        return ax
 
     def _solve_relations(
         self,
@@ -248,7 +331,23 @@ class Reactor:
             if isinstance(new_value, sp.Symbol) and new_value == symbol(var):
                 rel = rel_by_output.get(var)
                 if rel is not None:
-                    new_value = sp.Eq(symbol(var), sp.simplify(symbol(var) - rel.expr))
+                    eq_expr = sp.simplify(symbol(var) - rel.expr)
+                    substitutions: dict[sp.Symbol, sp.Expr] = {}
+                    for name, value in {**self.parameters, **values}.items():
+                        if name == var:
+                            continue
+                        if isinstance(value, Relational):
+                            continue
+                        if isinstance(value, sp.Expr):
+                            if value.free_symbols:
+                                continue
+                            substitutions[symbol(name)] = sp.Float(value)
+                            continue
+                        if isinstance(value, (int, float)):
+                            substitutions[symbol(name)] = sp.Float(value)
+                    if substitutions:
+                        eq_expr = eq_expr.subs(substitutions)
+                    new_value = sp.Eq(symbol(var), eq_expr)
             self.parameters[var] = new_value
             # Promote numeric results to explicit so later groups do not overwrite them.
             if isinstance(new_value, Relational):
@@ -267,7 +366,10 @@ class Reactor:
         if cls._RELATIONS_IMPORTED:
             return
         for module_name in cls._RELATION_MODULES:
-            importlib.import_module(module_name)
+            module = importlib.import_module(module_name)
+            import_relations = getattr(module, "import_relations", None)
+            if callable(import_relations):
+                import_relations()
         cls._RELATIONS_IMPORTED = True
 
     @classmethod

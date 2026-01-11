@@ -40,16 +40,6 @@ def load_allowed_tags() -> dict[str, object]:
             raise ValueError(f"allowed_tags.yaml entry {key!r} must be a list")
     return tags
 
-
-@lru_cache(maxsize=1)
-def load_allowed_variables() -> dict[str, dict[str, object]]:
-    """Load allowed variable metadata from the YAML registry."""
-    data = yaml.safe_load(VARIABLES_PATH.read_text()) or {}
-    if not isinstance(data, dict):
-        raise ValueError("allowed_variables.yaml must contain a mapping")
-    return data
-
-
 @lru_cache(maxsize=1)
 def load_default_layers() -> list[dict[str, object]]:
     """Load default parameter layers from the YAML registry."""
@@ -94,8 +84,6 @@ def load_default_layers() -> list[dict[str, object]]:
             }
         )
     return layers
-
-
 _ALLOWED_TAGS = load_allowed_tags()
 
 
@@ -108,9 +96,9 @@ def _relation_domain_order_from_tags(tags: Mapping[str, object]) -> dict[str, in
     if isinstance(raw, (list, tuple)):
         return {str(name): index + 1 for index, name in enumerate(raw)}
     raise ValueError("allowed_tags.yaml relation_domains must be a list or mapping")
-
-
 _RELATION_DOMAIN_ORDER = _relation_domain_order_from_tags(_ALLOWED_TAGS)
+
+
 
 ALLOWED_REACTOR_FAMILIES: tuple[str, ...] = tuple(_ALLOWED_TAGS.get("reactor_families", ()))
 ALLOWED_REACTOR_CONFIGURATIONS: tuple[str, ...] = tuple(_ALLOWED_TAGS.get("reactor_configurations", ()))
@@ -124,19 +112,18 @@ _OPTIONAL_METADATA_FIELDS = _ALLOWED_TAGS.get("optional_metadata_fields")
 if _OPTIONAL_METADATA_FIELDS is None:
     raise ValueError("allowed_tags.yaml must define optional_metadata_fields")
 OPTIONAL_METADATA_FIELDS: list[str] = list(_OPTIONAL_METADATA_FIELDS)
-_ARTIFACT_FIELDS = _ALLOWED_TAGS.get("artifact_fields")
-if _ARTIFACT_FIELDS is None:
-    raise ValueError("allowed_tags.yaml must define artifact_fields")
-ARTIFACT_FIELDS: list[str] = list(_ARTIFACT_FIELDS)
-RESERVED_KEYS: set[str] = set(REQUIRED_FIELDS + OPTIONAL_METADATA_FIELDS + ARTIFACT_FIELDS + ["artifacts"])
+RESERVED_KEYS: set[str] = set(REQUIRED_FIELDS + OPTIONAL_METADATA_FIELDS)
 
-RELATION_MODULES: tuple[str, ...] = (
-    "fusdb.geometry.plasma_geometry",
-    "fusdb.plasma_pressure.beta",
-    "fusdb.confinement.plasma_stored_energy",
-    "fusdb.confinement.scalings",
-)
+RELATION_MODULES: tuple[str, ...] = ("fusdb.relations",)
 
+
+@lru_cache(maxsize=1)
+def load_allowed_variables() -> dict[str, dict[str, object]]:
+    """Load allowed variable metadata from the YAML registry."""
+    data = yaml.safe_load(VARIABLES_PATH.read_text()) or {}
+    if not isinstance(data, dict):
+        raise ValueError("allowed_variables.yaml must contain a mapping")
+    return data
 ALLOWED_VARIABLES = load_allowed_variables()
 
 
@@ -158,6 +145,56 @@ def normalize_allowed(
         allowed_list = ", ".join(allowed)
         raise ValueError(f"{field_name} must be one of {allowed_list} (case-insensitive); got {value!r}")
     return mapping[key]
+
+
+def normalize_country(
+    value: str | None,
+    *,
+    warn: WarnFunc | None = None,
+) -> str | None:
+    """Normalize a country name/alpha-2/alpha-3 value to ISO 3166-1 alpha-3."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"country must be a string; got {type(value).__name__}")
+    text = value.strip()
+    if not text:
+        return None
+    alias_map = {
+        "EU": "EUU",
+        "EUU": "EUU",
+        "UK": "GBR",
+    }
+    text_upper = text.upper()
+    if text_upper in alias_map:
+        normalized = alias_map[text_upper]
+        if warn is not None and text != normalized:
+            warn(
+                f"Normalized country {value!r} to ISO 3166-1 alpha-3 code {normalized}.",
+                UserWarning,
+            )
+        return normalized
+    try:
+        import pycountry
+    except ImportError as exc:
+        raise ValueError("country normalization requires pycountry; install it to validate ISO 3166-1 codes") from exc
+
+    try:
+        record = pycountry.countries.lookup(text)
+    except LookupError as exc:
+        raise ValueError(
+            f"country must be ISO 3166-1 alpha-3, alpha-2, or a recognized country name; got {value!r}"
+        ) from exc
+
+    normalized = getattr(record, "alpha_3", None)
+    if not normalized:
+        raise ValueError(
+            f"country must resolve to an ISO 3166-1 alpha-3 code; got {value!r}"
+        )
+
+    if warn is not None and text != normalized:
+        warn(f"Normalized country {value!r} to ISO 3166-1 alpha-3 code {normalized}.", UserWarning)
+    return normalized
 
 
 def configuration_tags(reactor_configuration: str | None) -> tuple[str, ...]:
@@ -272,7 +309,7 @@ def relations_for(
     exclude: tuple[str, ...] | None = None,
 ) -> tuple["Relation", ...]:
     """Return relations that match the requested tag groups."""
-    from fusdb.reactors_class import Reactor
+    from fusdb.reactor_class import Reactor
 
     tagged = Reactor.get_relations_with_tags(groups, require_all=require_all, exclude=exclude)
     return tuple(rel for _tags, rel in tagged)
@@ -285,7 +322,7 @@ def relations_with_tags(
     exclude: tuple[str, ...] | None = None,
 ) -> tuple[tuple[tuple[str, ...], Relation], ...]:
     """Return relations and their tag tuples that match the requested groups."""
-    from fusdb.reactors_class import Reactor
+    from fusdb.reactor_class import Reactor
 
     return Reactor.get_relations_with_tags(groups, require_all=require_all, exclude=exclude)
 
@@ -392,36 +429,3 @@ def select_relations(
             )
         )
     return tuple(adjusted)
-
-
-
-__all__ = [
-    "ALLOWED_REACTOR_FAMILIES",
-    "ALLOWED_REACTOR_CONFIGURATIONS",
-    "ALLOWED_CONFINEMENT_MODES",
-    "ALLOWED_RELATION_DOMAINS",
-    "ALLOWED_VARIABLES",
-    "ARTIFACT_FIELDS",
-    "DEFAULTS_PATH",
-    "DEFAULT_GEOMETRY_VALUES",
-    "OPTIONAL_METADATA_FIELDS",
-    "REQUIRED_FIELDS",
-    "RESERVED_KEYS",
-    "RELATION_MODULES",
-    "TAGS_PATH",
-    "VARIABLES_PATH",
-    "WarnFunc",
-    "load_allowed_tags",
-    "load_allowed_variables",
-    "load_default_layers",
-    "normalize_allowed",
-    "configuration_tags",
-    "config_exclude_tags",
-    "variable_aliases",
-    "default_parameters_for_tags",
-    "relation_domain_order",
-    "relation_domain_stages",
-    "relations_for",
-    "relations_with_tags",
-    "select_relations",
-]
