@@ -105,6 +105,6 @@ organization: "Example Organization"
 # P_loss: [W] Power loss across the plasma boundary.
 
 # SCALING INPUTS
-# dnla19: [1e19 m^-3] Line-averaged electron density (1e19 m^-3).
+# n_la: [1/m^3] Line-averaged electron density.
 # kappa_ipb: [dimensionless] IPB-specific elongation at separatrix.
 # afuel: [amu] Average fuel mass number.

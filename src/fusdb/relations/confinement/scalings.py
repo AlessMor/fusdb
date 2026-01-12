@@ -15,7 +15,7 @@ from fusdb.relation_util import require_nonzero
 ############################################### TO BE IMPLEMENTED ###############################################
 
 def tau_E_itpa20_il(
-    I_p: float, B0: float, P_loss: float, dnla19: float, aion: float, R: float, delta: float, kappa_ipb: float
+    I_p: float, B0: float, P_loss: float, n_la: float, aion: float, R: float, delta: float, kappa_ipb: float
 ) -> float:
     """
     Calculate the ITPA20-IL Issue #1852 confinement time
@@ -24,7 +24,7 @@ def tau_E_itpa20_il(
     pcur (float): Plasma current [A]
     b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
     p_plasma_loss (float): Thermal power lost due to transport through the LCFS [W]
-    dnla19 (float): Central line-averaged electron density in units of 10**19 m**-3
+    n_la (float): Central line-averaged electron density in m**-3
     aion (float): Average mass of all ions (amu)
     rmajor (float): Plasma major radius [m]
     triang (float): Triangularity
@@ -41,6 +41,7 @@ def tau_E_itpa20_il(
         - T. Luda et al., “Validation of a full-plasma integrated modeling approach on ASDEX Upgrade,”
         Nuclear Fusion, vol. 61, no. 12, pp. 126048-126048, Nov. 2021, doi: https://doi.org/10.1088/1741-4326/ac3293.
     """
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -58,7 +59,7 @@ def tau_E_itpa20_il(
 
 
 def tau_E_itpa20(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, delta: float, kappa_ipb: float, eps: float, aion: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, delta: float, kappa_ipb: float, eps: float, aion: float
 ) -> float:
     """
     Calculate the ITPA20 Issue #3164 confinement time
@@ -66,7 +67,7 @@ def tau_E_itpa20(
     Parameters:
     pcur (float): Plasma current [A]
     b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    dnla19 (float): Central line-averaged electron density in units of 10**19 m**-3
+    n_la (float): Central line-averaged electron density in m**-3
     p_plasma_loss (float): Thermal power lost due to transport through the LCFS [W]
     rmajor (float): Plasma major radius [m]
     triang (float): Triangularity
@@ -85,6 +86,7 @@ def tau_E_itpa20(
         - G. Verdoolaege et al., “The updated ITPA global H-mode confinement database: description and analysis,”
           Nuclear Fusion, vol. 61, no. 7, pp. 076006-076006, Jan. 2021, doi: https://doi.org/10.1088/1741-4326/abdb91.
     """
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -103,8 +105,9 @@ def tau_E_itpa20(
 
 
 
-def tau_E_itpa20_il_high_z(I_p: float, B0: float, P_loss: float, dnla19: float, aion: float, R: float) -> float:
+def tau_E_itpa20_il_high_z(I_p: float, B0: float, P_loss: float, n_la: float, aion: float, R: float) -> float:
     """ITPA20-IL scaling (high-Z subset), coefficients adjusted for density in 1e19 m^-3."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -158,9 +161,10 @@ def tau_E_nstx_gyro_bohm(I_p: float, B0: float, P_loss: float, R: float, dnla20:
 
 
 def tau_E_itpa_2018_std5_gls(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
 ) -> float:
     """ITPA 2018 STD5-GLS scaling (density in 1e19 m^-3, eps=a/R)."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     eps_safe = require_nonzero(eps, "eps", "ITPA 2018 STD5 GLS scaling")
@@ -178,9 +182,10 @@ def tau_E_itpa_2018_std5_gls(
 
 
 def tau_E_itpa_2018_std5_ols(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
 ) -> float:
     """ITPA 2018 STD5-OLS scaling (density in 1e19 m^-3, eps=a/R)."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     eps_safe = require_nonzero(eps, "eps", "ITPA 2018 STD5 OLS scaling")
@@ -198,9 +203,10 @@ def tau_E_itpa_2018_std5_ols(
 
 
 def tau_E_itpa_2018_std5_sel1_gls(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
 ) -> float:
     """ITPA 2018 STD5-SEL1-GLS scaling (density in 1e19 m^-3, eps=a/R)."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     eps_safe = require_nonzero(eps, "eps", "ITPA 2018 STD5 SEL1 GLS scaling")
@@ -218,9 +224,10 @@ def tau_E_itpa_2018_std5_sel1_gls(
 
 
 def tau_E_itpa_2018_std5_sel1_ols(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
 ) -> float:
     """ITPA 2018 STD5-SEL1-OLS scaling (density in 1e19 m^-3, eps=a/R)."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     eps_safe = require_nonzero(eps, "eps", "ITPA 2018 STD5 SEL1 OLS scaling")
@@ -238,9 +245,10 @@ def tau_E_itpa_2018_std5_sel1_ols(
 
 
 def tau_E_itpa_2018_std5_sel1_wls(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
 ) -> float:
     """ITPA 2018 STD5-SEL1-WLS scaling (density in 1e19 m^-3, eps=a/R)."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     eps_safe = require_nonzero(eps, "eps", "ITPA 2018 STD5 SEL1 WLS scaling")
@@ -258,9 +266,10 @@ def tau_E_itpa_2018_std5_sel1_wls(
 
 
 def tau_E_itpa_2018_std5_wls(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
 ) -> float:
     """ITPA 2018 STD5-WLS scaling (density in 1e19 m^-3, eps=a/R)."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -277,24 +286,26 @@ def tau_E_itpa_2018_std5_wls(
 
 
 def tau_E_menard_nstx_petty08_hybrid(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
     """Return tau E menard nstx petty08 hybrid scaling."""
+    dnla19 = n_la / 1e19
     invA = 1.0 / A
     if invA <= 0.4:
-        return tau_E_petty08(I_p, B0, dnla19, P_loss, R, kappa_ipb, A)
+        return tau_E_petty08(I_p, B0, n_la, P_loss, R, kappa_ipb, A)
     if invA >= 0.6:
-        return tau_E_menard_nstx(I_p, B0, dnla19, P_loss, R, kappa_ipb, A, afuel)
+        return tau_E_menard_nstx(I_p, B0, n_la, P_loss, R, kappa_ipb, A, afuel)
     w = (invA - 0.4) / (0.6 - 0.4)
-    return w * tau_E_menard_nstx(I_p, B0, dnla19, P_loss, R, kappa_ipb, A, afuel) + (1 - w) * tau_E_petty08(I_p, B0, dnla19, P_loss, R, kappa_ipb, A)
+    return w * tau_E_menard_nstx(I_p, B0, n_la, P_loss, R, kappa_ipb, A, afuel) + (1 - w) * tau_E_petty08(I_p, B0, n_la, P_loss, R, kappa_ipb, A)
 
 
 
 
 def tau_E_menard_nstx(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
     """Return tau E menard nstx scaling."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -395,7 +406,7 @@ def tau_E_hubbard_nominal(I_p: float, B0: float, dnla20: float, P_loss: float) -
     return 0.014 * I_p_MA ** 0.68 * B0 ** 0.77 * dnla20 ** 0.02 * P_loss_MW ** (-0.29)
 
 
-def tau_E_I_Mode_y2(I_p: float, B0: float, P_loss: float, dnla19: float) -> float:
+def tau_E_I_Mode_y2(I_p: float, B0: float, P_loss: float, n_la: float) -> float:
     """
     Calculate the I-Mode confinement time scaling from Walk (equation 5.2).
 
@@ -403,7 +414,7 @@ def tau_E_I_Mode_y2(I_p: float, B0: float, P_loss: float, dnla19: float) -> floa
     I_p (float): Plasma current [A]
     B0 (float): Toroidal magnetic field on axis [T]
     P_loss (float): Net heating power [W]
-    dnla19 (float): Line averaged electron density in units of 10**19 m**-3
+    n_la (float): Line averaged electron density in m**-3
 
     Returns:
     float: I-Mode confinement time [s]
@@ -415,6 +426,7 @@ def tau_E_I_Mode_y2(I_p: float, B0: float, P_loss: float, dnla19: float) -> floa
         - J. R. Walk, "Pedestal structure and stability in high-performance plasmas on Alcator C-Mod,"
           https://dspace.mit.edu/handle/1721.1/95524, equation 5.2. 2014
     """
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -464,7 +476,7 @@ def tau_E_lang_high_density(
 
 
 def tau_E_petty08(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, kappa_ipb: float, A: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float
 ) -> float:
     """
         Calculate the beta independent dimensionless Petty08 confinement time
@@ -472,7 +484,7 @@ def tau_E_petty08(
         Parameters:
         pcur (float): Plasma current [A]
         b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        dnla19 (float): Line averaged electron density in units of 10**19 m**-3
+        n_la (float): Line averaged electron density in m**-3
         p_plasma_loss (float): Net Heating power [W]
         rmajor (float): Plasma major radius [m]
         kappa_ipb (float): IPB specific plasma separatrix elongation
@@ -492,6 +504,7 @@ def tau_E_petty08(
             Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     ‌
     """
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -508,7 +521,7 @@ def tau_E_petty08(
 
 
 
-def tau_E_murari(I_p: float, R: float, kappa_ipb: float, dnla19: float, B0: float, P_loss: float) -> float:
+def tau_E_murari(I_p: float, R: float, kappa_ipb: float, n_la: float, B0: float, P_loss: float) -> float:
     """
         Calculate the Murari H-mode energy confinement scaling time
 
@@ -516,7 +529,7 @@ def tau_E_murari(I_p: float, R: float, kappa_ipb: float, dnla19: float, B0: floa
         pcur (float): Plasma current [A]
         rmajor (float): Plasma major radius [m]
         kappa_ipb (float): IPB specific plasma separatrix elongation
-        dnla19 (float): Line averaged electron density in units of 10**19 m**-3
+        n_la (float): Line averaged electron density in m**-3
         b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
         p_plasma_loss (float): Net Heating power [W]
 
@@ -534,6 +547,7 @@ def tau_E_murari(I_p: float, R: float, kappa_ipb: float, dnla19: float, B0: floa
               Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     ‌
     """
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -549,7 +563,7 @@ def tau_E_murari(I_p: float, R: float, kappa_ipb: float, dnla19: float, B0: floa
 
 
 def tau_E_ds03(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, kappa_95: float, A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_95: float, A: float, afuel: float
 ) -> float:
     """
         Calculate the DS03 beta-independent H-mode scaling confinement time
@@ -557,7 +571,7 @@ def tau_E_ds03(
         Parameters:
         pcur (float): Plasma current [A]
         b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        dnla19 (float): Line averaged electron density in units of 10**19 m**-3
+        n_la (float): Line averaged electron density in m**-3
         p_plasma_loss (float): Net Heating power [W]
         rmajor (float): Plasma major radius [m]
         kappa95 (float): Plasma elongation at 95% flux surface
@@ -575,6 +589,7 @@ def tau_E_ds03(
              doi: https://doi.org/10.1088/0741-3335/50/4/043001.
     ‌
     """
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -592,14 +607,14 @@ def tau_E_ds03(
 
 
 
-def tau_E_iss04_stellarator(a: float, R: float, dnla19: float, B0: float, P_loss: float, iotabar: float) -> float:
+def tau_E_iss04_stellarator(a: float, R: float, n_la: float, B0: float, P_loss: float, iotabar: float) -> float:
     """
         Calculate the ISS04 stellarator scaling confinement time
 
         Parameters:
         rminor (float): Plasma minor radius [m]
         rmajor (float): Plasma major radius [m]
-        dnla19 (float): Line averaged electron density in units of 10**19 m**-3
+        n_la (float): Line averaged electron density in m**-3
         b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
         p_plasma_loss (float): Net Heating power [W]
         iotabar (float): Rotational transform
@@ -614,20 +629,21 @@ def tau_E_iss04_stellarator(a: float, R: float, dnla19: float, B0: float, P_loss
               vol. 45, no. 12, pp. 1684-1693, Nov. 2005, doi: https://doi.org/10.1088/0029-5515/45/12/024.
     ‌
     """
+    dnla19 = n_la / 1e19
     P_loss_MW = P_loss / 1e6
     return 0.134 * a ** 2.28 * R ** 0.64 * dnla19 ** 0.54 * B0 ** 0.84 * P_loss_MW ** (-0.61) * iotabar ** 0.41
 
 
 
 
-def tau_E_iss95_stellarator(a: float, R: float, dnla19: float, B0: float, P_loss: float, iotabar: float) -> float:
+def tau_E_iss95_stellarator(a: float, R: float, n_la: float, B0: float, P_loss: float, iotabar: float) -> float:
     """
         Calculate the ISS95 stellarator scaling confinement time
 
         Parameters:
         rminor (float): Plasma minor radius [m]
         rmajor (float): Plasma major radius [m]
-        dnla19 (float): Line averaged electron density in units of 10**19 m**-3
+        n_la (float): Line averaged electron density in m**-3
         b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
         p_plasma_loss (float): Net Heating power [W]
         iotabar (float): Rotational transform
@@ -642,6 +658,7 @@ def tau_E_iss95_stellarator(a: float, R: float, dnla19: float, B0: float, P_loss
               vol. 36, no. 8, pp. 1063-1077, Aug. 1996, doi: https://doi.org/10.1088/0029-5515/36/8/i11.
     ‌
     """
+    dnla19 = n_la / 1e19
     P_loss_MW = P_loss / 1e6
     return 0.079 * a ** 2.21 * R ** 0.65 * dnla19 ** 0.51 * B0 ** 0.83 * P_loss_MW ** (-0.59) * iotabar ** 0.4
 
@@ -649,7 +666,7 @@ def tau_E_iss95_stellarator(a: float, R: float, dnla19: float, B0: float, P_loss
 
 
 def tau_E_iter_ipb98y4(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
     """
     Calculate the IPB98(y,4) ELMy H-mode scaling confinement time
@@ -657,7 +674,7 @@ def tau_E_iter_ipb98y4(
     Parameters:
     pcur (float): Plasma current [A]
     b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    dnla19 (float): Line averaged electron density in units of 10**19 m**-3
+    n_la (float): Line averaged electron density in m**-3
     p_plasma_loss (float): Net Heating power [W]
     rmajor (float): Plasma major radius [m]
     kappa_ipb (float): IPB specific plasma separatrix elongation
@@ -677,6 +694,7 @@ def tau_E_iter_ipb98y4(
         - None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
           Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -695,7 +713,7 @@ def tau_E_iter_ipb98y4(
 
 
 def tau_E_iter_ipb98y3(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
     """
     Calculate the IPB98(y,3) ELMy H-mode scaling confinement time
@@ -703,12 +721,12 @@ def tau_E_iter_ipb98y3(
     Parameters:
     pcur (float): Plasma current [A]
     b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    dnla19 (float): Line averaged electron density in units of 10**19 m**-3
+    n_la (float): Line averaged electron density in m**-3
     p_plasma_loss (float): Net Heating power [W]
     rmajor (float): Plasma major radius [m]
     kappa_ipb (float): IPB specific plasma separatrix elongation
     aspect (float): Aspect ratio
-    afuel (float): Fuel atomic mass number
+    afuel (float): Fuel atomic mass number [amu]
 
     Returns:
     float: IPB98(y,3) ELMy H-mode confinement time [s]
@@ -723,6 +741,7 @@ def tau_E_iter_ipb98y3(
         - None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
           Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -745,19 +764,20 @@ def tau_E_iter_ipb98y3(
     output="tau_E",
 )
 def tau_E_iter_ipb98y2(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
     """
+    Taken from PROCESS codebase.
     Calculate the IPB98(y,2) ELMy H-mode scaling confinement time
 
     Parameters:
-    pcur (float): Plasma current [A]
-    b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    dnla19 (float): Line averaged electron density in units of 10**19 m**-3
-    p_plasma_loss (float): Net Heating power [W]
-    rmajor (float): Plasma major radius [m]
+    I_p (float): Plasma current [A]
+    B0 (float): Toroidal magnetic field on axis[T]
+    n_la (float): Line averaged electron density [m**-3]
+    P_loss (float): Net Heating power [W]
+    R (float): Plasma major radius [m]
     kappa_ipb (float): IPB specific plasma separatrix elongation
-    aspect (float): Aspect ratio
+    A (float): Aspect ratio
     afuel (float): Fuel atomic mass number
 
     Returns:
@@ -775,6 +795,7 @@ def tau_E_iter_ipb98y2(
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla19 = n_la / 1e19
     return (
         0.0562
         * I_p_MA ** 0.93
@@ -790,7 +811,7 @@ def tau_E_iter_ipb98y2(
 
 
 def tau_E_iter_ipb98y1(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
     """
     Calculate the IPB98(y,1) ELMy H-mode scaling confinement time
@@ -798,7 +819,7 @@ def tau_E_iter_ipb98y1(
     Parameters:
     pcur (float): Plasma current [A]
     b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    dnla19 (float): Line averaged electron density in units of 10**19 m**-3
+    n_la (float): Line averaged electron density in m**-3
     p_plasma_loss (float): Net Heating power [W]
     rmajor (float): Plasma major radius [m]
     kappa_ipb (float): IPB sprcific plasma separatrix elongation
@@ -818,6 +839,7 @@ def tau_E_iter_ipb98y1(
         - None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
           Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -835,9 +857,10 @@ def tau_E_iter_ipb98y1(
 
 
 def iter_ipb98y_confinement_time(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, kappa: float, A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa: float, A: float, afuel: float
 ) -> float:
     """Return iter ipb98y confinement time scaling."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -856,9 +879,10 @@ tau_E_ipb98y = iter_ipb98y_confinement_time
 
 
 def iter_pb98py_confinement_time(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, kappa: float, A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa: float, A: float, afuel: float
 ) -> float:
     """Return iter pb98py confinement time scaling."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -876,9 +900,10 @@ def iter_pb98py_confinement_time(
 tau_E_pb98py = iter_pb98py_confinement_time
 
 def kaye_confinement_time(
-    I_p: float, B0: float, kappa: float, R: float, A: float, dnla19: float, afuel: float, P_loss: float
+    I_p: float, B0: float, kappa: float, R: float, A: float, n_la: float, afuel: float, P_loss: float
 ) -> float:
     """Return kaye confinement time scaling."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -895,9 +920,10 @@ def kaye_confinement_time(
 
 
 def valovic_elmy_confinement_time(
-    I_p: float, B0: float, dnla19: float, afuel: float, R: float, a: float, kappa: float, P_loss: float
+    I_p: float, B0: float, n_la: float, afuel: float, R: float, a: float, kappa: float, P_loss: float
 ) -> float:
     """Return valovic elmy confinement time scaling."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -915,9 +941,10 @@ def valovic_elmy_confinement_time(
 
 
 def iter_96p_confinement_time(
-    I_p: float, B0: float, kappa_95: float, R: float, A: float, dnla19: float, afuel: float, P_loss: float
+    I_p: float, B0: float, kappa_95: float, R: float, A: float, n_la: float, afuel: float, P_loss: float
 ) -> float:
     """Return iter 96p confinement time scaling."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -936,9 +963,10 @@ tau_E_iter96p = iter_96p_confinement_time
 
 
 def tau_E_iter97L(
-    I_p: float, B0: float, dnla19: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
+    I_p: float, B0: float, n_la: float, P_loss: float, R: float, eps: float, kappa_A: float, afuel: float
 ) -> float:
     """ITER97L scaling (density in 1e19 m^-3, eps=a/R)."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     eps_safe = require_nonzero(eps, "eps", "ITER97L scaling")
@@ -956,9 +984,10 @@ def tau_E_iter97L(
 
 
 def iter_h97p_elmy_confinement_time(
-    I_p: float, B0: float, P_loss: float, dnla19: float, R: float, A: float, kappa: float, afuel: float
+    I_p: float, B0: float, P_loss: float, n_la: float, R: float, A: float, kappa: float, afuel: float
 ) -> float:
     """Return iter h97p elmy confinement time scaling."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (
@@ -977,9 +1006,10 @@ tau_E_iter_h97p_elmy = iter_h97p_elmy_confinement_time
 
 
 def iter_h97p_confinement_time(
-    I_p: float, B0: float, P_loss: float, dnla19: float, R: float, A: float, kappa: float, afuel: float
+    I_p: float, B0: float, P_loss: float, n_la: float, R: float, A: float, kappa: float, afuel: float
 ) -> float:
     """Return iter h97p confinement time scaling."""
+    dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return (

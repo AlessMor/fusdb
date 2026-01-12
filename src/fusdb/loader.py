@@ -142,6 +142,36 @@ def load_reactor_yaml(path: Path | str) -> Reactor:
         if name not in parameters
     }
 
+    if "dnla19" in parameters and "n_la" not in parameters:
+        dnla19 = parameters.get("dnla19")
+        if isinstance(dnla19, (int, float)) and math.isfinite(dnla19):
+            parameters["n_la"] = dnla19 * 1e19
+            explicit_parameters.add("n_la")
+            parameters.pop("dnla19", None)
+            explicit_parameters.discard("dnla19")
+            warnings.warn(
+                f"{data.get('id', path.name)}: dnla19 is deprecated; converted to n_la in m^-3.",
+                UserWarning,
+            )
+    if parameters.get("n_la") is None:
+        n_avg = parameters.get("n_avg")
+        if isinstance(n_avg, (int, float)) and math.isfinite(n_avg):
+            parameters["n_la"] = n_avg
+            explicit_parameters.add("n_la")
+            warnings.warn(
+                f"{data.get('id', path.name)}: n_la not provided; using n_avg as line-averaged density.",
+                UserWarning,
+            )
+
+    # NOTE: Change this once different fuel compositions are supported.
+    if parameters.get("afuel") is None:
+        parameters["afuel"] = 2.5
+        explicit_parameters.add("afuel")
+        warnings.warn(
+            f"{data.get('id', path.name)}: afuel not provided; assuming 50-50 D-T (afuel=2.5).",
+            UserWarning,
+        )
+
     kwargs["parameters"] = parameters
     kwargs["parameter_tolerances"] = tolerances
     kwargs["parameter_methods"] = parameter_methods

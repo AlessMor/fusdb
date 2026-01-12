@@ -88,6 +88,19 @@ def triangularity_95(delta_95: float) -> float:
 
 
 @Reactor.relation(
+    "geometry",
+    name="IPB elongation from volume",
+    output="kappa_ipb",
+    variables=("V_p", "R", "a"),
+    priority=PRIORITY_STRICT,
+    constraints=("R != 0", "a != 0"),
+)
+def kappa_ipb_from_volume(V_p: float, R: float, a: float) -> float:
+    """Return IPB-specific elongation from volume and radii."""
+    return V_p / (2 * sp.pi**2 * R * a**2)
+
+
+@Reactor.relation(
     ("geometry", "tokamak"),
     name="Tokamak volume",
     output="V_p",
@@ -133,41 +146,7 @@ def plasma_surface_area(a: float, R: float, kappa: float, delta: float, xi: floa
     w_07 = sp.cos(theta07 - xi * sp.sin(2 * theta07)) / sp.sqrt(0.51) * (1 - 0.49 / 2 * delta**2)
     Lp = 2 * sp.pi * a * (1 + 0.55 * (kappa - 1)) * (1 + 0.08 * delta**2) * (1 + 0.2 * (w_07 - 1))
     return 2 * sp.pi * R * (1 - 0.32 * delta * epsilon) * Lp
-
-
-def _stellarator_helical_factor(a: float, R: float, iota_axis: float, iota_edge: float) -> sp.Expr:
-    """Return a simple helical correction factor based on rotational transform shear."""
-    iota_shear = iota_edge - iota_axis
-    return sp.sqrt(1 + (iota_shear * a / R) ** 2)
-
-
-@Reactor.relation(
-    ("geometry", "stellarator"),
-    name="Stellarator volume",
-    output="V_p",
-    variables=("a", "R", "iota_axis", "iota_edge"),
-    priority=PRIORITY_STRICT,
-    constraints=("R != 0",),
-)
-def stellarator_volume(a: float, R: float, iota_axis: float, iota_edge: float) -> float:
-    """Return stellarator plasma volume from radii and rotational-transform shear."""
-    helical = _stellarator_helical_factor(a, R, iota_axis, iota_edge)
-    return 2 * sp.pi**2 * R * a**2 * helical
-
-
-@Reactor.relation(
-    ("geometry", "stellarator"),
-    name="Stellarator surface",
-    output="S_p",
-    variables=("a", "R", "iota_axis", "iota_edge"),
-    priority=PRIORITY_STRICT,
-    constraints=("R != 0",),
-)
-def stellarator_surface(a: float, R: float, iota_axis: float, iota_edge: float) -> float:
-    """Return stellarator plasma surface area from radii and rotational-transform shear."""
-    helical = _stellarator_helical_factor(a, R, iota_axis, iota_edge)
-    return 4 * sp.pi**2 * R * a * helical
-
+#NOTE: no geometry available for stellarators yet... Most papers do not give enough info to use complex relations (Henneberg, Boozer,...)
 
 # Configuration-specific geometry guidance (simplified from PROCESS/STAR/ITER sources).
 # For spherical tokamaks, see Menard et al., Nucl. Fusion 2016 and PROCESS Issue #1439/#1086.
