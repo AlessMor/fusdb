@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 import importlib
 import inspect
-import math
 import sympy as sp
 from sympy.core.relational import Relational
 from pathlib import Path
@@ -229,10 +228,20 @@ class Reactor:
             lines.append(f"{name}: {text}")
         return "\n".join(lines)
 
-    def sauter_cross_section(self, n: int = 256) -> tuple[list[float], list[float]]:
-        """Return Sauter-style (R, Z) points for the plasma cross-section."""
-        if n < 8:
-            raise ValueError("n must be >= 8 for a meaningful cross-section")
+    def plot_cross_section(
+        self,
+        ax: Any | None = None,
+        *,
+        n: int = 256,
+        label: str | None = None,
+        **plot_kwargs: Any,
+    ):
+        """Plot a reactor cross-section using a configuration-specific model."""
+        config = (self.reactor_configuration or "").lower()
+        if "tokamak" not in config:
+            raise NotImplementedError(
+                f"Cross-section plotting is not implemented for {self.reactor_configuration!r}"
+            )
 
         def numeric_param(*names: str, default: float | None = None) -> float | None:
             for name in names:
@@ -258,28 +267,19 @@ class Reactor:
         delta = numeric_param("delta", "delta_95", default=0.0)
         squareness = numeric_param("squareness", default=0.0)
 
-        two_pi = 2.0 * math.pi
-        r_vals: list[float] = []
-        z_vals: list[float] = []
-        for i in range(n):
-            theta = two_pi * i / (n - 1)
-            angle = theta + delta * math.sin(theta) - squareness * math.sin(2.0 * theta)
-            r_vals.append(major_radius + minor_radius * math.cos(angle))
-            z_vals.append(kappa * minor_radius * math.sin(theta + squareness * math.sin(2.0 * theta)))
-        return r_vals, z_vals
+        from fusdb.relations.geometry.plasma_geometry import sauter_cross_section
 
-    def plot_sauter_cross_section(
-        self,
-        ax: Any | None = None,
-        *,
-        n: int = 256,
-        label: str | None = None,
-        **plot_kwargs: Any,
-    ):
-        """Plot the Sauter cross-section using matplotlib."""
+        r_vals, z_vals = sauter_cross_section(
+            major_radius,
+            minor_radius,
+            kappa=kappa,
+            delta=delta,
+            squareness=squareness,
+            n=n,
+        )
+
         import matplotlib.pyplot as plt
 
-        r_vals, z_vals = self.sauter_cross_section(n=n)
         if ax is None:
             _, ax = plt.subplots()
         if label is None:

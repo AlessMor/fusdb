@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
 from typing import Callable, Iterable, Mapping, Sequence
 import warnings
 
 import yaml
 
 from fusdb.relation_class import Relation
+from fusdb.registry import DEFAULTS_PATH, TAGS_PATH, VARIABLES_PATH
 
-TAGS_PATH = Path(__file__).with_name("allowed_tags.yaml")
-VARIABLES_PATH = Path(__file__).with_name("allowed_variables.yaml")
-DEFAULTS_PATH = Path(__file__).with_name("reactor_defaults.yaml")
 
 
 @lru_cache(maxsize=1)

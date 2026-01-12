@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sympy as sp
 
-from fusdb.constants import MU0
+from fusdb.registry.constants import MU0
 from fusdb.reactor_class import Reactor
 from fusdb.relation_util import nonzero, symbol
 

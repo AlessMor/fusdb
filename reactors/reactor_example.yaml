@@ -10,7 +10,7 @@
 #     tol: 0.02
 #     method: x
 #
-# Units are converted to the default_unit in allowed_variables.yaml when provided.
+# Units are converted to the default_unit in registry/allowed_variables.yaml when provided.
 
 id: "EXAMPLE"
 name: "Example Reactor"

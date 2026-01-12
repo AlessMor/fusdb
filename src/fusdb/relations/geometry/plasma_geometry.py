@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import sympy as sp
 
 from fusdb.reactor_class import Reactor
@@ -134,6 +135,40 @@ def plasma_surface_area(a: float, R: float, kappa: float, delta: float, xi: floa
     return 2 * sp.pi * R * (1 - 0.32 * delta * epsilon) * Lp
 
 
+def _stellarator_helical_factor(a: float, R: float, iota_axis: float, iota_edge: float) -> sp.Expr:
+    """Return a simple helical correction factor based on rotational transform shear."""
+    iota_shear = iota_edge - iota_axis
+    return sp.sqrt(1 + (iota_shear * a / R) ** 2)
+
+
+@Reactor.relation(
+    ("geometry", "stellarator"),
+    name="Stellarator volume",
+    output="V_p",
+    variables=("a", "R", "iota_axis", "iota_edge"),
+    priority=PRIORITY_STRICT,
+    constraints=("R != 0",),
+)
+def stellarator_volume(a: float, R: float, iota_axis: float, iota_edge: float) -> float:
+    """Return stellarator plasma volume from radii and rotational-transform shear."""
+    helical = _stellarator_helical_factor(a, R, iota_axis, iota_edge)
+    return 2 * sp.pi**2 * R * a**2 * helical
+
+
+@Reactor.relation(
+    ("geometry", "stellarator"),
+    name="Stellarator surface",
+    output="S_p",
+    variables=("a", "R", "iota_axis", "iota_edge"),
+    priority=PRIORITY_STRICT,
+    constraints=("R != 0",),
+)
+def stellarator_surface(a: float, R: float, iota_axis: float, iota_edge: float) -> float:
+    """Return stellarator plasma surface area from radii and rotational-transform shear."""
+    helical = _stellarator_helical_factor(a, R, iota_axis, iota_edge)
+    return 4 * sp.pi**2 * R * a * helical
+
+
 # Configuration-specific geometry guidance (simplified from PROCESS/STAR/ITER sources).
 # For spherical tokamaks, see Menard et al., Nucl. Fusion 2016 and PROCESS Issue #1439/#1086.
 @Reactor.relation(
@@ -156,3 +191,27 @@ def st_elongation_from_aspect_ratio(A: float) -> float:
 def st_triangularity_from_aspect_ratio(A: float) -> float:
     """Return spherical tokamak triangularity from aspect ratio."""
     return 0.53 * (1 + 0.77 * (1 / A) ** 3) / 1.50
+
+
+def sauter_cross_section(
+    R: float,
+    a: float,
+    *,
+    kappa: float = 1.0,
+    delta: float = 0.0,
+    squareness: float = 0.0,
+    n: int = 256,
+) -> tuple[list[float], list[float]]:
+    """Return Sauter-style (R, Z) points for a tokamak plasma cross-section."""
+    if n < 8:
+        raise ValueError("n must be >= 8 for a meaningful cross-section")
+
+    two_pi = 2.0 * math.pi
+    r_vals: list[float] = []
+    z_vals: list[float] = []
+    for i in range(n):
+        theta = two_pi * i / (n - 1)
+        angle = theta + delta * math.sin(theta) - squareness * math.sin(2.0 * theta)
+        r_vals.append(R + a * math.cos(angle))
+        z_vals.append(kappa * a * math.sin(theta + squareness * math.sin(2.0 * theta)))
+    return r_vals, z_vals

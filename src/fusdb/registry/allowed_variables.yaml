@@ -128,6 +128,18 @@ li:
   default_unit: dimensionless
   description:
     - Internal inductance.
+iota_axis:
+  default_unit: dimensionless
+  constraints:
+    - iota_axis >= 0
+  description:
+    - Rotational transform on axis.
+iota_edge:
+  default_unit: dimensionless
+  constraints:
+    - iota_edge >= 0
+  description:
+    - Rotational transform at the plasma edge.
 ################ PLASMA PRESSURE & ENERGY ################
 beta_N:
   default_unit: dimensionless

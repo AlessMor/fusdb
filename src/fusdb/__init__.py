@@ -1,7 +1,6 @@
 from .relation_class import PRIORITY_EXPLICIT, PRIORITY_RELATION, PRIORITY_STRICT, Relation, RelationSystem
 from .reactor_class import Reactor
-from .relations.confinement.plasma_stored_energy import KEV_TO_J
-from .relations.plasma_pressure.beta import MU0
+from .registry.constants import KEV_TO_J, MU0
 from .loader import (
     find_reactor_dirs,
     load_all_reactors,

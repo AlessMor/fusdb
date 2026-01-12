@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fusdb.constants import KEV_TO_J
+from fusdb.registry.constants import KEV_TO_J
 from fusdb.reactor_class import Reactor
 from fusdb.relation_util import nonzero, symbol
 

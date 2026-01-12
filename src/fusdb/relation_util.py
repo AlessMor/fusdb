@@ -1,6 +1,5 @@
 import math
 from functools import lru_cache
-from pathlib import Path
 from typing import Any, Callable, Iterable
 
 import sympy as sp
@@ -8,10 +7,11 @@ from sympy.parsing.sympy_parser import parse_expr
 from sympy.core.relational import Relational
 import yaml
 
+from fusdb.registry import VARIABLES_PATH
+
 WarnFunc = Callable[[str, type[Warning] | None], None]
 REL_TOL_DEFAULT = 1e-2  # relative tolerance for relation checks
 _SYMBOLS: dict[str, sp.Symbol] = {}
-VARIABLES_PATH = Path(__file__).with_name("allowed_variables.yaml")
 
 
 def symbol(name: str) -> sp.Symbol:

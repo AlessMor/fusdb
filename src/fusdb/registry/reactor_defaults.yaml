@@ -6,7 +6,7 @@ layers:
     defaults:
       #kappa: 1.0
       #delta: 1.0
-      squareness: 0.0
+      squareness: 0.0 # kept as default since most reactors do not specify squareness
 
   # Example extensions:
   # - name: tokamak

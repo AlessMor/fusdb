@@ -2,7 +2,7 @@
 
 from numpy import float64
 
-from fusdb.constants import DT_REACTION_ENERGY_J, MEV_TO_J
+from fusdb.registry.constants import DT_REACTION_ENERGY_J, MEV_TO_J
 from fusdb.reactor_class import Reactor
 from fusdb.relations.fusion_power.reactivity_functions import sigmav_DT_BoschHale
 
