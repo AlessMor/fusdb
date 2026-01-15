@@ -21,5 +21,6 @@ See `reactors/example_reactor.yaml` for an annotated template listing all suppor
 
 ## Useful links:
 - https://www.fusionenergybase.com/projects
+- https://github.com/RemDelaporteMathurin/fusion-world
 - cfspopcon
 - PROCESS
