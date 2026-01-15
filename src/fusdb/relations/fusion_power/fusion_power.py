@@ -30,7 +30,7 @@ from fusdb.relations.fusion_power.reactivity_functions import (
     name="DT reaction rate",
     output="Rr_DT",
     solve_for=("Rr_DT",),
-    constraints=("T_avg >= 0", "V_p >= 0"),
+    constraints=("T_avg >= 0", "V_p >= 0", "Rr_DT >= 0"),
 )
 def reaction_rate_dt(f_D: float, f_T: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return DT fusion reaction rate from fractions, temperature, and volume."""
@@ -43,7 +43,7 @@ def reaction_rate_dt(f_D: float, f_T: float, n_i: float, T_avg: float, V_p: floa
     name="DD (He3+n) reaction rate",
     output="Rr_DDn",
     solve_for=("Rr_DDn",),
-    constraints=("T_avg >= 0", "V_p >= 0"),
+    constraints=("T_avg >= 0", "V_p >= 0", "Rr_DDn >= 0"),
 )
 def reaction_rate_ddn(f_D: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return D(d,n)He3 reaction rate (branch) from fractions, temperature, and volume."""
@@ -56,7 +56,7 @@ def reaction_rate_ddn(f_D: float, n_i: float, T_avg: float, V_p: float) -> float
     name="DD (T+p) reaction rate",
     output="Rr_DDp",
     solve_for=("Rr_DDp",),
-    constraints=("T_avg >= 0", "V_p >= 0"),
+    constraints=("T_avg >= 0", "V_p >= 0", "Rr_DDp >= 0"),
 )
 def reaction_rate_ddp(f_D: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return D(d,p)T reaction rate (branch) from fractions, temperature, and volume."""
@@ -69,7 +69,7 @@ def reaction_rate_ddp(f_D: float, n_i: float, T_avg: float, V_p: float) -> float
     name="D-He3 reaction rate",
     output="Rr_DHe3",
     solve_for=("Rr_DHe3",),
-    constraints=("T_avg >= 0", "V_p >= 0"),
+    constraints=("T_avg >= 0", "V_p >= 0", "Rr_DHe3 >= 0"),
 )
 def reaction_rate_dhe3(f_D: float, f_He3: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return D-He3 fusion reaction rate from fractions, temperature, and volume."""
@@ -82,7 +82,7 @@ def reaction_rate_dhe3(f_D: float, f_He3: float, n_i: float, T_avg: float, V_p: 
     name="T-T reaction rate",
     output="Rr_TT",
     solve_for=("Rr_TT",),
-    constraints=("T_avg >= 0", "V_p >= 0"),
+    constraints=("T_avg >= 0", "V_p >= 0", "Rr_TT >= 0"),
 )
 def reaction_rate_tt(f_T: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return T-T fusion reaction rate from fractions, temperature, and volume."""
@@ -95,7 +95,7 @@ def reaction_rate_tt(f_T: float, n_i: float, T_avg: float, V_p: float) -> float:
     name="He3-He3 reaction rate",
     output="Rr_He3He3",
     solve_for=("Rr_He3He3",),
-    constraints=("T_avg >= 0", "V_p >= 0"),
+    constraints=("T_avg >= 0", "V_p >= 0", "Rr_He3He3 >= 0"),
 )
 def reaction_rate_he3he3(f_He3: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return He3-He3 fusion reaction rate from fractions, temperature, and volume."""
@@ -108,7 +108,7 @@ def reaction_rate_he3he3(f_He3: float, n_i: float, T_avg: float, V_p: float) -> 
     name="T-He3 reaction rate",
     output="Rr_THe3",
     solve_for=("Rr_THe3",),
-    constraints=("T_avg >= 0", "V_p >= 0"),
+    constraints=("T_avg >= 0", "V_p >= 0", "Rr_THe3 >= 0"),
 )
 def reaction_rate_the3(f_T: float, f_He3: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return T-He3 fusion reaction rate from fractions, temperature, and volume."""
@@ -120,6 +120,7 @@ def reaction_rate_the3(f_T: float, f_He3: float, n_i: float, T_avg: float, V_p: 
     "fusion_power",
     name="DT alpha power",
     output="P_fus_DT_alpha",
+    constraints=("P_fus_DT_alpha >= 0",),
 )
 def alpha_power_dt(Rr_DT: float) -> float:
     """Return alpha power from D-T fusion."""
@@ -130,6 +131,7 @@ def alpha_power_dt(Rr_DT: float) -> float:
     "fusion_power",
     name="DD triton power",
     output="P_fus_DDp_T",
+    constraints=("P_fus_DDp_T >= 0",),
 )
 def triton_power_dd(Rr_DDp: float) -> float:
     """Return triton power from the D(d,p)T branch."""
@@ -140,6 +142,7 @@ def triton_power_dd(Rr_DDp: float) -> float:
     "fusion_power",
     name="DD helium-3 power",
     output="P_fus_DDn_He3",
+    constraints=("P_fus_DDn_He3 >= 0",),
 )
 def he3_power_dd(Rr_DDn: float) -> float:
     """Return He3 power from the D(d,n)He3 branch."""
@@ -150,6 +153,7 @@ def he3_power_dd(Rr_DDn: float) -> float:
     "fusion_power",
     name="DD proton power",
     output="P_fus_DDp_p",
+    constraints=("P_fus_DDp_p >= 0",),
 )
 def proton_power_dd(Rr_DDp: float) -> float:
     """Return proton power from the D(d,p)T branch."""
@@ -160,6 +164,7 @@ def proton_power_dd(Rr_DDp: float) -> float:
     "fusion_power",
     name="D-He3 alpha power",
     output="P_fus_DHe3_alpha",
+    constraints=("P_fus_DHe3_alpha >= 0",),
 )
 def alpha_power_dhe3(Rr_DHe3: float) -> float:
     """Return alpha power from D-He3 fusion."""
@@ -170,6 +175,7 @@ def alpha_power_dhe3(Rr_DHe3: float) -> float:
     "fusion_power",
     name="D-He3 proton power",
     output="P_fus_DHe3_p",
+    constraints=("P_fus_DHe3_p >= 0",),
 )
 def proton_power_dhe3(Rr_DHe3: float) -> float:
     """Return proton power from D-He3 fusion."""
@@ -180,6 +186,7 @@ def proton_power_dhe3(Rr_DHe3: float) -> float:
     "fusion_power",
     name="DT neutron power",
     output="P_fus_DT_n",
+    constraints=("P_fus_DT_n >= 0",),
 )
 def neutron_power_dt(Rr_DT: float) -> float:
     """Return neutron power from D-T fusion."""
@@ -190,6 +197,7 @@ def neutron_power_dt(Rr_DT: float) -> float:
     "fusion_power",
     name="DD neutron power",
     output="P_fus_DDn_n",
+    constraints=("P_fus_DDn_n >= 0",),
 )
 def neutron_power_dd(Rr_DDn: float) -> float:
     """Return neutron power from the D(d,n)He3 branch."""
@@ -200,6 +208,7 @@ def neutron_power_dd(Rr_DDn: float) -> float:
     "fusion_power",
     name="TT fusion power",
     output="P_fus_TT",
+    constraints=("P_fus_TT >= 0",),
 )
 def fusion_power_tt(Rr_TT: float) -> float:
     """Return total fusion power from T-T reactions."""
@@ -210,6 +219,7 @@ def fusion_power_tt(Rr_TT: float) -> float:
     "fusion_power",
     name="DT fusion power",
     output="P_fus_DT",
+    constraints=("P_fus_DT >= 0",),
 )
 def fusion_power_dt(P_fus_DT_alpha: float, P_fus_DT_n: float) -> float:
     """Return total D-T fusion power from alpha and neutron components."""
@@ -220,6 +230,7 @@ def fusion_power_dt(P_fus_DT_alpha: float, P_fus_DT_n: float) -> float:
     "fusion_power",
     name="DD (He3+n) fusion power",
     output="P_fus_DDn",
+    constraints=("P_fus_DDn >= 0",),
 )
 def fusion_power_ddn(P_fus_DDn_He3: float, P_fus_DDn_n: float) -> float:
     """Return D-D fusion power from the He3+n branch."""
@@ -230,6 +241,7 @@ def fusion_power_ddn(P_fus_DDn_He3: float, P_fus_DDn_n: float) -> float:
     "fusion_power",
     name="DD (T+p) fusion power",
     output="P_fus_DDp",
+    constraints=("P_fus_DDp >= 0",),
 )
 def fusion_power_ddp(P_fus_DDp_T: float, P_fus_DDp_p: float) -> float:
     """Return D-D fusion power from the T+p branch."""
@@ -240,6 +252,7 @@ def fusion_power_ddp(P_fus_DDp_T: float, P_fus_DDp_p: float) -> float:
     "fusion_power",
     name="DD fusion power",
     output="P_fus_DD",
+    constraints=("P_fus_DD >= 0",),
 )
 def fusion_power_dd(P_fus_DDn: float, P_fus_DDp: float) -> float:
     """Return total D-D fusion power from both branches."""
@@ -250,6 +263,7 @@ def fusion_power_dd(P_fus_DDn: float, P_fus_DDp: float) -> float:
     "fusion_power",
     name="D-He3 fusion power",
     output="P_fus_DHe3",
+    constraints=("P_fus_DHe3 >= 0",),
 )
 def fusion_power_dhe3(P_fus_DHe3_alpha: float, P_fus_DHe3_p: float) -> float:
     """Return total D-He3 fusion power from alpha and proton components."""
@@ -260,6 +274,7 @@ def fusion_power_dhe3(P_fus_DHe3_alpha: float, P_fus_DHe3_p: float) -> float:
     "fusion_power",
     name="Total fusion power",
     output="P_fus",
+    constraints=("P_fus >= 0",),
 )
 def fusion_power_total(
     P_fus_DT: float,
