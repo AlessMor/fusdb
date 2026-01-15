@@ -7,6 +7,7 @@ import pint
 import yaml
 
 from .reactor_class import Reactor
+from .registry.reactor_defaults import apply_reactor_defaults
 from .reactor_util import (
     ALLOWED_CONFINEMENT_MODES,
     ALLOWED_REACTOR_FAMILIES,
@@ -15,7 +16,6 @@ from .reactor_util import (
     REQUIRED_FIELDS,
     RESERVED_KEYS,
     configuration_tags,
-    default_parameters_for_tags,
     normalize_allowed,
     normalize_country,
     variable_aliases,
@@ -112,7 +112,8 @@ def load_reactor_yaml(path: Path | str) -> Reactor:
                     f"Failed to convert {canonical!r} from {param_unit!r} to {default_unit!r} in {path}"
                 ) from exc
         parameters[canonical] = param_value
-        explicit_parameters.add(canonical)
+        if param_value is not None:
+            explicit_parameters.add(canonical)
         if param_tol is not None:
             tolerances[canonical] = param_tol
         if param_method is not None:
@@ -136,46 +137,19 @@ def load_reactor_yaml(path: Path | str) -> Reactor:
         default_tags.add(str(normalized_family))
     if normalized_mode:
         default_tags.add(str(normalized_mode))
-    parameter_defaults: dict[str, Any] = {
-        name: default
-        for name, default in default_parameters_for_tags(default_tags).items()
-        if name not in parameters
-    }
+    parameter_defaults, fallback_relations = apply_reactor_defaults(
+        parameters,
+        explicit_parameters,
+        tags=default_tags,
+        reactor_id=data.get("id", path.name),
+        warn=warnings.warn,
+    )
 
-    if "dnla19" in parameters and "n_la" not in parameters:
-        dnla19 = parameters.get("dnla19")
-        if isinstance(dnla19, (int, float)) and math.isfinite(dnla19):
-            parameters["n_la"] = dnla19 * 1e19
-            explicit_parameters.add("n_la")
-            parameters.pop("dnla19", None)
-            explicit_parameters.discard("dnla19")
-            warnings.warn(
-                f"{data.get('id', path.name)}: dnla19 is deprecated; converted to n_la in m^-3.",
-                UserWarning,
-            )
-    if parameters.get("n_la") is None:
-        n_avg = parameters.get("n_avg")
-        if isinstance(n_avg, (int, float)) and math.isfinite(n_avg):
-            parameters["n_la"] = n_avg
-            explicit_parameters.add("n_la")
-            warnings.warn(
-                f"{data.get('id', path.name)}: n_la not provided; using n_avg as line-averaged density.",
-                UserWarning,
-            )
-
-    # NOTE: Change this once different fuel compositions are supported.
-    if parameters.get("afuel") is None:
-        parameters["afuel"] = 2.5
-        explicit_parameters.add("afuel")
-        warnings.warn(
-            f"{data.get('id', path.name)}: afuel not provided; assuming 50-50 D-T (afuel=2.5).",
-            UserWarning,
-        )
-
+    kwargs["parameter_defaults"] = parameter_defaults
+    kwargs["fallback_relations"] = fallback_relations
     kwargs["parameters"] = parameters
     kwargs["parameter_tolerances"] = tolerances
     kwargs["parameter_methods"] = parameter_methods
-    kwargs["parameter_defaults"] = parameter_defaults
     kwargs["explicit_parameters"] = explicit_parameters
     kwargs["root_dir"] = path.parent
 

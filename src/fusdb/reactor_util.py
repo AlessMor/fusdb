@@ -6,8 +6,9 @@ import warnings
 
 import yaml
 
+from fusdb.registry.reactor_defaults import default_parameters_for_tags
 from fusdb.relation_class import Relation
-from fusdb.registry import DEFAULTS_PATH, TAGS_PATH, VARIABLES_PATH
+from fusdb.registry import SPECIES_PATH, TAGS_PATH, VARIABLES_PATH
 
 
 
@@ -37,50 +38,28 @@ def load_allowed_tags() -> dict[str, object]:
             raise ValueError(f"allowed_tags.yaml entry {key!r} must be a list")
     return tags
 
+
 @lru_cache(maxsize=1)
-def load_default_layers() -> list[dict[str, object]]:
-    """Load default parameter layers from the YAML registry."""
-    data = yaml.safe_load(DEFAULTS_PATH.read_text()) or {}
-    if not isinstance(data, dict):
-        raise ValueError("reactor_defaults.yaml must contain a mapping")
-    raw_layers = data.get("layers", [])
-    if raw_layers is None:
-        raw_layers = []
-    if not isinstance(raw_layers, list):
-        raise ValueError("reactor_defaults.yaml 'layers' must be a list")
-    layers: list[dict[str, object]] = []
-    for layer in raw_layers:
-        if not isinstance(layer, dict):
-            raise ValueError("Each layer in reactor_defaults.yaml must be a mapping")
-        raw_tags = layer.get("tags", [])
-        if raw_tags is None:
-            raw_tags = []
-        if isinstance(raw_tags, str):
-            tags = [raw_tags]
-        elif isinstance(raw_tags, list):
-            tags = raw_tags
-        else:
-            raise ValueError("Default layer tags must be a string or list")
-        raw_defaults = layer.get("defaults", {})
-        if raw_defaults is None:
-            raw_defaults = {}
-        if not isinstance(raw_defaults, dict):
-            raise ValueError("Default layer defaults must be a mapping")
-        priority_raw = layer.get("priority", 0)
-        try:
-            priority = int(priority_raw)
-        except (TypeError, ValueError):
-            raise ValueError("Default layer priority must be an integer") from None
-        name = str(layer.get("name", ""))
-        layers.append(
-            {
-                "name": name,
-                "tags": tuple(str(tag) for tag in tags),
-                "defaults": dict(raw_defaults),
-                "priority": priority,
-            }
-        )
-    return layers
+def load_allowed_species() -> dict[str, dict[str, object]]:
+    """Load allowed ion species metadata from the YAML registry."""
+    data = yaml.safe_load(SPECIES_PATH.read_text())
+    if data is None:
+        data = {}
+    if isinstance(data, list):
+        return {str(item): {} for item in data}
+    if isinstance(data, dict):
+        if "species" in data and isinstance(data.get("species"), list):
+            return {str(item): {} for item in data.get("species", [])}
+        species: dict[str, dict[str, object]] = {}
+        for key, meta in data.items():
+            if meta is None:
+                meta = {}
+            if not isinstance(meta, dict):
+                raise ValueError("allowed_species.yaml entries must be mappings")
+            species[str(key)] = dict(meta)
+        return species
+    raise ValueError("allowed_species.yaml must contain a mapping of species to metadata")
+
 _ALLOWED_TAGS = load_allowed_tags()
 
 
@@ -101,6 +80,8 @@ ALLOWED_REACTOR_FAMILIES: tuple[str, ...] = tuple(_ALLOWED_TAGS.get("reactor_fam
 ALLOWED_REACTOR_CONFIGURATIONS: tuple[str, ...] = tuple(_ALLOWED_TAGS.get("reactor_configurations", ()))
 ALLOWED_CONFINEMENT_MODES: tuple[str, ...] = tuple(_ALLOWED_TAGS.get("confinement_modes", ()))
 ALLOWED_RELATION_DOMAINS: tuple[str, ...] = tuple(_RELATION_DOMAIN_ORDER.keys())
+ALLOWED_SPECIES_META: dict[str, dict[str, object]] = load_allowed_species()
+ALLOWED_SPECIES: tuple[str, ...] = tuple(ALLOWED_SPECIES_META.keys())
 _REQUIRED_METADATA_FIELDS = _ALLOWED_TAGS.get("required_metadata_fields")
 if _REQUIRED_METADATA_FIELDS is None:
     raise ValueError("allowed_tags.yaml must define required_metadata_fields")
@@ -278,20 +259,6 @@ def variable_aliases() -> dict[str, str]:
     return aliases
 
 
-def default_parameters_for_tags(tags: Iterable[str]) -> dict[str, object]:
-    """Return merged defaults for layers that match the provided tags."""
-    tag_set = set(tags)
-    layers = load_default_layers()
-    matched = [
-        layer for layer in layers if set(layer["tags"]).issubset(tag_set)
-    ]
-    matched.sort(key=lambda layer: (layer["priority"], layer["name"]))
-    defaults: dict[str, object] = {}
-    for layer in matched:
-        defaults.update(layer["defaults"])
-    return defaults
-
-
 DEFAULT_GEOMETRY_VALUES: dict[str, float] = {
     name: value
     for name, value in default_parameters_for_tags(()).items()
@@ -347,6 +314,7 @@ def select_relations(
         by_output.setdefault(output, []).append((tags, rel))
 
     selected: dict[str, Relation] = {}
+    selected_tags: dict[str, tuple[str, ...]] = {}
     for output, method in parameter_methods.items():
         if not method:
             continue
@@ -387,42 +355,28 @@ def select_relations(
                 f"Method {method!r} for {output} is ambiguous ({match_names}); using {matches[0].name}.",
                 UserWarning,
             )
-        selected[output] = matches[0]
+        chosen = matches[0]
+        selected[output] = chosen
+        for tags, rel in candidates:
+            if rel is chosen:
+                selected_tags[output] = tags
+                break
 
     adjusted: list[Relation] = []
     for _tags, rel in relations:
-        output = rel.variables[0] if rel.variables else None
+        if not rel.variables:
+            adjusted.append(rel)
+            continue
+        output = rel.variables[0]
         chosen = selected.get(output)
         if chosen is None or rel is chosen:
             adjusted.append(rel)
             continue
-        # When a method override exists, prevent other relations from solving the same output.
-        if output is None:
-            adjusted.append(rel)
+        chosen_tags = selected_tags.get(output)
+        if not chosen_tags:
             continue
-        if rel.solve_for is None:
-            if not rel.variables or rel.variables[0] != output:
-                adjusted.append(rel)
-                continue
-            new_targets = tuple(var for var in rel.variables if var != output)
-        else:
-            if output not in rel.solve_for:
-                adjusted.append(rel)
-                continue
-            new_targets = tuple(target for target in rel.solve_for if target != output)
-        if not new_targets:
-            new_targets = ("__relation_skip__",)
-        adjusted.append(
-            Relation(
-                rel.name,
-                rel.variables,
-                rel.expr,
-                priority=rel.priority,
-                rel_tol=rel.rel_tol,
-                solve_for=new_targets,
-                initial_guesses=rel.initial_guesses,
-                max_solve_iterations=rel.max_solve_iterations,
-                constraints=rel.constraints,
-            )
-        )
+        # Drop other relations only when they overlap the chosen relation's tags.
+        if set(_tags).intersection(chosen_tags):
+            continue
+        adjusted.append(rel)
     return tuple(adjusted)

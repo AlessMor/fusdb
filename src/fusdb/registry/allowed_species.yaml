@@ -1,0 +1,26 @@
+## Allowed ion species with metadata.
+H:
+  full_name: hydrogen
+  atomic_symbol: "H"
+  atomic_number: 1
+  atomic_mass: 1
+D:
+  full_name: deuterium
+  atomic_symbol: "H"
+  atomic_number: 1
+  atomic_mass: 2
+T:
+  full_name: tritium
+  atomic_symbol: "H"
+  atomic_number: 1
+  atomic_mass: 3
+He3:
+  full_name: helium-3
+  atomic_symbol: "He"
+  atomic_number: 2
+  atomic_mass: 3
+He4:
+  full_name: helium-4
+  atomic_symbol: "He"
+  atomic_number: 2
+  atomic_mass: 4

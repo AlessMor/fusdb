@@ -1,52 +1,148 @@
+# Example reactor definition
+#
+# Parameters can be provided as scalars:
+#   R: 3.3
+#
+# Or as mappings with optional entries:
+#   R:
+#     value: 3.3
+#     unit: m
+#     tol: 0.02
+#     method: x
+#
+# Units are converted to the default_unit in registry/allowed_variables.yaml when provided.
+
 id: ARC_2015
-reactor_family: ARC
 name: ARC 2015
 reactor_configuration: compact tokamak
 organization: MIT
-country: USA
 
+# Optional metadata
+reactor_family: ARC
+country: USA
+# site:
 design_year: 2015
 doi: 10.1016/j.fusengdes.2015.07.008
 notes: Conceptual compact tokamak from MIT.
+# allow_relation_overrides: false # allows to override set values if not conforming to relations
+confinement_mode: I-mode
 solve_strategy: global
 
-# plasma geometry
-R: 3.3
-a: 1.13
-A: 2.92
-kappa: 1.84
-delta: 0.5 # ASSUMED! In the paper it says "almost triangular"
-V_p: 153.0
+################ GEOMETRIC PARAMETERS ################
+R: 3.3 # [m] Major radius.
+a: 1.13 # [m] Minor radius.
+A: 2.92 # [dimensionless] Aspect ratio (R/a).
+kappa: 1.84 # [dimensionless] Elongation.
+# kappa_95: [dimensionless] Elongation at 95% flux surface.
+# delta_95: [dimensionless] Triangularity at 95% flux surface.
+# delta: [dimensionless] Core triangularity.
+V_p: 153.0 # [m^3] Plasma volume.
+# S_p: [m^2] Plasma surface area.
+# squareness: [dimensionless] Squareness (xi).
+# R_max: [m] Outboard major radius extent from the center of the torus.
+# R_min: [m] Inboard major radius extent from the center of the torus.
+# Z_max: [m] Upper vertical extent.
+# Z_min: [m] Lower vertical extent.
 
-# plasma parameters
-B0: 9.2
-B_max: 23
-I_p: 7.8e6
-f_BS: 0.63
-q95: 7.2
-q_a: 4.7
-q_min: 3.5
-li: 0.67
-beta_N: 2.59
-beta_T: 0.019
-T_avg: 14
-T0: 27
-n_avg: 1.3e20
-n0: 1.8e20
-f_GW: 0.67
-TBR: 1.1
-tau_E: 0.64
-H89: 2.8
-H98_y2: 1.8
-G89: 0.14
+################ MAGNETIC FIELD & CURRENT ################
+B0: 9.2 # [T] Toroidal field on axis.
+B_max: 23 # [T] Peak field on coil.
+# B_p: [T] Poloidal field.
+I_p: 7.8e6 # [A] Plasma current.
+f_BS: 0.63 # [dimensionless] Bootstrap current fraction.
+# f_NI: [dimensionless] Non-inductive current fraction.
+# f_CD: [dimensionless] Driven current fraction (excluding bootstrap).
+q95: 7.2 # [dimensionless] Safety factor at 95% flux surface.
+q_a: 4.7 # [dimensionless] Edge safety factor.
+q_min: 3.5 # [dimensionless] Minimum safety factor.
+li: 0.67 # [dimensionless] Internal inductance.
 
-# power and efficiency
-P_fus: 525e6
-P_th_tot: 708e6
-P_elec_tot: 283e6
-P_elec_net: 190e6
-eta_th: 0.40
-Q_e: 3.0
-P_wall: 2.5e6
-P_LHCD: 25e6
-P_ICRF: 13.6e6
+################ PLASMA PRESSURE & ENERGY ################
+beta_N: 2.59 # [dimensionless] Normalized beta.
+beta_T: 0.019 # [dimensionless] Toroidal beta (fraction).
+# beta_p: [dimensionless] Poloidal beta.
+# beta: [dimensionless] Total beta.
+# beta_limit: [dimensionless] Troyon beta limit.
+# p_th: [Pa] Thermal pressure.
+# W_th: [J] Thermal stored energy.
+
+################ TEMPERATURE & DENSITY ################
+T_avg: 14 # [keV] Volume-averaged electron temperature.
+T0: 27 # [keV] On-axis electron temperature.
+# T_e: [keV] Electron temperature.
+# T_i: [keV] Ion temperature.
+n_avg: 1.3e20 # [1/m^3] Volume-averaged electron density.
+n0: 1.8e20 # [1/m^3] On-axis electron density.
+# n_e: [1/m^3] Electron density.
+# n_i: [1/m^3] Ion density.
+# n_GW: [1/m^3] Greenwald density limit.
+# n_SUDO: [1/m^3] Sudo density limit.
+f_GW: 0.67 # [dimensionless] Greenwald fraction.
+# Z_eff: [dimensionless] Effective charge.
+
+################ ION COMPOSITION ################
+# f_D: [dimensionless] Deuterium ion fraction (n_D / n_i).
+# f_T: [dimensionless] Tritium ion fraction (n_T / n_i).
+# f_He3: [dimensionless] Helium-3 ion fraction (n_He3 / n_i).
+# f_He4: [dimensionless] Helium-4 ion fraction (n_He4 / n_i).
+
+################ CONFINEMENT & PERFORMANCE ################
+TBR: 1.1 # [dimensionless] Tritium breeding ratio.
+tau_E: 0.64 # [s] Energy confinement time.
+tau_p: 1 # [s] Particle confinement time (generic).
+# tau_p_D: [s] Deuterium particle confinement time.
+# tau_p_T: [s] Tritium particle confinement time.
+# tau_p_He3: [s] Helium-3 particle confinement time.
+# tau_p_He4: [s] Helium-4 particle confinement time.
+# tau_pulse: [s] Pulse length.
+H89: 2.8 # [dimensionless] H89 confinement enhancement factor.
+H98_y2: 1.8 # [dimensionless] H98(y,2) confinement enhancement factor.
+G89: 0.14 # [dimensionless] G89 gain factor.
+
+################ POWER & EXHAUST ################
+P_fus: 525e6 # [W] Fusion power.
+# Rr_DT: [1/s] D-T fusion reaction rate (volume-integrated).
+# Rr_DDn: [1/s] D-D fusion reaction rate (He3+n branch).
+# Rr_DDp: [1/s] D-D fusion reaction rate (T+p branch).
+# Rr_DHe3: [1/s] D-He3 fusion reaction rate.
+# Rr_TT: [1/s] T-T fusion reaction rate.
+# Rr_He3He3: [1/s] He3-He3 fusion reaction rate.
+# Rr_THe3: [1/s] T-He3 fusion reaction rate.
+# P_fus_DT: [W] Total D-T fusion power.
+# P_fus_DT_alpha: [W] Alpha power from D-T fusion.
+# P_fus_DT_n: [W] Neutron power from D-T fusion.
+# P_fus_DD: [W] Total D-D fusion power.
+# P_fus_DDn: [W] D-D fusion power from the He3+n branch.
+# P_fus_DDn_He3: [W] Helium-3 power from D-D fusion (He3+n branch).
+# P_fus_DDn_n: [W] Neutron power from D-D fusion (He3+n branch).
+# P_fus_DDp: [W] D-D fusion power from the T+p branch.
+# P_fus_DDp_T: [W] Triton power from D-D fusion (T+p branch).
+# P_fus_DDp_p: [W] Proton power from D-D fusion (T+p branch).
+# P_fus_DHe3: [W] Total D-He3 fusion power.
+# P_fus_DHe3_alpha: [W] Alpha power from D-He3 fusion.
+# P_fus_DHe3_p: [W] Proton power from D-He3 fusion.
+# P_fus_TT: [W] Total T-T fusion power.
+# P_charged: [W] Charged-particle fusion power deposited in the plasma.
+P_th_tot: 708e6 # [W] Total thermal power.
+P_elec_tot: 283e6 # [W] Gross electric power.
+P_elec_net: 190e6 # [W] Net electric power.
+# P_aux: [W] Total auxiliary heating power.
+# P_ohmic: [W] Ohmic heating power.
+eta_th: 0.4 # [dimensionless] Plant thermal/electric efficiency.
+Q_e: 3.0 # [dimensionless] Electric power multiplication.
+P_wall: 2.5e6 # [W/m^2] Fusion power wall loading.
+# P_NBI: [W] Neutral beam injected power.
+P_LHCD: 25e6 # [W] Lower hybrid coupled power.
+P_ICRF: 13.6e6 # [W] ICRF coupled power.
+# P_LH: [W] L-H transition threshold power.
+# P_sep: [W] Power across the separatrix.
+# P_sep_over_R: [W/m] P_sep divided by major radius.
+# P_sep_B_over_q95AR: [W*T/m] P_sep * B0 / (q95 * A * R).
+# P_loss: [W] Power loss across the plasma boundary.
+# P_rad: [W] Core radiated power (or total if not separated).
+# Q_sci: [dimensionless] Scientific Q
+
+################ SCALING INPUTS ################
+# n_la: [1/m^3] Line-averaged electron density.
+# kappa_ipb: [dimensionless] IPB-specific elongation at separatrix.
+# afuel: [amu] Average fuel mass number.

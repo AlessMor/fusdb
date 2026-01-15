@@ -146,3 +146,18 @@ def sigmav_DHe3_BoschHale(ion_temp_profile: float64) -> float64:
     sigmav: float64= cBH_1[1] * thetaBH_1 * math.sqrt(etaBH_1 / (mc2_1 * (ion_temp_profile**3.0))) * math.exp(-3.0 * etaBH_1)
 
     return sigmav*1e-6  # [m^3/s]
+
+
+def sigmav_TT(ion_temp_profile: float64) -> float64:
+    """Tritium-Tritium reaction (placeholder)."""
+    return ion_temp_profile * 0.0
+
+
+def sigmav_He3He3(ion_temp_profile: float64) -> float64:
+    """Helium-3/Helium-3 reaction (placeholder)."""
+    return ion_temp_profile * 0.0
+
+
+def sigmav_THe3(ion_temp_profile: float64) -> float64:
+    """Tritium/Helium-3 reaction (placeholder)."""
+    return ion_temp_profile * 0.0

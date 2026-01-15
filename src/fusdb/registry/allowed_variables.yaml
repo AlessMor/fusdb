@@ -188,6 +188,8 @@ n_e:
     - Electron density.
 n_i:
   default_unit: 1/m^3
+  constraints:
+    - n_i >= 0
   description:
     - Ion density.
 n_GW:
@@ -206,6 +208,35 @@ Z_eff:
   default_unit: dimensionless
   description:
     - Effective charge.
+################ ION COMPOSITION ################
+f_D:
+  default_unit: dimensionless
+  constraints:
+    - f_D >= 0
+    - f_D <= 1
+  description:
+    - Deuterium ion fraction (n_D / n_i).
+f_T:
+  default_unit: dimensionless
+  constraints:
+    - f_T >= 0
+    - f_T <= 1
+  description:
+    - Tritium ion fraction (n_T / n_i).
+f_He3:
+  default_unit: dimensionless
+  constraints:
+    - f_He3 >= 0
+    - f_He3 <= 1
+  description:
+    - Helium-3 ion fraction (n_He3 / n_i).
+f_He4:
+  default_unit: dimensionless
+  constraints:
+    - f_He4 >= 0
+    - f_He4 <= 1
+  description:
+    - Helium-4 ion fraction (n_He4 / n_i).
 ################ CONFINEMENT & PERFORMANCE ################
 TBR:
   default_unit: dimensionless
@@ -215,6 +246,36 @@ tau_E:
   default_unit: s
   description:
     - Energy confinement time.
+tau_p:
+  default_unit: s
+  constraints:
+    - tau_p > 0
+  description:
+    - Particle confinement time (generic).
+tau_p_D:
+  default_unit: s
+  constraints:
+    - tau_p_D > 0
+  description:
+    - Deuterium particle confinement time.
+tau_p_T:
+  default_unit: s
+  constraints:
+    - tau_p_T > 0
+  description:
+    - Tritium particle confinement time.
+tau_p_He3:
+  default_unit: s
+  constraints:
+    - tau_p_He3 > 0
+  description:
+    - Helium-3 particle confinement time.
+tau_p_He4:
+  default_unit: s
+  constraints:
+    - tau_p_He4 > 0
+  description:
+    - Helium-4 particle confinement time.
 tau_pulse:
   default_unit: s
   description:
@@ -236,6 +297,120 @@ P_fus:
   default_unit: W
   description:
     - Fusion power.
+Rr_DT:
+  default_unit: 1/s
+  constraints:
+    - Rr_DT >= 0
+  description:
+    - D-T fusion reaction rate (volume-integrated).
+Rr_DDn:
+  default_unit: 1/s
+  constraints:
+    - Rr_DDn >= 0
+  description:
+    - D-D fusion reaction rate (He3+n branch).
+Rr_DDp:
+  default_unit: 1/s
+  constraints:
+    - Rr_DDp >= 0
+  description:
+    - D-D fusion reaction rate (T+p branch).
+Rr_DHe3:
+  default_unit: 1/s
+  constraints:
+    - Rr_DHe3 >= 0
+  description:
+    - D-He3 fusion reaction rate.
+Rr_TT:
+  default_unit: 1/s
+  constraints:
+    - Rr_TT >= 0
+  description:
+    - T-T fusion reaction rate.
+Rr_He3He3:
+  default_unit: 1/s
+  constraints:
+    - Rr_He3He3 >= 0
+  description:
+    - He3-He3 fusion reaction rate.
+Rr_THe3:
+  default_unit: 1/s
+  constraints:
+    - Rr_THe3 >= 0
+  description:
+    - T-He3 fusion reaction rate.
+P_fus_DT:
+  default_unit: W
+  description:
+    - Total D-T fusion power.
+P_fus_DT_alpha:
+  aliases:
+    - P_alpha_DT
+  default_unit: W
+  description:
+    - Alpha power from D-T fusion.
+P_fus_DT_n:
+  default_unit: W
+  description:
+    - Neutron power from D-T fusion.
+P_fus_DD:
+  default_unit: W
+  description:
+    - Total D-D fusion power.
+P_fus_DDn:
+  default_unit: W
+  description:
+    - D-D fusion power from the He3+n branch.
+P_fus_DDn_He3:
+  aliases:
+    - P_He3_DD
+  default_unit: W
+  description:
+    - Helium-3 power from D-D fusion (He3+n branch).
+P_fus_DDn_n:
+  default_unit: W
+  description:
+    - Neutron power from D-D fusion (He3+n branch).
+P_fus_DDp:
+  default_unit: W
+  description:
+    - D-D fusion power from the T+p branch.
+P_fus_DDp_T:
+  aliases:
+    - P_T_DD
+  default_unit: W
+  description:
+    - Triton power from D-D fusion (T+p branch).
+P_fus_DDp_p:
+  aliases:
+    - P_p_DD
+  default_unit: W
+  description:
+    - Proton power from D-D fusion (T+p branch).
+P_fus_DHe3:
+  default_unit: W
+  description:
+    - Total D-He3 fusion power.
+P_fus_DHe3_alpha:
+  aliases:
+    - P_alpha_DHe3
+  default_unit: W
+  description:
+    - Alpha power from D-He3 fusion.
+P_fus_DHe3_p:
+  aliases:
+    - P_p_DHe3
+  default_unit: W
+  description:
+    - Proton power from D-He3 fusion.
+P_fus_TT:
+  default_unit: W
+  description:
+    - Total T-T fusion power.
+P_charged:
+  default_unit: W
+  description:
+    - Charged-particle fusion power deposited in the plasma.
 P_th_tot:
   default_unit: W
   description:
@@ -252,6 +427,14 @@ P_aux:
   default_unit: W
   description:
     - Total auxiliary heating power.
+P_ohmic:
+  default_unit: W
+  description:
+    - Ohmic heating power.
+P_heating:
+  default_unit: W
+  description:
+    - Total plasma heating power (ohmic + charged fusion + auxiliary).
 eta_th:
   default_unit: dimensionless
   description:
@@ -281,6 +464,8 @@ P_LH:
   description:
     - L-H transition threshold power.
 P_sep:
+  aliases:
+    - P_SOL
   default_unit: W
   description:
     - Power across the separatrix.
@@ -297,9 +482,11 @@ P_loss:
   description:
     - Power loss across the plasma boundary.
 P_rad:
+  aliases:
+    - P_rad_core
   default_unit: W
   description:
-    - Total radiated power.
+    - Core radiated power (or total if not separated).
 Q_sci:
   default_unit: dimensionless
   description:

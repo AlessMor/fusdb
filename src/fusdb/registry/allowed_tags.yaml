@@ -16,7 +16,7 @@ relation_domains:
   geometry: 1
   plasma: 2
   confinement: 2
-  power_exhaust: 3
+  power_exhaust: 4
 required_metadata_fields:
   - id
   - name

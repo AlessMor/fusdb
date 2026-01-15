@@ -28,7 +28,7 @@ organization: "Example Organization"
 # confinement_mode: H-mode
 # solve_strategy: default # choose from 'default', 'global' or user-defined. user defined requires a list of relations or groups of relations to be specified
 
-# GEOMETRIC PARAMETERS
+################ GEOMETRIC PARAMETERS ################
 # R: [m] Major radius.
 # a: [m] Minor radius.
 # A: [dimensionless] Aspect ratio (R/a).
@@ -44,7 +44,7 @@ organization: "Example Organization"
 # Z_max: [m] Upper vertical extent.
 # Z_min: [m] Lower vertical extent.
 
-# MAGNETIC FIELD & CURRENT
+################ MAGNETIC FIELD & CURRENT ################
 # B0: [T] Toroidal field on axis.
 # B_max: [T] Peak field on coil.
 # B_p: [T] Poloidal field.
@@ -57,7 +57,7 @@ organization: "Example Organization"
 # q_min: [dimensionless] Minimum safety factor.
 # li: [dimensionless] Internal inductance.
 
-# PLASMA PRESSURE & ENERGY
+################ PLASMA PRESSURE & ENERGY ################
 # beta_N: [dimensionless] Normalized beta.
 # beta_T: [dimensionless] Toroidal beta (fraction).
 # beta_p: [dimensionless] Poloidal beta.
@@ -66,7 +66,7 @@ organization: "Example Organization"
 # p_th: [Pa] Thermal pressure.
 # W_th: [J] Thermal stored energy.
 
-# TEMPERATURE & DENSITY
+################ TEMPERATURE & DENSITY ################
 # T_avg: [keV] Volume-averaged electron temperature.
 # T0: [keV] On-axis electron temperature.
 # T_e: [keV] Electron temperature.
@@ -75,25 +75,61 @@ organization: "Example Organization"
 # n0: [1/m^3] On-axis electron density.
 # n_e: [1/m^3] Electron density.
 # n_i: [1/m^3] Ion density.
+# n_GW: [1/m^3] Greenwald density limit.
+# n_SUDO: [1/m^3] Sudo density limit.
 # f_GW: [dimensionless] Greenwald fraction.
 # Z_eff: [dimensionless] Effective charge.
 
-# CONFINEMENT & PERFORMANCE
+################ ION COMPOSITION ################
+# f_D: [dimensionless] Deuterium ion fraction (n_D / n_i).
+# f_T: [dimensionless] Tritium ion fraction (n_T / n_i).
+# f_He3: [dimensionless] Helium-3 ion fraction (n_He3 / n_i).
+# f_He4: [dimensionless] Helium-4 ion fraction (n_He4 / n_i).
+
+################ CONFINEMENT & PERFORMANCE ################
 # TBR: [dimensionless] Tritium breeding ratio.
 # tau_E: [s] Energy confinement time.
+# tau_p: [s] Particle confinement time (generic).
+# tau_p_D: [s] Deuterium particle confinement time.
+# tau_p_T: [s] Tritium particle confinement time.
+# tau_p_He3: [s] Helium-3 particle confinement time.
+# tau_p_He4: [s] Helium-4 particle confinement time.
 # tau_pulse: [s] Pulse length.
 # H89: [dimensionless] H89 confinement enhancement factor.
 # H98_y2: [dimensionless] H98(y,2) confinement enhancement factor.
 # G89: [dimensionless] G89 gain factor.
 
-# POWER & EXHAUST
+################ POWER & EXHAUST ################
 # P_fus: [W] Fusion power.
+# Rr_DT: [1/s] D-T fusion reaction rate (volume-integrated).
+# Rr_DDn: [1/s] D-D fusion reaction rate (He3+n branch).
+# Rr_DDp: [1/s] D-D fusion reaction rate (T+p branch).
+# Rr_DHe3: [1/s] D-He3 fusion reaction rate.
+# Rr_TT: [1/s] T-T fusion reaction rate.
+# Rr_He3He3: [1/s] He3-He3 fusion reaction rate.
+# Rr_THe3: [1/s] T-He3 fusion reaction rate.
+# P_fus_DT: [W] Total D-T fusion power.
+# P_fus_DT_alpha: [W] Alpha power from D-T fusion.
+# P_fus_DT_n: [W] Neutron power from D-T fusion.
+# P_fus_DD: [W] Total D-D fusion power.
+# P_fus_DDn: [W] D-D fusion power from the He3+n branch.
+# P_fus_DDn_He3: [W] Helium-3 power from D-D fusion (He3+n branch).
+# P_fus_DDn_n: [W] Neutron power from D-D fusion (He3+n branch).
+# P_fus_DDp: [W] D-D fusion power from the T+p branch.
+# P_fus_DDp_T: [W] Triton power from D-D fusion (T+p branch).
+# P_fus_DDp_p: [W] Proton power from D-D fusion (T+p branch).
+# P_fus_DHe3: [W] Total D-He3 fusion power.
+# P_fus_DHe3_alpha: [W] Alpha power from D-He3 fusion.
+# P_fus_DHe3_p: [W] Proton power from D-He3 fusion.
+# P_fus_TT: [W] Total T-T fusion power.
+# P_charged: [W] Charged-particle fusion power deposited in the plasma.
 # P_th_tot: [W] Total thermal power.
 # P_elec_tot: [W] Gross electric power.
 # P_elec_net: [W] Net electric power.
+# P_aux: [W] Total auxiliary heating power.
+# P_ohmic: [W] Ohmic heating power.
 # eta_th: [dimensionless] Plant thermal/electric efficiency.
 # Q_e: [dimensionless] Electric power multiplication.
-# P_aux: [W] Total auxiliary heating power.
 # P_wall: [W/m^2] Fusion power wall loading.
 # P_NBI: [W] Neutral beam injected power.
 # P_LHCD: [W] Lower hybrid coupled power.
@@ -103,8 +139,10 @@ organization: "Example Organization"
 # P_sep_over_R: [W/m] P_sep divided by major radius.
 # P_sep_B_over_q95AR: [W*T/m] P_sep * B0 / (q95 * A * R).
 # P_loss: [W] Power loss across the plasma boundary.
+# P_rad: [W] Core radiated power (or total if not separated).
+# Q_sci: [dimensionless] Scientific Q
 
-# SCALING INPUTS
+################ SCALING INPUTS ################
 # n_la: [1/m^3] Line-averaged electron density.
 # kappa_ipb: [dimensionless] IPB-specific elongation at separatrix.
 # afuel: [amu] Average fuel mass number.

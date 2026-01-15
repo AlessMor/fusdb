@@ -200,6 +200,36 @@ def test_parameter_alias_mapping(tmp_path: Path) -> None:
     assert math.isclose(float(reactor.parameters["squareness"]), 0.9)
 
 
+def test_greenwald_fraction_sets_n_e(tmp_path: Path) -> None:
+    reactor_dir = tmp_path / "reactors" / "GW_TEST"
+    reactor_dir.mkdir(parents=True)
+    path = reactor_dir / "reactor.yaml"
+    I_p = math.pi * 1e6
+    a = 1.0
+    f_gw = 0.5
+    path.write_text(
+        "\n".join(
+            [
+                'id: "GW_TEST"',
+                'name: "Greenwald fraction test"',
+                'reactor_configuration: "tokamak"',
+                'organization: "Example Lab"',
+                "",
+                f"I_p: {I_p}",
+                f"a: {a}",
+                f"f_GW: {f_gw}",
+            ]
+        )
+    )
+
+    reactor = load_reactor_yaml(path)
+
+    expected_n_gw = 1e20 * (I_p / 1e6) / (math.pi * a**2)
+    expected_n_avg = f_gw * expected_n_gw
+    assert math.isclose(float(reactor.n_avg), expected_n_avg, rel_tol=1e-6)
+    assert math.isclose(float(reactor.n_e), expected_n_avg, rel_tol=1e-6)
+
+
 def test_duplicate_alias_raises(tmp_path: Path) -> None:
     reactor_dir = tmp_path / "reactors" / "ARC_2023"
     reactor_dir.mkdir(parents=True)

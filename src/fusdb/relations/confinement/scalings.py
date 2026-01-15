@@ -759,7 +759,7 @@ def tau_E_iter_ipb98y3(
 
 
 @Reactor.relation(
-    ("confinement", "tokamak"),
+    ("confinement", "tokamak", "H-mode"),
     name="tau_E_iter_ipb98y2",
     output="tau_E",
 )
@@ -793,20 +793,7 @@ def tau_E_iter_ipb98y2(
         - None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
           Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
-    I_p_MA = I_p / 1e6
-    P_loss_MW = P_loss / 1e6
-    dnla19 = n_la / 1e19
-    return (
-        0.0562
-        * I_p_MA ** 0.93
-        * B0 ** 0.15
-        * dnla19 ** 0.41
-        * P_loss_MW ** (-0.69)
-        * R ** 1.97
-        * kappa_ipb ** 0.78
-        * A ** (-0.58)
-        * afuel ** 0.19
-    )
+    return 0.0562 * (I_p / 1e6) ** 0.93 * B0 ** 0.15 * (n_la/1e19) ** 0.41 * (P_loss/1e6)** (-0.69) * R ** 1.97 * kappa_ipb ** 0.78 * A ** (-0.58) * afuel ** 0.19
 
 
 

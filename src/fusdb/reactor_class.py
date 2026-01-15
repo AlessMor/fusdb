@@ -8,7 +8,6 @@ from typing import Any, ClassVar
 
 import warnings
 
-from fusdb.relations.power_exhaust import PSEP_RELATIONS
 from fusdb.relation_class import Relation, RelationSystem
 from fusdb.relation_util import REL_TOL_DEFAULT, symbol
 from fusdb.reactor_util import (
@@ -61,6 +60,7 @@ class Reactor:
     parameter_tolerances: dict[str, float] = field(default_factory=dict)  # Tolerances for explicit values.
     parameter_methods: dict[str, str] = field(default_factory=dict)  # Method overrides by output name.
     parameter_defaults: dict[str, Scalar] = field(default_factory=dict)  # Default seeds by tags.
+    fallback_relations: tuple[Relation, ...] = field(default_factory=tuple)  # Per-reactor fallback relations.
     explicit_parameters: set[str] = field(default_factory=set)  # Explicit (or promoted) parameter names. They’re the values the solver locks and checks relations against.
 
     # internal
@@ -77,6 +77,8 @@ class Reactor:
             self.parameter_methods = {}
         if self.parameter_defaults is None:
             self.parameter_defaults = {}
+        if self.fallback_relations is None:
+            self.fallback_relations = ()
         if self.explicit_parameters is None:
             self.explicit_parameters = set()
         self.relations_used = []
@@ -99,9 +101,18 @@ class Reactor:
             )
         rel_tol = REL_TOL_DEFAULT
         config_tags = configuration_tags(self.reactor_configuration)
-        exclude_tags = config_exclude_tags(self.reactor_configuration)
+        exclude_tags = set(config_exclude_tags(self.reactor_configuration))
+        if self.confinement_mode:
+            for mode in self.ALLOWED_CONFINEMENT_MODES:
+                if mode != self.confinement_mode:
+                    exclude_tags.add(mode)
+        exclude_tags = tuple(sorted(exclude_tags))
 
-        def apply_relations(tagged_relations: tuple[tuple[tuple[str, ...], Relation], ...]) -> None:
+        def apply_relations(
+            tagged_relations: tuple[tuple[tuple[str, ...], Relation], ...],
+            *,
+            global_mode: bool = False,
+        ) -> None:
             relations = select_relations(
                 tagged_relations,
                 parameter_methods=self.parameter_methods,
@@ -109,10 +120,42 @@ class Reactor:
                 warn=warnings.warn,
             )
             if relations:
+                selected = set(relations)
                 self.relations_used.extend(
-                    (tags, rel) for (tags, _rel), rel in zip(tagged_relations, relations)
+                    (tags, rel) for (tags, rel) in tagged_relations if rel in selected
                 )
-            self._solve_relations(relations, rel_tol, not bool(self.allow_relation_overrides))
+            fallback_relations: list[Relation] = []
+            if self.fallback_relations:
+                base_outputs = {rel.variables[0] for rel in relations if rel.variables}
+                explicit_params = self.explicit_parameters or set()
+                for rel in self.fallback_relations:
+                    if not rel.variables:
+                        continue
+                    output = rel.variables[0]
+                    if output in base_outputs or output in explicit_params:
+                        continue
+                    value = self.parameters.get(output)
+                    if value is None:
+                        fallback_relations.append(rel)
+                        continue
+                    if isinstance(value, Relational):
+                        fallback_relations.append(rel)
+                        continue
+                    if isinstance(value, sp.Expr) and value.free_symbols:
+                        fallback_relations.append(rel)
+                        continue
+
+            if fallback_relations:
+                self.relations_used.extend((("fallback",), rel) for rel in fallback_relations)
+            combined_relations = tuple(relations) + tuple(fallback_relations)
+            if not combined_relations:
+                return
+            self._solve_relations(
+                combined_relations,
+                rel_tol,
+                not bool(self.allow_relation_overrides),
+                global_mode=global_mode,
+            )
 
         strategy_raw = self.solve_strategy
         strategy: str
@@ -132,15 +175,12 @@ class Reactor:
         if strategy in ("default", "staged"):
             for groups in relation_domain_stages():
                 tagged = list(relations_with_tags(groups, require_all=False, exclude=exclude_tags))
-                if "power_exhaust" in groups:
-                    tagged.extend((("power_exhaust",), rel) for rel in PSEP_RELATIONS)
                 apply_relations(tuple(tagged))
         elif strategy == "global":
             tagged = list(
                 relations_with_tags(ALLOWED_RELATION_DOMAINS, require_all=False, exclude=exclude_tags)
             )
-            tagged.extend((("power_exhaust",), rel) for rel in PSEP_RELATIONS)
-            apply_relations(tuple(tagged))
+            apply_relations(tuple(tagged), global_mode=True)
         elif strategy == "user":
             if not user_steps:
                 raise ValueError(
@@ -155,8 +195,6 @@ class Reactor:
             name_map: dict[str, list[tuple[tuple[str, ...], Relation]]] = {}
             for tags, rel in self._RELATIONS:
                 name_map.setdefault(normalize_key(rel.name), []).append((tags, rel))
-            for rel in PSEP_RELATIONS:
-                name_map.setdefault(normalize_key(rel.name), []).append((("power_exhaust",), rel))
 
             for step in user_steps:
                 step_text = step.strip()
@@ -165,8 +203,6 @@ class Reactor:
                 domain = domain_lookup.get(step_text.lower())
                 if domain:
                     tagged = list(relations_with_tags(domain, require_all=False, exclude=exclude_tags))
-                    if domain == "power_exhaust":
-                        tagged.extend((("power_exhaust",), rel) for rel in PSEP_RELATIONS)
                     apply_relations(tuple(tagged))
                     continue
                 step_key = normalize_key(step_text)
@@ -292,9 +328,10 @@ class Reactor:
         relations: tuple[Relation, ...],
         rel_tol: float,
         lock: bool,
+        *,
+        global_mode: bool = False,
     ) -> dict[str, Scalar | None]:
         """Apply a set of relations and update parameter values in place."""
-        _ = lock
         if not relations:
             return {}
 
@@ -309,9 +346,11 @@ class Reactor:
                 seen_vars.add(var)
                 if var in self.parameters:
                     value = self.parameters[var]
-                    if isinstance(value, Relational):
-                        continue
                     if var in explicit_params:
+                        if isinstance(value, Relational):
+                            if lock:
+                                system.set(var, symbol(var))
+                            continue
                         system.set(var, value, tol=self.parameter_tolerances.get(var))
 
         # Seed defaults only when a variable is present in this relation set.
@@ -322,7 +361,7 @@ class Reactor:
                 continue
             system.seed(name, value)
 
-        values = system.solve()
+        values = system.solve(global_mode=global_mode)
         rel_by_output = {rel.variables[0]: rel for rel in relations if rel.variables}
         for var in seen_vars:
             new_value = values.get(var)
@@ -349,9 +388,11 @@ class Reactor:
                         eq_expr = eq_expr.subs(substitutions)
                     new_value = sp.Eq(symbol(var), eq_expr)
             self.parameters[var] = new_value
-            # Promote numeric results to explicit so later groups do not overwrite them.
             if isinstance(new_value, Relational):
+                if lock:
+                    self.explicit_parameters.add(var)
                 continue
+            # Promote numeric results to explicit so later groups do not overwrite them.
             if isinstance(new_value, sp.Expr):
                 if not new_value.free_symbols:
                     self.explicit_parameters.add(var)
