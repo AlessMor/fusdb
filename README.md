@@ -18,3 +18,8 @@ See `reactors/example_reactor.yaml` for an annotated template listing all suppor
 ## Usage
 - CLI: install editable (`pip install -e .`) then list or show reactors with the bundled `fusdb` commands.
 - Python: `from fusdb.loader import load_all_reactors` to load scenarios, then access attributes on the returned `Reactor` objects.
+
+## Useful links:
+- https://www.fusionenergybase.com/projects
+- cfspopcon
+- PROCESS
