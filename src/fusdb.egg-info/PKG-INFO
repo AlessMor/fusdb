@@ -1,8 +1,0 @@
-Metadata-Version: 2.4
-Name: fusdb
-Version: 0.1.0
-Summary: Fusion reactor scenario database with per-folder YAML and a single Reactor class.
-Requires-Python: >=3.10
-License-File: LICENSE
-Requires-Dist: PyYAML>=6.0
-Dynamic: license-file

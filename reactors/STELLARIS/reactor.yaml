@@ -13,7 +13,7 @@
 # Units are converted to the default_unit in registry/allowed_variables.yaml when provided.
 
 id: Stellaris2025
-name: Stellaris 2025
+name: Stellaris 2025 - Point A
 reactor_configuration: stellarator
 organization: Proxima
 
@@ -29,15 +29,15 @@ doi: 10.1016/j.fusengdes.2025.114868
 # solve_strategy: default # choose from 'default', 'global' or user-defined. user defined requires a list of relations or groups of relations to be specified
 
 ################ GEOMETRIC PARAMETERS ################
-R: 12.7 # [m] Major radius.
+R: 12.74 # [m] Major radius.
 a: 1.3 # [m] Minor radius.
-# A: [dimensionless] Aspect ratio (R/a).
+A: 9.8 # [dimensionless] Aspect ratio (R/a).
 # kappa: [dimensionless] Elongation.
 # kappa_95: [dimensionless] Elongation at 95% flux surface.
 # delta_95: [dimensionless] Triangularity at 95% flux surface.
 # delta: [dimensionless] Core triangularity.
-V_p: 428 # [m^3] Plasma volume.
-S_p: 940 # [m^2] Plasma surface area.
+V_p: 425 # [m^3] Plasma volume.
+S_p: 327 # [m^2] Plasma surface area.
 # squareness: [dimensionless] Squareness (xi).
 # R_max: [m] Outboard major radius extent from the center of the torus.
 # R_min: [m] Inboard major radius extent from the center of the torus.
@@ -45,7 +45,7 @@ S_p: 940 # [m^2] Plasma surface area.
 # Z_min: [m] Lower vertical extent.
 
 ################ MAGNETIC FIELD & CURRENT ################
-# B0: [T] Toroidal field on axis.
+B0: 9.0 # [T] Toroidal field on axis.
 # B_max: [T] Peak field on coil.
 # B_p: [T] Poloidal field.
 # I_p: [A] Plasma current.
@@ -58,7 +58,7 @@ S_p: 940 # [m^2] Plasma surface area.
 # li: [dimensionless] Internal inductance.
 
 ################ PLASMA PRESSURE & ENERGY ################
-# beta_N: [dimensionless] Normalized beta.
+beta_N: 0.0276 #[dimensionless] Normalized beta.
 # beta_T: [dimensionless] Toroidal beta (fraction).
 # beta_p: [dimensionless] Poloidal beta.
 # beta: [dimensionless] Total beta.
@@ -72,13 +72,13 @@ T_avg: 12 # [keV] Volume-averaged electron temperature.
 # T_e: [keV] Electron temperature.
 # T_i: [keV] Ion temperature.
 n_avg: 3.17e20 # [1/m^3] Volume-averaged electron density.
-# n0: [1/m^3] On-axis electron density.
+n0: 5.06e20 # [1/m^3] On-axis electron density.
 # n_e: [1/m^3] Electron density.
 # n_i: [1/m^3] Ion density.
 # n_GW: [1/m^3] Greenwald density limit.
 # n_SUDO: [1/m^3] Sudo density limit.
 # f_GW: [dimensionless] Greenwald fraction.
-# Z_eff: [dimensionless] Effective charge.
+Z_eff: 1.2 # [dimensionless] Effective charge.
 
 ################ ION COMPOSITION ################
 # f_D: [dimensionless] Deuterium ion fraction (n_D / n_i).
@@ -88,7 +88,7 @@ n_avg: 3.17e20 # [1/m^3] Volume-averaged electron density.
 
 ################ CONFINEMENT & PERFORMANCE ################
 # TBR: [dimensionless] Tritium breeding ratio.
-tau_E: 1.5 # [s] Energy confinement time.
+tau_E: 1.46 # [s] Energy confinement time.
 tau_p: 11 # [s] Particle confinement time (generic).
 # tau_p_D: [s] Deuterium particle confinement time.
 # tau_p_T: [s] Tritium particle confinement time.
@@ -100,7 +100,9 @@ tau_p: 11 # [s] Particle confinement time (generic).
 # G89: [dimensionless] G89 gain factor.
 
 ################ POWER & EXHAUST ################
-# P_fus: [W] Fusion power.
+P_fus: # Fusion power.
+  value: 2700
+  unit: MW
 # Rr_DT: [1/s] D-T fusion reaction rate (volume-integrated).
 # Rr_DDn: [1/s] D-D fusion reaction rate (He3+n branch).
 # Rr_DDp: [1/s] D-D fusion reaction rate (T+p branch).
