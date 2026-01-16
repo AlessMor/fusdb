@@ -76,4 +76,4 @@ def engineering_gain_factor(
         Q_eng = (P_fus_el - P_aux_el) / P_aux_el
     return Q_eng
 
-# TODO: consider adding the definition used in cfspopcon: Q = P_fusion / (P_ohmic + P_auxiliary_launched)
+# TODO(med): consider adding the definition used in cfspopcon: Q = P_fusion / (P_ohmic + P_auxiliary_launched)

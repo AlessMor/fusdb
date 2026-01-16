@@ -454,7 +454,13 @@ P_charged:
   constraints:
     - P_charged >= 0
   description:
-    - Charged-particle fusion power deposited in the plasma.
+    - Charged-particle fusion power.
+P_neutron:
+  default_unit: W
+  constraints:
+    - P_neutron >= 0
+  description:
+    - Neutron fusion power.
 P_th_tot:
   default_unit: W
   description:

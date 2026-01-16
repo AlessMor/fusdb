@@ -95,7 +95,7 @@ def test_parameters_missing_defaults(tmp_path: Path) -> None:
     )
 
     reactor = load_reactor_yaml(path)
-    assert reactor.parameters.get("P_fus") is None
+    assert isinstance(reactor.parameters.get("P_fus"), sp.Equality)
     assert isinstance(reactor.parameters.get("tau_E"), sp.Expr)
 
 
@@ -329,8 +329,8 @@ def test_tokamak_volume_and_surface_backfilled(tmp_path: Path) -> None:
 
     reactor = load_reactor_yaml(path)
 
-    expected_V = float(plasma_volume(1.2, 4.0, 1.6, 0.2, 1.0))
-    expected_S = float(plasma_surface_area(1.2, 4.0, 1.6, 0.2, 1.0))
+    expected_V = float(plasma_volume(1.2, 4.0, 1.6, 0.2, 0.0))
+    expected_S = float(plasma_surface_area(1.2, 4.0, 1.6, 0.2, 0.0))
 
     assert math.isclose(float(reactor.V_p), expected_V, rel_tol=1e-6)
     assert math.isclose(float(reactor.S_p), expected_S, rel_tol=1e-6)

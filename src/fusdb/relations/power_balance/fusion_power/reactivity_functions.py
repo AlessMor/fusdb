@@ -151,13 +151,15 @@ def sigmav_DHe3_BoschHale(ion_temp_profile: float64) -> float64:
 def sigmav_TT(ion_temp_profile: float64) -> float64:
     """Tritium-Tritium reaction (placeholder)."""
     return ion_temp_profile * 0.0
-
+# TODO(low): Implement sigmav_TT function
 
 def sigmav_He3He3(ion_temp_profile: float64) -> float64:
     """Helium-3/Helium-3 reaction (placeholder)."""
     return ion_temp_profile * 0.0
+# TODO(low): Implement sigmav_He3He3 function
 
 
 def sigmav_THe3(ion_temp_profile: float64) -> float64:
     """Tritium/Helium-3 reaction (placeholder)."""
     return ion_temp_profile * 0.0
+# TODO(low): Implement sigmav_THe3 function

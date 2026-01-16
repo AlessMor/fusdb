@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Mapping
 
-from fusdb.relations.fusion_power.reactivity_functions import (
+from fusdb.relations.power_balance.fusion_power.reactivity_functions import (
     sigmav_DD_BoschHale,
     sigmav_DHe3_BoschHale,
     sigmav_DT_BoschHale,

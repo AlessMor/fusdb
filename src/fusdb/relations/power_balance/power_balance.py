@@ -6,7 +6,7 @@ from fusdb.reactor_class import Reactor
 
 # TODO(high): CHECK THE DEFINITIONS FOR P_LOSS AND ADD REFERENCES
 @Reactor.relation(
-    ("power_exhaust", "power_balance"),
+    "power_balance",
     name="Total plasma heating",
     output="P_heating",
 )
@@ -16,9 +16,9 @@ def total_plasma_heating(P_ohmic: float, P_charged: float, P_aux: float) -> floa
 
 
 @Reactor.relation(
-    ("power_exhaust", "power_balance"),
+    "power_balance",
     name="Loss power to SOL and core radiation",
-    output="P_loss",
+    output="P_loss_explicit",
 )
 def loss_power_to_exhaust(P_sep: float, P_rad: float) -> float:
     """Return loss power as the sum of separatrix power and core radiation."""
@@ -26,24 +26,14 @@ def loss_power_to_exhaust(P_sep: float, P_rad: float) -> float:
 
 
 @Reactor.relation(
-    ("power_exhaust", "power_balance"),
-    name="Charged fusion power",
-    output="P_charged",
+    "power_balance",
+    name="Power balance",
+    output="P_loss",
+    solve_for=("P_loss",),
+    constraints=("P_loss >= 0", "P_heating >= 0"),
 )
-def charged_fusion_power(
-    P_fus_DT_alpha: float,
-    P_fus_DDn_He3: float,
-    P_fus_DDp_T: float,
-    P_fus_DDp_p: float,
-    P_fus_DHe3_alpha: float,
-    P_fus_DHe3_p: float,
-) -> float:
-    """Return charged fusion power from common D-T, D-D, and D-He3 channels."""
-    return (
-        P_fus_DT_alpha
-        + P_fus_DDn_He3
-        + P_fus_DDp_T
-        + P_fus_DDp_p
-        + P_fus_DHe3_alpha
-        + P_fus_DHe3_p
-    )
+def power_balance_simple(P_heating: float) -> float:
+    """Total power lost must equal total power input."""
+    return P_heating
+# NOTE: P_loss is computed as a variable in the solver to enforce P_loss = P_heating
+# TODO: improve this enforcing relation... maybe inside constraints?

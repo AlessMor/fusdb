@@ -40,3 +40,7 @@ def p_sep_ratio(P_sep: float, R: float) -> float:
 def p_sep_metric(P_sep: float, B0: float, q95: float, A: float, R: float) -> float:
     """Return the P_sep * B0 / (q95 * A * R) metric."""
     return P_sep * B0 / (q95 * A * R)
+
+
+# TODO(high): add relations for P_fus_wall and P_n_wall
+    # to do this, add a S_wall variable that defaults to S_p if not specified
