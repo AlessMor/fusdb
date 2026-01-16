@@ -21,7 +21,7 @@ See `reactors/example_reactor.yaml` for an annotated template listing all suppor
 
 ## Interactive Relation Graph
 The `relation_map.ipynb` notebook generates an interactive graph of the relations between variables, which is saved as `relation_graph.html`.
-[View the interactive relation graph](https://AlessMor.github.io/fusdb/docs/elation_graph.html) 
+[View the interactive relation graph](https://AlessMor.github.io/fusdb/docs/relation_graph.html) 
 
 ## Useful links:
 - https://www.fusionenergybase.com/projects
