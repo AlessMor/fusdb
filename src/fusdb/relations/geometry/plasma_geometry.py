@@ -59,7 +59,7 @@ def elongation(Z_max: float, Z_min: float, R_max: float, R_min: float) -> float:
     """Return elongation from vertical and horizontal extents."""
     return (Z_max - Z_min) / (R_max - R_min)
 
-# NOTE: check if "95" relations are valid for L,I and H-modes
+# TODO(med): check if "95" relations are valid for L,I and H-modes
 @Reactor.relation(
     ("geometry", "tokamak"),
     name="Elongation 95%",
@@ -73,7 +73,7 @@ def elongation_95(kappa_95: float) -> float:
     return 1.12 * kappa_95
 
 
-# NOTE: check if "95" relations are valid for L,I and H-modes
+# TODO(med): check if "95" relations are valid for L,I and H-modes
 @Reactor.relation(
     ("geometry", "tokamak"),
     name="Triangularity 95%",
@@ -146,7 +146,7 @@ def plasma_surface_area(a: float, R: float, kappa: float, delta: float, xi: floa
     w_07 = sp.cos(theta07 - xi * sp.sin(2 * theta07)) / sp.sqrt(0.51) * (1 - 0.49 / 2 * delta**2)
     Lp = 2 * sp.pi * a * (1 + 0.55 * (kappa - 1)) * (1 + 0.08 * delta**2) * (1 + 0.2 * (w_07 - 1))
     return 2 * sp.pi * R * (1 - 0.32 * delta * epsilon) * Lp
-#NOTE: no geometry available for stellarators yet... Most papers do not give enough info to use complex relations (Henneberg, Boozer,...)
+#TODO(low): no geometry available for stellarators yet... Most papers do not give enough info to use complex relations (Henneberg, Boozer,...)
 
 # Configuration-specific geometry guidance (simplified from PROCESS/STAR/ITER sources).
 # For spherical tokamaks, see Menard et al., Nucl. Fusion 2016 and PROCESS Issue #1439/#1086.

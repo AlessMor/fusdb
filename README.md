@@ -24,3 +24,7 @@ See `reactors/example_reactor.yaml` for an annotated template listing all suppor
 - https://github.com/RemDelaporteMathurin/fusion-world
 - cfspopcon
 - PROCESS
+
+## TODO:
+- [ ] add relations for radiated power
+- [ ] update species fractions and equilibrium solver

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fusdb.reactor_class import Reactor
 
-# NOTE: CHECK THE DEFINITIONS FOR P_LOSS AND ADD REFERENCES
+# TODO(high): CHECK THE DEFINITIONS FOR P_LOSS AND ADD REFERENCES
 @Reactor.relation(
     ("power_exhaust", "power_balance"),
     name="Total plasma heating",

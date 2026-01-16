@@ -14,7 +14,7 @@ from fusdb.relations.fusion_power.reactivity_functions import (
 
 _SPECIES = ("D", "T", "He3", "He4")
 _FRACTION_VARS = {"D": "f_D", "T": "f_T", "He3": "f_He3", "He4": "f_He4"}
-# NOTE: improve it to work automatically by taking data from allowed_species
+# TODO(low): improve it to work automatically by taking data from allowed_species
 
 
 def solve_steady_state_composition(

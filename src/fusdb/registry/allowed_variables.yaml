@@ -567,3 +567,6 @@ afuel:
   default_unit: amu
   description:
     - Average fuel mass number.
+
+
+# TODO(low): check currently allowed variables units and descriptions, then add aliases if needed

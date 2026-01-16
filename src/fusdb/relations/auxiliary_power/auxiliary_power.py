@@ -16,4 +16,4 @@ def auxiliary_power(P_NBI: float, P_ICRF: float, P_LHCD: float) -> float:
     return P_NBI + P_ICRF + P_LHCD
 
 
-# NOTE: specify launched and absorbed auxiliary power
+# TODO(med): specify launched and absorbed auxiliary power

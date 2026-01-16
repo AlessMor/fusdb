@@ -30,7 +30,7 @@ def electron_density_from_fractions(
 ) -> float:
     """Return electron density from ion density and ion fractions."""
     return n_i * (f_D + f_T + 2.0 * f_He3 + 2.0 * f_He4)
-# NOTE: improve the formulation so that it takes all ion fractions automatically
+# TODO(low): improve the formulation so that it takes all ion fractions automatically
 
 
 @Reactor.relation(
@@ -165,4 +165,4 @@ def helium4_fraction_normalized(f_D: float, f_T: float, f_He3: float) -> float:
 def average_fuel_mass_number(f_D: float, f_T: float, f_He3: float, f_He4: float) -> float:
     """Return average ion mass number from ion fractions."""
     return 2.0 * f_D + 3.0 * f_T + 3.0 * f_He3 + 4.0 * f_He4
-# NOTE: improve it to work automatically by taking data from allowed_species
+# TODO(low): improve it to work automatically by taking data from allowed_species
