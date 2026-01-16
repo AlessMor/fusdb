@@ -14,3 +14,6 @@ from fusdb.reactor_class import Reactor
 def auxiliary_power(P_NBI: float, P_ICRF: float, P_LHCD: float) -> float:
     """Return total auxiliary power from injected sources."""
     return P_NBI + P_ICRF + P_LHCD
+
+
+# NOTE: specify launched and absorbed auxiliary power

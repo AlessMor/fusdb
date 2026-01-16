@@ -159,26 +159,38 @@ W_th:
     - Thermal stored energy.
 ################ TEMPERATURE & DENSITY ################
 T_avg:
+  aliases:
+    - T_e_avg
   default_unit: keV
   description:
     - Volume-averaged electron temperature.
-T0:
-  default_unit: keV
-  description:
-    - On-axis electron temperature.
 T_e:
   default_unit: keV
   description:
     - Electron temperature.
+T0:
+  aliases:
+    - T_e_peak
+  default_unit: keV
+  description:
+    - On-axis/peak electron temperature.
 T_i:
   default_unit: keV
   description:
     - Ion temperature.
+T_i_peak:
+  default_unit: keV
+  description:
+    - On-axis/peak ion temperature.
 n_avg:
+  aliases:
+    - n_e_avg
   default_unit: 1/m^3
   description:
     - Volume-averaged electron density.
 n0:
+  aliases:
+    - n_e_peak
   default_unit: 1/m^3
   description:
     - On-axis electron density.
@@ -451,16 +463,16 @@ P_elec_tot:
   default_unit: W
   description:
     - Gross electric power.
-P_elec_net:
+P_fus_el:
   default_unit: W
   description:
-    - Net electric power.
+    - Electric power output.
 P_aux:
   default_unit: W
   constraints:
     - P_aux >= 0
   description:
-    - Total auxiliary heating power.
+    - Total auxiliary heating power absorbed by the plasma.
 P_ohmic:
   default_unit: W
   constraints:
@@ -532,9 +544,16 @@ P_rad:
   description:
     - Core radiated power (or total if not separated).
 Q_sci:
+  aliases:
+    - Q # NOTE: only "Q" may be ambiguous
+    - Q_phy
   default_unit: dimensionless
   description:
-    - Scientific Q
+    - scientific gain factor Q
+Q_eng:
+  default_unit: dimensionless
+  description:
+    - engineering gain factor Q_eng.
 ################ SCALING INPUTS ################
 n_la:
   default_unit: 1/m^3
