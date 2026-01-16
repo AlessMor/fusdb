@@ -19,6 +19,10 @@ See `reactors/example_reactor.yaml` for an annotated template listing all suppor
 - CLI: install editable (`pip install -e .`) then list or show reactors with the bundled `fusdb` commands.
 - Python: `from fusdb.loader import load_all_reactors` to load scenarios, then access attributes on the returned `Reactor` objects.
 
+## Interactive Relation Graph
+The `relation_map.ipynb` notebook generates an interactive graph of the relations between variables, which is saved as `relation_graph.html`.
+[View the interactive relation graph](relation_graph.html) 
+
 ## Useful links:
 - https://www.fusionenergybase.com/projects
 - https://github.com/RemDelaporteMathurin/fusion-world
