@@ -152,7 +152,13 @@ beta_limit:
 p_th:
   default_unit: Pa
   description:
-    - Thermal pressure.
+    - Thermal pressure. Note that p_tot_avg > p_th generally, as it includes energetic particles (see 2016 - Miyamoto - Plasma Physics for Controlled Fusion)
+  aliases:
+    - p_tot_avg
+p_peak:
+  default_unit: Pa
+  description:
+    - Peak pressure.
 W_th:
   default_unit: J
   description:
@@ -204,6 +210,10 @@ n_i:
     - n_i >= 0
   description:
     - Ion density.
+n_i_peak:
+  default_unit: 1/m^3
+  description:
+    - On-axis/peak ion density.
 n_GW:
   default_unit: 1/m^3
   description:
