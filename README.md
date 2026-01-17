@@ -1,38 +1,61 @@
 # fusdb
-Fusdb is a small toolkit for storing and validating fusion reactor scenarios. Each scenario is described by a `reactor.yaml` containing metadata plus grouped parameters (geometry, plasma, power, etc.) . Relations encoded in Python modules cross-check values, infer missing ones, and flag inconsistencies with configurable tolerances.
 
-## What’s inside
-- A `Reactor` dataclass that normalizes inputs, applies constraint systems, and exposes a convenient Python API.
-- A loader that reads one or many `reactor.yaml` files and returns `Reactor` instances.
-- Relation libraries for geometry, plasma parameters, power exhaust, and confinement scalings (bidirectional, priority-aware).
-- An example reactor file documenting every supported field and option, plus test scenarios for regression coverage.
+A small toolkit for storing and validating fusion reactor scenarios.
 
-## Reactor YAML at a glance
-- Top-level metadata (ids, names, organization, notes).
-- `plasma_geometry`: radii, aspect ratio, shaping terms, optional extents.
-- `plasma_parameters`: temperatures/densities, pressure/energy, beta, confinement (`confinement_time` with value + method).
-- `power_and_efficiency`: fusion/power flows, wall loading, power exhaust metrics.
+Each scenario is described by a `reactor.yaml` file, containing variables that describe the steady-state condition of the plasma. Relations encoded in Python modules cross-check values, infer missing ones, and recognise inconsistencies in the input data.
 
-See `reactors/example_reactor.yaml` for an annotated template listing all supported fields and confinement scaling method names.
+## Project Structure
+
+```
+fusdb/
+├── reactors/         # Reactor data files (YAML)
+├── src/fusdb/        # Main source code
+│   ├── registry/     # Allowed variables, constants, and default values
+│   ├── relations/    # Physics and engineering relations
+│   └── cli.py        # Command-line interface
+├── tests/            # Tests
+└── docs/             # Documentation and notebooks
+```
+
+## Reactors
+
+Each reactor is defined by a `reactor.yaml` file. See `src/fusdb/registry/reactor_example.yaml` for an annotated template.
+
+Each reactor data is taken from papers and represent a plasma scenario for a fusion reactor.
+
+## Relations
+
+Relations are defined in Python modules within `src/fusdb/relations/`. They are used to:
+- Cross-check values
+- Infer missing values
+- Recognise inconsistencies
 
 ## Usage
-- CLI: install editable (`pip install -e .`) then list or show reactors with the bundled `fusdb` commands.
-- Python: `from fusdb.loader import load_all_reactors` to load scenarios, then access attributes on the returned `Reactor` objects.
+
+- **CLI**: Install with `pip install -e .`, then use `fusdb` to list or show reactors.
+- **Python**: Use `from fusdb.loader import load_all_reactors` to load scenarios into `Reactor` objects.
 
 ## Interactive Relation Graph
-The `relation_map.ipynb` notebook generates an interactive graph of the relations between variables, which is saved as `relation_graph.html`.
+
+The `docs/relation_map.ipynb` notebook generates an interactive graph of the relations between variables.
+
 [View the interactive relation graph](https://AlessMor.github.io/fusdb/relation_graph.html) 
 
-## Useful links:
-- https://www.fusionenergybase.com/projects
-- https://github.com/RemDelaporteMathurin/fusion-world
-- cfspopcon
-- PROCESS
+## Useful links and references:
+
+0D plasma codes:
+- [cfspopcon](https://github.com/cfs-energy/cfspopcon)
+- [PROCESS](https://github.com/ukaea/PROCESS)
+Databeses for fusion reactors worldwide:
+- [Fusion Energy Base](https://www.fusionenergybase.com/projects)
+- [Fusion World on Github](https://github.com/RemDelaporteMathurin/fusion-world)
+
 
 ## TODO:
-- [ ] check relation enforcing a "solve_for" constraint
+
 - [ ] check default/global solve modes for RelationSystem
 - [ ] add relations for radiated power
 - [ ] update species fractions and equilibrium solver
 - [ ] add density and temperature profiles (complex, requires re-evaluation of relation class: is it possible to adapt current relations to work with both profiles and avgs?)
 - [ ] add reactor optimization by: splitting yaml loading from solving, pick axes (default n_avg, T_avg), solve the implicit system at each point, then filter by constraints and rank by an objective.
+- [ ] check relation enforcing a "solve_for" constraint (P_aux, P_loss)
