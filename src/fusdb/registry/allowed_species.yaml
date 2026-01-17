@@ -24,3 +24,5 @@ He4:
   atomic_symbol: "He"
   atomic_number: 2
   atomic_mass: 4
+
+# TODO(low): add specific data for each species (radas data as in cfspopcon?)

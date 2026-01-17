@@ -44,3 +44,7 @@ def p_sep_metric(P_sep: float, B0: float, q95: float, A: float, R: float) -> flo
 
 # TODO(high): add relations for P_fus_wall and P_n_wall
     # to do this, add a S_wall variable that defaults to S_p if not specified
+    
+# TODO(low): cfspopcon adds 
+    # P_sep*B0/R0, which scales roughly the same as the parallel heat flux density entering the scrape-off-layer.
+    # P_sep * B_pol / (R * n^2), which scales roughly the same as the impurity fraction required for detachment.

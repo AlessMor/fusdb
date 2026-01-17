@@ -30,5 +30,9 @@ The `relation_map.ipynb` notebook generates an interactive graph of the relation
 - PROCESS
 
 ## TODO:
+- [ ] check relation enforcing a "solve_for" constraint
+- [ ] check default/global solve modes for RelationSystem
 - [ ] add relations for radiated power
 - [ ] update species fractions and equilibrium solver
+- [ ] add density and temperature profiles (complex, requires re-evaluation of relation class: is it possible to adapt current relations to work with both profiles and avgs?)
+- [ ] add reactor optimization by: splitting yaml loading from solving, pick axes (default n_avg, T_avg), solve the implicit system at each point, then filter by constraints and rank by an objective.

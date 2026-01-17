@@ -166,3 +166,9 @@ def average_fuel_mass_number(f_D: float, f_T: float, f_He3: float, f_He4: float)
     """Return average ion mass number from ion fractions."""
     return 2.0 * f_D + 3.0 * f_T + 3.0 * f_He3 + 4.0 * f_He4
 # TODO(low): improve it to work automatically by taking data from allowed_species
+
+
+# TODO(med): could add a relation to evaluate D, T, He3 injection terms at steady-state
+    # Ndot_inj_x = V_p*(n_x/tau_p_x - n_x_production + n_x_burn)
+def fuel_injection_terms():
+    pass

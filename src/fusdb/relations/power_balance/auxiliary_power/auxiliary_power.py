@@ -17,3 +17,5 @@ def auxiliary_power(P_NBI: float, P_ICRF: float, P_LHCD: float) -> float:
 
 
 # TODO(med): specify launched and absorbed auxiliary power
+
+# TODO(low): specify fraction of P_aux used for heating and for current drive

@@ -8,7 +8,7 @@ from fusdb.registry.constants import MU0
 from fusdb.reactor_class import Reactor
 from fusdb.relation_util import nonzero, symbol
 
-
+#TODO(low): once profiles are implemented, add a beta_avg 
 @Reactor.relation(
     "plasma",
     name="Toroidal beta",
@@ -40,6 +40,7 @@ def poloidal_beta(p_th: float, B_p: float) -> float:
 def beta_decomposition(beta_T: float, beta_p: float) -> float:
     """Total beta from toroidal and poloidal components (Freidberg Eq. 11.59)."""
     return 1 / (1 / beta_T + 1 / beta_p)
+# TODO(high): call it also beta_total?
 
 
 @Reactor.relation(

@@ -13,3 +13,4 @@ DD_N_ENERGY_J = 2.45 * MEV_TO_J
 DHE3_ALPHA_ENERGY_J = 3.6 * MEV_TO_J
 DHE3_P_ENERGY_J = 14.7 * MEV_TO_J
 TT_REACTION_ENERGY_J = 11.3 * MEV_TO_J
+# NOTE: could be improved by doing as in PROCESS: (mass difference)*c^2

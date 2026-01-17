@@ -8,6 +8,8 @@ def _math_module(value: object):
         return sp
     return np
 
+# TODO(low): add DTHively and DDHively reactivities and options to switch between them and BoschHale
+# check ranges of validity for each function
 
 def sigmav_DT_BoschHale(ion_temp_profile: float64) -> float64:
     r"""Deuterium-Tritium reaction.

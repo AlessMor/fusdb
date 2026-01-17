@@ -40,3 +40,5 @@ def sudo_density_limit(P_loss: float, B0: float, R: float, a: float) -> float:
     """Return Sudo density limit in 1/m^3 for stellarators."""
     P_loss_MW = P_loss / 1e6
     return 1e20 * 0.25 * P_loss_MW * B0 / (R * a**2)
+
+# TODO(low): from PROCESS - physics/calculate_density_limit

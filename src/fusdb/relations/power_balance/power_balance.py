@@ -36,4 +36,6 @@ def power_balance_simple(P_heating: float) -> float:
     """Total power lost must equal total power input."""
     return P_heating
 # NOTE: P_loss is computed as a variable in the solver to enforce P_loss = P_heating
-# TODO: improve this enforcing relation... maybe inside constraints?
+# TODO(med): improve this enforcing relation... maybe inside constraints?
+
+# TODO(med): from PROCESS, add balance for ions and electrons (constraints.py)

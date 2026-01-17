@@ -41,7 +41,7 @@ def aspect_ratio(R: float, a: float) -> float:
     """Return aspect ratio from major and minor radius."""
     return R / a
 
-
+# TODO(med): differentiate between kappa_sep = (Zmax - Zmin)/(Rmax - Rmin) and kappa_areal = S_p/(pi*a**2)
 @Reactor.relation(
     "geometry",
     name="Elongation",
@@ -194,3 +194,5 @@ def sauter_cross_section(
         r_vals.append(R + a * math.cos(angle))
         z_vals.append(kappa * a * math.sin(theta + squareness * math.sin(2.0 * theta)))
     return r_vals, z_vals
+
+# TODO(med): add from cfspopcon "calc_plasma_poloidal_circumference"
