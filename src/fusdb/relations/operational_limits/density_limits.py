@@ -12,7 +12,7 @@ from fusdb.relation_util import nonzero, symbol
     ("plasma", "tokamak"),
     name="Greenwald density limit",
     output="n_GW",
-    constraints=(nonzero(symbol("a")),),
+    constraints=("a != 0"),
 )
 def greenwald_density_limit(I_p: float, a: float) -> float:
     """Return Greenwald density limit in 1/m^3 for tokamaks."""
@@ -22,8 +22,8 @@ def greenwald_density_limit(I_p: float, a: float) -> float:
 @Reactor.relation(
     ("plasma", "tokamak"),
     name="Greenwald density fraction",
-    output="f_GW",
-    constraints=(nonzero(symbol("n_GW")),),
+    output="f_GW", # type: ignore[arg-type]
+    constraints=("n_GW != 0",)
 )
 def greenwald_density_fraction(n_GW: float, n_avg: float) -> float:
     """Return fraction of Greenwald density limit."""
@@ -34,7 +34,7 @@ def greenwald_density_fraction(n_GW: float, n_avg: float) -> float:
     ("plasma", "stellarator"),
     name="Sudo density limit",
     output="n_SUDO",
-    constraints=(nonzero(symbol("R")), nonzero(symbol("a"))),
+    constraints=("R != 0", "a != 0"),
 )
 def sudo_density_limit(P_loss: float, B0: float, R: float, a: float) -> float:
     """Return Sudo density limit in 1/m^3 for stellarators."""

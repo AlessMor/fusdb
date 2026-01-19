@@ -10,6 +10,7 @@ from fusdb.relation_util import require_nonzero
 
 # Only the active default scaling is decorated for relation discovery.
 
+# TODO(med): avoid the use of require_nonzero, use "constraints" argument instead
 
 
 ############################################### TO BE IMPLEMENTED ###############################################

@@ -6,14 +6,12 @@ import math
 import sympy as sp
 
 from fusdb.reactor_class import Reactor
-from fusdb.relation_class import PRIORITY_STRICT
 
 
 @Reactor.relation(
     "geometry",
     name="Major radius",
     output="R",
-    priority=PRIORITY_STRICT,
     initial_guesses={
         "R": lambda v: (v["R_max"] + v["R_min"]) / 2,
         "R_max": lambda v: 2 * v["R"] - v["R_min"],
@@ -29,7 +27,6 @@ def major_radius(R_max: float, R_min: float) -> float:
     "geometry",
     name="Aspect ratio",
     output="A",
-    priority=PRIORITY_STRICT,
     constraints=("a != 0", "R > a"),
     initial_guesses={
         "A": lambda v: v["R"] / v["a"],
@@ -46,7 +43,7 @@ def aspect_ratio(R: float, a: float) -> float:
     "geometry",
     name="Elongation",
     output="kappa",
-    constraints=("R_max - R_min != 0",),
+    constraints=("R_max - R_min != 0","Z_max - Z_min != 0"),
     initial_guesses={
         "kappa": lambda v: (v["Z_max"] - v["Z_min"]) / (v["R_max"] - v["R_min"]),
         "Z_max": lambda v: v["Z_min"] + v["kappa"] * (v["R_max"] - v["R_min"]),
@@ -92,7 +89,6 @@ def triangularity_95(delta_95: float) -> float:
     name="IPB elongation from volume",
     output="kappa_ipb",
     variables=("V_p", "R", "a"),
-    priority=PRIORITY_STRICT,
     constraints=("R != 0", "a != 0"),
 )
 def kappa_ipb_from_volume(V_p: float, R: float, a: float) -> float:
@@ -105,7 +101,6 @@ def kappa_ipb_from_volume(V_p: float, R: float, a: float) -> float:
     name="Tokamak volume",
     output="V_p",
     variables=("a", "R", "kappa", "delta", "squareness"),
-    priority=PRIORITY_STRICT,
     initial_guesses={
         "V_p": lambda v: plasma_volume(v["a"], v["R"], v["kappa"], v["delta"], v["squareness"]),
         "a": lambda v: max(1e-3, (abs(v.get("V_p", 1.0)) ** (1 / 3)) / max(v.get("kappa", 1.0), 1e-3)),
@@ -129,7 +124,6 @@ def plasma_volume(a: float, R: float, kappa: float, delta: float, xi: float) -> 
     name="Tokamak surface",
     output="S_p",
     variables=("a", "R", "kappa", "delta", "squareness"),
-    priority=PRIORITY_STRICT,
     initial_guesses={
         "S_p": lambda v: plasma_surface_area(v["a"], v["R"], v["kappa"], v["delta"], v["squareness"]),
         "a": lambda v: max(1e-3, (abs(v.get("S_p", 1.0)) ** (1 / 2)) / max(v.get("kappa", 1.0), 1e-3)),
@@ -176,8 +170,8 @@ def sauter_cross_section(
     R: float,
     a: float,
     *,
-    kappa: float = 1.0,
-    delta: float = 0.0,
+    kappa: float,
+    delta: float,
     squareness: float = 0.0,
     n: int = 256,
 ) -> tuple[list[float], list[float]]:

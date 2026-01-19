@@ -29,8 +29,6 @@ def loss_power_to_exhaust(P_sep: float, P_rad: float) -> float:
     "power_balance",
     name="Power balance",
     output="P_loss",
-    solve_for=("P_loss",),
-    constraints=("P_loss >= 0", "P_heating >= 0"),
 )
 def power_balance_simple(P_heating: float) -> float:
     """Total power lost must equal total power input."""

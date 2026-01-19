@@ -1,4 +1,4 @@
-from .relation_class import PRIORITY_EXPLICIT, PRIORITY_RELATION, PRIORITY_STRICT, Relation, RelationSystem
+from .relation_class import Relation, RelationSystem
 from .reactor_class import Reactor
 from .registry.constants import KEV_TO_J, MU0
 from .loader import (

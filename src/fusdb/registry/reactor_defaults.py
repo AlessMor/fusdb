@@ -88,8 +88,10 @@ def apply_reactor_defaults(
                 fractions.setdefault(frac_key, 0.0)
 
     # Infer n_i from n_e (or n_avg) using the charge-weighted fraction relation when needed.
+    # Keep inferred values local so the relation system can still reconcile n_i later.
     n_i_value = parameters.get("n_i")
-    if n_i_value is None:
+    n_i_seed = n_i_value
+    if n_i_seed is None:
         n_e_value = parameters.get("n_e")
         n_e_source = "n_e"
         if n_e_value is None:
@@ -103,21 +105,21 @@ def apply_reactor_defaults(
                 + 2.0 * fractions.get("f_He4", 0.0)
             )
             if charge_weight > 0:
-                n_i_value = float(n_e_value) / charge_weight
-                parameters["n_i"] = n_i_value
-                explicit_parameters.add("n_i")
-                defaults.pop("n_i", None)
+                n_i_seed = float(n_e_value) / charge_weight
                 if any(key not in fractions for key in fraction_keys):
                     warn_func(
-                        f"{reactor_id}: inferred n_i from {n_e_source} with missing fractions treated as zero.",
+                        (
+                            f"{reactor_id}: inferred n_i from {n_e_source} for composition "
+                            "with missing fractions treated as zero."
+                        ),
                         UserWarning,
                     )
                 warn_func(
-                    f"{reactor_id}: n_i not provided; inferred from {n_e_source}.",
+                    f"{reactor_id}: n_i not provided; inferred from {n_e_source} for composition.",
                     UserWarning,
                 )
 
-    if n_i_value is not None:
+    if n_i_seed is not None:
         T_avg_value = parameters.get("T_avg")
         if T_avg_value is None:
             T_avg_value = 0.0
@@ -129,7 +131,7 @@ def apply_reactor_defaults(
 
         # Run the steady-state composition solver whenever we have total ion density.
         steady_fractions = solve_steady_state_composition(
-            n_i=float(n_i_value),
+            n_i=float(n_i_seed),
             T_avg=float(T_avg_value),
             fractions=fractions,
             tau_p=tau_p_inputs or None,
@@ -144,14 +146,13 @@ def apply_reactor_defaults(
             UserWarning,
         )
 
-    # If n_la is missing, add a low-priority fallback relation tied to n_avg.
+    # If n_la is missing, add a fallback relation tied to n_avg.
     if parameters.get("n_la") is None:
         fallback_relations.append(
             Relation(
                 "Line-averaged density fallback",
                 ("n_la", "n_avg"),
                 symbol("n_la") - symbol("n_avg"),
-                priority=-100,
                 solve_for=("n_la",),
             )
         )

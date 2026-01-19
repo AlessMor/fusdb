@@ -11,7 +11,6 @@ from fusdb.reactor_class import Reactor
     "fusion_power",
     name="Fusion triple product",
     output="n_i_tau_E_T_i",
-    variables=("n_i_peak", "T_i_peak", "tau_E"),
 )
 def fusion_triple_product(
     n_i_peak: float, T_i_peak: float, tau_E: float
@@ -35,7 +34,6 @@ def fusion_triple_product(
     "fusion_power",
     name="Physics gain factor",
     output="Q_sci",
-    variables=("P_fus", "P_aux"),
 )
 def physics_gain_factor(
     P_fus: float, P_aux: float) -> float:
@@ -62,7 +60,6 @@ def physics_gain_factor(
     "fusion_power",
     name="Engineering gain factor",
     output="Q_eng",
-    variables=("P_fus_el", "P_aux_el"),
 )
 def engineering_gain_factor(
     P_fus_el: float, P_aux_el: float) -> float:

@@ -1,7 +1,6 @@
 """Power exhaust relations defined once."""
 
 from fusdb.reactor_class import Reactor
-from fusdb.relation_class import PRIORITY_STRICT
 from fusdb.relation_util import nonzero, symbol
 
 
@@ -9,8 +8,7 @@ from fusdb.relation_util import nonzero, symbol
     "power_exhaust",
     name="P_sep ratio",
     output="P_sep_over_R",
-    priority=PRIORITY_STRICT,
-    constraints=(nonzero(symbol("R")),),
+    constraints=("R != 0"),
     initial_guesses={
         "P_sep_over_R": lambda v: v["P_sep"] / v["R"],
         "P_sep": lambda v: v["P_sep_over_R"] * v["R"],
@@ -26,8 +24,7 @@ def p_sep_ratio(P_sep: float, R: float) -> float:
     "power_exhaust",
     name="P_sep metric",
     output="P_sep_B_over_q95AR",
-    priority=PRIORITY_STRICT,
-    constraints=(nonzero(symbol("q95")), nonzero(symbol("A")), nonzero(symbol("R"))),
+    constraints=("q95 != 0", "A != 0", "R != 0"),
     initial_guesses={
         "P_sep_B_over_q95AR": lambda v: v["P_sep"] * v["B0"] / (v["q95"] * v["A"] * v["R"]),
         "P_sep": lambda v: v["P_sep_B_over_q95AR"] * v["q95"] * v["A"] * v["R"] / v["B0"],

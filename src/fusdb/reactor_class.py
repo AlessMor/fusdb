@@ -361,6 +361,19 @@ class Reactor:
                 continue
             system.seed(name, value)
 
+        # Seed previously computed numeric values so later stages reuse them unless overridden.
+        for name in seen_vars:
+            if name in explicit_params:
+                continue
+            value = self.parameters.get(name)
+            if value is None:
+                continue
+            if isinstance(value, Relational):
+                continue
+            if isinstance(value, sp.Expr) and value.free_symbols:
+                continue
+            system.seed(name, value)
+
         values = system.solve(global_mode=global_mode)
         rel_by_output = {rel.variables[0]: rel for rel in relations if rel.variables}
         for var in seen_vars:
@@ -368,6 +381,11 @@ class Reactor:
             if new_value is None:
                 continue
             if isinstance(new_value, sp.Symbol) and new_value == symbol(var):
+                current_value = self.parameters.get(var)
+                if isinstance(current_value, (int, float)):
+                    continue
+                if isinstance(current_value, sp.Expr) and not current_value.free_symbols:
+                    continue
                 rel = rel_by_output.get(var)
                 if rel is not None:
                     eq_expr = sp.simplify(symbol(var) - rel.expr)
@@ -388,16 +406,6 @@ class Reactor:
                         eq_expr = eq_expr.subs(substitutions)
                     new_value = sp.Eq(symbol(var), eq_expr)
             self.parameters[var] = new_value
-            if isinstance(new_value, Relational):
-                if lock:
-                    self.explicit_parameters.add(var)
-                continue
-            # Promote numeric results to explicit so later groups do not overwrite them.
-            if isinstance(new_value, sp.Expr):
-                if not new_value.free_symbols:
-                    self.explicit_parameters.add(var)
-            elif isinstance(new_value, (int, float)):
-                self.explicit_parameters.add(var)
 
         return values
 
@@ -422,11 +430,10 @@ class Reactor:
         output: str | None = None,
         variables: tuple[str, ...] | None = None,
         solve_for: tuple[str, ...] | None = None,
-        priority: int | None = None,
         rel_tol: float = REL_TOL_DEFAULT,
         initial_guesses: dict[str, Any] | None = None,
-        max_solve_iterations: int = 25,
         constraints: tuple[str | Relational, ...] | None = None,
+        backsolve_explicit: bool = False,
     ):
         """Decorate a function as a symbolic relation registered on the class."""
         group_tuple = (groups,) if isinstance(groups, str) else tuple(groups)
@@ -451,12 +458,11 @@ class Reactor:
                 name,
                 all_vars,
                 expr,
-                priority=priority,
                 rel_tol=rel_tol,
                 solve_for=solve_targets,
                 initial_guesses=initial_guesses,
-                max_solve_iterations=max_solve_iterations,
                 constraints=tuple(merged_constraints),
+                backsolve_explicit=backsolve_explicit,
             )
             cls._RELATIONS.append((group_tuple, relation))
             setattr(func, "relation", relation)

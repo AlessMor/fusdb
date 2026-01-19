@@ -31,10 +31,14 @@ kappa:
   description:
     - Elongation.
 kappa_95:
+  constraints:
+    - kappa_95 > 0
   default_unit: dimensionless
   description:
     - Elongation at 95% flux surface.
 delta_95:
+  constraints:
+    - delta_95 > 0
   default_unit: dimensionless
   description:
     - Triangularity at 95% flux surface.
@@ -69,18 +73,26 @@ squareness:
     - Squareness (xi).
 R_max:
   default_unit: m
+  constraints:
+    - R_max > 0
   description:
     - Outboard major radius extent from the center of the torus.
 R_min:
   default_unit: m
+  constraints:
+    - R_min > 0
   description:
     - Inboard major radius extent from the center of the torus.
 Z_max:
   default_unit: m
+  constraints:
+    - Z_max > 0
   description:
     - Upper vertical extent.
 Z_min:
   default_unit: m
+  constraints:
+    - Z_min > 0
   description:
     - Lower vertical extent.
 ################ MAGNETIC FIELD & CURRENT ################
@@ -102,26 +114,41 @@ I_p:
     - Plasma current.
 f_BS:
   default_unit: dimensionless
+  constraints:
+    - f_BS >= 0
+    - f_BS <= 1
   description:
     - Bootstrap current fraction.
 f_NI:
   default_unit: dimensionless
+  constraints:
+    - f_NI >= 0
+    - f_NI <= 1
   description:
     - Non-inductive current fraction.
 f_CD:
   default_unit: dimensionless
+  constraints:
+    - f_CD >= 0
+    - f_CD <= 1
   description:
     - Driven current fraction (excluding bootstrap).
 q95:
   default_unit: dimensionless
+  constraints:
+    - q95 > 0
   description:
     - Safety factor at 95% flux surface.
 q_a:
   default_unit: dimensionless
+  constraints:
+    - q_a > 0
   description:
     - Edge safety factor.
 q_min:
   default_unit: dimensionless
+  constraints:
+    - q_min > 0
   description:
     - Minimum safety factor.
 li:
@@ -152,7 +179,7 @@ beta_limit:
 p_th:
   default_unit: Pa
   description:
-    - Thermal pressure. Note that p_tot_avg > p_th generally, as it includes energetic particles (see 2016 - Miyamoto - Plasma Physics for Controlled Fusion)
+    - Thermal pressure. # NOTE: p_tot_avg > p_th generally, as it includes energetic particles (see 2016 - Miyamoto - Plasma Physics for Controlled Fusion)
   aliases:
     - p_tot_avg
 p_peak:
@@ -161,6 +188,8 @@ p_peak:
     - Peak pressure.
 W_th:
   default_unit: J
+  constraints:
+    - W_th >= 0
   description:
     - Thermal stored energy.
 ################ TEMPERATURE & DENSITY ################
@@ -168,40 +197,56 @@ T_avg:
   aliases:
     - T_e_avg
   default_unit: keV
+  constraints:
+    - T_avg > 0
   description:
     - Volume-averaged electron temperature.
 T_e:
   default_unit: keV
+  constraints:
+    - T_e > 0
   description:
     - Electron temperature.
 T0:
   aliases:
     - T_e_peak
   default_unit: keV
+  constraints:
+    - T0 > 0
   description:
     - On-axis/peak electron temperature.
 T_i:
   default_unit: keV
+  constraints:
+    - T_i >= 0
   description:
     - Ion temperature.
 T_i_peak:
   default_unit: keV
+  constraints:
+    - T_i_peak >= 0
   description:
     - On-axis/peak ion temperature.
 n_avg:
   aliases:
     - n_e_avg
   default_unit: 1/m^3
+  constraints:
+    - n_avg > 0
   description:
     - Volume-averaged electron density.
 n0:
   aliases:
     - n_e_peak
   default_unit: 1/m^3
+  constraints:
+    - n0 > 0
   description:
     - On-axis electron density.
 n_e:
   default_unit: 1/m^3
+  constraints:
+    - n_e >= 0
   description:
     - Electron density.
 n_i:
@@ -212,22 +257,33 @@ n_i:
     - Ion density.
 n_i_peak:
   default_unit: 1/m^3
+  constraints:
+    - n_i_peak >= 0
   description:
     - On-axis/peak ion density.
 n_GW:
   default_unit: 1/m^3
+  constraints:
+    - n_GW >= 0
   description:
     - Greenwald density limit.
 n_SUDO:
   default_unit: 1/m^3
+  constraints:
+    - n_SUDO >= 0
   description:
     - Sudo density limit.
 f_GW:
   default_unit: dimensionless
+  constraints:
+    - f_GW >= 0
+    - f_GW <= 1
   description:
     - Greenwald fraction.
 Z_eff:
   default_unit: dimensionless
+  constraints:
+    - Z_eff >= 0
   description:
     - Effective charge.
 ################ ION COMPOSITION ################
@@ -262,6 +318,9 @@ f_He4:
 ################ CONFINEMENT & PERFORMANCE ################
 TBR:
   default_unit: dimensionless
+  constraints:
+    - TBR >= 0
+    - TBR <= 1
   description:
     - Tritium breeding ratio.
 tau_E:
@@ -300,6 +359,8 @@ tau_p_He4:
     - Helium-4 particle confinement time.
 tau_pulse:
   default_unit: s
+  constraints:
+    - tau_pulse > 0
   description:
     - Pulse length.
 H89:
@@ -473,14 +534,20 @@ P_neutron:
     - Neutron fusion power.
 P_th_tot:
   default_unit: W
+  constraints:
+    - P_th_tot >= 0
   description:
     - Total thermal power.
 P_elec_tot:
   default_unit: W
+  constraints:
+    - P_elec_tot >= 0
   description:
     - Gross electric power.
 P_fus_el:
   default_unit: W
+  constraints:
+    - P_fus_el >= 0
   description:
     - Electric power output.
 P_aux:
@@ -503,30 +570,45 @@ P_heating:
     - Total plasma heating power (ohmic + charged fusion + auxiliary).
 eta_th:
   default_unit: dimensionless
+  constraints:
+    - eta_th >= 0
+    - eta_th <= 1
   description:
     - Plant thermal/electric efficiency.
 Q_e:
   default_unit: dimensionless
+  constraints:
+    - Q_e >= 0
   description:
     - Electric power multiplication.
 P_wall:
   default_unit: W/m^2
+  constraints:
+    - P_wall >= 0
   description:
     - Fusion power wall loading.
 P_NBI:
   default_unit: W
+  constraints:
+    - P_NBI >= 0
   description:
     - Neutral beam injected power.
 P_LHCD:
   default_unit: W
+  constraints:
+    - P_LHCD >= 0
   description:
     - Lower hybrid coupled power.
 P_ICRF:
   default_unit: W
+  constraints:
+    - P_ICRF >= 0
   description:
     - ICRF coupled power.
 P_LH:
   default_unit: W
+  constraints:
+    - P_LH >= 0
   description:
     - L-H transition threshold power.
 P_sep:
@@ -539,6 +621,8 @@ P_sep:
     - Power across the separatrix.
 P_sep_over_R:
   default_unit: W/m
+  constraints:
+    - P_sep_over_R >= 0
   description:
     - P_sep divided by major radius.
 P_sep_B_over_q95AR:
@@ -551,9 +635,33 @@ P_loss:
     - P_loss >= 0
   description:
     - Power loss across the plasma boundary.
-P_rad:
+P_brem:
+  default_unit: W
   aliases:
-    - P_rad_core
+    - P_bremsstrahlung
+    - P_rad_bremsstrahlung
+  constraints:
+    - P_brem >= 0
+  description:
+    - Bremsstrahlung radiated power.
+P_line:
+  default_unit: W
+  aliases:
+    - P_rad_line
+  constraints:
+    - P_line >= 0
+  description:
+    - Line radiated power.
+P_sync:
+  aliases:
+    - P_synchrotron
+    - P_rad_synchrotron
+  default_unit: W
+  constraints:
+    - P_sync >= 0
+  description:
+    - Synchrotron radiated power.
+P_rad:
   default_unit: W
   constraints:
     - P_rad >= 0
@@ -564,15 +672,21 @@ Q_sci:
     - Q # NOTE: only "Q" may be ambiguous
     - Q_phy
   default_unit: dimensionless
+  constraints:
+    - Q_sci >= 0
   description:
     - scientific gain factor Q
 Q_eng:
   default_unit: dimensionless
+  constraints:
+    - Q_eng >= 0
   description:
     - engineering gain factor Q_eng.
 ################ SCALING INPUTS ################
 n_la:
   default_unit: 1/m^3
+  constraints:
+    - n_la >= 0
   description:
     - Line-averaged electron density.
 kappa_ipb:

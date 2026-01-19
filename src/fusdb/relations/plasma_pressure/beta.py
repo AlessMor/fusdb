@@ -13,7 +13,7 @@ from fusdb.relation_util import nonzero, symbol
     "plasma",
     name="Toroidal beta",
     output="beta_T",
-    constraints=(nonzero(symbol("B0")),),
+    constraints=("B0 != 0"),
 )
 def toroidal_beta(p_th: float, B0: float) -> float:
     """Freidberg Eq. 11.58: toroidal field contribution (dimensionless)."""
@@ -24,7 +24,7 @@ def toroidal_beta(p_th: float, B0: float) -> float:
     "plasma",
     name="Poloidal beta",
     output="beta_p",
-    constraints=(nonzero(symbol("B_p")),),
+    constraints=("B_p != 0"),
 )
 def poloidal_beta(p_th: float, B_p: float) -> float:
     """Freidberg Eq. 11.58 using poloidal field magnitude."""
@@ -35,7 +35,7 @@ def poloidal_beta(p_th: float, B_p: float) -> float:
     "plasma",
     name="Beta decomposition",
     output="beta",
-    constraints=(nonzero(symbol("beta_T")), nonzero(symbol("beta_p"))),
+    constraints=("beta_T != 0", "beta_p != 0"),
 )
 def beta_decomposition(beta_T: float, beta_p: float) -> float:
     """Total beta from toroidal and poloidal components (Freidberg Eq. 11.59)."""
@@ -47,7 +47,7 @@ def beta_decomposition(beta_T: float, beta_p: float) -> float:
     "plasma",
     name="Normalized beta",
     output="beta_N",
-    constraints=(nonzero(symbol("I_p"))),
+    constraints=("I_p != 0")
 )
 def normalized_beta(beta_T: float, a: float, B0: float, I_p: float) -> float:
     """Wesson/Troyon normalization: beta_N = beta_T(%) * a * B0 / I_p."""
