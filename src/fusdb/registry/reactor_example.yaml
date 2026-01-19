@@ -24,7 +24,6 @@ organization: "Example Organization"
 # design_year: 2026
 # doi:
 # notes:
-# allow_relation_overrides: false # allows to override set values if not conforming to relations
 # confinement_mode: H-mode
 # solve_strategy: default # choose from 'default', 'global' or user-defined. user defined requires a list of relations or groups of relations to be specified
 

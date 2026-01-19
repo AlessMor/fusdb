@@ -6,11 +6,7 @@ from __future__ import annotations
 import sympy as sp
 
 from fusdb.reactor_class import Reactor
-from fusdb.relation_util import require_nonzero
-
 # Only the active default scaling is decorated for relation discovery.
-
-# TODO(med): avoid the use of require_nonzero, use "constraints" argument instead
 
 
 ############################################### TO BE IMPLEMENTED ###############################################
@@ -168,7 +164,7 @@ def tau_E_itpa_2018_std5_gls(
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
-    eps_safe = require_nonzero(eps, "eps", "ITPA 2018 STD5 GLS scaling")
+    eps_safe = eps
     return (
         0.042
         * afuel ** 0.47
@@ -189,7 +185,7 @@ def tau_E_itpa_2018_std5_ols(
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
-    eps_safe = require_nonzero(eps, "eps", "ITPA 2018 STD5 OLS scaling")
+    eps_safe = eps
     return (
         0.049
         * afuel ** 0.25
@@ -210,7 +206,7 @@ def tau_E_itpa_2018_std5_sel1_gls(
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
-    eps_safe = require_nonzero(eps, "eps", "ITPA 2018 STD5 SEL1 GLS scaling")
+    eps_safe = eps
     return (
         0.023
         * afuel ** 0.33
@@ -231,7 +227,7 @@ def tau_E_itpa_2018_std5_sel1_ols(
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
-    eps_safe = require_nonzero(eps, "eps", "ITPA 2018 STD5 SEL1 OLS scaling")
+    eps_safe = eps
     return (
         0.045
         * afuel ** 0.24
@@ -252,7 +248,7 @@ def tau_E_itpa_2018_std5_sel1_wls(
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
-    eps_safe = require_nonzero(eps, "eps", "ITPA 2018 STD5 SEL1 WLS scaling")
+    eps_safe = eps
     return (
         0.03
         * afuel ** 0.094
@@ -455,7 +451,7 @@ def tau_E_lang_high_density(
     """Return tau E lang high density scaling."""
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
-    qratio = q / require_nonzero(q_star, "q_star", "Lang scaling")
+    qratio = q / q_star
     n_gw = 1.0e20 * I_p_MA / (sp.pi * a * a)
     nratio = nd_line / n_gw
     return (
@@ -957,7 +953,7 @@ def tau_E_iter97L(
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
-    eps_safe = require_nonzero(eps, "eps", "ITER97L scaling")
+    eps_safe = eps
     return (
         0.023
         * I_p_MA ** 0.96

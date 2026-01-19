@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fusdb.reactor_class import Reactor
-from fusdb.relation_util import nonzero, symbol
 
 
 @Reactor.relation(

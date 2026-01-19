@@ -1,7 +1,6 @@
 """Power exhaust relations defined once."""
 
 from fusdb.reactor_class import Reactor
-from fusdb.relation_util import nonzero, symbol
 
 
 @Reactor.relation(

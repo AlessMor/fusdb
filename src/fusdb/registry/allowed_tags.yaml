@@ -30,6 +30,6 @@ optional_metadata_fields:
   - design_year
   - doi
   - notes
-  - allow_relation_overrides
   - confinement_mode
   - solve_strategy
+  - allow_relation_overrides

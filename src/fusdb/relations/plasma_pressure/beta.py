@@ -6,7 +6,6 @@ import sympy as sp
 
 from fusdb.registry.constants import MU0
 from fusdb.reactor_class import Reactor
-from fusdb.relation_util import nonzero, symbol
 
 #TODO(low): once profiles are implemented, add a beta_avg 
 @Reactor.relation(

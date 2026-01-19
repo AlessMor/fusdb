@@ -5,7 +5,6 @@ from __future__ import annotations
 import sympy as sp
 
 from fusdb.reactor_class import Reactor
-from fusdb.relation_util import nonzero, symbol
 
 
 @Reactor.relation(

@@ -1,6 +1,8 @@
+"""Shared utilities for relation definitions and solver constraint handling."""
+
 import math
 from functools import lru_cache
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Mapping, MutableMapping, Sequence
 
 import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
@@ -21,16 +23,6 @@ def symbol(name: str) -> sp.Symbol:
         sym = sp.Symbol(name, real=True)
         _SYMBOLS[name] = sym
     return sym
-
-
-def nonzero(expr: sp.Expr) -> Relational:
-    """Return a nonzero constraint for the expression."""
-    return sp.Ne(expr, 0)
-
-
-def positive(expr: sp.Expr) -> Relational:
-    """Return a positive constraint for the expression."""
-    return sp.Gt(expr, 0)
 
 
 @lru_cache(maxsize=1)
@@ -93,44 +85,194 @@ def constraints_for_vars(names: Iterable[str]) -> tuple[Relational, ...]:
     return tuple(merged)
 
 
-def require_nonzero(value: float | sp.Expr, field_name: str, context: str = "relation checks") -> float | sp.Expr:
-    """Validate that a value is non-zero (numeric) or return it for symbolic usage.
-    
-    Args:
-        value: The numeric value to check.
-        field_name: The name of the field being validated.
-        context: A description of the context where this check is performed.
-        
-    Raises:
-        ValueError: If the value is zero.
-    """
-    if isinstance(value, sp.Expr):
-        return value
-    if value == 0:
-        raise ValueError(f"{field_name} must be non-zero for {context}")
-    return value
+def numeric_value(val: sp.Expr | float | int) -> float | None:
+    """Return a finite float for numeric Sympy expressions or Python numbers."""
+    if isinstance(val, sp.Expr):
+        if val.free_symbols:
+            return None
+        try:
+            evaluated = val.evalf(chop=True)
+        except Exception:
+            return None
+        if evaluated.is_real is False:
+            return None
+        try:
+            number = float(evaluated)
+        except (TypeError, ValueError):
+            return None
+        return number if math.isfinite(number) else None
+    if isinstance(val, (int, float)):
+        return float(val) if math.isfinite(val) else None
+    return None
 
 
-def coerce_number(value: Any, field_name: str) -> sp.Expr | None:
-    """Convert a value to a Sympy expression, ensuring numeric inputs are finite.
-    
-    Args:
-        value: The value to convert. Can be int, float, or None.
-        field_name: The name of the field for error reporting.
-        
-    Returns:
-        The value as a Sympy expression, or None if the input is None.
-        
-    Raises:
-        ValueError: If the value is not numeric, not finite, or cannot be converted.
-    """
-    if value is None:
+def as_float(value: Any) -> float | None:
+    """Return a finite float for numeric values, else None."""
+    if value is None or isinstance(value, Relational):
         return None
     if isinstance(value, sp.Expr):
-        return value
+        return numeric_value(value)
     if isinstance(value, (int, float)):
-        number = float(value)
-        if not math.isfinite(number):
-            raise ValueError(f"{field_name} must be finite for relation checks")
-        return sp.Float(number)
-    raise ValueError(f"{field_name} must be numeric for relation checks; got {value!r}")
+        return numeric_value(value)
+    return None
+
+
+def first_numeric(
+    values: Mapping[str, Any],
+    *names: str,
+    default: float | None = None,
+) -> float | None:
+    """Return the first numeric value among the requested keys."""
+    for name in names:
+        numeric = as_float(values.get(name))
+        if numeric is not None:
+            return numeric
+    return default
+
+
+def update_value(
+    values: MutableMapping[str, float],
+    name: str,
+    new_value: float,
+    *,
+    eps: float = 1e-12,
+) -> bool:
+    """Update a numeric value if it differs beyond a relative epsilon."""
+    old_value = values.get(name)
+    if old_value is None or abs(old_value - new_value) > eps * max(abs(old_value), abs(new_value), 1.0):
+        values[name] = new_value
+        return True
+    return False
+
+
+def relation_residual(
+    values: Mapping[str, float],
+    vars: Sequence[str],
+    residual_fn: Callable[..., object] | None,
+    expr: sp.Expr,
+) -> float | None:
+    """Evaluate a relation residual using lambdify when possible."""
+    if any(name not in values for name in vars):
+        return None
+    args = [values[name] for name in vars]
+    if residual_fn is not None:
+        try:
+            result = residual_fn(*args)
+        except Exception:
+            result = None
+        else:
+            if isinstance(result, (list, tuple)) and result:
+                result = result[0]
+            try:
+                numeric = float(result)
+            except (TypeError, ValueError):
+                numeric = None
+            else:
+                if math.isfinite(numeric):
+                    return numeric
+    subs = {symbol(name): sp.Float(values[name]) for name in vars}
+    return numeric_value(expr.subs(subs))
+
+
+def solve_linear_system(
+    equations: Sequence[sp.Expr],
+    unknowns: Sequence[sp.Symbol],
+) -> dict[sp.Symbol, sp.Expr] | None:
+    """Solve a linear system if possible, returning a symbol->expr map."""
+    try:
+        matrix, rhs = sp.linear_eq_to_matrix(equations, unknowns)
+        solutions = sp.linsolve((matrix, rhs), unknowns)
+    except Exception:
+        return None
+    for sol in solutions:
+        return dict(zip(unknowns, sol))
+    return None
+
+
+def solve_numeric_system(
+    equations: Sequence[sp.Expr],
+    unknowns: Sequence[sp.Symbol],
+    guesses: Sequence[float],
+    *,
+    max_iter: int,
+) -> list[float] | None:
+    """Solve a nonlinear system numerically, preferring least_squares."""
+    try:
+        from scipy.optimize import least_squares  # type: ignore[import-not-found]
+    except Exception:
+        least_squares = None
+
+    if least_squares is not None:
+        func = sp.lambdify(unknowns, equations, "math")
+
+        def residuals(x: Sequence[float]) -> list[float]:
+            result = func(*x)
+            if isinstance(result, (list, tuple)):
+                return [float(val) for val in result]
+            return [float(result)]
+
+        try:
+            lsq = least_squares(residuals, guesses, max_nfev=max_iter * 20)
+        except Exception:
+            lsq = None
+        if lsq is not None and lsq.success:
+            return [float(val) for val in lsq.x]
+
+    if len(equations) != len(unknowns):
+        return None
+    try:
+        nsolve_solution = sp.nsolve(equations, unknowns, guesses, tol=1e-10, maxsteps=max_iter)
+    except Exception:
+        return None
+    if len(unknowns) == 1:
+        return [float(nsolve_solution)]
+    try:
+        return [float(val) for val in nsolve_solution]
+    except TypeError:
+        return [float(nsolve_solution)]
+
+
+def constraints_ok(
+    constraints: Sequence[tuple[tuple[str, ...], Callable[..., object] | None, Relational]],
+    values: Mapping[str, float],
+) -> bool:
+    """Evaluate precompiled constraints against known values."""
+    if not constraints:
+        return True
+    for names, fn, constraint in constraints:
+        if any(name not in values for name in names):
+            continue
+        args = [values[name] for name in names]
+        verdict = None
+        if fn is not None:
+            try:
+                verdict = fn(*args)
+            except Exception:
+                verdict = None
+            else:
+                if isinstance(verdict, bool):
+                    if verdict is False:
+                        return False
+                    continue
+                if verdict is True or verdict == sp.true:
+                    continue
+                if verdict is False or verdict == sp.false:
+                    return False
+                verdict = None
+
+        if verdict is None:
+            subs = {symbol(name): sp.Float(values[name]) for name in names}
+            try:
+                evaluated = constraint.subs(subs)
+            except Exception:
+                continue
+            if evaluated is True or evaluated == sp.true:
+                continue
+            if evaluated is False or evaluated == sp.false:
+                return False
+            try:
+                if bool(evaluated) is False:
+                    return False
+            except Exception:
+                continue
+    return True

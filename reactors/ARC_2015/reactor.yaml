@@ -24,7 +24,6 @@ country: USA
 design_year: 2015
 doi: 10.1016/j.fusengdes.2015.07.008
 notes: Conceptual compact tokamak from MIT.
-# allow_relation_overrides: false # allows to override set values if not conforming to relations
 confinement_mode: I-mode
 solve_strategy: global
 

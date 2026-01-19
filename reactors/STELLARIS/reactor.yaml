@@ -24,7 +24,6 @@ organization: Proxima
 design_year: 2025
 doi: 10.1016/j.fusengdes.2025.114868
 # notes:
-# allow_relation_overrides: false # allows to override set values if not conforming to relations
 # confinement_mode: H-mode
 # solve_strategy: default # choose from 'default', 'global' or user-defined. user defined requires a list of relations or groups of relations to be specified
 
@@ -45,7 +44,7 @@ S_p: 327 # [m^2] Plasma surface area.
 # Z_min: [m] Lower vertical extent.
 
 ################ MAGNETIC FIELD & CURRENT ################
-B0: 9.0 # [T] Toroidal field on axis.
+B0: 9.0 # [T] Toroidal field on axis. - NOTE: on paper it is "Axis Averaged B0"
 # B_max: [T] Peak field on coil.
 # B_p: [T] Poloidal field.
 # I_p: [A] Plasma current.

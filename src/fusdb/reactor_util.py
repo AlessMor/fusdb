@@ -11,13 +11,22 @@ from fusdb.relation_class import Relation
 from fusdb.registry import SPECIES_PATH, TAGS_PATH, VARIABLES_PATH
 
 
+def _load_yaml(path: "Path") -> object:
+    data = yaml.safe_load(path.read_text())
+    return {} if data is None else data
+
+
+def _load_mapping(path: "Path", *, label: str) -> dict[str, object]:
+    data = _load_yaml(path)
+    if not isinstance(data, dict):
+        raise ValueError(f"{label} must contain a mapping")
+    return data
+
 
 @lru_cache(maxsize=1)
 def load_allowed_tags() -> dict[str, object]:
     """Load allowed tag lists and metadata from the YAML registry."""
-    data = yaml.safe_load(TAGS_PATH.read_text()) or {}
-    if not isinstance(data, dict):
-        raise ValueError("allowed_tags.yaml must contain a mapping")
+    data = _load_mapping(TAGS_PATH, label="allowed_tags.yaml")
     tags: dict[str, object] = {}
     for key, value in data.items():
         if value is None:
@@ -42,9 +51,7 @@ def load_allowed_tags() -> dict[str, object]:
 @lru_cache(maxsize=1)
 def load_allowed_species() -> dict[str, dict[str, object]]:
     """Load allowed ion species metadata from the YAML registry."""
-    data = yaml.safe_load(SPECIES_PATH.read_text())
-    if data is None:
-        data = {}
+    data = _load_yaml(SPECIES_PATH)
     if isinstance(data, list):
         return {str(item): {} for item in data}
     if isinstance(data, dict):
@@ -73,6 +80,15 @@ def _relation_domain_order_from_tags(tags: Mapping[str, object]) -> dict[str, in
         return {str(name): index + 1 for index, name in enumerate(raw)}
     raise ValueError("allowed_tags.yaml relation_domains must be a list or mapping")
 _RELATION_DOMAIN_ORDER = _relation_domain_order_from_tags(_ALLOWED_TAGS)
+RELATION_DOMAIN_ORDER: dict[str, int] = dict(_RELATION_DOMAIN_ORDER)
+
+_RELATION_DOMAIN_STAGES: tuple[tuple[str, ...], ...] = ()
+if _RELATION_DOMAIN_ORDER:
+    stages: dict[int, list[str]] = {}
+    for name, order in _RELATION_DOMAIN_ORDER.items():
+        stages.setdefault(int(order), []).append(name)
+    _RELATION_DOMAIN_STAGES = tuple(tuple(stages[order]) for order in sorted(stages))
+RELATION_DOMAIN_STAGES: tuple[tuple[str, ...], ...] = _RELATION_DOMAIN_STAGES
 
 
 
@@ -98,10 +114,7 @@ RELATION_MODULES: tuple[str, ...] = ("fusdb.relations",)
 @lru_cache(maxsize=1)
 def load_allowed_variables() -> dict[str, dict[str, object]]:
     """Load allowed variable metadata from the YAML registry."""
-    data = yaml.safe_load(VARIABLES_PATH.read_text()) or {}
-    if not isinstance(data, dict):
-        raise ValueError("allowed_variables.yaml must contain a mapping")
-    return data
+    return _load_mapping(VARIABLES_PATH, label="allowed_variables.yaml")
 ALLOWED_VARIABLES = load_allowed_variables()
 
 
@@ -123,6 +136,23 @@ def normalize_allowed(
         allowed_list = ", ".join(allowed)
         raise ValueError(f"{field_name} must be one of {allowed_list} (case-insensitive); got {value!r}")
     return mapping[key]
+
+
+def normalize_key(value: str) -> str:
+    """Normalize a free-form key by stripping non-alphanumerics and lowercasing."""
+    return "".join(ch for ch in value.lower() if ch.isalnum())
+
+
+def parse_solve_strategy(strategy_raw: str | Sequence[str] | None) -> tuple[str, list[str] | None]:
+    """Parse solve_strategy into a normalized mode and optional user steps."""
+    if strategy_raw is None:
+        return "default", None
+    if isinstance(strategy_raw, str):
+        strategy = strategy_raw.strip().lower()
+        return (strategy or "default"), None
+    if isinstance(strategy_raw, (list, tuple)):
+        return "user", [str(step) for step in strategy_raw]
+    raise ValueError("solve_strategy must be a string, list, or omitted")
 
 
 def normalize_country(
@@ -186,30 +216,24 @@ def configuration_tags(reactor_configuration: str | None) -> tuple[str, ...]:
         tags.add(normalized)
     if "tokamak" in concept:
         tags.add("tokamak")
-    if "spherical" in concept and "tokamak" in concept:
-        tags.add("spherical_tokamak")
-    if "compact" in concept and "tokamak" in concept:
-        tags.add("compact_tokamak")
-    if "stellarator" in concept:
-        tags.add("stellarator")
-    if "frc" in concept:
-        tags.add("frc")
-    if "mirror" in concept:
-        tags.add("mirror")
+        if "spherical" in concept:
+            tags.add("spherical_tokamak")
+        if "compact" in concept:
+            tags.add("compact_tokamak")
+    for needle in ("stellarator", "frc", "mirror"):
+        if needle in concept:
+            tags.add(needle)
     return tuple(sorted(tags))
 
 
 def relation_domain_order() -> dict[str, int]:
     """Return the configured solve order for relation domains."""
-    return dict(_RELATION_DOMAIN_ORDER)
+    return dict(RELATION_DOMAIN_ORDER)
 
 
 def relation_domain_stages() -> tuple[tuple[str, ...], ...]:
     """Return ordered domain stages grouped by solve order."""
-    stages: dict[int, list[str]] = {}
-    for name, order in _RELATION_DOMAIN_ORDER.items():
-        stages.setdefault(int(order), []).append(name)
-    return tuple(tuple(stages[order]) for order in sorted(stages))
+    return RELATION_DOMAIN_STAGES
 
 
 _CONFIG_EXCLUDE_TAGS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -322,16 +346,16 @@ def select_relations(
         if not candidates:
             continue
         # Normalize the method and relation names so matching ignores separators.
-        method_key = "".join(ch for ch in method.lower() if ch.isalnum())
+        method_key = normalize_key(method)
         if not method_key:
             continue
         exact: list[Relation] = []
         partial: list[Relation] = []
         for _tags, rel in candidates:
-            name_key = "".join(ch for ch in rel.name.lower() if ch.isalnum())
+            name_key = normalize_key(rel.name)
             keys = {name_key}
             if rel.variables:
-                output_key = "".join(ch for ch in rel.variables[0].lower() if ch.isalnum())
+                output_key = normalize_key(rel.variables[0])
                 if output_key and name_key.startswith(output_key):
                     stripped = name_key[len(output_key):]
                     if stripped:

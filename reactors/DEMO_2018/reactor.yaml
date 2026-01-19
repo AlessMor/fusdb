@@ -24,7 +24,6 @@ country: EUU
 design_year: 2018
 doi: 10.1016/j.fusengdes.2022.113080
 notes: EU-DEMO Physics Baseline 2018
-# allow_relation_overrides: false # allows to override set values if not conforming to relations
 confinement_mode: H-mode
 solve_strategy: global # choose from 'default', 'global' or user-defined. user defined requires a list of relations or groups of relations to be specified
 

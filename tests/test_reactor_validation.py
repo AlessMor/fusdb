@@ -2,7 +2,6 @@ import math
 from pathlib import Path
 
 import pytest
-import sympy as sp
 
 from fusdb.relations.geometry import plasma_surface_area, plasma_volume
 from fusdb.loader import load_reactor_yaml
@@ -40,7 +39,6 @@ def test_optional_metadata_defaults_to_none(tmp_path: Path) -> None:
                     'id: "ARC_2018"',
                     'name: "ARC 2018 baseline"',
                     'reactor_configuration: "tokamak"',
-                    'allow_relation_overrides: true',
                     'organization: "Example Lab"',
             ]
         )
@@ -62,7 +60,6 @@ def test_doi_can_be_list(tmp_path: Path) -> None:
                     'id: "ARC_2018"',
                     'name: "ARC 2018 baseline"',
                     'reactor_configuration: "tokamak"',
-                    'allow_relation_overrides: true',
                     'organization: "Example Lab"',
                 "",
                 "doi:",
@@ -86,7 +83,6 @@ def test_parameters_missing_defaults(tmp_path: Path) -> None:
                     'id: "ARC_2018"',
                     'name: "ARC 2018 baseline"',
                     'reactor_configuration: "tokamak"',
-                    'allow_relation_overrides: true',
                     'organization: "Example Lab"',
                 "",
                 "# no parameters",
@@ -95,8 +91,8 @@ def test_parameters_missing_defaults(tmp_path: Path) -> None:
     )
 
     reactor = load_reactor_yaml(path)
-    assert isinstance(reactor.parameters.get("P_fus"), sp.Equality)
-    assert isinstance(reactor.parameters.get("tau_E"), sp.Expr)
+    assert reactor.parameters.get("P_fus") is None
+    assert reactor.parameters.get("tau_E") is None
 
 
 def test_aspect_ratio_and_minor_radius_are_backfilled(tmp_path: Path) -> None:
@@ -109,7 +105,6 @@ def test_aspect_ratio_and_minor_radius_are_backfilled(tmp_path: Path) -> None:
                     'id: "ARC_2018"',
                     'name: "ARC 2018 baseline"',
                     'reactor_configuration: "tokamak"',
-                    'allow_relation_overrides: true',
                     'organization: "Example Lab"',
                 "",
                 "# plasma geometry",
@@ -125,7 +120,7 @@ def test_aspect_ratio_and_minor_radius_are_backfilled(tmp_path: Path) -> None:
     assert math.isclose(float(reactor.A), float(reactor.R) / float(reactor.a))
 
 
-def test_inconsistent_geometry_warns_and_keeps_explicit(tmp_path: Path) -> None:
+def test_inconsistent_geometry_warns_and_updates_explicit(tmp_path: Path) -> None:
     reactor_dir = tmp_path / "reactors" / "ARC_2018"
     reactor_dir.mkdir(parents=True)
     path = reactor_dir / "reactor.yaml"
@@ -135,7 +130,6 @@ def test_inconsistent_geometry_warns_and_keeps_explicit(tmp_path: Path) -> None:
                     'id: "ARC_2018"',
                     'name: "ARC 2018 baseline"',
                     'reactor_configuration: "tokamak"',
-                    'allow_relation_overrides: true',
                     'organization: "Example Lab"',
                 "",
                 "# plasma geometry",
@@ -149,7 +143,7 @@ def test_inconsistent_geometry_warns_and_keeps_explicit(tmp_path: Path) -> None:
     with pytest.warns(UserWarning):
         reactor = load_reactor_yaml(path)
 
-    assert math.isclose(float(reactor.A), 2.5)
+    assert math.isclose(float(reactor.A), 3.0)
 
 
 def test_geometry_within_tolerance_no_warning(tmp_path: Path) -> None:
@@ -162,7 +156,6 @@ def test_geometry_within_tolerance_no_warning(tmp_path: Path) -> None:
                     'id: "ARC_2018"',
                     'name: "ARC 2018 baseline"',
                     'reactor_configuration: "tokamak"',
-                    'allow_relation_overrides: true',
                     'organization: "Example Lab"',
                 "",
                 "# plasma geometry",
@@ -250,7 +243,6 @@ def test_power_relations_computed_and_validated(tmp_path: Path) -> None:
                 'name: "ARC 2018 baseline"',
                 'reactor_configuration: "tokamak"',
                 'organization: "Example Lab"',
-                "allow_relation_overrides: true",
                 "",
                 "# plasma geometry",
                 "R: 3.0",
@@ -276,7 +268,7 @@ def test_power_relations_computed_and_validated(tmp_path: Path) -> None:
     )
 
 
-def test_inconsistent_power_relation_warns_and_keeps_explicit(tmp_path: Path) -> None:
+def test_inconsistent_power_relation_warns_and_updates_explicit(tmp_path: Path) -> None:
     reactor_dir = tmp_path / "reactors" / "ARC_2018"
     reactor_dir.mkdir(parents=True)
     path = reactor_dir / "reactor.yaml"
@@ -287,7 +279,6 @@ def test_inconsistent_power_relation_warns_and_keeps_explicit(tmp_path: Path) ->
                 'name: "ARC 2018 baseline"',
                 'reactor_configuration: "tokamak"',
                 'organization: "Example Lab"',
-                "allow_relation_overrides: true",
                 "",
                 "# plasma geometry",
                 "R: 3.0",
@@ -303,7 +294,7 @@ def test_inconsistent_power_relation_warns_and_keeps_explicit(tmp_path: Path) ->
     with pytest.warns(UserWarning):
         reactor = load_reactor_yaml(path)
 
-    assert math.isclose(float(reactor.P_sep_over_R), 30e6)
+    assert math.isclose(float(reactor.P_sep_over_R), 40e6)
 
 
 def test_tokamak_volume_and_surface_backfilled(tmp_path: Path) -> None:
@@ -329,14 +320,15 @@ def test_tokamak_volume_and_surface_backfilled(tmp_path: Path) -> None:
 
     reactor = load_reactor_yaml(path)
 
-    expected_V = float(plasma_volume(1.2, 4.0, 1.6, 0.2, 0.0))
-    expected_S = float(plasma_surface_area(1.2, 4.0, 1.6, 0.2, 0.0))
+    delta = 1.5 * 0.2
+    expected_V = float(plasma_volume(1.2, 4.0, 1.6, delta, 0.0))
+    expected_S = float(plasma_surface_area(1.2, 4.0, 1.6, delta, 0.0))
 
     assert math.isclose(float(reactor.V_p), expected_V, rel_tol=1e-6)
     assert math.isclose(float(reactor.S_p), expected_S, rel_tol=1e-6)
 
 
-def test_tokamak_volume_inconsistency_warns_and_keeps_explicit(tmp_path: Path) -> None:
+def test_tokamak_volume_inconsistency_warns_and_updates_explicit(tmp_path: Path) -> None:
     reactor_dir = tmp_path / "reactors" / "ARC_2018"
     reactor_dir.mkdir(parents=True)
     path = reactor_dir / "reactor.yaml"
@@ -347,7 +339,6 @@ def test_tokamak_volume_inconsistency_warns_and_keeps_explicit(tmp_path: Path) -
                 'name: "ARC 2018 baseline"',
                 'reactor_configuration: "tokamak"',
                 'organization: "Example Lab"',
-                "allow_relation_overrides: true",
                 "",
                 "# plasma geometry",
                 "R: 4.0",
@@ -362,4 +353,5 @@ def test_tokamak_volume_inconsistency_warns_and_keeps_explicit(tmp_path: Path) -
     with pytest.warns(UserWarning):
         reactor = load_reactor_yaml(path)
 
-    assert math.isclose(float(reactor.V_p), 1.0)
+    expected_V = float(plasma_volume(1.2, 4.0, 1.6, 1.5 * 0.2, 0.0))
+    assert math.isclose(float(reactor.V_p), expected_V, rel_tol=1e-6)
