@@ -11,13 +11,13 @@ import yaml
 
 from fusdb.registry import VARIABLES_PATH
 
-WarnFunc = Callable[[str, type[Warning] | None], None]
 REL_TOL_DEFAULT = 1e-2  # relative tolerance for relation checks
 _SYMBOLS: dict[str, sp.Symbol] = {}
 
 
 def symbol(name: str) -> sp.Symbol:
     """Get a stable Sympy symbol for a variable name."""
+    # Cache symbols to keep identity stable across relations.
     sym = _SYMBOLS.get(name)
     if sym is None:
         sym = sp.Symbol(name, real=True)
@@ -28,6 +28,7 @@ def symbol(name: str) -> sp.Symbol:
 @lru_cache(maxsize=1)
 def _allowed_variables_raw() -> dict[str, object]:
     """Load the raw allowed variables mapping from YAML."""
+    # Read the registry once and validate its shape.
     data = yaml.safe_load(VARIABLES_PATH.read_text()) or {}
     if not isinstance(data, dict):
         raise ValueError("allowed_variables.yaml must contain a mapping")
@@ -37,16 +38,20 @@ def _allowed_variables_raw() -> dict[str, object]:
 @lru_cache(maxsize=1)
 def _constraint_symbols() -> dict[str, sp.Symbol]:
     """Build a symbol table for allowed variables used in constraints."""
+    # Create a shared symbol table so constraints parse consistently.
     return {name: symbol(name) for name in _allowed_variables_raw().keys()}
 
 
 def parse_constraint(expr: str | Relational) -> Relational:
     """Parse a constraint string into a Sympy relational."""
+    # Allow pre-parsed constraints to pass through.
     if isinstance(expr, Relational):
         return expr
+    # Parse string constraints using the allowed-variable symbol table.
     if not isinstance(expr, str):
         raise ValueError(f"Constraint must be a string or Sympy relational; got {type(expr).__name__}")
     parsed = parse_expr(expr, local_dict=_constraint_symbols(), evaluate=False)
+    # Ensure the parsed value is a relational expression.
     if isinstance(parsed, bool) or parsed in (sp.true, sp.false):
         raise ValueError(f"Constraint {expr!r} must be a relational expression")
     if not isinstance(parsed, Relational):
@@ -57,6 +62,7 @@ def parse_constraint(expr: str | Relational) -> Relational:
 @lru_cache(maxsize=1)
 def variable_constraints() -> dict[str, tuple[Relational, ...]]:
     """Load per-variable constraint expressions from allowed variables YAML."""
+    # Parse registry constraints once and cache them.
     constraints: dict[str, tuple[Relational, ...]] = {}
     data = _allowed_variables_raw()
     for name, meta in data.items():
@@ -78,6 +84,7 @@ def variable_constraints() -> dict[str, tuple[Relational, ...]]:
 
 def constraints_for_vars(names: Iterable[str]) -> tuple[Relational, ...]:
     """Return the combined constraints for a collection of variable names."""
+    # Collect all per-variable constraints for the given names.
     merged: list[Relational] = []
     mapping = variable_constraints()
     for name in names:
@@ -87,6 +94,7 @@ def constraints_for_vars(names: Iterable[str]) -> tuple[Relational, ...]:
 
 def numeric_value(val: sp.Expr | float | int) -> float | None:
     """Return a finite float for numeric Sympy expressions or Python numbers."""
+    # Evaluate Sympy expressions safely without introducing symbolic dependencies.
     if isinstance(val, sp.Expr):
         if val.free_symbols:
             return None
@@ -108,6 +116,7 @@ def numeric_value(val: sp.Expr | float | int) -> float | None:
 
 def as_float(value: Any) -> float | None:
     """Return a finite float for numeric values, else None."""
+    # Filter out non-numeric and relational inputs early.
     if value is None or isinstance(value, Relational):
         return None
     if isinstance(value, sp.Expr):
@@ -123,6 +132,7 @@ def first_numeric(
     default: float | None = None,
 ) -> float | None:
     """Return the first numeric value among the requested keys."""
+    # Walk keys in order and return the first numeric value.
     for name in names:
         numeric = as_float(values.get(name))
         if numeric is not None:
@@ -138,6 +148,7 @@ def update_value(
     eps: float = 1e-12,
 ) -> bool:
     """Update a numeric value if it differs beyond a relative epsilon."""
+    # Use a relative threshold to avoid noisy updates.
     old_value = values.get(name)
     if old_value is None or abs(old_value - new_value) > eps * max(abs(old_value), abs(new_value), 1.0):
         values[name] = new_value
@@ -152,8 +163,10 @@ def relation_residual(
     expr: sp.Expr,
 ) -> float | None:
     """Evaluate a relation residual using lambdify when possible."""
+    # Require all inputs before attempting evaluation.
     if any(name not in values for name in vars):
         return None
+    # Prefer the lambdified residual for speed.
     args = [values[name] for name in vars]
     if residual_fn is not None:
         try:
@@ -170,6 +183,7 @@ def relation_residual(
             else:
                 if math.isfinite(numeric):
                     return numeric
+    # Fallback to symbolic substitution when lambdify fails.
     subs = {symbol(name): sp.Float(values[name]) for name in vars}
     return numeric_value(expr.subs(subs))
 
@@ -179,6 +193,7 @@ def solve_linear_system(
     unknowns: Sequence[sp.Symbol],
 ) -> dict[sp.Symbol, sp.Expr] | None:
     """Solve a linear system if possible, returning a symbol->expr map."""
+    # Convert to a matrix form and attempt a linear solve.
     try:
         matrix, rhs = sp.linear_eq_to_matrix(equations, unknowns)
         solutions = sp.linsolve((matrix, rhs), unknowns)
@@ -197,6 +212,7 @@ def solve_numeric_system(
     max_iter: int,
 ) -> list[float] | None:
     """Solve a nonlinear system numerically, preferring least_squares."""
+    # Try least_squares first when SciPy is available.
     try:
         from scipy.optimize import least_squares  # type: ignore[import-not-found]
     except Exception:
@@ -205,6 +221,7 @@ def solve_numeric_system(
     if least_squares is not None:
         func = sp.lambdify(unknowns, equations, "math")
 
+        # Map vector inputs to residual list.
         def residuals(x: Sequence[float]) -> list[float]:
             result = func(*x)
             if isinstance(result, (list, tuple)):
@@ -218,6 +235,7 @@ def solve_numeric_system(
         if lsq is not None and lsq.success:
             return [float(val) for val in lsq.x]
 
+    # Fall back to nsolve when the system is square.
     if len(equations) != len(unknowns):
         return None
     try:
@@ -235,16 +253,23 @@ def solve_numeric_system(
 def constraints_ok(
     constraints: Sequence[tuple[tuple[str, ...], Callable[..., object] | None, Relational]],
     values: Mapping[str, float],
+    *,
+    focus_names: set[str] | None = None,
 ) -> bool:
     """Evaluate precompiled constraints against known values."""
     if not constraints:
         return True
+    # Optionally restrict checks to constraints that touch updated variables.
+    focus = focus_names or set()
     for names, fn, constraint in constraints:
+        if focus and names and not (set(names) & focus):
+            continue
         if any(name not in values for name in names):
             continue
         args = [values[name] for name in names]
         verdict = None
         if fn is not None:
+            # Prefer fast lambdified constraint evaluation.
             try:
                 verdict = fn(*args)
             except Exception:
@@ -260,6 +285,7 @@ def constraints_ok(
                     return False
                 verdict = None
 
+        # Fallback to symbolic substitution when lambdify is inconclusive.
         if verdict is None:
             subs = {symbol(name): sp.Float(values[name]) for name in names}
             try:

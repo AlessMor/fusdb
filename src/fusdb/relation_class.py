@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import math
 import warnings
-from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence
 
 import networkx as nx
@@ -47,6 +46,7 @@ class Relation:
         initial_guesses: Mapping[str, float | Callable[[Mapping[str, float]], float]] | None = None,
         constraints: Sequence[Relational | str] | None = None,
     ) -> None:
+        # Store core relation metadata and normalize inputs.
         self.name = name
         self.variables = tuple(variables)
         self.expr = sp.sympify(expr)
@@ -54,18 +54,25 @@ class Relation:
         self.solve_for = solve_for
         self.initial_guesses = initial_guesses
         self.constraints = tuple(constraints or ())
-
-
-@dataclass(frozen=True)
-class _Info:
-    rel: Relation
-    vars: tuple[str, ...]
-    expr: sp.Expr
-    rel_tol: float
-    residual_fn: Callable[..., object] | None
-    constraints: list[tuple[tuple[str, ...], Callable[..., object] | None, Relational]]
-    solve_for: tuple[str, ...] | None
-    initial_guesses: Mapping[str, float | Callable[[Mapping[str, float]], float]] | None
+        # Precompute solve targets and symbols for reuse.
+        self.solve_targets = self.solve_for or self.variables
+        self.syms = tuple(symbol(name) for name in self.variables)
+        # Lambdify the residual for fast numeric evaluation.
+        try:
+            self.residual_fn = sp.lambdify(self.syms, self.expr, "math")
+        except Exception:
+            self.residual_fn = None
+        # Compile constraints (relation-level + variable-level) once.
+        compiled: list[tuple[tuple[str, ...], Callable[..., object] | None, Relational]] = []
+        for item in list(self.constraints) + list(constraints_for_vars(self.variables)):
+            constraint = item if isinstance(item, Relational) else parse_constraint(item)
+            names = tuple(sorted(sym.name for sym in constraint.free_symbols))
+            try:
+                fn = sp.lambdify([symbol(name) for name in names], constraint, "math")
+            except Exception:
+                fn = None
+            compiled.append((names, fn, constraint))
+        self.constraints_compiled = tuple(compiled)
 
 
 class RelationSystem:
@@ -81,16 +88,13 @@ class RelationSystem:
         self.relations = tuple(relations)
         self.rel_tol = rel_tol
         self.warn_sink = warn
-        self._infos: dict[Relation, _Info] = {}
         self._solve_cache: dict[tuple[int, str], list[tuple[tuple[str, ...], Callable[..., object] | None, sp.Expr]]] = {}
 
+        # Build the relation-variable incidence graph once for component solving.
         graph = nx.Graph()
         for rel in self.relations:
-            # Precompile per-relation symbols, lambdas, and constraints once.
-            info = self._build_info(rel)
-            self._infos[rel] = info
             graph.add_node(rel, bipartite=0)
-            for name in info.vars:
+            for name in rel.variables:
                 graph.add_node(name, bipartite=1)
                 graph.add_edge(rel, name)
 
@@ -103,36 +107,6 @@ class RelationSystem:
             # Keep a stable order for deterministic solving.
             components.append((sorted(rels, key=lambda r: r.name), sorted(vars_)))
         self._components = components
-
-    def _build_info(self, rel: Relation) -> _Info:
-        syms = tuple(symbol(name) for name in rel.variables)
-        # Lambdify residual for fast numeric evaluation (fallback to subs later).
-        try:
-            residual_fn = sp.lambdify(syms, rel.expr, "math")
-        except Exception:
-            residual_fn = None
-
-        constraints: list[tuple[tuple[str, ...], Callable[..., object] | None, Relational]] = []
-        for item in list(rel.constraints) + list(constraints_for_vars(rel.variables)):
-            constraint = item if isinstance(item, Relational) else parse_constraint(item)
-            names = tuple(sorted(sym.name for sym in constraint.free_symbols))
-            # Precompile constraint lambdas for cheap checks.
-            try:
-                fn = sp.lambdify([symbol(name) for name in names], constraint, "math")
-            except Exception:
-                fn = None
-            constraints.append((names, fn, constraint))
-
-        return _Info(
-            rel=rel,
-            vars=rel.variables,
-            expr=rel.expr,
-            rel_tol=rel.rel_tol,
-            residual_fn=residual_fn,
-            constraints=constraints,
-            solve_for=rel.solve_for,
-            initial_guesses=rel.initial_guesses,
-        )
 
     def solve(
         self,
@@ -152,9 +126,11 @@ class RelationSystem:
             max_iter: Iteration cap for fills/repairs and numeric solve budget.
             explicit: Subset of keys in values treated as explicit inputs.
         """
+        # Normalize inputs and explicit set.
         values_num = {k: float(v) for k, v in (values or {}).items()}
         explicit_set = set(values_num) if explicit is None else set(explicit) & set(values_num)
         explicit_values = {name: values_num[name] for name in explicit_set}
+        # Normalize solve mode and tolerances.
         mode = mode.lower().strip()
         if mode not in {"override_input", "locked_input"}:
             raise ValueError("mode must be 'override_input' or 'locked_input'")
@@ -173,7 +149,7 @@ class RelationSystem:
 
         # Optional repair loop to satisfy violated relations by solving one variable.
         if override_input:
-            self._repair_violations(values_num, explicit_set, tol_use, max_iter)
+            self._repair_violations(values_num, tol_use, max_iter)
 
         # Final validation / error reporting.
         violations = self._validate(values_num, tol_use)
@@ -212,16 +188,15 @@ class RelationSystem:
 
     def _candidate_for_target(
         self,
-        info: _Info,
+        rel: Relation,
         target: str,
         values: Mapping[str, float],
     ) -> float | None:
-        plan = self._solve_plan_for(info, target)
-        if not plan:
-            return None
+        # Prefer cached symbolic solve plans when available.
+        plan = self._solve_plan_for(rel, target)
+        candidates: list[float] = []
 
         # Evaluate all viable expressions for the target and pick a candidate.
-        candidates: list[float] = []
         for arg_names, fn, expr in plan:
             if any(name not in values for name in arg_names):
                 continue
@@ -237,16 +212,41 @@ class RelationSystem:
                 numeric = numeric_value(expr.subs(subs))
             if numeric is None or not math.isfinite(numeric):
                 continue
+            test_values = dict(values)
+            test_values[target] = float(numeric)
+            if not constraints_ok(rel.constraints_compiled, test_values, focus_names={target}):
+                continue
             candidates.append(float(numeric))
+
+        # Fallback: numeric solve for single-unknown relations with no symbolic plan.
+        if not candidates:
+            target_sym = symbol(target)
+            subs = {
+                symbol(name): sp.Float(values[name])
+                for name in rel.variables
+                if name != target and name in values
+            }
+            expr = rel.expr.subs(subs)
+            if expr.free_symbols == {target_sym}:
+                guesses = self._build_guesses((rel,), (target,), values)
+                solved = solve_numeric_system([expr], [target_sym], guesses, max_iter=50)
+                if solved:
+                    numeric = float(solved[0])
+                    if math.isfinite(numeric):
+                        test_values = dict(values)
+                        test_values[target] = numeric
+                        if constraints_ok(rel.constraints_compiled, test_values, focus_names={target}):
+                            candidates.append(numeric)
 
         if not candidates:
             return None
         return next((value for value in candidates if value > 0), candidates[0])
 
     def _solve_plan_for(
-        self, info: _Info, target: str
+        self, rel: Relation, target: str
     ) -> list[tuple[tuple[str, ...], Callable[..., object] | None, sp.Expr]]:
-        key = (id(info.rel), target)
+        # Reuse cached solve plans when possible.
+        key = (id(rel), target)
         plan = self._solve_cache.get(key)
         if plan is not None:
             return plan
@@ -254,9 +254,9 @@ class RelationSystem:
         # Fast path: isolate target via coefficient if expression is affine in target.
         target_sym = symbol(target)
         plan = []
-        coeff = info.expr.coeff(target_sym)
+        coeff = rel.expr.coeff(target_sym)
         if coeff is not None and coeff != 0:
-            rest = info.expr - coeff * target_sym
+            rest = rel.expr - coeff * target_sym
             if not rest.has(target_sym):
                 expr = -rest / coeff
                 arg_names = tuple(sorted(sym.name for sym in expr.free_symbols if sym.name != target))
@@ -270,7 +270,7 @@ class RelationSystem:
 
         # Fallback: symbolic solve for the target.
         try:
-            solutions = sp.solve(info.expr, target_sym)
+            solutions = sp.solve(rel.expr, target_sym)
         except Exception:
             solutions = []
         if isinstance(solutions, sp.Expr):
@@ -299,19 +299,17 @@ class RelationSystem:
         for _ in range(max_iter):
             updated = False
             for rel in rels:
-                info = self._infos[rel]
                 # Only solve relations with exactly one missing value.
-                missing = [name for name in info.vars if name not in values]
+                missing = [name for name in rel.variables if name not in values]
                 if len(missing) != 1:
                     continue
                 target = missing[0]
                 if target in locked:
                     continue
-                solve_targets = info.solve_for or info.vars
-                if target not in solve_targets:
+                if target not in rel.solve_targets:
                     continue
                 # Compute a candidate for the missing variable.
-                candidate = self._candidate_for_target(info, target, values)
+                candidate = self._candidate_for_target(rel, target, values)
                 if candidate is None:
                     continue
                 if update_value(values, target, candidate, eps=_EPS):
@@ -328,12 +326,17 @@ class RelationSystem:
         # Build relation -> unknown variables mapping for DM decomposition.
         rel_unknowns: dict[Relation, tuple[str, ...]] = {}
         for rel in rels:
-            unknowns = tuple(name for name in rel.variables if name in free_vars)
+            unknowns = tuple(
+                name
+                for name in rel.variables
+                if name in free_vars and name in rel.solve_targets
+            )
             if unknowns:
                 rel_unknowns[rel] = unknowns
         if not rel_unknowns:
             return
 
+        # Solve DM blocks in order, updating values as each block is resolved.
         for block_rels, block_vars in self._dm_blocks(rel_unknowns, free_vars):
             self._solve_block(block_rels, block_vars, values, max_iter)
 
@@ -427,6 +430,7 @@ class RelationSystem:
         if len(unknowns) <= 0:
             return
 
+        # Map unknowns to symbols for solving.
         unknown_syms = [symbol(name) for name in unknowns]
         unknown_set = set(unknown_syms)
 
@@ -441,7 +445,7 @@ class RelationSystem:
 
         equations: list[sp.Expr] = []
         for rel in block_rels:
-            expr = self._infos[rel].expr.subs(known_subs)
+            expr = rel.expr.subs(known_subs)
             if expr == 0:
                 continue
             if expr.free_symbols and not expr.free_symbols.issubset(unknown_set):
@@ -482,6 +486,18 @@ class RelationSystem:
                 return
             solved_values[sym.name] = float(numeric)
 
+        # Validate constraints before applying updates.
+        focus_names = set(solved_values)
+        for rel in block_rels:
+            values_map: dict[str, float] = {}
+            for name in rel.variables:
+                if name in solved_values:
+                    values_map[name] = solved_values[name]
+                elif name in values:
+                    values_map[name] = float(values[name])
+            if not constraints_ok(rel.constraints_compiled, values_map, focus_names=focus_names):
+                return
+
         # Apply updates if they differ meaningfully.
         for name, numeric in solved_values.items():
             update_value(values, name, numeric, eps=_EPS)
@@ -492,6 +508,7 @@ class RelationSystem:
         unknowns: Sequence[str],
         values: Mapping[str, float],
     ) -> list[float]:
+        # Seed guesses from current known values.
         guess_values: dict[str, float] = {
             name: float(values[name])
             for name in unknowns
@@ -505,7 +522,7 @@ class RelationSystem:
             return ctx
 
         for rel in block_rels:
-            guesses = self._infos[rel].initial_guesses
+            guesses = rel.initial_guesses
             if not guesses:
                 continue
             ctx = context()
@@ -519,33 +536,32 @@ class RelationSystem:
                 if isinstance(guess, (int, float)) and math.isfinite(float(guess)):
                     guess_values[name] = float(guess)
 
+        # Fill remaining unknowns with a neutral default.
         return [guess_values.get(name, 1.0) for name in unknowns]
 
     def _repair_violations(
         self,
         values: dict[str, float],
-        explicit: set[str],
         tol: float,
         max_iter: int,
     ) -> None:
+        # Iterate until no relation can be repaired via a single-variable update.
         for _ in range(max_iter):
             updated = False
             for rel in self.relations:
-                info = self._infos[rel]
                 # Only consider relations that are fully specified.
-                if any(name not in values for name in info.vars):
+                if any(name not in values for name in rel.variables):
                     continue
-                residual = relation_residual(values, info.vars, info.residual_fn, info.expr)
+                residual = relation_residual(values, rel.variables, rel.residual_fn, rel.expr)
                 if residual is None:
                     continue
-                rel_tol = info.rel_tol if info.rel_tol is not None else tol
-                scale = max(max(abs(values[name]) for name in info.vars), 1.0)
+                rel_tol = rel.rel_tol if rel.rel_tol is not None else tol
+                scale = max(max(abs(values[name]) for name in rel.variables), 1.0)
                 if abs(residual) <= rel_tol * scale:
                     continue
-                solve_targets = info.solve_for or info.vars
-                target = solve_targets[0]
+                target = rel.solve_targets[0]
                 # Solve a single variable to reduce residual.
-                candidate = self._candidate_for_target(info, target, values)
+                candidate = self._candidate_for_target(rel, target, values)
                 if candidate is None:
                     continue
                 if update_value(values, target, candidate, eps=_EPS):
@@ -560,16 +576,16 @@ class RelationSystem:
     ) -> list[tuple[Relation, str]]:
         violations: list[tuple[Relation, str]] = []
         for rel in self.relations:
-            info = self._infos[rel]
-            missing = [name for name in info.vars if name not in values]
+            # Check for missing values before residual evaluation.
+            missing = [name for name in rel.variables if name not in values]
             if missing:
                 violations.append((rel, f"missing values for: {', '.join(missing)}"))
                 continue
             # Residual + constraint validation with scaled tolerance.
-            residual = relation_residual(values, info.vars, info.residual_fn, info.expr)
-            rel_tol = info.rel_tol if info.rel_tol is not None else tol
-            scale = max(max(abs(values[name]) for name in info.vars), 1.0)
-            constraint_ok = constraints_ok(info.constraints, values)
+            residual = relation_residual(values, rel.variables, rel.residual_fn, rel.expr)
+            rel_tol = rel.rel_tol if rel.rel_tol is not None else tol
+            scale = max(max(abs(values[name]) for name in rel.variables), 1.0)
+            constraint_ok = constraints_ok(rel.constraints_compiled, values)
             if residual is None or abs(residual) > rel_tol * scale or not constraint_ok:
                 detail_parts = []
                 if residual is None:

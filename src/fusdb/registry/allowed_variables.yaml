@@ -38,7 +38,8 @@ kappa_95:
     - Elongation at 95% flux surface.
 delta_95:
   constraints:
-    - delta_95 > 0
+    - delta_95 >= 0
+    - delta_95 <= 1
   default_unit: dimensionless
   description:
     - Triangularity at 95% flux surface.

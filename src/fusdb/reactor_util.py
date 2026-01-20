@@ -12,11 +12,13 @@ from fusdb.registry import SPECIES_PATH, TAGS_PATH, VARIABLES_PATH
 
 
 def _load_yaml(path: "Path") -> object:
+    # Read YAML and normalize empty documents to an empty mapping.
     data = yaml.safe_load(path.read_text())
     return {} if data is None else data
 
 
 def _load_mapping(path: "Path", *, label: str) -> dict[str, object]:
+    # Enforce mapping shape for registry files.
     data = _load_yaml(path)
     if not isinstance(data, dict):
         raise ValueError(f"{label} must contain a mapping")
@@ -26,12 +28,14 @@ def _load_mapping(path: "Path", *, label: str) -> dict[str, object]:
 @lru_cache(maxsize=1)
 def load_allowed_tags() -> dict[str, object]:
     """Load allowed tag lists and metadata from the YAML registry."""
+    # Parse tag metadata and normalize shapes.
     data = _load_mapping(TAGS_PATH, label="allowed_tags.yaml")
     tags: dict[str, object] = {}
     for key, value in data.items():
         if value is None:
             tags[key] = ()
         elif key == "relation_domains" and isinstance(value, dict):
+            # relation_domains can be a mapping of domain->order.
             domains: dict[str, int] = {}
             for domain, order in value.items():
                 try:
@@ -42,6 +46,7 @@ def load_allowed_tags() -> dict[str, object]:
                     ) from None
             tags[key] = domains
         elif isinstance(value, list):
+            # Most tag groups are lists of strings.
             tags[key] = tuple(str(item) for item in value)
         else:
             raise ValueError(f"allowed_tags.yaml entry {key!r} must be a list")
@@ -51,6 +56,7 @@ def load_allowed_tags() -> dict[str, object]:
 @lru_cache(maxsize=1)
 def load_allowed_species() -> dict[str, dict[str, object]]:
     """Load allowed ion species metadata from the YAML registry."""
+    # Support either a list or a mapping with optional metadata.
     data = _load_yaml(SPECIES_PATH)
     if isinstance(data, list):
         return {str(item): {} for item in data}
@@ -71,6 +77,7 @@ _ALLOWED_TAGS = load_allowed_tags()
 
 
 def _relation_domain_order_from_tags(tags: Mapping[str, object]) -> dict[str, int]:
+    # Support relation_domains as mapping or ordered list.
     raw = tags.get("relation_domains", ())
     if raw is None:
         return {}
@@ -84,6 +91,7 @@ RELATION_DOMAIN_ORDER: dict[str, int] = dict(_RELATION_DOMAIN_ORDER)
 
 _RELATION_DOMAIN_STAGES: tuple[tuple[str, ...], ...] = ()
 if _RELATION_DOMAIN_ORDER:
+    # Group domains by their ordering index for staged solving.
     stages: dict[int, list[str]] = {}
     for name, order in _RELATION_DOMAIN_ORDER.items():
         stages.setdefault(int(order), []).append(name)
@@ -114,6 +122,7 @@ RELATION_MODULES: tuple[str, ...] = ("fusdb.relations",)
 @lru_cache(maxsize=1)
 def load_allowed_variables() -> dict[str, dict[str, object]]:
     """Load allowed variable metadata from the YAML registry."""
+    # Keep this cached to avoid repeated YAML parsing.
     return _load_mapping(VARIABLES_PATH, label="allowed_variables.yaml")
 ALLOWED_VARIABLES = load_allowed_variables()
 
@@ -128,6 +137,7 @@ def normalize_allowed(
     field_name: str,
 ) -> str | None:
     """Normalize a value against an allowed list using case-insensitive matching."""
+    # Map lower-case inputs to canonical values.
     if value is None:
         return None
     mapping = {entry.lower(): entry for entry in allowed}
@@ -140,11 +150,13 @@ def normalize_allowed(
 
 def normalize_key(value: str) -> str:
     """Normalize a free-form key by stripping non-alphanumerics and lowercasing."""
+    # Use a strict normalization so names can match across separators.
     return "".join(ch for ch in value.lower() if ch.isalnum())
 
 
 def parse_solve_strategy(strategy_raw: str | Sequence[str] | None) -> tuple[str, list[str] | None]:
     """Parse solve_strategy into a normalized mode and optional user steps."""
+    # Accept None, string, or list forms.
     if strategy_raw is None:
         return "default", None
     if isinstance(strategy_raw, str):
@@ -161,6 +173,7 @@ def normalize_country(
     warn: WarnFunc | None = None,
 ) -> str | None:
     """Normalize a country name/alpha-2/alpha-3 value to ISO 3166-1 alpha-3."""
+    # Normalize simple aliases before consulting pycountry.
     if value is None:
         return None
     if not isinstance(value, str):
@@ -187,6 +200,7 @@ def normalize_country(
     except ImportError as exc:
         raise ValueError("country normalization requires pycountry; install it to validate ISO 3166-1 codes") from exc
 
+    # Delegate to pycountry for canonicalization.
     try:
         record = pycountry.countries.lookup(text)
     except LookupError as exc:
@@ -207,6 +221,7 @@ def normalize_country(
 
 def configuration_tags(reactor_configuration: str | None) -> tuple[str, ...]:
     """Derive configuration tags from a free-form reactor configuration string."""
+    # Normalize text and derive both specific and generic tags.
     if not reactor_configuration:
         return ()
     concept = reactor_configuration.lower()
@@ -228,11 +243,13 @@ def configuration_tags(reactor_configuration: str | None) -> tuple[str, ...]:
 
 def relation_domain_order() -> dict[str, int]:
     """Return the configured solve order for relation domains."""
+    # Return a copy to avoid accidental mutation.
     return dict(RELATION_DOMAIN_ORDER)
 
 
 def relation_domain_stages() -> tuple[tuple[str, ...], ...]:
     """Return ordered domain stages grouped by solve order."""
+    # Expose staged ordering for relation application.
     return RELATION_DOMAIN_STAGES
 
 
@@ -245,6 +262,7 @@ _CONFIG_EXCLUDE_TAGS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 def config_exclude_tags(reactor_configuration: str | None) -> tuple[str, ...]:
     """Return relation tags that should be excluded for the configuration."""
+    # Match the configuration to its excluded tag set.
     if not reactor_configuration:
         return ()
     concept = reactor_configuration.lower()
@@ -257,6 +275,7 @@ def config_exclude_tags(reactor_configuration: str | None) -> tuple[str, ...]:
 @lru_cache(maxsize=1)
 def variable_aliases() -> dict[str, str]:
     """Build a mapping of alias names to canonical variable names."""
+    # Ensure aliases are unique and do not shadow canonical names.
     aliases: dict[str, str] = {}
     for name, meta in ALLOWED_VARIABLES.items():
         if not isinstance(meta, dict):
@@ -297,6 +316,7 @@ def relations_for(
     exclude: tuple[str, ...] | None = None,
 ) -> tuple["Relation", ...]:
     """Return relations that match the requested tag groups."""
+    # Return only the relation objects, not tags.
     from fusdb.reactor_class import Reactor
 
     tagged = Reactor.get_relations_with_tags(groups, require_all=require_all, exclude=exclude)
@@ -310,6 +330,7 @@ def relations_with_tags(
     exclude: tuple[str, ...] | None = None,
 ) -> tuple[tuple[tuple[str, ...], Relation], ...]:
     """Return relations and their tag tuples that match the requested groups."""
+    # Preserve tag context for callers that need filtering.
     from fusdb.reactor_class import Reactor
 
     return Reactor.get_relations_with_tags(groups, require_all=require_all, exclude=exclude)
@@ -328,6 +349,7 @@ def select_relations(
     if not parameter_methods:
         return tuple(rel for _tags, rel in relations)
 
+    # Build lookup tables and resolve requested methods.
     warn_func = warn or warnings.warn
     # Index relations by output variable for quick method matching.
     by_output: dict[str, list[tuple[tuple[str, ...], Relation]]] = {}
@@ -386,6 +408,7 @@ def select_relations(
                 selected_tags[output] = tags
                 break
 
+    # Remove shadowed relations that overlap the chosen tags.
     adjusted: list[Relation] = []
     for _tags, rel in relations:
         if not rel.variables:

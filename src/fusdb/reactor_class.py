@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 import importlib
 import inspect
-import math
 import sympy as sp
 from sympy.core.relational import Relational
 from pathlib import Path
@@ -77,6 +76,7 @@ class Reactor:
 
     def __post_init__(self) -> None:
         """Normalize metadata and solve configured relations in stages."""
+        # Normalize optional containers to avoid None checks elsewhere.
         if self.parameter_methods is None:
             self.parameter_methods = {}
         if self.parameter_defaults is None:
@@ -87,13 +87,16 @@ class Reactor:
             self.explicit_parameters = set()
         if self.allow_relation_overrides is None:
             self.allow_relation_overrides = True
+        # Preserve the original explicit inputs for diagnostics.
         if not self.input_parameters:
             self.input_parameters = {
                 name: self.parameters.get(name)
                 for name in self.explicit_parameters
                 if name in self.parameters
             }
+        # Reset relation usage tracking on construction.
         self.relations_used = []
+        # Normalize metadata fields against allowed registries.
         self.reactor_family = normalize_allowed(
             self.reactor_family, self.ALLOWED_REACTOR_FAMILIES, field_name="reactor_family"
         )
@@ -111,6 +114,7 @@ class Reactor:
                 self.ALLOWED_CONFINEMENT_MODES,
                 field_name="confinement_mode",
             )
+        # Derive tags and exclusions for relation selection.
         rel_tol = REL_TOL_DEFAULT
         config_tags = configuration_tags(self.reactor_configuration)
         exclude_tags = set(config_exclude_tags(self.reactor_configuration))
@@ -120,13 +124,16 @@ class Reactor:
                     exclude_tags.add(mode)
         exclude_tags = tuple(sorted(exclude_tags))
 
+        # Parse the solve strategy to determine domain ordering.
         strategy, user_steps = parse_solve_strategy(self.solve_strategy)
 
         if strategy in ("default", "staged"):
+            # Apply relations in ordered domain stages.
             for groups in relation_domain_stages():
                 tagged = list(relations_with_tags(groups, require_all=False, exclude=exclude_tags))
                 self._apply_relations(tuple(tagged), rel_tol, config_tags=config_tags)
         elif strategy == "global":
+            # Apply all relations in a single pass.
             tagged = list(
                 relations_with_tags(ALLOWED_RELATION_DOMAINS, require_all=False, exclude=exclude_tags)
             )
@@ -137,6 +144,7 @@ class Reactor:
                     "solve_strategy set to 'user' but no steps were provided; use a list of domains or relation names"
                 )
 
+            # Map user steps to domains or explicit relation names.
             domain_lookup = {domain.lower(): domain for domain in ALLOWED_RELATION_DOMAINS}
             self._ensure_relation_modules_loaded()
             name_map: dict[str, list[tuple[tuple[str, ...], Relation]]] = {}
@@ -147,11 +155,13 @@ class Reactor:
                 step_text = step.strip()
                 if not step_text:
                     raise ValueError("solve_strategy steps must be non-empty strings")
+                # Domain steps apply all relations in that domain.
                 domain = domain_lookup.get(step_text.lower())
                 if domain:
                     tagged = list(relations_with_tags(domain, require_all=False, exclude=exclude_tags))
                     self._apply_relations(tuple(tagged), rel_tol, config_tags=config_tags)
                     continue
+                # Name steps apply a specific relation by name.
                 step_key = normalize_key(step_text)
                 matches = name_map.get(step_key)
                 if not matches:
@@ -179,9 +189,11 @@ class Reactor:
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Route unknown attributes into the parameter map."""
+        # Preserve dataclass fields and internal attributes.
         if name.startswith("_") or name in type(self).__dataclass_fields__:
             object.__setattr__(self, name, value)
             return
+        # Store dynamic attributes as parameters.
         params = self.__dict__.setdefault("parameters", {})
         params[name] = value
 
@@ -198,6 +210,7 @@ class Reactor:
         *,
         config_tags: tuple[str, ...],
     ) -> None:
+        # Choose relations based on parameter method overrides and tags.
         relations = select_relations(
             tagged_relations,
             parameter_methods=self.parameter_methods,
@@ -205,8 +218,10 @@ class Reactor:
             warn=warnings.warn,
         )
         if relations:
+            # Track which relations were applied for debugging/UX.
             selected = set(relations)
             self.relations_used.extend((tags, rel) for (tags, rel) in tagged_relations if rel in selected)
+        # Collect fallback relations only when explicit values are missing or symbolic.
         fallback_relations: list[Relation] = []
         if self.fallback_relations:
             base_outputs = {rel.variables[0] for rel in relations if rel.variables}
@@ -226,6 +241,7 @@ class Reactor:
 
         if fallback_relations:
             self.relations_used.extend((("fallback",), rel) for rel in fallback_relations)
+        # Apply selected relations plus any fallbacks.
         combined_relations = tuple(relations) + tuple(fallback_relations)
         if not combined_relations:
             return
@@ -240,6 +256,7 @@ class Reactor:
 
     def __repr__(self) -> str:
         """Return a column-style representation of metadata and parameters."""
+        # Flatten metadata and parameters into a stable, readable block.
         def text(value: object) -> str:
             return "" if value is None else str(value)
 
@@ -258,12 +275,14 @@ class Reactor:
         **plot_kwargs: Any,
     ):
         """Plot a reactor cross-section using a configuration-specific model."""
+        # Only tokamak-like configurations are supported for now.
         config = (self.reactor_configuration or "").lower()
         if "tokamak" not in config:
             raise NotImplementedError(
                 f"Cross-section plotting is not implemented for {self.reactor_configuration!r}"
             )
 
+        # Read geometry inputs with fallbacks for 95% values.
         major_radius = first_numeric(self.parameters, "R")
         minor_radius = first_numeric(self.parameters, "a")
         if major_radius is None or minor_radius is None:
@@ -285,6 +304,7 @@ class Reactor:
 
         import matplotlib.pyplot as plt
 
+        # Plot on the provided axes or create a new figure.
         if ax is None:
             _, ax = plt.subplots()
         if label is None:
@@ -301,6 +321,7 @@ class Reactor:
         if not relations:
             return {}
 
+        # Create a relation system for the selected relations.
         system = RelationSystem(
             relations,
             rel_tol=rel_tol,
@@ -310,6 +331,7 @@ class Reactor:
         explicit_params = self.explicit_parameters or set(self.parameters.keys())
         values: dict[str, float] = {}
 
+        # Seed explicit values from reactor inputs.
         for rel in relations:
             for var in rel.variables:
                 if var in seen_vars:
@@ -320,6 +342,7 @@ class Reactor:
                     if numeric is not None:
                         values[var] = numeric
 
+        # Seed defaults for parameters not explicitly set.
         for name, value in self.parameter_defaults.items():
             if name in explicit_params or name not in seen_vars or name in values:
                 continue
@@ -327,6 +350,7 @@ class Reactor:
             if numeric is not None:
                 values[name] = numeric
 
+        # Seed remaining known values as initial guesses.
         for name in seen_vars:
             if name in explicit_params or name in values:
                 continue
@@ -334,6 +358,7 @@ class Reactor:
             if numeric is not None:
                 values[name] = numeric
 
+        # Solve and write results back to the parameter map.
         explicit = {name for name in explicit_params if name in values}
         mode = "override_input" if self.allow_relation_overrides else "locked_input"
         values = system.solve(values, mode=mode, tol=rel_tol, explicit=explicit)
@@ -346,6 +371,7 @@ class Reactor:
     @classmethod
     def _ensure_relation_modules_loaded(cls) -> None:
         """Import relation modules once to register decorated relations."""
+        # Import relation modules only once per process.
         if cls._RELATIONS_IMPORTED:
             return
         for module_name in cls._RELATION_MODULES:
@@ -373,14 +399,17 @@ class Reactor:
 
         def decorator(func):
             """Wrap the function in a Relation and attach it to the class registry."""
+            # Resolve variable names and output.
             arg_names = tuple(variables) if variables is not None else tuple(inspect.signature(func).parameters.keys())
             output_name = output or func.__name__
             all_vars = (output_name, *arg_names)
             solve_targets = solve_for or all_vars
 
+            # Build the implicit relation expression output - f(inputs).
             arg_syms = [symbol(arg) for arg in arg_names]
             output_sym = symbol(output_name)
             expr = output_sym - func(*arg_syms)
+            # Normalize and attach any constraints.
             if constraints is None:
                 merged_constraints = []
             elif isinstance(constraints, (str, Relational)):
@@ -396,6 +425,7 @@ class Reactor:
                 initial_guesses=initial_guesses,
                 constraints=tuple(merged_constraints),
             )
+            # Register the relation for later selection.
             cls._RELATIONS.append((group_tuple, relation))
             setattr(func, "relation", relation)
             return func
@@ -411,10 +441,12 @@ class Reactor:
         exclude: tuple[str, ...] | None = None,
     ) -> tuple[tuple[tuple[str, ...], Relation], ...]:
         """Return relations with their tag tuples for filtering or diagnostics."""
+        # Load relation modules before searching.
         cls._ensure_relation_modules_loaded()
         requested = (groups,) if isinstance(groups, str) else tuple(groups)
         exclude_set = set(exclude or ())
 
+        # Filter relations by tags while avoiding duplicates.
         matches: list[tuple[tuple[str, ...], Relation]] = []
         seen: set[int] = set()
         for tags, rel in cls._RELATIONS:
