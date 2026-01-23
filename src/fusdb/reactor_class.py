@@ -73,6 +73,9 @@ class Reactor:
     relations_used: list[tuple[tuple[str, ...], Relation]] = field(
         default_factory=list, metadata={"section": "internal"}, repr=False  # Relations applied.
     )
+    _warnings_issued: set[str] = field(
+        default_factory=set, metadata={"section": "internal"}, repr=False  # Warnings issued to avoid duplicates.
+    )
 
     def __post_init__(self) -> None:
         """Normalize metadata and solve configured relations in stages."""
@@ -178,6 +181,14 @@ class Reactor:
             raise ValueError(
                 "solve_strategy must be 'default', 'global', or a list of domains/relation names"
             )
+        
+        # Final cleanup pass: re-solve all relations to pick up newly solvable systems
+        # (e.g., after apply_reactor_defaults set n_i, species densities become computable)
+        if strategy in ("default", "staged"):
+            all_relations = list(
+                relations_with_tags(ALLOWED_RELATION_DOMAINS, require_all=False, exclude=exclude_tags)
+            )
+            self._apply_relations(tuple(all_relations), rel_tol, config_tags=config_tags)
 
     def __getattr__(self, name: str) -> Any:
         """Expose parameters as attributes when present in the parameter map.
@@ -322,10 +333,12 @@ class Reactor:
             return {}
 
         # Create a relation system for the selected relations.
+        # Share warnings_issued set across all RelationSystem instances to deduplicate warnings
         system = RelationSystem(
             relations,
             rel_tol=rel_tol,
             warn=warnings.warn,
+            warnings_issued=self._warnings_issued,
         )
         seen_vars: set[str] = set()
         explicit_params = self.explicit_parameters or set(self.parameters.keys())

@@ -84,29 +84,14 @@ class RelationSystem:
         *,
         rel_tol: float = REL_TOL_DEFAULT,
         warn: WarnFunc = warnings.warn,
+        warnings_issued: set[str] | None = None,
     ) -> None:
         self.relations = tuple(relations)
         self.rel_tol = rel_tol
         self.warn_sink = warn
         self._solve_cache: dict[tuple[int, str], list[tuple[tuple[str, ...], Callable[..., object] | None, sp.Expr]]] = {}
-
-        # Build the relation-variable incidence graph once for component solving.
-        graph = nx.Graph()
-        for rel in self.relations:
-            graph.add_node(rel, bipartite=0)
-            for name in rel.variables:
-                graph.add_node(name, bipartite=1)
-                graph.add_edge(rel, name)
-
-        components: list[tuple[list[Relation], list[str]]] = []
-        for comp in nx.connected_components(graph):
-            rels = [node for node in comp if isinstance(node, Relation)]
-            if not rels:
-                continue
-            vars_ = [node for node in comp if isinstance(node, str)]
-            # Keep a stable order for deterministic solving.
-            components.append((sorted(rels, key=lambda r: r.name), sorted(vars_)))
-        self._components = components
+        # Use external warnings set if provided, otherwise create new one
+        self._warnings_issued: set[str] = warnings_issued if warnings_issued is not None else set()
 
     def solve(
         self,
@@ -117,13 +102,13 @@ class RelationSystem:
         max_iter: int = 50,
         explicit: set[str] | None = None,
     ) -> dict[str, float]:
-        """Solve the system using provided values as inputs/guesses.
+        """Solve system iteratively: exhaust 1×1, then 2×2, then 3×3, etc.
 
         Args:
             values: Initial numeric values (explicit inputs and/or seeds).
             mode: "override_input" to allow overrides, "locked_input" to lock explicit inputs.
             tol: Global relative tolerance; defaults to system rel_tol.
-            max_iter: Iteration cap for fills/repairs and numeric solve budget.
+            max_iter: Iteration cap for numeric solve budget.
             explicit: Subset of keys in values treated as explicit inputs.
         """
         # Normalize inputs and explicit set.
@@ -137,22 +122,32 @@ class RelationSystem:
         override_input = mode == "override_input"
         tol_use = self.rel_tol if tol is None else float(tol)
         locked = set() if override_input else explicit_set
+        
+        # Note: Do NOT clear _warnings_issued here - we want warnings to be deduplicated
+        # across multiple solve() calls on the same RelationSystem instance
 
-        # Pass 1: fill single-unknown relations and solve DM blocks on missing-only vars.
-        for rels, vars_ in self._components:
-            self._solve_component(rels, vars_, values_num, locked, max_iter, free_all=False)
+        # Pass 1: Solve with explicit inputs locked
+        # Dynamically identify solvable relations based on current known values
+        all_vars = set()
+        for rel in self.relations:
+            all_vars.update(rel.variables)
+        
+        # Temporarily suppress warnings during Pass 1 (we'll try Pass 2 if this fails)
+        warnings_backup = self._warnings_issued.copy()
+        suppress_warnings = override_input
+        
+        self._solve_iterative(list(self.relations), sorted(all_vars), values_num, locked, max_iter, suppress_warnings=suppress_warnings)
 
-        # Pass 2 (override_input): allow moving known values to satisfy relations.
-        if override_input and self._validate(values_num, tol_use):
-            for rels, vars_ in self._components:
-                self._solve_component(rels, vars_, values_num, set(), max_iter, free_all=True)
-
-        # Optional repair loop to satisfy violated relations by solving one variable.
+        # Pass 2 (override_input): Allow adjusting any value to satisfy relations
         if override_input:
-            self._repair_violations(values_num, tol_use, max_iter)
+            violations_pass1 = self._validate(values_num, tol_use, explicit_set)
+            if violations_pass1:
+                # Pass 1 failed, try Pass 2 without clearing warnings
+                # (we keep the warnings set to avoid duplicates in final validation)
+                self._solve_iterative(list(self.relations), sorted(all_vars), values_num, set(), max_iter, suppress_warnings=False)
 
         # Final validation / error reporting.
-        violations = self._validate(values_num, tol_use)
+        violations = self._validate(values_num, tol_use, explicit_set)
         if violations:
             if not override_input:
                 lines = ["Unable to satisfy relations with locked reactor inputs:"]
@@ -165,9 +160,12 @@ class RelationSystem:
                     else:
                         lines.append("  explicit inputs: none")
                 raise ValueError("\n".join(lines))
+            # Issue warnings for violations, but with deduplication
             for rel, detail in violations:
-                msg = f"{rel.name} violates relation ({detail})"
-                self.warn_sink(msg, UserWarning)
+                msg = detail
+                if msg not in self._warnings_issued:
+                    self._warnings_issued.add(msg)
+                    self.warn_sink(msg, UserWarning)
 
         if override_input:
             # Warn about explicit inputs that were overridden beyond tolerance.
@@ -186,61 +184,291 @@ class RelationSystem:
 
         return values_num
 
-    def _candidate_for_target(
+    def _solve_for_any_target(
         self,
         rel: Relation,
         target: str,
         values: Mapping[str, float],
+        suppress_warnings: bool = False,
     ) -> float | None:
-        # Prefer cached symbolic solve plans when available.
-        plan = self._solve_plan_for(rel, target)
-        candidates: list[float] = []
-
-        # Evaluate all viable expressions for the target and pick a candidate.
-        for arg_names, fn, expr in plan:
-            if any(name not in values for name in arg_names):
+        """Solve relation for target bidirectionally (ignoring solve_for restrictions)."""
+        # Try symbolic solve first
+        target_sym = symbol(target)
+        known_subs = {symbol(v): sp.Float(values[v]) for v in rel.variables if v != target and v in values}
+        expr = rel.expr.subs(known_subs)
+        
+        # If expression is already in target only, solve it
+        if expr.free_symbols == {target_sym} or not expr.free_symbols:
+            try:
+                solutions = sp.solve(expr, target_sym)
+                if not isinstance(solutions, list):
+                    solutions = [solutions]
+                
+                for sol in solutions:
+                    if not sol.free_symbols:  # Fully evaluated
+                        numeric = numeric_value(sol)
+                        
+                        if numeric is not None and math.isfinite(numeric):
+                            # Validate constraints
+                            test = dict(values)
+                            test[target] = numeric
+                            if not constraints_ok(rel.constraints_compiled, test, focus_names={target}):
+                                # Warn about constraint violation
+                                if not suppress_warnings:
+                                    failed_constraints = []
+                                    for names, fn, constraint in rel.constraints_compiled:
+                                        if target in names:
+                                            try:
+                                                result = fn(*[test.get(n, 0) for n in names]) if fn else None
+                                                if result is False or (isinstance(result, bool) and not result):
+                                                    failed_constraints.append(str(constraint))
+                                            except Exception:
+                                                pass
+                                    
+                                    if failed_constraints:
+                                        constraints_str = ", ".join(failed_constraints)
+                                        # Identify input variables that caused this
+                                        input_vars = [v for v in rel.variables if v != target and v in values]
+                                        if input_vars:
+                                            inputs_str = ", ".join(f"{v}={values[v]:.4g}" for v in input_vars)
+                                            msg = (
+                                                f"{rel.name}: cannot solve for {target} = {numeric:.4g} from inputs ({inputs_str}) "
+                                                f"(violates constraints: {constraints_str})"
+                                            )
+                                        else:
+                                            msg = (
+                                                f"{rel.name}: cannot solve for {target} = {numeric:.4g} "
+                                                f"(violates constraints: {constraints_str})"
+                                            )
+                                        if msg not in self._warnings_issued:
+                                            self._warnings_issued.add(msg)
+                                            self.warn_sink(msg, UserWarning)
+                                continue
+                            
+                            # Prefer positive solutions
+                            if numeric > 0:
+                                return numeric
+            except Exception:
+                pass
+        
+        # Fallback: numeric rootfinding with constraint-guided initial guesses
+        def residual_fn(x):
+            test = dict(values)
+            test[target] = x[0]
+            res = relation_residual(test, rel.variables, rel.residual_fn, rel.expr)
+            return [res if res is not None else 1e10]
+        
+        from scipy.optimize import root
+        
+        # Extract constraint bounds for the target variable to guide initial guesses
+        lower_bound, upper_bound = -1e10, 1e10
+        for names, fn, constraint in rel.constraints_compiled:
+            if target in names and len(names) == 1:
+                # Simple single-variable constraint like "x <= 1" or "x >= 0"
+                constraint_str = str(constraint)
+                if '<=' in constraint_str:
+                    parts = constraint_str.split('<=')
+                    if len(parts) == 2:
+                        try:
+                            if target in parts[0]:
+                                upper_bound = min(upper_bound, float(parts[1].strip()))
+                            else:
+                                lower_bound = max(lower_bound, float(parts[0].strip()))
+                        except ValueError:
+                            pass
+                elif '>=' in constraint_str:
+                    parts = constraint_str.split('>=')
+                    if len(parts) == 2:
+                        try:
+                            if target in parts[0]:
+                                lower_bound = max(lower_bound, float(parts[1].strip()))
+                            else:
+                                upper_bound = min(upper_bound, float(parts[0].strip()))
+                        except ValueError:
+                            pass
+        
+        # Build initial guesses, using constraint bounds when available
+        guesses = self._build_guesses([rel], [target], values)
+        guess_list = [guesses[0]]
+        
+        # Add constraint-guided guesses
+        if math.isfinite(lower_bound) and math.isfinite(upper_bound):
+            # Use midpoint and quartiles if we have bounds
+            guess_list.extend([
+                (lower_bound + upper_bound) / 2,
+                lower_bound + (upper_bound - lower_bound) * 0.25,
+                lower_bound + (upper_bound - lower_bound) * 0.75,
+            ])
+        elif math.isfinite(lower_bound):
+            guess_list.extend([lower_bound + 1, lower_bound + 10])
+        elif math.isfinite(upper_bound):
+            guess_list.extend([upper_bound - 1, upper_bound - 10])
+        else:
+            # No constraint bounds, use generic guesses
+            guess_list.extend([1.0, 0.1, 10.0, 100.0])
+        
+        # Try guesses in order
+        for guess_val in guess_list:
+            if not math.isfinite(guess_val):
                 continue
-            args = [values[name] for name in arg_names]
-            numeric = None
-            if fn is not None:
-                try:
-                    numeric = float(fn(*args))
-                except Exception:
-                    numeric = None
-            if numeric is None:
-                subs = {symbol(name): sp.Float(values[name]) for name in arg_names}
-                numeric = numeric_value(expr.subs(subs))
-            if numeric is None or not math.isfinite(numeric):
-                continue
-            test_values = dict(values)
-            test_values[target] = float(numeric)
-            if not constraints_ok(rel.constraints_compiled, test_values, focus_names={target}):
-                continue
-            candidates.append(float(numeric))
+            result = root(residual_fn, [guess_val], method='hybr')
+            if result.success:
+                numeric = float(result.x[0])
+                if math.isfinite(numeric):
+                    test = dict(values)
+                    test[target] = numeric
+                    if constraints_ok(rel.constraints_compiled, test, focus_names={target}):
+                        return numeric
+        
+        return None
 
-        # Fallback: numeric solve for single-unknown relations with no symbolic plan.
-        if not candidates:
-            target_sym = symbol(target)
-            subs = {
-                symbol(name): sp.Float(values[name])
-                for name in rel.variables
-                if name != target and name in values
-            }
-            expr = rel.expr.subs(subs)
-            if expr.free_symbols == {target_sym}:
-                guesses = self._build_guesses((rel,), (target,), values)
-                solved = solve_numeric_system([expr], [target_sym], guesses, max_iter=50)
-                if solved:
-                    numeric = float(solved[0])
-                    if math.isfinite(numeric):
-                        test_values = dict(values)
-                        test_values[target] = numeric
-                        if constraints_ok(rel.constraints_compiled, test_values, focus_names={target}):
-                            candidates.append(numeric)
-
-        if not candidates:
-            return None
-        return next((value for value in candidates if value > 0), candidates[0])
+    def _solve_iterative(
+        self,
+        rels: Sequence[Relation],
+        vars_: Sequence[str],
+        values: dict[str, float],
+        locked: set[str],
+        max_iter: int,
+        suppress_warnings: bool = False,
+    ) -> None:
+        """Iteratively solve n×n subsystems: 1×1 until exhausted, then 2×2, then 3×3, etc.
+        After any progress at size>1, restart from 1×1.
+        """
+        max_size = 7
+        
+        for outer_iter in range(max_iter):
+            made_progress = False
+            
+            # Try each size level
+            for size in range(1, max_size + 1):
+                # Keep solving systems of this size until no more progress
+                while True:
+                    size_progress = self._solve_all_of_size(rels, vars_, values, locked, size, max_iter, suppress_warnings)
+                    if not size_progress:
+                        break
+                    made_progress = True
+                    
+                    # If we made progress and size > 1, restart from 1×1
+                    # (solving larger systems may have unlocked new 1×1 systems)
+                    if size > 1:
+                        break
+                
+                # If we solved any size>1 systems, restart from 1×1
+                if made_progress and size > 1:
+                    break
+            
+            # If no progress at any size level, we're done
+            if not made_progress:
+                break
+    
+    def _solve_all_of_size(
+        self,
+        rels: Sequence[Relation],
+        vars_: Sequence[str],
+        values: dict[str, float],
+        locked: set[str],
+        size: int,
+        max_iter: int,
+        suppress_warnings: bool = False,
+    ) -> bool:
+        """Find and solve all size×size subsystems. Returns True if any progress made."""
+        # Find all unknowns for each relation
+        rel_unknowns: dict[Relation, list[str]] = {}
+        for rel in rels:
+            unknowns = [v for v in rel.variables if v in vars_ and v not in values and v not in locked]
+            if unknowns:
+                rel_unknowns[rel] = unknowns
+        
+        if not rel_unknowns:
+            return False
+        
+        # For 1×1 systems: find relations with exactly 1 unknown and solve them
+        if size == 1:
+            made_progress = False
+            for rel, unknowns in rel_unknowns.items():
+                if len(unknowns) == 1:
+                    target = unknowns[0]
+                    result = self._solve_for_any_target(rel, target, values, suppress_warnings)
+                    if result is not None and math.isfinite(result):
+                        values[target] = result
+                        made_progress = True
+            return made_progress
+        
+        # For size > 1: find ALL square subsystems (n relations, n unknowns)
+        # Key insight: unknowns can appear in OTHER relations too - we don't require "closure"
+        # Strategy: enumerate all n-relation subsets, check if they have exactly n combined unknowns
+        
+        made_progress = False
+        all_rels = list(rel_unknowns.keys())
+        
+        # For small sizes, enumerate all combinations; for large sizes, use heuristics
+        if size <= 3 and len(all_rels) <= 20:
+            # Enumerate all n-relation combinations
+            from itertools import combinations
+            for rel_subset in combinations(all_rels, size):
+                # Get all unknowns in this subset
+                subset_unknowns = set()
+                for rel in rel_subset:
+                    subset_unknowns.update(rel_unknowns[rel])
+                
+                # Check if square: exactly n unknowns
+                if len(subset_unknowns) == size:
+                    # Solve this subsystem numerically
+                    if self._solve_numeric_system(list(rel_subset), values, locked, max_iter):
+                        made_progress = True
+        else:
+            # For larger sizes or many relations, fall back to connected components
+            # (This is the old approach - still useful for large systems)
+            graph = nx.Graph()
+            for rel, unknowns in rel_unknowns.items():
+                graph.add_node(rel, bipartite=0)
+                for var in unknowns:
+                    graph.add_node(var, bipartite=1)
+                    graph.add_edge(rel, var)
+            
+            for component in nx.connected_components(graph):
+                comp_rels = [n for n in component if isinstance(n, Relation)]
+                comp_vars = [n for n in component if isinstance(n, str)]
+                
+                if len(comp_rels) == size and len(comp_vars) == size:
+                    # Try to solve this subsystem (even if not "closed")
+                    if self._solve_numeric_system(comp_rels, values, locked, max_iter):
+                        made_progress = True
+        
+        return made_progress
+    
+    def _solve_numeric_system(
+        self,
+        rels: list[Relation],
+        values: dict[str, float],
+        locked: set[str],
+        max_iter: int,
+    ) -> bool:
+        """Solve system numerically using scipy.optimize. Returns True if solved."""
+        # Collect unknowns
+        unknowns = []
+        for rel in rels:
+            for var in rel.variables:
+                if var not in values and var not in locked and var not in unknowns:
+                    unknowns.append(var)
+        
+        if not unknowns:
+            return False
+        
+        # For 1×1, try solving for the single unknown using bidirectional solving
+        if len(unknowns) == 1 and len(rels) == 1:
+            var = unknowns[0]
+            rel = rels[0]
+            candidate = self._solve_for_any_target(rel, var, values)
+            if candidate is not None:
+                values[var] = candidate
+                return True
+            return False
+        
+        # For larger systems, use block solver
+        self._solve_block(rels, unknowns, values, max_iter)
+        # Check if all variables were solved
+        return all(v in values for v in unknowns)
 
     def _solve_plan_for(
         self, rel: Relation, target: str
@@ -284,140 +512,6 @@ class RelationSystem:
             plan.append((arg_names, fn, expr))
         self._solve_cache[key] = plan
         return plan
-
-    def _solve_component(
-        self,
-        rels: Sequence[Relation],
-        vars_: Sequence[str],
-        values: dict[str, float],
-        locked: set[str],
-        max_iter: int,
-        *,
-        free_all: bool,
-    ) -> None:
-        # Inline single-unknown propagation within the component.
-        for _ in range(max_iter):
-            updated = False
-            for rel in rels:
-                # Only solve relations with exactly one missing value.
-                missing = [name for name in rel.variables if name not in values]
-                if len(missing) != 1:
-                    continue
-                target = missing[0]
-                if target in locked:
-                    continue
-                if target not in rel.solve_targets:
-                    continue
-                # Compute a candidate for the missing variable.
-                candidate = self._candidate_for_target(rel, target, values)
-                if candidate is None:
-                    continue
-                if update_value(values, target, candidate, eps=_EPS):
-                    updated = True
-            if not updated:
-                break
-
-        if free_all:
-            free_vars = set(vars_) - locked
-        else:
-            free_vars = {name for name in vars_ if name not in values and name not in locked}
-        if not free_vars:
-            return
-        # Build relation -> unknown variables mapping for DM decomposition.
-        rel_unknowns: dict[Relation, tuple[str, ...]] = {}
-        for rel in rels:
-            unknowns = tuple(
-                name
-                for name in rel.variables
-                if name in free_vars and name in rel.solve_targets
-            )
-            if unknowns:
-                rel_unknowns[rel] = unknowns
-        if not rel_unknowns:
-            return
-
-        # Solve DM blocks in order, updating values as each block is resolved.
-        for block_rels, block_vars in self._dm_blocks(rel_unknowns, free_vars):
-            self._solve_block(block_rels, block_vars, values, max_iter)
-
-    def _dm_blocks(
-        self,
-        rel_unknowns: Mapping[Relation, tuple[str, ...]],
-        free_vars: set[str],
-    ) -> list[tuple[list[Relation], list[str]]]:
-        edges = [(rel, name) for rel, names in rel_unknowns.items() for name in names]
-        if not edges:
-            return []
-
-        # Build incidence graph and compute maximum matching.
-        rels = list(rel_unknowns.keys())
-        graph = nx.Graph()
-        graph.add_nodes_from(rels, bipartite=0)
-        graph.add_nodes_from(free_vars, bipartite=1)
-        graph.add_edges_from(edges)
-
-        matching = nx.algorithms.bipartite.maximum_matching(graph, top_nodes=set(rels))
-
-        # Orient edges: matched var->rel, unmatched rel->var (DM convention).
-        directed = nx.DiGraph()
-        directed.add_nodes_from(graph.nodes())
-        for rel, name in edges:
-            matched = matching.get(rel) == name or matching.get(name) == rel
-            directed.add_edge(name, rel) if matched else directed.add_edge(rel, name)
-
-        unmatched_rels = [rel for rel in rels if rel not in matching]
-        unmatched_vars = [name for name in free_vars if name not in matching]
-
-        over = set()
-        for rel in unmatched_rels:
-            over.add(rel)
-            over.update(nx.descendants(directed, rel))
-
-        under = set()
-        for name in unmatched_vars:
-            under.add(name)
-            under.update(nx.descendants(directed, name))
-
-        # Retain only well-determined nodes, then order SCC blocks topologically.
-        well_nodes = set(directed.nodes()) - over - under
-        if not well_nodes:
-            return []
-
-        subgraph = directed.subgraph(well_nodes).copy()
-        sccs = list(nx.strongly_connected_components(subgraph))
-        condensed = nx.condensation(subgraph, sccs)
-
-        def block_label(idx: int) -> tuple[str, ...]:
-            members = condensed.nodes[idx]["members"]
-            labels = []
-            for node in members:
-                if isinstance(node, Relation):
-                    labels.append(f"R:{node.name}")
-                else:
-                    labels.append(f"V:{node}")
-            return tuple(sorted(labels))
-
-        blocks: list[tuple[list[Relation], list[str]]] = []
-        for idx in nx.lexicographical_topological_sort(condensed, key=block_label):
-            members = condensed.nodes[idx]["members"]
-            block_rels = sorted(
-                [node for node in members if isinstance(node, Relation)],
-                key=lambda r: r.name,
-            )
-            block_vars = sorted([node for node in members if isinstance(node, str)])
-            if not block_rels or not block_vars:
-                continue
-            # Skip underdetermined blocks and ones that depend on outside vars.
-            if len(block_rels) < len(block_vars):
-                continue
-            block_var_set = set(block_vars)
-            if any(
-                not set(rel_unknowns.get(rel, ())).issubset(block_var_set)
-                for rel in block_rels
-            ):
-                continue
-            blocks.append((block_rels, block_vars))
-        return blocks
 
     def _solve_block(
         self,
@@ -539,47 +633,20 @@ class RelationSystem:
         # Fill remaining unknowns with a neutral default.
         return [guess_values.get(name, 1.0) for name in unknowns]
 
-    def _repair_violations(
-        self,
-        values: dict[str, float],
-        tol: float,
-        max_iter: int,
-    ) -> None:
-        # Iterate until no relation can be repaired via a single-variable update.
-        for _ in range(max_iter):
-            updated = False
-            for rel in self.relations:
-                # Only consider relations that are fully specified.
-                if any(name not in values for name in rel.variables):
-                    continue
-                residual = relation_residual(values, rel.variables, rel.residual_fn, rel.expr)
-                if residual is None:
-                    continue
-                rel_tol = rel.rel_tol if rel.rel_tol is not None else tol
-                scale = max(max(abs(values[name]) for name in rel.variables), 1.0)
-                if abs(residual) <= rel_tol * scale:
-                    continue
-                target = rel.solve_targets[0]
-                # Solve a single variable to reduce residual.
-                candidate = self._candidate_for_target(rel, target, values)
-                if candidate is None:
-                    continue
-                if update_value(values, target, candidate, eps=_EPS):
-                    updated = True
-            if not updated:
-                break
-
     def _validate(
         self,
         values: Mapping[str, float],
         tol: float,
+        explicit: set[str] | None = None,
     ) -> list[tuple[Relation, str]]:
         violations: list[tuple[Relation, str]] = []
+        explicit_set = explicit or set()
+        
         for rel in self.relations:
-            # Check for missing values before residual evaluation.
+            # Check for missing values - skip validation if any missing
+            # (missing values are expected and not errors)
             missing = [name for name in rel.variables if name not in values]
             if missing:
-                violations.append((rel, f"missing values for: {', '.join(missing)}"))
                 continue
             # Residual + constraint validation with scaled tolerance.
             residual = relation_residual(values, rel.variables, rel.residual_fn, rel.expr)
@@ -587,13 +654,77 @@ class RelationSystem:
             scale = max(max(abs(values[name]) for name in rel.variables), 1.0)
             constraint_ok = constraints_ok(rel.constraints_compiled, values)
             if residual is None or abs(residual) > rel_tol * scale or not constraint_ok:
-                detail_parts = []
-                if residual is None:
-                    detail_parts.append("residual unavailable")
-                else:
-                    detail_parts.append(f"residual={residual}")
-                    detail_parts.append(f"tol={rel_tol * scale}")
-                if not constraint_ok:
-                    detail_parts.append("constraints violated")
-                violations.append((rel, ", ".join(detail_parts)))
+                # Generate detailed error message
+                msg = self._format_violation_message(rel, values, residual, rel_tol * scale, constraint_ok, explicit_set)
+                violations.append((rel, msg))
         return violations
+    
+    def _format_violation_message(
+        self,
+        rel: Relation,
+        values: Mapping[str, float],
+        residual: float | None,
+        tol: float,
+        constraint_ok: bool,
+        explicit_set: set[str],
+    ) -> str:
+        """Format a detailed violation message showing which variable is inconsistent."""
+        # Lazy import to avoid circular dependency
+        from fusdb.reactor_util import ALLOWED_VARIABLES
+        
+        # Find the explicit (input) variable(s) in this relation
+        explicit_vars = [name for name in rel.variables if name in explicit_set]
+        
+        if not explicit_vars:
+            # No explicit inputs - show relation name and basic diagnostic
+            if residual is None:
+                return f"{rel.name}: residual unavailable"
+            elif not constraint_ok:
+                return f"{rel.name}: constraints violated (residual={residual:.3e}, tol={tol:.3e})"
+            else:
+                return f"{rel.name}: residual={residual:.3e} exceeds tolerance {tol:.3e}"
+        
+        # Focus on the first explicit variable as the "inconsistent" one
+        inconsistent_var = explicit_vars[0]
+        input_value = values[inconsistent_var]
+        
+        # Get unit from registry
+        var_meta = ALLOWED_VARIABLES.get(inconsistent_var, {})
+        unit = var_meta.get("default_unit", "dimensionless")
+        
+        # Try to compute what the value should be by solving for this variable
+        computed_value = None
+        try:
+            # Create a copy without the inconsistent variable
+            test_values = {k: v for k, v in values.items() if k != inconsistent_var}
+            # Try to solve for the inconsistent variable
+            target_sym = symbol(inconsistent_var)
+            known_subs = {symbol(v): sp.Float(test_values[v]) for v in rel.variables if v != inconsistent_var and v in test_values}
+            expr = rel.expr.subs(known_subs)
+            if expr.free_symbols == {target_sym}:
+                solutions = sp.solve(expr, target_sym)
+                if solutions:
+                    if isinstance(solutions, list):
+                        sol = solutions[0]
+                    else:
+                        sol = solutions
+                    if not sol.free_symbols:
+                        computed_value = float(sol.evalf())
+        except Exception:
+            pass
+        
+        # Format message
+        if residual is None:
+            # Can't format without residual
+            return f"{inconsistent_var} is inconsistent for {rel.name} relation (residual unavailable)"
+        
+        if computed_value is not None:
+            msg = f"{inconsistent_var} is inconsistent for {rel.name} relation. input: {input_value:.3e} {unit}, got: {computed_value:.3e} {unit}, residual: {residual:.3e} {unit}"
+        else:
+            # Fallback if we can't compute expected value
+            msg = f"{inconsistent_var} is inconsistent for {rel.name} relation. input: {input_value:.3e} {unit}, residual: {residual:.3e} {unit}, tol: {tol:.3e} {unit}"
+        
+        if not constraint_ok:
+            msg += " (constraints violated)"
+        
+        return msg

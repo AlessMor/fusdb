@@ -153,7 +153,12 @@ def load_reactor_yaml(path: Path | str) -> Reactor:
     kwargs["explicit_parameters"] = explicit_parameters
     kwargs["root_dir"] = path.parent
 
-    return Reactor(**kwargs)
+    reactor = Reactor(**kwargs)
+    
+    # Note: Validation of explicit parameters is already handled by RelationSystem.solve()
+    # with proper deduplication, so no additional validation is needed here.
+    
+    return reactor
 
 
 def find_reactor_dirs(root: Path, reactor_folder: str = "reactors") -> list[Path]:
