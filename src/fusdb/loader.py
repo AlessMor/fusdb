@@ -155,6 +155,9 @@ def load_reactor_yaml(path: Path | str) -> Reactor:
 
     reactor = Reactor(**kwargs)
     
+    # Note: Validation of explicit parameters is already handled by RelationSystem.solve()
+    # with proper deduplication, so no additional validation is needed here.
+    
     return reactor
 
 

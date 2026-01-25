@@ -38,45 +38,6 @@ from fusdb.relations.power_balance.fusion_power.reactivity_functions import (
     sigmav_TT,
 )
 
-
-@Reactor.relation(
-    "fusion_power",
-    name="Total fusion power from reaction rates",
-    output="P_fus",
-    constraints=("n_i > 0", "V_p > 0", "T_avg > 0"),
-    initial_guesses={
-        "n_i": lambda v: 1e20,  # Typical tokamak density
-    },
-)
-def fusion_power_from_reaction_rates(
-    f_D: float, f_T: float, f_He3: float, n_i: float, T_avg: float, V_p: float
-) -> float:
-    """Return total fusion power directly from plasma parameters.
-    
-    Combines all reaction channels (DT, DD, DHe3, TT) into a single relation:
-    P_fus = sum of (Rr_i * E_i) for all reaction channels
-    
-    This provides a direct path to solve for n_i from P_fus, bypassing 
-    intermediate variables like P_fus_DT, P_fus_DT_alpha, etc.
-    """
-    
-    Rr_DT = f_D * f_T * (n_i ** 2) * V_p * sigmav_DT_BoschHale(T_avg)
-    P_DT = Rr_DT * (DT_ALPHA_ENERGY_J + DT_N_ENERGY_J)
-    
-    _, sigmav_DDn, sigmav_DDp = sigmav_DD_BoschHale(T_avg)
-    Rr_DDn = 0.5 * (f_D ** 2) * (n_i ** 2) * sigmav_DDn * V_p
-    Rr_DDp = 0.5 * (f_D ** 2) * (n_i ** 2) * sigmav_DDp * V_p
-    P_DD = Rr_DDn * (DD_HE3_ENERGY_J + DD_N_ENERGY_J) + Rr_DDp * (DD_P_ENERGY_J + DD_T_ENERGY_J)
-    
-    Rr_DHe3 = f_D * f_He3 * (n_i ** 2) * sigmav_DHe3_BoschHale(T_avg) * V_p
-    P_DHe3 = Rr_DHe3 * (DHE3_ALPHA_ENERGY_J + DHE3_P_ENERGY_J)
-    
-    Rr_TT = 0.5 * (f_T ** 2) * (n_i ** 2) * sigmav_TT(T_avg) * V_p
-    P_TT = Rr_TT * TT_REACTION_ENERGY_J
-    
-    return P_DT + P_DD + P_DHe3 + P_TT
-
-
 @Reactor.relation(
     "fusion_power",
     name="Total fusion power",
