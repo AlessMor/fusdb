@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import sympy as sp
+
 from fusdb.reactor_class import Reactor
+from fusdb.registry.constants import KEV_TO_J
 from fusdb.relations.power_balance.fusion_power.reactivity_functions import (
     sigmav_DD_BoschHale,
     sigmav_DHe3_BoschHale,

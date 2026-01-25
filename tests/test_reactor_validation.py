@@ -355,3 +355,117 @@ def test_tokamak_volume_inconsistency_warns_and_updates_explicit(tmp_path: Path)
 
     expected_V = float(plasma_volume(1.2, 4.0, 1.6, 1.5 * 0.2, 0.0))
     assert math.isclose(float(reactor.V_p), expected_V, rel_tol=1e-6)
+
+
+class TestDefaults:
+    """Tests for default values set in reactor_defaults.py."""
+
+    def test_T_e_from_T_avg(self, tmp_path: Path) -> None:
+        """T_e should be set from T_avg when not provided."""
+        reactor_dir = tmp_path / "reactors" / "T_E_TEST"
+        reactor_dir.mkdir(parents=True)
+        path = reactor_dir / "reactor.yaml"
+        path.write_text(
+            "\n".join(
+                [
+                    'id: "T_E_TEST"',
+                    'name: "Temperature default test"',
+                    'reactor_configuration: "tokamak"',
+                    'organization: "Test Lab"',
+                    "",
+                    "T_avg: 15.0",
+                ]
+            )
+        )
+        reactor = load_reactor_yaml(path)
+        assert reactor.T_avg == 15.0
+        assert reactor.T_e == 15.0
+
+    def test_T_i_from_T_avg(self, tmp_path: Path) -> None:
+        """T_i should be set from T_avg when not provided."""
+        reactor_dir = tmp_path / "reactors" / "T_I_TEST"
+        reactor_dir.mkdir(parents=True)
+        path = reactor_dir / "reactor.yaml"
+        path.write_text(
+            "\n".join(
+                [
+                    'id: "T_I_TEST"',
+                    'name: "Temperature default test"',
+                    'reactor_configuration: "tokamak"',
+                    'organization: "Test Lab"',
+                    "",
+                    "T_avg: 12.0",
+                ]
+            )
+        )
+        reactor = load_reactor_yaml(path)
+        assert reactor.T_avg == 12.0
+        assert reactor.T_i == 12.0
+
+    def test_n_la_from_n_avg(self, tmp_path: Path) -> None:
+        """n_la should be set from n_avg when not provided."""
+        reactor_dir = tmp_path / "reactors" / "N_LA_TEST"
+        reactor_dir.mkdir(parents=True)
+        path = reactor_dir / "reactor.yaml"
+        path.write_text(
+            "\n".join(
+                [
+                    'id: "N_LA_TEST"',
+                    'name: "Density default test"',
+                    'reactor_configuration: "tokamak"',
+                    'organization: "Test Lab"',
+                    "",
+                    "n_avg: 1.0e20",
+                ]
+            )
+        )
+        reactor = load_reactor_yaml(path)
+        assert reactor.n_avg == 1.0e20
+        assert reactor.n_la == 1.0e20
+
+    def test_explicit_T_e_preserved(self, tmp_path: Path) -> None:
+        """Explicit T_e should not be overwritten by default."""
+        reactor_dir = tmp_path / "reactors" / "T_E_EXPLICIT_TEST"
+        reactor_dir.mkdir(parents=True)
+        path = reactor_dir / "reactor.yaml"
+        path.write_text(
+            "\n".join(
+                [
+                    'id: "T_E_EXPLICIT_TEST"',
+                    'name: "Temperature explicit test"',
+                    'reactor_configuration: "tokamak"',
+                    'organization: "Test Lab"',
+                    "",
+                    "T_avg: 15.0",
+                    "T_e: 18.0",
+                ]
+            )
+        )
+        reactor = load_reactor_yaml(path)
+        assert reactor.T_avg == 15.0
+        assert reactor.T_e == 18.0
+        assert reactor.T_i == 15.0
+
+    def test_default_fractions(self, tmp_path: Path) -> None:
+        """Default fractions should be 50-50 D-T."""
+        reactor_dir = tmp_path / "reactors" / "FRAC_TEST"
+        reactor_dir.mkdir(parents=True)
+        path = reactor_dir / "reactor.yaml"
+        path.write_text(
+            "\n".join(
+                [
+                    'id: "FRAC_TEST"',
+                    'name: "Fraction default test"',
+                    'reactor_configuration: "tokamak"',
+                    'organization: "Test Lab"',
+                    "",
+                    "R: 5.0",
+                ]
+            )
+        )
+        reactor = load_reactor_yaml(path)
+        assert reactor.f_D == 0.5
+        assert reactor.f_T == 0.5
+        assert reactor.f_He3 == 0.0
+        assert reactor.f_He4 == 0.0
+

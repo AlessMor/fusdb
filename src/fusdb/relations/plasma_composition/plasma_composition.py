@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fusdb.reactor_class import Reactor
 
-
+# NOTE: n_e = n_avg usually, but it could be specified n_e_avg and n_i_avg
 @Reactor.relation(
     "plasma",
     name="Electron density from volume-averaged density",

@@ -18,7 +18,7 @@ def total_plasma_heating(P_ohmic: float, P_charged: float, P_aux: float) -> floa
 @Reactor.relation(
     "power_balance",
     name="Loss power to SOL and core radiation",
-    output="P_loss_explicit",
+    output="P_loss",
 )
 def loss_power_to_exhaust(P_sep: float, P_rad: float) -> float:
     """Return loss power as the sum of separatrix power and core radiation."""

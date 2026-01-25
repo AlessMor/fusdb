@@ -1,9 +1,33 @@
-"""Solver for steady-state plasma composition."""
+"""
+Steady-state plasma composition solver.
+
+Computes consistent ion density fractions (f_D, f_T, f_He3, f_He4)
+accounting for fusion reaction rates and particle confinement times.
+
+INPUT PARAMETERS:
+    n_i     : Total ion density [m^-3]
+    T_avg   : Volume-averaged temperature [keV]
+    f_D     : Deuterium fraction (initial guess)
+    f_T     : Tritium fraction (initial guess)
+    f_He3   : Helium-3 fraction (initial or 0)
+    f_He4   : Helium-4 fraction (initial or 0)
+    tau_p   : Global particle confinement time [s]
+
+OUTPUT PARAMETERS:
+    f_D, f_T, f_He3, f_He4 : Steady-state fractions accounting for ash
+
+BEHAVIOR:
+    - If tau_p is not provided or <= 0: Returns input fractions unchanged
+    - If tau_p > 0: Computes steady-state fractions with ash buildup
+
+This solver is called:
+1. During reactor initialization (in reactor_defaults.py)
+2. During solver cycles when fractions may need recomputation
+"""
 
 from __future__ import annotations
 
 import math
-from typing import Mapping
 
 from fusdb.relations.power_balance.fusion_power.reactivity_functions import (
     sigmav_DD_BoschHale,
@@ -13,134 +37,101 @@ from fusdb.relations.power_balance.fusion_power.reactivity_functions import (
 
 
 _SPECIES = ("D", "T", "He3", "He4")
-_FRACTION_VARS = {"D": "f_D", "T": "f_T", "He3": "f_He3", "He4": "f_He4"}
-# TODO(low): improve it to work automatically by taking data from allowed_species
+_FRACTION_KEYS = ("f_D", "f_T", "f_He3", "f_He4")
 
 
 def solve_steady_state_composition(
     n_i: float,
     T_avg: float,
-    fractions: Mapping[str, float] | None = None,
-    tau_p: Mapping[str, float] | None = None,
+    fractions: dict[str, float] | None = None,
+    tau_p: float | None = None,
     *,
     max_iter: int = 50,
     tol: float = 1e-6,
 ) -> dict[str, float]:
-    """Solve for steady-state ion fractions given total density, temperature, and confinement times."""
-    n_i_val = float(n_i)
-    if not math.isfinite(n_i_val):
-        raise ValueError("n_i must be finite")
-    if n_i_val < 0:
-        raise ValueError("n_i must be >= 0")
-    if n_i_val == 0:
-        return {var: 0.0 for var in _FRACTION_VARS.values()}
-
-    T_val = float(T_avg)
-    if not math.isfinite(T_val):
-        raise ValueError("T_avg must be finite")
-    if T_val < 0:
-        raise ValueError("T_avg must be >= 0")
-
-    fraction_inputs: dict[str, float | None] = {species: None for species in _SPECIES}
-    if fractions is not None:
-        for species in _SPECIES:
-            keys = (_FRACTION_VARS[species], species)
-            for key in keys:
-                if key in fractions:
-                    fraction_inputs[species] = float(fractions[key])
-                    break
-
-    controlled: dict[str, float] = {}
-    for species, value in fraction_inputs.items():
-        if value is None:
-            continue
-        if not math.isfinite(value):
-            raise ValueError(f"{_FRACTION_VARS[species]} must be finite")
-        if value < 0:
-            raise ValueError(f"{_FRACTION_VARS[species]} must be >= 0")
-        controlled[species] = value
-
-    if controlled:
-        total = sum(controlled.values())
-        if total <= 0:
-            raise ValueError("Fuel fraction sum must be positive")
-        weights = {species: value / total for species, value in controlled.items()}
-    else:
-        weights = {"D": 0.5, "T": 0.5}
-
-    controlled_species = set(weights)
-    uncontrolled_species = set(_SPECIES) - controlled_species
-
-    tau_p_map: dict[str, float] = {}
-    for species in _SPECIES:
-        tau_value = None
-        if tau_p is not None:
-            for key in (species, f"tau_p_{species}", "tau_p", "default"):
-                if key in tau_p:
-                    tau_value = float(tau_p[key])
-                    break
-        if tau_value is None:
-            tau_p_map[species] = 0.0
-            continue
-        if not math.isfinite(tau_value) or tau_value <= 0:
-            raise ValueError(f"tau_p_{species} must be > 0")
-        tau_p_map[species] = tau_value
-
-    for species in uncontrolled_species:
-        if tau_p_map[species] <= 0:
-            raise ValueError(f"tau_p_{species} is required for steady-state composition")
-
+    """
+    Solve for steady-state ion fractions.
+    
+    Args:
+        n_i: Total ion density [m^-3]
+        T_avg: Volume-averaged temperature [keV]
+        fractions: Input fractions {f_D, f_T, f_He3, f_He4}
+        tau_p: Particle confinement time [s]
+        
+    Returns:
+        dict with f_D, f_T, f_He3, f_He4
+        
+    If tau_p is None or <= 0, returns input fractions unchanged.
+    """
+    # Parse input fractions
+    f_D_in = fractions.get("f_D", 0.5) if fractions else 0.5
+    f_T_in = fractions.get("f_T", 0.5) if fractions else 0.5
+    f_He3_in = fractions.get("f_He3", 0.0) if fractions else 0.0
+    f_He4_in = fractions.get("f_He4", 0.0) if fractions else 0.0
+    
+    # Quick return if no confinement time specified
+    if tau_p is None or tau_p <= 0 or not math.isfinite(tau_p):
+        return {"f_D": f_D_in, "f_T": f_T_in, "f_He3": f_He3_in, "f_He4": f_He4_in}
+    
+    # Validate inputs
+    if n_i is None or n_i <= 0 or not math.isfinite(n_i):
+        return {"f_D": f_D_in, "f_T": f_T_in, "f_He3": f_He3_in, "f_He4": f_He4_in}
+    
+    T_val = float(T_avg) if T_avg and math.isfinite(T_avg) else 0.0
+    
+    # Get reaction rates
     if T_val <= 0:
-        sigmav_dt = 0.0
-        sigmav_ddn = 0.0
-        sigmav_ddp = 0.0
-        sigmav_dhe3 = 0.0
+        sigmav_dt = sigmav_ddn = sigmav_dhe3 = 0.0
     else:
         sigmav_dt = float(sigmav_DT_BoschHale(T_val))
-        _, sigmav_ddn, sigmav_ddp = sigmav_DD_BoschHale(T_val)
+        _, sigmav_ddn, _ = sigmav_DD_BoschHale(T_val)
         sigmav_dhe3 = float(sigmav_DHe3_BoschHale(T_val))
-
-    densities: dict[str, float] = {species: 0.0 for species in _SPECIES}
-    for species, weight in weights.items():
-        densities[species] = weight * n_i_val
-
+    
+    # Convert fractions to densities
+    densities = {
+        "D": f_D_in * n_i,
+        "T": f_T_in * n_i,
+        "He3": f_He3_in * n_i,
+        "He4": f_He4_in * n_i,
+    }
+    
+    # Fuel species weights (how to redistribute remaining density)
+    fuel_total = f_D_in + f_T_in
+    if fuel_total <= 0:
+        fuel_total = 1.0
+    weights = {"D": f_D_in / fuel_total, "T": f_T_in / fuel_total}
+    
+    # Iterate to steady state
     for _ in range(max_iter):
-        n_D = densities["D"]
-        n_T = densities["T"]
-        n_He3 = densities["He3"]
-
+        n_D, n_T, n_He3 = densities["D"], densities["T"], densities["He3"]
+        
+        # Reaction rates
         r_dt = n_D * n_T * sigmav_dt
         r_ddn = 0.5 * n_D**2 * sigmav_ddn
-        r_ddp = 0.5 * n_D**2 * sigmav_ddp
         r_dhe3 = n_D * n_He3 * sigmav_dhe3
-
+        
         updated = dict(densities)
-        if "T" in uncontrolled_species:
-            denom = n_D * sigmav_dt + 1.0 / tau_p_map["T"]
-            updated["T"] = r_ddp / denom if denom > 0 else 0.0
-        if "He3" in uncontrolled_species:
-            denom = n_D * sigmav_dhe3 + 1.0 / tau_p_map["He3"]
-            updated["He3"] = r_ddn / denom if denom > 0 else 0.0
-        if "He4" in uncontrolled_species:
-            updated["He4"] = tau_p_map["He4"] * (r_dt + r_dhe3)
-
-        remainder = n_i_val - sum(updated[species] for species in uncontrolled_species)
+        
+        # Ash production: He4 from D-T and D-He3, He3 from D-D
+        updated["He4"] = tau_p * (r_dt + r_dhe3)
+        updated["He3"] = tau_p * r_ddn
+        
+        # Redistribute remaining density to fuel
+        ash_density = updated["He3"] + updated["He4"]
+        remainder = n_i - ash_density
         if remainder < 0:
-            raise ValueError("Total ion density is smaller than steady-state ash density")
-        for species, weight in weights.items():
-            updated[species] = weight * remainder
-
-        max_change = 0.0
-        for species in _SPECIES:
-            prev = densities[species]
-            curr = updated[species]
-            scale = max(abs(prev), abs(curr), 1.0)
-            max_change = max(max_change, abs(curr - prev) / scale)
+            remainder = 0.0
+        
+        updated["D"] = weights["D"] * remainder
+        updated["T"] = weights["T"] * remainder
+        
+        # Check convergence
+        max_change = max(
+            abs(updated[s] - densities[s]) / max(abs(densities[s]), 1.0)
+            for s in _SPECIES
+        )
         densities = updated
         if max_change <= tol:
             break
-
-    fractions_out = {
-        _FRACTION_VARS[species]: value / n_i_val for species, value in densities.items()
-    }
-    return fractions_out
+    
+    return {f"f_{s}": densities[s] / n_i for s in _SPECIES}

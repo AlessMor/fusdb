@@ -24,7 +24,7 @@ organization: "Example Organization"
 # design_year: 2026
 # doi:
 # notes:
-# confinement_mode: H-mode
+confinement_mode: H-mode
 # solve_strategy: default # choose from 'default', 'global' or user-defined. user defined requires a list of relations or groups of relations to be specified
 
 ################ GEOMETRIC PARAMETERS ################
@@ -33,7 +33,7 @@ R: 5 #[m] Major radius.
 A: 1.8 #[dimensionless] Aspect ratio (R/a).
 # kappa: [dimensionless] Elongation.
 kappa_95: 1 #[dimensionless] Elongation at 95% flux surface.
-delta_95: 1.5 #[dimensionless] Triangularity at 95% flux surface.
+delta_95: 0.4 #[dimensionless] Triangularity at 95% flux surface.
 # delta: [dimensionless] Core triangularity.
 # V_p: [m^3] Plasma volume.
 # S_p: [m^2] Plasma surface area.
@@ -47,7 +47,7 @@ delta_95: 1.5 #[dimensionless] Triangularity at 95% flux surface.
 B0: 6 #[T] Toroidal field on axis.
 # B_max: [T] Peak field on coil.
 # B_p: [T] Poloidal field.
-I_p: 10 #[A] Plasma current.
+I_p: 10e6 #[A] Plasma current.
 # f_BS: [dimensionless] Bootstrap current fraction.
 # f_NI: [dimensionless] Non-inductive current fraction.
 # f_CD: [dimensionless] Driven current fraction (excluding bootstrap).
@@ -99,7 +99,9 @@ tau_p: 1 #[s] Particle confinement time (generic).
 # G89: [dimensionless] G89 gain factor.
 
 ################ POWER & EXHAUST ################
-P_fus: 800 # [W] Fusion power.
+P_fus:
+  value: 800
+  unit: MW # [W] Fusion power.
 # Rr_DT: [1/s] D-T fusion reaction rate (volume-integrated).
 # Rr_DDn: [1/s] D-D fusion reaction rate (He3+n branch).
 # Rr_DDp: [1/s] D-D fusion reaction rate (T+p branch).
