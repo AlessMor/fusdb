@@ -86,6 +86,7 @@ Thumbs.db
 # MyST/Sphinx
 _build/
 .sphinx/
+docs/_generated/
 
 # Data files (if tracking output)
 *.pkl

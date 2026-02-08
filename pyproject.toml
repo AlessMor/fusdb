@@ -9,5 +9,13 @@ description = "Fusion reactor scenario database with per-folder YAML and a singl
 requires-python = ">=3.10"
 dependencies = ["PyYAML>=6.0", "sympy>=1.12", "pycountry>=24.6.1", "hypernetx==2.4.0", "pandas==2.2.2", "fastjsonschema>=2.18", "pyomo>=6.7"]
 
+[project.optional-dependencies]
+docs = [
+    "myst-parser>=2.0",
+    "sphinx>=7.2",
+    "sphinxcontrib-bibtex>=2.6",
+    "sphinx-rtd-theme>=2.0",
+]
+
 [project.scripts]
 fusdb = "fusdb.cli:main"

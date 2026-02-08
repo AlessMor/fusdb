@@ -1,58 +1,73 @@
 # fusdb
 
-A small toolkit for storing and validating fusion reactor scenarios.
+A small toolkit for storing and validating fusion reactor plasma scenarios.
 
-Each scenario is described by a `reactor.yaml` file, containing variables that describe the steady-state condition of the plasma. Relations encoded in Python modules cross-check values, infer missing ones, and recognise inconsistencies in the input data.
+Each scenario is described by a `reactor.yaml` file, containing variables that describe the steady-state condition of the plasma. Relations encoded in Python modules cross-check values, infer missing ones, and recognize inconsistencies in the input data.
+
+## Disclaimers:
+This is a personal project made by Alessandro Morandi, PhD student at PoliTO, with the aim of having a single place to store data on fusion reactors and useful formulas to use in other studies.  
+Due to the personal nature of the project, use of AI LLM models was made to speed up the process (especially inside the classes and to set up docs, while physical formulas have been added manually).  
+**The validation of reactors should not be considered a criticism to the published papers, and are often due to the simplifications of this model. Always double-check the results if they should be used for scientific analyses.**
 
 ## Project Structure
 
 ```
 fusdb/
-├── reactors/         # Reactor data files (YAML)
-├── src/fusdb/        # Main source code
-│   ├── registry/     # Allowed variables, constants, and default values
-│   ├── relations/    # Physics and engineering relations
-│   └── cli.py        # Command-line interface
-├── tests/            # Tests
-└── docs/             # Documentation and notebooks
+├── reactors/                 # Reactor data files (YAML)
+├── src/fusdb/                # Main source code
+│   ├── __init__.py           # Public API exports
+│   ├── reactor_class.py      # Reactor loader/solver
+│   ├── relation_class.py     # Relation definition/decorator
+│   ├── relationsystem_class.py # Solver engine
+│   ├── variable_class.py     # Variable container
+│   ├── relation_util.py      # Relation discovery/filtering helpers
+│   ├── relations/            # Relations grouped by domain
+│   └── registry/             # Allowed variables, constants, defaults, tags
+├── docs/                     # Sphinx docs (Markdown via MyST), notebooks, artifacts
+├── lib/                      # JS/CSS assets used by HTML graph outputs
+└── tests/                    # Tests
 ```
 
 ## Reactors
 
-Each reactor is defined by a `reactor.yaml` file. See `src/fusdb/registry/reactor_example.yaml` for an annotated template.
+Each reactor lives in `reactors/<reactor_id>/reactor.yaml` or as a standalone `reactors/<reactor_id>.yaml`.
+See `docs/reactor_class.md` for the YAML schema and examples.
 
-Each reactor data is taken from papers and represent a plasma scenario for a fusion reactor.
+## Relations and RelationSystem
 
-## Relation and RelationSystem
-
-Relations are defined in Python modules within `src/fusdb/relations/`. They are used to:
-- Cross-check values
-- Infer missing values
-- Recognise inconsistencies
+Relations are defined in `src/fusdb/relations/` and grouped by domain (geometry, power_balance, confinement, etc.). The solver engine is `RelationSystem` in `src/fusdb/relationsystem_class.py`.
 
 ## Usage
 
-- **CLI**: Install with `pip install -e .`, then use `fusdb` to list or show reactors.
-- **Python**: Use `from fusdb.loader import load_all_reactors` to load scenarios into `Reactor` objects.
+```python
+from fusdb import Reactor
 
-## Interactive Relation Graph
+reactor = Reactor.from_yaml("reactors/ARC_2015")
+reactor.solve()
 
-The `docs/relation_map.ipynb` notebook generates an interactive graph of the relations between variables.
+print(reactor.variables_dict["P_fus"].current_value)
+```
 
-[View the interactive relation graph](https://AlessMor.github.io/fusdb/docs/relation_graph.html) 
+## Documentation
 
-## Useful links and references:
+Sphinx docs live in `docs/` and use Markdown via MyST.
+
+```bash
+pip install -e .[docs]
+sphinx-build -b html docs docs/_build/html
+```
+
+## Useful Links and References
 
 0D plasma codes:
 - [cfspopcon](https://github.com/cfs-energy/cfspopcon)
 - [PROCESS](https://github.com/ukaea/PROCESS)
-Databeses for fusion reactors worldwide:
+
+Databases for fusion reactors worldwide:
 - [Fusion Energy Base](https://www.fusionenergybase.com/projects)
 - [Fusion World on Github](https://github.com/RemDelaporteMathurin/fusion-world)
 
-
-## TODO:
-
+## TODO
 - [ ] check default/global solve modes for RelationSystem
 - [ ] add relations for radiated power
 - [ ] update species fractions and equilibrium solver

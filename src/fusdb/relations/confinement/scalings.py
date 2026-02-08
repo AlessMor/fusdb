@@ -17,25 +17,25 @@ def tau_E_itpa20_il(
     """
     Calculate the ITPA20-IL Issue #1852 confinement time
 
-    Parameters:
-    pcur (float): Plasma current [A]
-    b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    p_plasma_loss (float): Thermal power lost due to transport through the LCFS [W]
-    n_la (float): Central line-averaged electron density in m**-3
-    aion (float): Average mass of all ions (amu)
-    rmajor (float): Plasma major radius [m]
-    triang (float): Triangularity
-    kappa_ipb (float): IPB specific plasma separatrix elongation
+    Args:
+        pcur (float): Plasma current [A]
+        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+        p_plasma_loss (float): Thermal power lost due to transport through the LCFS [W]
+        n_la (float): Central line-averaged electron density in m**-3
+        aion (float): Average mass of all ions (amu)
+        rmajor (float): Plasma major radius [m]
+        triang (float): Triangularity
+        kappa_ipb (float): IPB specific plasma separatrix elongation
 
     Returns:
-    float: ITPA20-IL confinement time [s]
+        float: ITPA20-IL confinement time [s]
 
     Notes:
-        - Mass term is the effective mass of the plasma, so we assume the total ion mass here
-        - This scaling uses the IPB defintiion of elongation, see reference for more information.
+        Mass term is the effective mass of the plasma, so we assume the total ion mass here
+        This scaling uses the IPB defintiion of elongation, see reference for more information.
 
     References:
-        - T. Luda et al., “Validation of a full-plasma integrated modeling approach on ASDEX Upgrade,”
+        T. Luda et al., “Validation of a full-plasma integrated modeling approach on ASDEX Upgrade,”
         Nuclear Fusion, vol. 61, no. 12, pp. 126048-126048, Nov. 2021, doi: https://doi.org/10.1088/1741-4326/ac3293.
     """
     dnla19 = n_la / 1e19
@@ -61,27 +61,27 @@ def tau_E_itpa20(
     """
     Calculate the ITPA20 Issue #3164 confinement time
 
-    Parameters:
-    pcur (float): Plasma current [A]
-    b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    n_la (float): Central line-averaged electron density in m**-3
-    p_plasma_loss (float): Thermal power lost due to transport through the LCFS [W]
-    rmajor (float): Plasma major radius [m]
-    triang (float): Triangularity
-    kappa_ipb (float): IPB specific plasma separatrix elongation
-    eps (float): Inverse aspect ratio
-    aion (float): Average mass of all ions (amu)
+    Args:
+        pcur (float): Plasma current [A]
+        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+        n_la (float): Central line-averaged electron density in m**-3
+        p_plasma_loss (float): Thermal power lost due to transport through the LCFS [W]
+        rmajor (float): Plasma major radius [m]
+        triang (float): Triangularity
+        kappa_ipb (float): IPB specific plasma separatrix elongation
+        eps (float): Inverse aspect ratio
+        aion (float): Average mass of all ions (amu)
 
     Returns:
-    float: ITPA20 confinement time [s]
+        float: ITPA20 confinement time [s]
 
     Notes:
-        - Mass term is the effective mass of the plasma, so we assume the total ion mass here
-        - This scaling uses the IPB defintiion of elongation, see reference for more information.
+        Mass term is the effective mass of the plasma, so we assume the total ion mass here
+        This scaling uses the IPB defintiion of elongation, see reference for more information.
 
     References:
-        - G. Verdoolaege et al., “The updated ITPA global H-mode confinement database: description and analysis,”
-          Nuclear Fusion, vol. 61, no. 7, pp. 076006-076006, Jan. 2021, doi: https://doi.org/10.1088/1741-4326/abdb91.
+        G. Verdoolaege et al., “The updated ITPA global H-mode confinement database: description and analysis,”
+        Nuclear Fusion, vol. 61, no. 7, pp. 076006-076006, Jan. 2021, doi: https://doi.org/10.1088/1741-4326/abdb91.
     """
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
@@ -132,23 +132,23 @@ def tau_E_nstx_gyro_bohm(I_p: float, B0: float, P_loss: float, R: float, dnla20:
     """
         Calculate the NSTX gyro-Bohm confinement time
 
-        Parameters:
-        pcur (float): Plasma current [A]
-        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        p_plasma_loss (float): Net Heating power [W]
-        rmajor (float): Plasma major radius [m]
-        dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+        Args:
+            pcur (float): Plasma current [A]
+            b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+            p_plasma_loss (float): Net Heating power [W]
+            rmajor (float): Plasma major radius [m]
+            dnla20 (float): Line averaged electron density in units of 10**20 m**-3
 
         Returns:
-        float: NSTX gyro-Bohm confinement time [s]
+            float: NSTX gyro-Bohm confinement time [s]
 
         Notes:
 
         References:
-            - P. F. Buxton, L. Connor, A. E. Costley, Mikhail Gryaznevich, and S. McNamara,
+            P. F. Buxton, L. Connor, A. E. Costley, Mikhail Gryaznevich, and S. McNamara,
             “On the energy confinement time in spherical tokamaks: implications for the design of pilot plants and fusion reactors,”
             vol. 61, no. 3, pp. 035006-035006, Jan. 2019, doi: https://doi.org/10.1088/1361-6587/aaf7e5.
-    ‌
+            ‌
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
@@ -324,21 +324,21 @@ def tau_E_hubbard_upper(I_p: float, B0: float, dnla20: float, P_loss: float) -> 
     """
         Calculate the Hubbard 2017 I-mode confinement time scaling - upper
 
-        Parameters:
-        pcur (float): Plasma current [A]
-        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        dnla20 (float): Line averaged electron density in units of 10**20 m**-3
-        p_plasma_loss (float): Net Heating power [W]
+        Args:
+            pcur (float): Plasma current [A]
+            b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+            dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+            p_plasma_loss (float): Net Heating power [W]
 
         Returns:
-        float: Hubbard confinement time [s]
+            float: Hubbard confinement time [s]
 
         Notes:
 
         References:
-            - A. E. Hubbard et al., “Physics and performance of the I-mode regime over an expanded operating space on Alcator C-Mod,”
+            A. E. Hubbard et al., “Physics and performance of the I-mode regime over an expanded operating space on Alcator C-Mod,”
             Nuclear Fusion, vol. 57, no. 12, p. 126039, Oct. 2017, doi: https://doi.org/10.1088/1741-4326/aa8570.
-    ‌
+            ‌
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
@@ -351,21 +351,21 @@ def tau_E_hubbard_lower(I_p: float, B0: float, dnla20: float, P_loss: float) -> 
     """
         Calculate the Hubbard 2017 I-mode confinement time scaling - lower
 
-        Parameters:
-        pcur (float): Plasma current [A]
-        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        dnla20 (float): Line averaged electron density in units of 10**20 m**-3
-        p_plasma_loss (float): Net Heating power [W]
+        Args:
+            pcur (float): Plasma current [A]
+            b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+            dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+            p_plasma_loss (float): Net Heating power [W]
 
         Returns:
-        float: Hubbard confinement time [s]
+            float: Hubbard confinement time [s]
 
         Notes:
 
         References:
-            - A. E. Hubbard et al., “Physics and performance of the I-mode regime over an expanded operating space on Alcator C-Mod,”
+            A. E. Hubbard et al., “Physics and performance of the I-mode regime over an expanded operating space on Alcator C-Mod,”
             Nuclear Fusion, vol. 57, no. 12, p. 126039, Oct. 2017, doi: https://doi.org/10.1088/1741-4326/aa8570.
-    ‌
+            ‌
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
@@ -382,21 +382,21 @@ def tau_E_hubbard_nominal(I_p: float, B0: float, dnla20: float, P_loss: float) -
     """
         Calculate the Hubbard 2017 I-mode confinement time scaling - nominal
 
-        Parameters:
-        pcur (float): Plasma current [A]
-        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        dnla20 (float): Line averaged electron density in units of 10**20 m**-3
-        p_plasma_loss (float): Net Heating power [W]
+        Args:
+            pcur (float): Plasma current [A]
+            b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+            dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+            p_plasma_loss (float): Net Heating power [W]
 
         Returns:
-        float: Hubbard confinement time [s]
+            float: Hubbard confinement time [s]
 
         Notes:
 
         References:
-            - A. E. Hubbard et al., “Physics and performance of the I-mode regime over an expanded operating space on Alcator C-Mod,”
+            A. E. Hubbard et al., “Physics and performance of the I-mode regime over an expanded operating space on Alcator C-Mod,”
             Nuclear Fusion, vol. 57, no. 12, p. 126039, Oct. 2017, doi: https://doi.org/10.1088/1741-4326/aa8570.
-    ‌
+            ‌
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
@@ -405,21 +405,21 @@ def tau_E_I_Mode_y2(I_p: float, B0: float, P_loss: float, n_la: float) -> float:
     """
     Calculate the I-Mode confinement time scaling from Walk (equation 5.2).
 
-    Parameters:
-    I_p (float): Plasma current [A]
-    B0 (float): Toroidal magnetic field on axis [T]
-    P_loss (float): Net heating power [W]
-    n_la (float): Line averaged electron density in m**-3
+    Args:
+        I_p (float): Plasma current [A]
+        B0 (float): Toroidal magnetic field on axis [T]
+        P_loss (float): Net heating power [W]
+        n_la (float): Line averaged electron density in m**-3
 
     Returns:
-    float: I-Mode confinement time [s]
+        float: I-Mode confinement time [s]
 
     Notes:
-        - Coefficient adjusted for density in 1e19 m^-3.
+        Coefficient adjusted for density in 1e19 m^-3.
 
     References:
-        - J. R. Walk, "Pedestal structure and stability in high-performance plasmas on Alcator C-Mod,"
-          https://dspace.mit.edu/handle/1721.1/95524, equation 5.2. 2014
+        J. R. Walk, "Pedestal structure and stability in high-performance plasmas on Alcator C-Mod,"
+        https://dspace.mit.edu/handle/1721.1/95524, equation 5.2. 2014
     """
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
@@ -476,28 +476,28 @@ def tau_E_petty08(
     """
         Calculate the beta independent dimensionless Petty08 confinement time
 
-        Parameters:
-        pcur (float): Plasma current [A]
-        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        n_la (float): Line averaged electron density in m**-3
-        p_plasma_loss (float): Net Heating power [W]
-        rmajor (float): Plasma major radius [m]
-        kappa_ipb (float): IPB specific plasma separatrix elongation
-        aspect (float): Aspect ratio
+        Args:
+            pcur (float): Plasma current [A]
+            b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+            n_la (float): Line averaged electron density in m**-3
+            p_plasma_loss (float): Net Heating power [W]
+            rmajor (float): Plasma major radius [m]
+            kappa_ipb (float): IPB specific plasma separatrix elongation
+            aspect (float): Aspect ratio
 
         Returns:
-        float: Petty08 confinement time [s]
+            float: Petty08 confinement time [s]
 
         Notes:
-            - This scaling uses the IPB defintiion of elongation, see reference for more information.
+            This scaling uses the IPB defintiion of elongation, see reference for more information.
 
         References:
-            - C. C. Petty, “Sizing up plasmas using dimensionless parameters,”
+            C. C. Petty, “Sizing up plasmas using dimensionless parameters,”
             Physics of Plasmas, vol. 15, no. 8, Aug. 2008, doi: https://doi.org/10.1063/1.2961043.
 
-            - None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
+            None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
             Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
-    ‌
+            ‌
     """
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
@@ -520,27 +520,27 @@ def tau_E_murari(I_p: float, R: float, kappa_ipb: float, n_la: float, B0: float,
     """
         Calculate the Murari H-mode energy confinement scaling time
 
-        Parameters:
-        pcur (float): Plasma current [A]
-        rmajor (float): Plasma major radius [m]
-        kappa_ipb (float): IPB specific plasma separatrix elongation
-        n_la (float): Line averaged electron density in m**-3
-        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        p_plasma_loss (float): Net Heating power [W]
+        Args:
+            pcur (float): Plasma current [A]
+            rmajor (float): Plasma major radius [m]
+            kappa_ipb (float): IPB specific plasma separatrix elongation
+            n_la (float): Line averaged electron density in m**-3
+            b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+            p_plasma_loss (float): Net Heating power [W]
 
         Returns:
-        float: Murari confinement time [s]
+            float: Murari confinement time [s]
 
         Notes:
-            - This scaling uses the IPB defintiion of elongation, see reference for more information.
+            This scaling uses the IPB defintiion of elongation, see reference for more information.
 
         References:
-            - A. Murari, E. Peluso, Michela Gelfusa, I. Lupelli, and P. Gaudio, “A new approach to the formulation and validation of scaling expressions for plasma confinement in tokamaks,”
-             Nuclear Fusion, vol. 55, no. 7, pp. 073009-073009, Jun. 2015, doi: https://doi.org/10.1088/0029-5515/55/7/073009.
+            A. Murari, E. Peluso, Michela Gelfusa, I. Lupelli, and P. Gaudio, “A new approach to the formulation and validation of scaling expressions for plasma confinement in tokamaks,”
+            Nuclear Fusion, vol. 55, no. 7, pp. 073009-073009, Jun. 2015, doi: https://doi.org/10.1088/0029-5515/55/7/073009.
 
-            - None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
-              Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
-    ‌
+            None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
+            Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
+            ‌
     """
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
@@ -563,26 +563,26 @@ def tau_E_ds03(
     """
         Calculate the DS03 beta-independent H-mode scaling confinement time
 
-        Parameters:
-        pcur (float): Plasma current [A]
-        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        n_la (float): Line averaged electron density in m**-3
-        p_plasma_loss (float): Net Heating power [W]
-        rmajor (float): Plasma major radius [m]
-        kappa95 (float): Plasma elongation at 95% flux surface
-        aspect (float): Aspect ratio
-        afuel (float): Fuel atomic mass number
+        Args:
+            pcur (float): Plasma current [A]
+            b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+            n_la (float): Line averaged electron density in m**-3
+            p_plasma_loss (float): Net Heating power [W]
+            rmajor (float): Plasma major radius [m]
+            kappa95 (float): Plasma elongation at 95% flux surface
+            aspect (float): Aspect ratio
+            afuel (float): Fuel atomic mass number
 
         Returns:
-        float: DS03 beta-independent H-mode confinement time [s]
+            float: DS03 beta-independent H-mode confinement time [s]
 
         Notes:
 
         References:
-            - T. C. Luce, C. C. Petty, and J. G. Cordey, “Application of dimensionless parameter scaling techniques to the design and interpretation of magnetic fusion experiments,”
-             Plasma Physics and Controlled Fusion, vol. 50, no. 4, p. 043001, Mar. 2008,
-             doi: https://doi.org/10.1088/0741-3335/50/4/043001.
-    ‌
+            T. C. Luce, C. C. Petty, and J. G. Cordey, “Application of dimensionless parameter scaling techniques to the design and interpretation of magnetic fusion experiments,”
+            Plasma Physics and Controlled Fusion, vol. 50, no. 4, p. 043001, Mar. 2008,
+            doi: https://doi.org/10.1088/0741-3335/50/4/043001.
+            ‌
     """
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
@@ -606,23 +606,23 @@ def tau_E_iss04_stellarator(a: float, R: float, n_la: float, B0: float, P_loss: 
     """
         Calculate the ISS04 stellarator scaling confinement time
 
-        Parameters:
-        rminor (float): Plasma minor radius [m]
-        rmajor (float): Plasma major radius [m]
-        n_la (float): Line averaged electron density in m**-3
-        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        p_plasma_loss (float): Net Heating power [W]
-        iotabar (float): Rotational transform
+        Args:
+            rminor (float): Plasma minor radius [m]
+            rmajor (float): Plasma major radius [m]
+            n_la (float): Line averaged electron density in m**-3
+            b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+            p_plasma_loss (float): Net Heating power [W]
+            iotabar (float): Rotational transform
 
         Returns:
-        float: ISS04 stellarator confinement time [s]
+            float: ISS04 stellarator confinement time [s]
 
         Notes:
 
         References:
-            - H. Yamada et al., “Characterization of energy confinement in net-current free plasmas using the extended International Stellarator Database,”
-              vol. 45, no. 12, pp. 1684-1693, Nov. 2005, doi: https://doi.org/10.1088/0029-5515/45/12/024.
-    ‌
+            H. Yamada et al., “Characterization of energy confinement in net-current free plasmas using the extended International Stellarator Database,”
+            vol. 45, no. 12, pp. 1684-1693, Nov. 2005, doi: https://doi.org/10.1088/0029-5515/45/12/024.
+            ‌
     """
     dnla19 = n_la / 1e19
     P_loss_MW = P_loss / 1e6
@@ -635,23 +635,23 @@ def tau_E_iss95_stellarator(a: float, R: float, n_la: float, B0: float, P_loss: 
     """
         Calculate the ISS95 stellarator scaling confinement time
 
-        Parameters:
-        rminor (float): Plasma minor radius [m]
-        rmajor (float): Plasma major radius [m]
-        n_la (float): Line averaged electron density in m**-3
-        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-        p_plasma_loss (float): Net Heating power [W]
-        iotabar (float): Rotational transform
+        Args:
+            rminor (float): Plasma minor radius [m]
+            rmajor (float): Plasma major radius [m]
+            n_la (float): Line averaged electron density in m**-3
+            b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+            p_plasma_loss (float): Net Heating power [W]
+            iotabar (float): Rotational transform
 
         Returns:
-        float: ISS95 stellarator confinement time [s]
+            float: ISS95 stellarator confinement time [s]
 
         Notes:
 
         References:
-            - U. Stroth et al., “Energy confinement scaling from the international stellarator database,”
-              vol. 36, no. 8, pp. 1063-1077, Aug. 1996, doi: https://doi.org/10.1088/0029-5515/36/8/i11.
-    ‌
+            U. Stroth et al., “Energy confinement scaling from the international stellarator database,”
+            vol. 36, no. 8, pp. 1063-1077, Aug. 1996, doi: https://doi.org/10.1088/0029-5515/36/8/i11.
+            ‌
     """
     dnla19 = n_la / 1e19
     P_loss_MW = P_loss / 1e6
@@ -666,28 +666,28 @@ def tau_E_iter_ipb98y4(
     """
     Calculate the IPB98(y,4) ELMy H-mode scaling confinement time
 
-    Parameters:
-    pcur (float): Plasma current [A]
-    b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    n_la (float): Line averaged electron density in m**-3
-    p_plasma_loss (float): Net Heating power [W]
-    rmajor (float): Plasma major radius [m]
-    kappa_ipb (float): IPB specific plasma separatrix elongation
-    aspect (float): Aspect ratio
-    afuel (float): Fuel atomic mass number
+    Args:
+        pcur (float): Plasma current [A]
+        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+        n_la (float): Line averaged electron density in m**-3
+        p_plasma_loss (float): Net Heating power [W]
+        rmajor (float): Plasma major radius [m]
+        kappa_ipb (float): IPB specific plasma separatrix elongation
+        aspect (float): Aspect ratio
+        afuel (float): Fuel atomic mass number
 
     Returns:
-    float: IPB98(y,4) ELMy H-mode confinement time [s]
+        float: IPB98(y,4) ELMy H-mode confinement time [s]
 
     Notes:
-        - See correction paper below for more information about the re-definition of the elongation used.
+        See correction paper below for more information about the re-definition of the elongation used.
 
     References:
-        - I. P. E. G. on C. Transport, I. P. E. G. on C. Database, and I. P. B. Editors, “Chapter 2: Plasma confinement and transport,”
+        I. P. E. G. on C. Transport, I. P. E. G. on C. Database, and I. P. B. Editors, “Chapter 2: Plasma confinement and transport,”
         Nuclear Fusion, vol. 39, no. 12, pp. 2175-2249, Dec. 1999, doi: https://doi.org/10.1088/0029-5515/39/12/302.
 
-        - None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
-          Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
+        None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
+        Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
@@ -713,28 +713,28 @@ def tau_E_iter_ipb98y3(
     """
     Calculate the IPB98(y,3) ELMy H-mode scaling confinement time
 
-    Parameters:
-    pcur (float): Plasma current [A]
-    b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    n_la (float): Line averaged electron density in m**-3
-    p_plasma_loss (float): Net Heating power [W]
-    rmajor (float): Plasma major radius [m]
-    kappa_ipb (float): IPB specific plasma separatrix elongation
-    aspect (float): Aspect ratio
-    afuel (float): Fuel atomic mass number [amu]
+    Args:
+        pcur (float): Plasma current [A]
+        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+        n_la (float): Line averaged electron density in m**-3
+        p_plasma_loss (float): Net Heating power [W]
+        rmajor (float): Plasma major radius [m]
+        kappa_ipb (float): IPB specific plasma separatrix elongation
+        aspect (float): Aspect ratio
+        afuel (float): Fuel atomic mass number [amu]
 
     Returns:
-    float: IPB98(y,3) ELMy H-mode confinement time [s]
+        float: IPB98(y,3) ELMy H-mode confinement time [s]
 
     Notes:
-        - See correction paper below for more information about the re-definition of the elongation used.
+        See correction paper below for more information about the re-definition of the elongation used.
 
     References:
-        - I. P. E. G. on C. Transport, I. P. E. G. on C. Database, and I. P. B. Editors, “Chapter 2: Plasma confinement and transport,”
+        I. P. E. G. on C. Transport, I. P. E. G. on C. Database, and I. P. B. Editors, “Chapter 2: Plasma confinement and transport,”
         Nuclear Fusion, vol. 39, no. 12, pp. 2175-2249, Dec. 1999, doi: https://doi.org/10.1088/0029-5515/39/12/302.
 
-        - None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
-          Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
+        None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
+        Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
@@ -766,28 +766,28 @@ def tau_E_iter_ipb98y2(
     Taken from PROCESS codebase.
     Calculate the IPB98(y,2) ELMy H-mode scaling confinement time
 
-    Parameters:
-    I_p (float): Plasma current [A]
-    B0 (float): Toroidal magnetic field on axis[T]
-    n_la (float): Line averaged electron density [m**-3]
-    P_loss (float): Net Heating power [W]
-    R (float): Plasma major radius [m]
-    kappa_ipb (float): IPB specific plasma separatrix elongation
-    A (float): Aspect ratio
-    afuel (float): Fuel atomic mass number
+    Args:
+        I_p (float): Plasma current [A]
+        B0 (float): Toroidal magnetic field on axis[T]
+        n_la (float): Line averaged electron density [m**-3]
+        P_loss (float): Net Heating power [W]
+        R (float): Plasma major radius [m]
+        kappa_ipb (float): IPB specific plasma separatrix elongation
+        A (float): Aspect ratio
+        afuel (float): Fuel atomic mass number
 
     Returns:
-    float: IPB98(y,2) ELMy H-mode confinement time [s]
+        float: IPB98(y,2) ELMy H-mode confinement time [s]
 
     Notes:
-        - See correction paper below for more information about the re-definition of the elongation used.
+        See correction paper below for more information about the re-definition of the elongation used.
 
     References:
-        - I. P. E. G. on C. Transport, I. P. E. G. on C. Database, and I. P. B. Editors, “Chapter 2: Plasma confinement and transport,”
+        I. P. E. G. on C. Transport, I. P. E. G. on C. Database, and I. P. B. Editors, “Chapter 2: Plasma confinement and transport,”
         Nuclear Fusion, vol. 39, no. 12, pp. 2175-2249, Dec. 1999, doi: https://doi.org/10.1088/0029-5515/39/12/302.
 
-        - None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
-          Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
+        None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
+        Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
     return 0.0562 * (I_p / 1e6) ** 0.93 * B0 ** 0.15 * (n_la/1e19) ** 0.41 * (P_loss/1e6)** (-0.69) * R ** 1.97 * kappa_ipb ** 0.78 * A ** (-0.58) * afuel ** 0.19
 def tau_E_iter_ipb98y1(
@@ -796,28 +796,28 @@ def tau_E_iter_ipb98y1(
     """
     Calculate the IPB98(y,1) ELMy H-mode scaling confinement time
 
-    Parameters:
-    pcur (float): Plasma current [A]
-    b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    n_la (float): Line averaged electron density in m**-3
-    p_plasma_loss (float): Net Heating power [W]
-    rmajor (float): Plasma major radius [m]
-    kappa_ipb (float): IPB sprcific plasma separatrix elongation
-    aspect (float): Aspect ratio
-    afuel (float): Fuel atomic mass number
+    Args:
+        pcur (float): Plasma current [A]
+        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+        n_la (float): Line averaged electron density in m**-3
+        p_plasma_loss (float): Net Heating power [W]
+        rmajor (float): Plasma major radius [m]
+        kappa_ipb (float): IPB sprcific plasma separatrix elongation
+        aspect (float): Aspect ratio
+        afuel (float): Fuel atomic mass number
 
     Returns:
-    float: IPB98(y,1) ELMy H-mode confinement time [s]
+        float: IPB98(y,1) ELMy H-mode confinement time [s]
 
     Notes:
-        - See correction paper below for more information about the re-definition of the elongation used.
+        See correction paper below for more information about the re-definition of the elongation used.
 
     References:
-        - I. P. E. G. on C. Transport, I. P. E. G. on C. Database, and I. P. B. Editors, “Chapter 2: Plasma confinement and transport,”
+        I. P. E. G. on C. Transport, I. P. E. G. on C. Database, and I. P. B. Editors, “Chapter 2: Plasma confinement and transport,”
         Nuclear Fusion, vol. 39, no. 12, pp. 2175-2249, Dec. 1999, doi: https://doi.org/10.1088/0029-5515/39/12/302.
 
-        - None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
-          Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
+        None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
+        Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
     dnla19 = n_la / 1e19
     I_p_MA = I_p / 1e6
@@ -1286,22 +1286,22 @@ def rebut_lallia_confinement_time(
     """
     Calculate the Rebut-Lallia offset linear scaling (L-mode) confinement time
 
-    Parameters:
-    rminor (float): Plasma minor radius [m]
-    rmajor (float): Plasma major radius [m]
-    kappa (float): Plasma elongation at 95% flux surface
-    afuel (float): Fuel atomic mass number
-    pcur (float): Plasma current [A]
-    zeff (float): Effective charge
-    dnla20 (float): Line averaged electron density in units of 10**20 m**-3
-    b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    p_plasma_loss (float): Net Heating power [W]
+    Args:
+        rminor (float): Plasma minor radius [m]
+        rmajor (float): Plasma major radius [m]
+        kappa (float): Plasma elongation at 95% flux surface
+        afuel (float): Fuel atomic mass number
+        pcur (float): Plasma current [A]
+        zeff (float): Effective charge
+        dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+        p_plasma_loss (float): Net Heating power [W]
 
     Returns:
-    float: Rebut-Lallia confinement time [s]
+        float: Rebut-Lallia confinement time [s]
 
     References:
-        - T.C.Hender et.al., 'Physics Assesment of the European Reactor Study', AEA FUS 172, 1992
+        T.C.Hender et.al., 'Physics Assesment of the European Reactor Study', AEA FUS 172, 1992
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
@@ -1318,21 +1318,21 @@ def iter_89o_confinement_time(
     """
     Calculate the ITER Offset linear scaling - ITER 89-O (L-mode) confinement time
 
-    Parameters:
-    pcur (float): Plasma current [A]
-    rmajor (float): Plasma major radius [m]
-    rminor (float): Plasma minor radius [m]
-    kappa (float): Plasma elongation
-    dnla20 (float): Line averaged electron density in units of 10**20 m**-3
-    b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    afuel (float): Fuel atomic mass number
-    p_plasma_loss (float): Net Heating power [W]
+    Args:
+        pcur (float): Plasma current [A]
+        rmajor (float): Plasma major radius [m]
+        rminor (float): Plasma minor radius [m]
+        kappa (float): Plasma elongation
+        dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+        afuel (float): Fuel atomic mass number
+        p_plasma_loss (float): Net Heating power [W]
 
     Returns:
-    float: ITER 89-O confinement time [s]
+        float: ITER 89-O confinement time [s]
 
     References:
-        - T.C.Hender et.al., 'Physics Assesment of the European Reactor Study', AEA FUS 172, 1992
+        T.C.Hender et.al., 'Physics Assesment of the European Reactor Study', AEA FUS 172, 1992
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
@@ -1356,23 +1356,23 @@ def iter_89p_confinement_time(I_p: float, R: float, a: float, kappa: float, dnla
     """
     Calculate the ITER Power scaling - ITER 89-P (L-mode) confinement time
 
-    Parameters:
-    pcur (float): Plasma current [A]
-    rmajor (float): Plasma major radius [m]
-    rminor (float): Plasma minor radius [m]
-    kappa (float): Plasma elongation
-    dnla20 (float): Line averaged electron density in units of 10**20 m**-3
-    b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-    afuel (float): Fuel atomic mass number
-    p_plasma_loss (float): Net Heating power [W]
+    Args:
+        pcur (float): Plasma current [A]
+        rmajor (float): Plasma major radius [m]
+        rminor (float): Plasma minor radius [m]
+        kappa (float): Plasma elongation
+        dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+        b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
+        afuel (float): Fuel atomic mass number
+        p_plasma_loss (float): Net Heating power [W]
 
     Returns:
-    float: ITER 89-P confinement time [s]
+        float: ITER 89-P confinement time [s]
 
     References:
-        - T.C.Hender et.al., 'Physics Assesment of the European Reactor Study', AEA FUS 172, 1992
-        - N. A. Uckan, International Atomic Energy Agency, Vienna (Austria)and ITER Physics Group,
-          "ITER physics design guidelines: 1989", no. No. 10. Feb. 1990.
+        T.C.Hender et.al., 'Physics Assesment of the European Reactor Study', AEA FUS 172, 1992
+        N. A. Uckan, International Atomic Energy Agency, Vienna (Austria)and ITER Physics Group,
+        "ITER physics design guidelines: 1989", no. No. 10. Feb. 1990.
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
@@ -1444,17 +1444,17 @@ def tau_E_mirnov(a: float, kappa_95: float, I_p: float) -> float:
     """
     Calculate the Mirnov scaling (H-mode) confinement time
 
-    Parameters:
-    rminor (float): Plasma minor radius [m]
-    kappa95 (float): Plasma elongation at 95% flux surface
-    pcur (float): Plasma current [A]
+    Args:
+        rminor (float): Plasma minor radius [m]
+        kappa95 (float): Plasma elongation at 95% flux surface
+        pcur (float): Plasma current [A]
 
     Returns:
-    float: Mirnov scaling confinement time [s]
+        float: Mirnov scaling confinement time [s]
 
     References:
-        - N. A. Uckan, International Atomic Energy Agency, Vienna (Austria)and ITER Physics Group,
-         "ITER physics design guidelines: 1989", no. No. 10. Feb. 1990.
+        N. A. Uckan, International Atomic Energy Agency, Vienna (Austria)and ITER Physics Group,
+        "ITER physics design guidelines: 1989", no. No. 10. Feb. 1990.
     """
     I_p_MA = I_p / 1e6
     return 0.2 * a * sp.sqrt(kappa_95) * I_p_MA
@@ -1466,17 +1466,17 @@ def tau_E_neo_alcator(dene20: float, a: float, R: float, q_star: float) -> float
     """
     Calculate the Nec-Alcator(NA) OH scaling confinement time
 
-    Parameters:
-    dene20 (float): Volume averaged electron density in units of 10**20 m**-3
-    rminor (float): Plasma minor radius [m]
-    rmajor (float): Plasma major radius [m]
-    qstar (float): Equivalent cylindrical edge safety factor
+    Args:
+        dene20 (float): Volume averaged electron density in units of 10**20 m**-3
+        rminor (float): Plasma minor radius [m]
+        rmajor (float): Plasma major radius [m]
+        qstar (float): Equivalent cylindrical edge safety factor
 
     Returns:
-    float: Neo-Alcator confinement time [s]
+        float: Neo-Alcator confinement time [s]
 
     References:
-        - N. A. Uckan, International Atomic Energy Agency, Vienna (Austria)and ITER Physics Group,
-         "ITER physics design guidelines: 1989", no. No. 10. Feb. 1990.
+        N. A. Uckan, International Atomic Energy Agency, Vienna (Austria)and ITER Physics Group,
+        "ITER physics design guidelines: 1989", no. No. 10. Feb. 1990.
     """
     return 0.07 * dene20 * a * R * R * q_star

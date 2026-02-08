@@ -16,7 +16,7 @@ from fusdb.relation_class import Relation_decorator as Relation
     tags=("geometry",))
 def major_radius(R_max: float, R_min: float) -> float:
     """Return the geometric major radius from inboard/outboard extents.
-    Formula reported in Sauter 2016."""
+    Formula reported in :cite:`sauter_geometric_2016`."""
     return (R_max + R_min) / 2
 
 ########################################
@@ -26,7 +26,7 @@ def major_radius(R_max: float, R_min: float) -> float:
     tags=("geometry",))
 def minor_radius(R_max: float, R_min: float) -> float:
     """Return the geometric minor radius from inboard/outboard major radii extents.
-    Formula reported in Sauter 2016."""
+    Formula reported in :cite:`sauter_geometric_2016`."""
     return (R_max - R_min) / 2
 
 ########################################
@@ -37,7 +37,7 @@ def minor_radius(R_max: float, R_min: float) -> float:
     constraints=("a != 0"))
 def aspect_ratio(R: float, a: float) -> float:
     """Return aspect ratio from major and minor radius.
-    Formula reported in Sauter 2016."""
+    Formula reported in :cite:`sauter_geometric_2016`."""
     return R / a
 
 ########################################
@@ -48,7 +48,7 @@ def aspect_ratio(R: float, a: float) -> float:
     constraints=("R != 0"))
 def inverse_aspect_ratio(R: float, a: float) -> float:
     """Return inverse aspect ratio from major and minor radius.
-    Formula reported in Sauter 2016."""
+    Formula reported in :cite:`sauter_geometric_2016`."""
     return a / R
 
 ########################################
@@ -75,7 +75,7 @@ def aspect_ratio_relation(A: float) -> float:
     constraints=("R_max - R_min != 0","Z_max - Z_min != 0"),)
 def elongation(Z_max: float, Z_min: float, R_max: float, R_min: float) -> float:
     """Return elongation from vertical and horizontal extents.
-    Formula reported in Sauter 2016."""
+    Formula reported in :cite:`sauter_geometric_2016`."""
     return (Z_max - Z_min) / (R_max - R_min)
 # TODO(med): check if "95" relations are valid for L,I and H-modes
 ########################################
@@ -96,7 +96,7 @@ def elongation_95(kappa_95: float) -> float:
 # TODO(low): add as relation. to do so it's necessary also to define delta_top = (R-R(Z=Zmax))/a and delta_bottom = (R-R(Z=Zmin))/a
 def triangularity(delta_top: float, delta_bottom: float) -> float:
     """Return triangularity from triangularity at the top and bottom of the shape.
-    Formula reported in Sauter 2016."""
+    Formula reported in :cite:`sauter_geometric_2016`."""
     return (delta_top + delta_bottom) / 2
 
 ########################################
@@ -166,9 +166,9 @@ def sauter_plasma_cross_sectional_length(
 ):
     """
     Poloidal length around the plasma cross-section.
-    Sauter, O., 2016. Geometric formulas for system codes including the effect of negative triangularity. Fusion Engineering and Design 112, 633–645. https://doi.org/10.1016/j.fusengdes.2016.04.033
+    See :cite:`sauter_geometric_2016`.
     """
-    # theta_07 reported in Sauter 2016 has been multiplied and divided by 1+sqrt(1+8*xi) to avoid division by 0
+    # theta_07 reported in Sauter 2016 (:cite:`sauter_geometric_2016`) has been multiplied and divided by 1+sqrt(1+8*xi) to avoid division by 0
     theta_07 = -2 * squareness / (1 + sp.sqrt(1 + 8 * squareness**2))
     # using the analytical formula for w_07, related to the radial width of the plasma shape at 70% of the maximum height
     w_07 = sp.cos(theta_07 - squareness * sp.sin(2 * theta_07)) / sp.sqrt(0.51) * (1 - 0.49 / 2 * delta**2)
@@ -189,7 +189,7 @@ def sauter_plasma_surface(
 ):
     """
     Surface area around the LCFS in the toroidal and poloidal direction
-    Sauter, O., 2016. Geometric formulas for system codes including the effect of negative triangularity. Fusion Engineering and Design 112, 633–645. https://doi.org/10.1016/j.fusengdes.2016.04.033
+    See :cite:`sauter_geometric_2016`.
     """
     A_p = 2 * math.pi * R * (1 - 0.32 * delta * eps) * L_p
     return A_p
@@ -208,7 +208,7 @@ def sauter_plasma_volume(
 ):
     """
     Plasma Volume inside the LCFS
-    Sauter, O., 2016. Geometric formulas for system codes including the effect of negative triangularity. Fusion Engineering and Design 112, 633–645. https://doi.org/10.1016/j.fusengdes.2016.04.033
+    See :cite:`sauter_geometric_2016`.
     """
     V_p = 2 * math.pi * R * (1 - 0.25 * delta * eps) * S_phi
     return V_p
@@ -226,9 +226,9 @@ def sauter_plasma_cross_sectional_surface(
     squareness: float) -> float:
     """
     Surface of the plasma cross-section in the radial and poloidal direction
-    Sauter, O., 2016. Geometric formulas for system codes including the effect of negative triangularity. Fusion Engineering and Design 112, 633–645. https://doi.org/10.1016/j.fusengdes.2016.04.033
+    See :cite:`sauter_geometric_2016`.
     """
-    # theta_07 reported in Sauter 2016 has been multiplied and divided by 1+sqrt(1+8*xi) to avoid division by 0
+    # theta_07 reported in Sauter 2016 (:cite:`sauter_geometric_2016`) has been multiplied and divided by 1+sqrt(1+8*xi) to avoid division by 0
     theta_07 = sp.asin(0.7) - 2 * squareness / (1 + sp.sqrt(1 + 8 * squareness**2))
     # using the analytical formula for w_07, related to the radial width of the plasma shape at 70% of the maximum height
     w_07 = sp.cos(theta_07 - squareness * sp.sin(2 * theta_07)) / sp.sqrt(0.51) * (1 - 0.49 / 2 * delta**2)

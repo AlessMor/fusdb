@@ -24,8 +24,8 @@ def within_tolerance(
     """Check if two values are equal within specified tolerances.
     
     Compares two values using both absolute and relative tolerance.
-    The comparison is: |a - b| <= max(abs_tol, rel_tol * scale)
-    where scale is max(|a|, |b|, 1.0).
+    The comparison is: ``|a - b| <= max(abs_tol, rel_tol * scale)``
+    where scale is max(abs(a), abs(b), 1.0).
     
     Args:
         a: First value (must be convertible to float).
