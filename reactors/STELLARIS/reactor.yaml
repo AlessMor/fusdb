@@ -1,149 +1,38 @@
-# Example reactor definition
-#
-# Parameters can be provided as scalars:
-#   R: 3.3
-#
-# Or as mappings with optional entries:
-#   R:
-#     value: 3.3
-#     unit: m
-#     tol: 0.02
-#     method: x
-#
-# Units are converted to the default_unit in registry/allowed_variables.yaml when provided.
-
-id: Stellaris2025
-name: Stellaris 2025 - Point A
-reactor_configuration: stellarator
-organization: Proxima
-
-# Optional metadata
-# reactor_family: Example
-# country: ITA # please use ISO 3166-1 alpha-3 country codes
-# site:
-design_year: 2025
-doi: 10.1016/j.fusengdes.2025.114868
-# notes:
-# confinement_mode: H-mode
-# solve_strategy: default # choose from 'default', 'global' or user-defined. user defined requires a list of relations or groups of relations to be specified
-
-################ GEOMETRIC PARAMETERS ################
-R: 12.74 # [m] Major radius.
-a: 1.3 # [m] Minor radius.
-A: 9.8 # [dimensionless] Aspect ratio (R/a).
-# kappa: [dimensionless] Elongation.
-# kappa_95: [dimensionless] Elongation at 95% flux surface.
-# delta_95: [dimensionless] Triangularity at 95% flux surface.
-# delta: [dimensionless] Core triangularity.
-V_p: 425 # [m^3] Plasma volume.
-S_p: 327 # [m^2] Plasma surface area.
-# squareness: [dimensionless] Squareness (xi).
-# R_max: [m] Outboard major radius extent from the center of the torus.
-# R_min: [m] Inboard major radius extent from the center of the torus.
-# Z_max: [m] Upper vertical extent.
-# Z_min: [m] Lower vertical extent.
-
-################ MAGNETIC FIELD & CURRENT ################
-B0: 9.0 # [T] Toroidal field on axis. - NOTE: on paper it is "Axis Averaged B0"
-# B_max: [T] Peak field on coil.
-# B_p: [T] Poloidal field.
-# I_p: [A] Plasma current.
-# f_BS: [dimensionless] Bootstrap current fraction.
-# f_NI: [dimensionless] Non-inductive current fraction.
-# f_CD: [dimensionless] Driven current fraction (excluding bootstrap).
-# q95: [dimensionless] Safety factor at 95% flux surface.
-# q_a: [dimensionless] Edge safety factor.
-# q_min: [dimensionless] Minimum safety factor.
-# li: [dimensionless] Internal inductance.
-
-################ PLASMA PRESSURE & ENERGY ################
-beta_N: 0.0276 #[dimensionless] Normalized beta.
-# beta_T: [dimensionless] Toroidal beta (fraction).
-# beta_p: [dimensionless] Poloidal beta.
-# beta: [dimensionless] Total beta.
-# beta_limit: [dimensionless] Troyon beta limit.
-# p_th: [Pa] Thermal pressure.
-# W_th: [J] Thermal stored energy.
-
-################ TEMPERATURE & DENSITY ################
-T_avg: 12 # [keV] Volume-averaged electron temperature.
-# T0: [keV] On-axis electron temperature.
-# T_e: [keV] Electron temperature.
-# T_i: [keV] Ion temperature.
-n_avg: 3.17e20 # [1/m^3] Volume-averaged electron density.
-n0: 5.06e20 # [1/m^3] On-axis electron density.
-# n_e: [1/m^3] Electron density.
-# n_i: [1/m^3] Ion density.
-# n_GW: [1/m^3] Greenwald density limit.
-# n_SUDO: [1/m^3] Sudo density limit.
-# f_GW: [dimensionless] Greenwald fraction.
-Z_eff: 1.2 # [dimensionless] Effective charge.
-
-################ ION COMPOSITION ################
-# f_D: [dimensionless] Deuterium ion fraction (n_D / n_i).
-# f_T: [dimensionless] Tritium ion fraction (n_T / n_i).
-# f_He3: [dimensionless] Helium-3 ion fraction (n_He3 / n_i).
-# f_He4: [dimensionless] Helium-4 ion fraction (n_He4 / n_i).
-
-################ CONFINEMENT & PERFORMANCE ################
-# TBR: [dimensionless] Tritium breeding ratio.
-tau_E: 1.46 # [s] Energy confinement time.
-tau_p: 11 # [s] Particle confinement time (generic).
-# tau_p_D: [s] Deuterium particle confinement time.
-# tau_p_T: [s] Tritium particle confinement time.
-# tau_p_He3: [s] Helium-3 particle confinement time.
-# tau_p_He4: [s] Helium-4 particle confinement time.
-# tau_pulse: [s] Pulse length.
-# H89: [dimensionless] H89 confinement enhancement factor.
-# H98_y2: [dimensionless] H98(y,2) confinement enhancement factor.
-# G89: [dimensionless] G89 gain factor.
-
-################ POWER & EXHAUST ################
-P_fus: # Fusion power.
-  value: 2700
-  unit: MW
-# Rr_DT: [1/s] D-T fusion reaction rate (volume-integrated).
-# Rr_DDn: [1/s] D-D fusion reaction rate (He3+n branch).
-# Rr_DDp: [1/s] D-D fusion reaction rate (T+p branch).
-# Rr_DHe3: [1/s] D-He3 fusion reaction rate.
-# Rr_TT: [1/s] T-T fusion reaction rate.
-# Rr_He3He3: [1/s] He3-He3 fusion reaction rate.
-# Rr_THe3: [1/s] T-He3 fusion reaction rate.
-# P_fus_DT: [W] Total D-T fusion power.
-# P_fus_DT_alpha: [W] Alpha power from D-T fusion.
-# P_fus_DT_n: [W] Neutron power from D-T fusion.
-# P_fus_DD: [W] Total D-D fusion power.
-# P_fus_DDn: [W] D-D fusion power from the He3+n branch.
-# P_fus_DDn_He3: [W] Helium-3 power from D-D fusion (He3+n branch).
-# P_fus_DDn_n: [W] Neutron power from D-D fusion (He3+n branch).
-# P_fus_DDp: [W] D-D fusion power from the T+p branch.
-# P_fus_DDp_T: [W] Triton power from D-D fusion (T+p branch).
-# P_fus_DDp_p: [W] Proton power from D-D fusion (T+p branch).
-# P_fus_DHe3: [W] Total D-He3 fusion power.
-# P_fus_DHe3_alpha: [W] Alpha power from D-He3 fusion.
-# P_fus_DHe3_p: [W] Proton power from D-He3 fusion.
-# P_fus_TT: [W] Total T-T fusion power.
-# P_charged: [W] Charged-particle fusion power deposited in the plasma.
-# P_th_tot: [W] Total thermal power.
-# P_elec_tot: [W] Gross electric power.
-# P_elec_net: [W] Net electric power.
-P_aux: 50e6 # [W] Total auxiliary heating power.
-# P_ohmic: [W] Ohmic heating power.
-# eta_th: [dimensionless] Plant thermal/electric efficiency.
-# Q_e: [dimensionless] Electric power multiplication.
-P_wall: 4.05e6 # [W/m^2] Fusion power wall loading.
-# P_NBI: [W] Neutral beam injected power.
-# P_LHCD: [W] Lower hybrid coupled power.
-# P_ICRF: [W] ICRF coupled power.
-# P_LH: [W] L-H transition threshold power.
-# P_sep: [W] Power across the separatrix.
-# P_sep_over_R: [W/m] P_sep divided by major radius.
-# P_sep_B_over_q95AR: [W*T/m] P_sep * B0 / (q95 * A * R).
-# P_loss: [W] Power loss across the plasma boundary.
-# P_rad: [W] Core radiated power (or total if not separated).
-# Q_sci: [dimensionless] Scientific Q
-
-################ SCALING INPUTS ################
-# n_la: [1/m^3] Line-averaged electron density.
-# kappa_ipb: [dimensionless] IPB-specific elongation at separatrix.
-# afuel: [amu] Average fuel mass number.
+metadata:
+  id: Stellaris2025
+  name: Stellaris 2025 - Point A
+  organization: Proxima
+  year: 2025
+  doi: 10.1016/j.fusengdes.2025.114868
+tags:
+- stellarator
+solver_tags:
+  mode: default
+  verbosity: false
+variables:
+  R:
+    value: 12.74
+    fixed: true
+  a:
+    value: 1.3
+    fixed: true
+  A:
+    value: 9.8
+    fixed: true
+  V_p: 425
+  S_p: 327
+  B0: 9.0
+  beta_N: 0.0276
+  T_avg:
+    value: 12
+    unit: keV
+  n_avg: 3.17e20
+  n0: 5.06e20
+  Z_eff: 1.2
+  tau_E: 1.46
+  tau_p: 11
+  P_fus:
+    value: 2700
+    unit: MW
+  P_aux: 50e6
+  P_wall: 4.05e6

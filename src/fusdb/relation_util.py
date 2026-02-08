@@ -1,304 +1,405 @@
-"""Shared utilities for relation definitions and solver constraint handling."""
+"""Utilities shared by Relation objects."""
 
-import math
-from functools import lru_cache
-from typing import Any, Callable, Iterable, Mapping, MutableMapping, Sequence
+from __future__ import annotations
+
+from typing import Callable, Iterable
+import types
+import inspect
 
 import sympy as sp
-from sympy.parsing.sympy_parser import parse_expr
-from sympy.core.relational import Relational
-import yaml
-
-from fusdb.registry import VARIABLES_PATH
-
-REL_TOL_DEFAULT = 1e-2  # relative tolerance for relation checks
-_SYMBOLS: dict[str, sp.Symbol] = {}
 
 
-def symbol(name: str) -> sp.Symbol:
-    """Get a stable Sympy symbol for a variable name."""
-    # Cache symbols to keep identity stable across relations.
-    sym = _SYMBOLS.get(name)
-    if sym is None:
-        sym = sp.Symbol(name, real=True)
-        _SYMBOLS[name] = sym
-    return sym
+def function_inputs(func: Callable) -> list[str]:
+    """Return ordered input names for a callable.
+
+    Args:
+        func: Callable to introspect.
+
+    Returns:
+        Ordered list of parameter names.
+    """
+    sig = inspect.signature(func)
+    inputs: list[str] = []
+    for name, param in sig.parameters.items():
+        if param.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        ):
+            inputs.append(name)
+    return inputs
 
 
-@lru_cache(maxsize=1)
-def _allowed_variables_raw() -> dict[str, object]:
-    """Load the raw allowed variables mapping from YAML."""
-    # Read the registry once and validate its shape.
-    data = yaml.safe_load(VARIABLES_PATH.read_text()) or {}
-    if not isinstance(data, dict):
-        raise ValueError("allowed_variables.yaml must contain a mapping")
-    return data
+def build_sympy_expr(
+    func: Callable,
+    inputs: Iterable[str],
+    output: str,
+) -> tuple[sp.Expr | None, dict[str, sp.Symbol] | None]:
+    """Create an implicit sympy expression output - f(inputs).
 
+    Args:
+        func: Explicit relation function.
+        inputs: Ordered input variable names.
+        output: Output variable name.
 
-@lru_cache(maxsize=1)
-def _constraint_symbols() -> dict[str, sp.Symbol]:
-    """Build a symbol table for allowed variables used in constraints."""
-    # Create a shared symbol table so constraints parse consistently.
-    return {name: symbol(name) for name in _allowed_variables_raw().keys()}
+    Returns:
+        (expr, symbols) or (None, None) if conversion fails.
+    """
+    symbols = {name: sp.Symbol(name, real=True) for name in (*inputs, output)}
+    try:
+        expr = func(*[symbols[name] for name in inputs])
+        return symbols[output] - expr, symbols
+    except Exception:
+        pass
 
+    class _SympyModuleProxy:
+        """Proxy math/numpy-style functions to sympy equivalents (best-effort)."""
 
-def parse_constraint(expr: str | Relational) -> Relational:
-    """Parse a constraint string into a Sympy relational."""
-    # Allow pre-parsed constraints to pass through.
-    if isinstance(expr, Relational):
-        return expr
-    # Parse string constraints using the allowed-variable symbol table.
-    if not isinstance(expr, str):
-        raise ValueError(f"Constraint must be a string or Sympy relational; got {type(expr).__name__}")
-    parsed = parse_expr(expr, local_dict=_constraint_symbols(), evaluate=False)
-    # Ensure the parsed value is a relational expression.
-    if isinstance(parsed, bool) or parsed in (sp.true, sp.false):
-        raise ValueError(f"Constraint {expr!r} must be a relational expression")
-    if not isinstance(parsed, Relational):
-        raise ValueError(f"Constraint {expr!r} must be a relational expression")
-    return parsed
+        _ALT = {
+            "arcsin": "asin",
+            "arccos": "acos",
+            "arctan": "atan",
+            "arcsinh": "asinh",
+            "arccosh": "acosh",
+            "arctanh": "atanh",
+            "log10": "log",
+            "log2": "log",
+            "power": "Pow",
+            "abs": "Abs",
+            "fabs": "Abs",
+        }
 
+        _CONST = {
+            "pi": sp.pi,
+            "e": sp.E,
+        }
 
-@lru_cache(maxsize=1)
-def variable_constraints() -> dict[str, tuple[Relational, ...]]:
-    """Load per-variable constraint expressions from allowed variables YAML."""
-    # Parse registry constraints once and cache them.
-    constraints: dict[str, tuple[Relational, ...]] = {}
-    data = _allowed_variables_raw()
-    for name, meta in data.items():
-        if not isinstance(meta, dict):
-            continue
-        raw = meta.get("constraints")
-        if raw is None:
-            continue
-        if isinstance(raw, str):
-            items = [raw]
-        elif isinstance(raw, (list, tuple)):
-            items = list(raw)
-        else:
-            raise ValueError(f"constraints for {name!r} must be a string or list of strings")
-        parsed = tuple(parse_constraint(item) for item in items)
-        constraints[name] = parsed
-    return constraints
+        def __getattr__(self, name: str) -> object:
+            if name in self._CONST:
+                return self._CONST[name]
+            if hasattr(sp, name):
+                return getattr(sp, name)
+            alt = self._ALT.get(name)
+            if alt and hasattr(sp, alt):
+                return getattr(sp, alt)
+            raise AttributeError(name)
 
-
-def constraints_for_vars(names: Iterable[str]) -> tuple[Relational, ...]:
-    """Return the combined constraints for a collection of variable names."""
-    # Collect all per-variable constraints for the given names.
-    merged: list[Relational] = []
-    mapping = variable_constraints()
-    for name in names:
-        merged.extend(mapping.get(name, ()))
-    return tuple(merged)
-
-
-def numeric_value(val: sp.Expr | float | int) -> float | None:
-    """Return a finite float for numeric Sympy expressions or Python numbers."""
-    # Evaluate Sympy expressions safely without introducing symbolic dependencies.
-    if isinstance(val, sp.Expr):
-        if val.free_symbols:
-            return None
-        try:
-            evaluated = val.evalf(chop=True)
-        except Exception:
-            return None
-        if evaluated.is_real is False:
-            return None
-        try:
-            number = float(evaluated)
-        except (TypeError, ValueError):
-            return None
-        return number if math.isfinite(number) else None
-    if isinstance(val, (int, float)):
-        return float(val) if math.isfinite(val) else None
-    return None
-
-
-def as_float(value: Any) -> float | None:
-    """Return a finite float for numeric values, else None."""
-    # Filter out non-numeric and relational inputs early.
-    if value is None or isinstance(value, Relational):
-        return None
-    if isinstance(value, sp.Expr):
-        return numeric_value(value)
-    if isinstance(value, (int, float)):
-        return numeric_value(value)
-    return None
-
-
-def first_numeric(
-    values: Mapping[str, Any],
-    *names: str,
-    default: float | None = None,
-) -> float | None:
-    """Return the first numeric value among the requested keys."""
-    # Walk keys in order and return the first numeric value.
-    for name in names:
-        numeric = as_float(values.get(name))
-        if numeric is not None:
-            return numeric
-    return default
-
-
-def update_value(
-    values: MutableMapping[str, float],
-    name: str,
-    new_value: float,
-    *,
-    eps: float = 1e-12,
-) -> bool:
-    """Update a numeric value if it differs beyond a relative epsilon."""
-    # Use a relative threshold to avoid noisy updates.
-    old_value = values.get(name)
-    if old_value is None or abs(old_value - new_value) > eps * max(abs(old_value), abs(new_value), 1.0):
-        values[name] = new_value
-        return True
-    return False
-
-
-def relation_residual(
-    values: Mapping[str, float],
-    vars: Sequence[str],
-    residual_fn: Callable[..., object] | None,
-    expr: sp.Expr,
-) -> float | None:
-    """Evaluate a relation residual using lambdify when possible."""
-    # Require all inputs before attempting evaluation.
-    if any(name not in values for name in vars):
-        return None
-    # Prefer the lambdified residual for speed.
-    args = [values[name] for name in vars]
-    if residual_fn is not None:
-        try:
-            result = residual_fn(*args)
-        except Exception:
-            result = None
-        else:
-            if isinstance(result, (list, tuple)) and result:
-                result = result[0]
+    proxy = _SympyModuleProxy()
+    patched_globals = dict(func.__globals__)
+    patched_globals.setdefault("__builtins__", func.__globals__.get("__builtins__", __builtins__))
+    # Swap common module handles if present.
+    if "math" in patched_globals:
+        patched_globals["math"] = proxy
+    if "np" in patched_globals:
+        patched_globals["np"] = proxy
+    if "numpy" in patched_globals:
+        patched_globals["numpy"] = proxy
+    # Swap common direct imports (sin, cos, pi, etc.) if present.
+    for name in (
+        "pi",
+        "e",
+        "sin",
+        "cos",
+        "tan",
+        "asin",
+        "acos",
+        "atan",
+        "arcsin",
+        "arccos",
+        "arctan",
+        "sinh",
+        "cosh",
+        "tanh",
+        "asinh",
+        "acosh",
+        "atanh",
+        "sqrt",
+        "exp",
+        "log",
+        "log10",
+        "log2",
+        "power",
+        "abs",
+        "fabs",
+        "floor",
+        "ceil",
+    ):
+        if name in patched_globals:
             try:
-                numeric = float(result)
-            except (TypeError, ValueError):
-                numeric = None
-            else:
-                if math.isfinite(numeric):
-                    return numeric
-    # Fallback to symbolic substitution when lambdify fails.
-    subs = {symbol(name): sp.Float(values[name]) for name in vars}
-    return numeric_value(expr.subs(subs))
-
-
-def solve_linear_system(
-    equations: Sequence[sp.Expr],
-    unknowns: Sequence[sp.Symbol],
-) -> dict[sp.Symbol, sp.Expr] | None:
-    """Solve a linear system if possible, returning a symbol->expr map."""
-    # Convert to a matrix form and attempt a linear solve.
+                patched_globals[name] = getattr(proxy, name)
+            except AttributeError:
+                continue
     try:
-        matrix, rhs = sp.linear_eq_to_matrix(equations, unknowns)
-        solutions = sp.linsolve((matrix, rhs), unknowns)
+        patched_func = types.FunctionType(
+            func.__code__,
+            patched_globals,
+            func.__name__,
+            func.__defaults__,
+            func.__closure__,
+        )
+        expr = patched_func(*[symbols[name] for name in inputs])
+        return symbols[output] - expr, symbols
     except Exception:
-        return None
-    for sol in solutions:
-        return dict(zip(unknowns, sol))
-    return None
+        return None, None
 
 
-def solve_numeric_system(
-    equations: Sequence[sp.Expr],
-    unknowns: Sequence[sp.Symbol],
-    guesses: Sequence[float],
-    *,
-    max_iter: int,
-) -> list[float] | None:
-    """Solve a nonlinear system numerically, preferring least_squares."""
-    # Try least_squares first when SciPy is available.
-    try:
-        from scipy.optimize import least_squares  # type: ignore[import-not-found]
-    except Exception:
-        least_squares = None
+def evaluate_constraints(
+    constraints: Iterable[str] | None,
+    values: dict[str, object],
+) -> list[str]:
+    """Evaluate constraint strings against provided values.
 
-    if least_squares is not None:
-        func = sp.lambdify(unknowns, equations, "math")
+    Args:
+        constraints: Iterable of constraint expressions.
+        values: Mapping of variable names to numeric values.
 
-        # Map vector inputs to residual list.
-        def residuals(x: Sequence[float]) -> list[float]:
-            result = func(*x)
-            if isinstance(result, (list, tuple)):
-                return [float(val) for val in result]
-            return [float(result)]
-
-        try:
-            lsq = least_squares(residuals, guesses, max_nfev=max_iter * 20)
-        except Exception:
-            lsq = None
-        if lsq is not None and lsq.success:
-            return [float(val) for val in lsq.x]
-
-    # Fall back to nsolve when the system is square.
-    if len(equations) != len(unknowns):
-        return None
-    try:
-        nsolve_solution = sp.nsolve(equations, unknowns, guesses, tol=1e-10, maxsteps=max_iter)
-    except Exception:
-        return None
-    if len(unknowns) == 1:
-        return [float(nsolve_solution)]
-    try:
-        return [float(val) for val in nsolve_solution]
-    except TypeError:
-        return [float(nsolve_solution)]
-
-
-def constraints_ok(
-    constraints: Sequence[tuple[tuple[str, ...], Callable[..., object] | None, Relational]],
-    values: Mapping[str, float],
-    *,
-    focus_names: set[str] | None = None,
-) -> bool:
-    """Evaluate precompiled constraints against known values."""
+    Returns:
+        List of violated constraint strings (empty if none).
+    """
     if not constraints:
-        return True
-    # Optionally restrict checks to constraints that touch updated variables.
-    focus = focus_names or set()
-    for names, fn, constraint in constraints:
-        if focus and names and not (set(names) & focus):
+        return []
+    failed: list[str] = []
+    for constraint in constraints:
+        try:
+            expr = sp.sympify(constraint, locals=values)
+            if expr is sp.S.true:
+                continue
+            if expr is sp.S.false:
+                failed.append(constraint)
+                continue
+            if not bool(expr):
+                failed.append(constraint)
+        except Exception:
+            # If evaluation fails, keep it undecidable rather than failing hard.
             continue
-        if any(name not in values for name in names):
-            continue
-        args = [values[name] for name in names]
-        verdict = None
-        if fn is not None:
-            # Prefer fast lambdified constraint evaluation.
-            try:
-                verdict = fn(*args)
-            except Exception:
-                verdict = None
-            else:
-                if isinstance(verdict, bool):
-                    if verdict is False:
-                        return False
-                    continue
-                if verdict is True or verdict == sp.true:
-                    continue
-                if verdict is False or verdict == sp.false:
-                    return False
-                verdict = None
+    return failed
 
-        # Fallback to symbolic substitution when lambdify is inconclusive.
-        if verdict is None:
-            subs = {symbol(name): sp.Float(values[name]) for name in names}
-            try:
-                evaluated = constraint.subs(subs)
-            except Exception:
+
+def check_relation_satisfied(
+    rel: object,
+    values: dict[str, object],
+    *,
+    rel_tol: float | None = None,
+    abs_tol: float | None = None,
+    check_constraints: bool = True
+) -> tuple[bool, str, float | None]:
+    """Check if relation is satisfied with given values.
+    
+    Performs a comprehensive check including:
+    1. Verifying all variables are present
+    2. Checking constraints (if requested)
+    3. Evaluating the relation
+    4. Computing residual (actual - expected)
+    5. Checking if within tolerance
+    
+    Args:
+        rel: Relation object to check
+        values: Variable values dictionary
+        rel_tol: Relative tolerance (uses rel.rel_tol_default if None)
+        abs_tol: Absolute tolerance (uses rel.abs_tol_default if None)
+        check_constraints: If True, check constraints before evaluating
+        
+    Returns:
+        Tuple of (satisfied, status, residual) where:
+        - satisfied: True if relation is satisfied within tolerance
+        - status: "SAT" (satisfied), "VIOLATED" (outside tolerance), or "UNDECIDABLE" (cannot evaluate)
+        - residual: actual - expected value, or None if undecidable
+    """
+    from .utils import within_tolerance
+    
+    # Check if all variables are present
+    if any(name not in values for name in rel.variables):
+        return (False, "UNDECIDABLE", None)
+    
+    # Check constraints if requested
+    if check_constraints:
+        violations = evaluate_constraints(rel.constraints, values)
+        if violations:
+            return (False, "VIOLATED", None)
+    
+    # Evaluate relation
+    try:
+        expected = rel.evaluate(**{name: values[name] for name in rel.inputs})
+    except Exception:
+        return (False, "UNDECIDABLE", None)
+    
+    actual = values.get(rel.output)
+    
+    # Convert to scalars
+    try:
+        actual_scalar = float(actual) if actual is not None else None
+        expected_scalar = float(expected) if expected is not None else None
+    except Exception:
+        return (False, "UNDECIDABLE", None)
+    
+    if actual_scalar is None or expected_scalar is None:
+        return (False, "UNDECIDABLE", None)
+    
+    # Calculate residual
+    residual = actual_scalar - expected_scalar
+    
+    # Check tolerance
+    rel_tol_val = rel_tol if rel_tol is not None else (rel.rel_tol_default or 0.0)
+    abs_tol_val = abs_tol if abs_tol is not None else (rel.abs_tol_default or 0.0)
+    
+    satisfied = within_tolerance(actual_scalar, expected_scalar, 
+                                 rel_tol=rel_tol_val, abs_tol=abs_tol_val)
+    status = "SAT" if satisfied else "VIOLATED"
+    
+    return (satisfied, status, residual)
+
+
+def build_inverse_solver(
+    expr: sp.Expr,
+    symbols: dict[str, sp.Symbol],
+    unknown: str,
+    ordered_vars: Iterable[str],
+) -> Callable | None:
+    """Try to build a numeric inverse solver for a single unknown.
+
+    Args:
+        expr: Implicit expression equal to 0.
+        symbols: Sympy symbols by name.
+        unknown: Variable name to solve for.
+        ordered_vars: All variable names in order.
+
+    Returns:
+        Callable or None if an inverse cannot be built.
+    """
+    try:
+        solutions = sp.solve(expr, symbols[unknown])
+    except Exception:
+        return None
+    if not solutions:
+        return None
+    try:
+        args = [symbols[name] for name in ordered_vars if name != unknown]
+        return sp.lambdify(args, solutions[0], modules=["numpy", "sympy"])
+    except Exception:
+        return None
+
+
+def get_filtered_relations(
+    reactor_tags: Iterable[str] | str | None,
+    variable_names: Iterable[str] | None,
+    variable_methods: Iterable[str] | None,
+    verbose: bool = False,
+    extra_relations: Iterable[object] | None = None,
+):
+    """Get filtered relations based on tags and optional domain tags.
+
+    Tag inputs are normalized internally (lowercase, alphanumeric).
+    Unrecognized tags are simply ignored. This function loads all relation
+    modules so the registry is populated; it does not require a Reactor object.
+
+    Args:
+        reactor_tags: Tags identifying the reactor type (any case/format)
+        variable_names: Names of variables available in the system
+        variable_methods: Relation names selected as method overrides
+        verbose: If True, log warnings when tags are rejected
+        extra_relations: Optional relations to include alongside the registry
+
+    Returns:
+        List of relations matching the criteria (or all if no filters)
+    """
+    from .relation_class import _RELATION_REGISTRY
+    from . import relations
+    from .registry import (
+        ALLOWED_CONFINEMENT_MODES,
+        ALLOWED_REACTOR_CONFIGURATIONS,
+        ALLOWED_REACTOR_FAMILIES,
+        ALLOWED_SOLVING_ORDER,
+        canonical_variable_name,
+    )
+    from .utils import normalize_tags_to_tuple
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Ensure relations are loaded before filtering (no Reactor instance required)
+    relations.import_relations()
+
+    # Normalize inputs
+    tags_normalized = tuple(normalize_tags_to_tuple(reactor_tags or ()))
+    variable_names_set = set(variable_names or ())
+    method_names = {name for name in (variable_methods or ()) if name}
+
+    allowed_domains = set(ALLOWED_SOLVING_ORDER)
+    domain_filters = {tag for tag in tags_normalized if tag in allowed_domains}
+    reactor_tags_normalized = tuple(tag for tag in tags_normalized if tag not in allowed_domains)
+
+    relations = list(_RELATION_REGISTRY)
+    if extra_relations:
+        seen = {id(rel) for rel in relations}
+        for rel in extra_relations:
+            if id(rel) in seen:
                 continue
-            if evaluated is True or evaluated == sp.true:
+            relations.append(rel)
+            seen.add(id(rel))
+
+    # If no filtering, return all
+    if not reactor_tags_normalized and not domain_filters and not variable_names_set:
+        if verbose:
+            logger.info("No filters applied; returning all %d relations", len(relations))
+        return list(relations)
+
+    results = []
+    allowed_specific = (
+        set(ALLOWED_REACTOR_CONFIGURATIONS)
+        | set(ALLOWED_CONFINEMENT_MODES)
+        | set(ALLOWED_REACTOR_FAMILIES)
+    )
+    tags_set = set(reactor_tags_normalized)
+
+    override_outputs: set[str] = set()
+    if method_names:
+        for relation in relations:
+            if relation.name in method_names:
+                override_outputs.add(canonical_variable_name(relation.output))
+
+    for relation in relations:
+        relation_tags = set(relation.tags)  # Already normalized by decorator
+        domains = relation_tags.intersection(allowed_domains)
+        reactor_specific = relation_tags.intersection(allowed_specific)
+
+        # Domain filter (domain tags are part of reactor_tags)
+        if domain_filters:
+            if relation_tags.intersection(domain_filters):
+                pass
+            elif domains and not domains.intersection(domain_filters):
+                if verbose:
+                    logger.info("Rejecting %s: domain %s not in tags", relation.name, sorted(domain_filters))
                 continue
-            if evaluated is False or evaluated == sp.false:
-                return False
-            try:
-                if bool(evaluated) is False:
-                    return False
-            except Exception:
+            elif not domains and relation.name not in domain_filters:
+                if verbose:
+                    logger.info("Rejecting %s: no domain match for %s", relation.name, sorted(domain_filters))
                 continue
-    return True
+
+        # Reactor tags must satisfy non-domain relation tags
+        if reactor_specific and not reactor_specific.issubset(tags_set):
+            if verbose:
+                missing = reactor_specific - tags_set
+                logger.info("Rejecting %s: missing tags %s", relation.name, sorted(missing))
+            continue
+
+        # Method override for outputs
+        if override_outputs:
+            output_name = canonical_variable_name(relation.output)
+            if output_name in override_outputs and relation.name not in method_names:
+                if verbose:
+                    logger.info("Rejecting %s: method override", relation.name)
+                continue
+
+        results.append(relation)
+
+    if verbose:
+        tags_label = ", ".join(reactor_tags_normalized) if reactor_tags_normalized else "none"
+        domain_label = ", ".join(sorted(domain_filters)) if domain_filters else "none"
+        logger.info(
+            "Filtered relations: %d of %d (domain=%s, tags=%s)",
+            len(results),
+            len(_RELATION_REGISTRY),
+            domain_label,
+            tags_label,
+        )
+    return results

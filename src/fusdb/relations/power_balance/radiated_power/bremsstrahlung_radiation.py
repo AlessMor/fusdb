@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from fusdb.reactor_class import Reactor
-
-
-@Reactor.relation(
-    "power_balance",
+from fusdb.relation_class import Relation_decorator as Relation
+@Relation(
     name="Bremsstrahlung radiation",
     output="P_brem",
+    tags=("power_balance",),
     constraints=("T_avg >= 0", "n_e >= 0", "V_p >= 0", "Z_eff > 0", "P_brem >= 0"),
 )
 def bremsstrahlung_radiation(n_e: float, T_avg: float, Z_eff: float, V_p: float) -> float:

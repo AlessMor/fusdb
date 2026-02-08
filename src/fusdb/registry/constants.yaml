@@ -1,0 +1,28 @@
+# Shared physical constants and reaction energies
+
+# Conversion factors
+MEV_TO_J: 1.602176634e-13  # 1 MeV in joules
+KEV_TO_J: 1.602176634e-16  # 1 keV in joules
+
+# Physical constants
+MU0: 1.25663706212e-6  # Vacuum permeability (H/m), 4π×10^-7
+
+# D-T fusion reaction energies (Joules)
+DT_REACTION_ENERGY_J: 2.8198311e-12  # 17.6 MeV
+DT_ALPHA_ENERGY_J: 5.6076218e-13     # 3.5 MeV
+DT_N_ENERGY_J: 2.2590689e-12         # 14.1 MeV (17.6 - 3.5)
+
+# D-D fusion reaction energies (Joules)
+DD_T_ENERGY_J: 1.6182e-13            # 1.01 MeV
+DD_HE3_ENERGY_J: 1.3137848e-13       # 0.82 MeV
+DD_P_ENERGY_J: 4.8385734e-13         # 3.02 MeV
+DD_N_ENERGY_J: 3.9253334e-13         # 2.45 MeV
+
+# D-He3 fusion reaction energies (Joules)
+DHE3_ALPHA_ENERGY_J: 5.7678388e-13   # 3.6 MeV
+DHE3_P_ENERGY_J: 2.3551998e-12       # 14.7 MeV
+
+# T-T fusion reaction energies (Joules)
+TT_REACTION_ENERGY_J: 1.810459596e-12 # 11.3 MeV
+
+# NOTE: could be improved by doing as in PROCESS: (mass difference)*c^2

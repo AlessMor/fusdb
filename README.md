@@ -23,7 +23,7 @@ Each reactor is defined by a `reactor.yaml` file. See `src/fusdb/registry/reacto
 
 Each reactor data is taken from papers and represent a plasma scenario for a fusion reactor.
 
-## Relations
+## Relation and RelationSystem
 
 Relations are defined in Python modules within `src/fusdb/relations/`. They are used to:
 - Cross-check values
@@ -39,7 +39,7 @@ Relations are defined in Python modules within `src/fusdb/relations/`. They are 
 
 The `docs/relation_map.ipynb` notebook generates an interactive graph of the relations between variables.
 
-[View the interactive relation graph](https://AlessMor.github.io/fusdb/relation_graph.html) 
+[View the interactive relation graph](https://AlessMor.github.io/fusdb/docs/relation_graph.html) 
 
 ## Useful links and references:
 

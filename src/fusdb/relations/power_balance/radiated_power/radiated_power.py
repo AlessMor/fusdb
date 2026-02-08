@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from fusdb.reactor_class import Reactor
-
+from fusdb.relation_class import Relation_decorator as Relation
 # NOTE: PROCESS and cfspopcon use radas radiation loss function Lz, that includes all sources of radiation in a formula
 # P_i = n_i * n_e * Lz(Z_i, T_i).
 
 
-@Reactor.relation(
-    "power_balance",
+@Relation(
     name="Total radiated power",
     output="P_rad",
+    tags=("power_balance",),
     constraints=("P_rad >= 0",),
 )
 def total_radiated_power(

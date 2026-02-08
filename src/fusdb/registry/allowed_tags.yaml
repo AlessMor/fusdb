@@ -1,35 +1,39 @@
 # Allowed tags for reactors and relations.
+
+# ! ALL TAGS SHOULD BE LOWERCASE AND WITHOUT SPACES OR SYMBOLS !
 reactor_families:
-  - ARC
-  - DEMO
-  - STEP
+  - arc
+  - demo
+  - step
 reactor_configurations:
   - tokamak
-  - compact tokamak
-  - spherical tokamak
+  - compacttokamak
+  - sphericaltokamak
   - stellarator
 confinement_modes:
-  - H-mode
-  - I-mode
-  - L-mode
-relation_domains:
+  - hmode
+  - imode
+  - lmode
+
+solving_order:
   geometry: 1
   plasma: 2
   confinement: 2
-  fusion_power: 3
-  power_exhaust: 4
+  fusionpower: 3
+  powerexhaust: 4
+
 required_metadata_fields:
   - id
-  - name
-  - reactor_configuration
-  - organization
+  - reactorconfiguration
 optional_metadata_fields:
-  - reactor_family
+  - name
+  - organization
+  - reactorfamily
   - country
   - site
-  - design_year
+  - designyear
   - doi
   - notes
-  - confinement_mode
-  - solve_strategy
-  - allow_relation_overrides
+  - confinementmode
+  - solvestrategy
+  - allowrelationoverrides

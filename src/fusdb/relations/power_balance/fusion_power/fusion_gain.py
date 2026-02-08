@@ -4,13 +4,11 @@ General efficiency metrics"""
 from __future__ import annotations
 import numpy as np
 
-from fusdb.reactor_class import Reactor
-
-
-@Reactor.relation(
-    "fusion_power",
+from fusdb.relation_class import Relation_decorator as Relation
+@Relation(
     name="Fusion triple product",
     output="n_i_tau_E_T_i",
+    tags=("fusion_power",),
 )
 def fusion_triple_product(
     n_i_peak: float, T_i_peak: float, tau_E: float
@@ -30,10 +28,11 @@ def fusion_triple_product(
     """
     return n_i_peak * T_i_peak * tau_E
 
-@Reactor.relation(
-    "fusion_power",
+########################################
+@Relation(
     name="Physics gain factor",
     output="Q_sci",
+    tags=("fusion_power",),
 )
 def physics_gain_factor(
     P_fus: float, P_aux: float) -> float:
@@ -56,10 +55,11 @@ def physics_gain_factor(
         Q_phy = P_fus / P_aux
     return Q_phy
 
-@Reactor.relation(
-    "fusion_power",
+########################################
+@Relation(
     name="Engineering gain factor",
     output="Q_eng",
+    tags=("fusion_power",),
 )
 def engineering_gain_factor(
     P_fus_el: float, P_aux_el: float) -> float:
@@ -73,4 +73,3 @@ def engineering_gain_factor(
         Q_eng = (P_fus_el - P_aux_el) / P_aux_el
     return Q_eng
 
-# TODO(med): consider adding the definition used in cfspopcon: Q = P_fusion / (P_ohmic + P_auxiliary_launched)

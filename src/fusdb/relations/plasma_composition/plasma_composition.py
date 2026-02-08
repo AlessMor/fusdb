@@ -1,174 +1,159 @@
-"""Ion composition relations for densities and fractions."""
-
+"""Ion composition relations generalized by allowed species."""
 from __future__ import annotations
+from inspect import Signature, Parameter
+from pathlib import Path
+from fusdb.relation_class import Relation_decorator as Relation
+from fusdb.utils import load_yaml
 
-from fusdb.reactor_class import Reactor
+_REGISTRY = Path(__file__).resolve().parents[2] / "registry" / "allowed_species.yaml"
 
+def _load_species() -> dict:
+    """Load allowed species metadata. Args: none. Returns: dict."""
+    try:
+        return load_yaml(_REGISTRY)
+    except Exception:
+        return {}
 
-@Reactor.relation(
-    "plasma",
-    name="Electron density from volume-averaged density",
-    output="n_e",
-    variables=("n_avg",),
-)
-def electron_density_from_average(n_avg: float) -> float:
-    """Return electron density from volume-averaged density."""
-    return n_avg
-
-
-@Reactor.relation(
-    "plasma",
-    name="Electron density from ion fractions",
-    output="n_e",
-)
-def electron_density_from_fractions(
-    n_i: float,
-    f_D: float,
-    f_T: float,
-    f_He3: float,
-    f_He4: float,
-) -> float:
-    """Return electron density from ion density and ion fractions."""
-    return n_i * (f_D + f_T + 2.0 * f_He3 + 2.0 * f_He4)
-# TODO(low): improve the formulation so that it takes all ion fractions automatically
+_SPECIES_DATA = _load_species()
+SPECIES = tuple(_SPECIES_DATA.keys())
+FRACTIONS = [f"f_{s}" for s in SPECIES]
+DENSITIES = {s: f"n_{s}" for s in SPECIES}
+CHARGE = [(_SPECIES_DATA.get(s, {}) or {}).get("atomic_number", 1) for s in SPECIES]
+MASS = [(_SPECIES_DATA.get(s, {}) or {}).get("atomic_mass", 1) for s in SPECIES]
 
 
-@Reactor.relation(
-    "plasma",
-    name="Deuterium density from fraction",
-    output="n_D",
-)
-def deuterium_density(f_D: float, n_i: float) -> float:
-    """Return deuterium density from ion fraction and total ion density."""
-    return f_D * n_i
+def _relation(name: str, output: str, inputs: list[str], func, constraints=None, rel_tol=None):
+    """Create a Relation with standard plasma tags. Args: name, output, inputs, func. Returns: Relation."""
+    func.__signature__ = Signature([Parameter(n, Parameter.POSITIONAL_OR_KEYWORD) for n in inputs])
+    return Relation(name=name, output=output, tags=("plasma",), constraints=constraints, rel_tol_default=rel_tol)(func)
 
 
-@Reactor.relation(
-    "plasma",
-    name="Tritium density from fraction",
-    output="n_T",
-)
-def tritium_density(f_T: float, n_i: float) -> float:
-    """Return tritium density from ion fraction and total ion density."""
-    return f_T * n_i
+def _fraction_sum_expr() -> str:
+    """Build sum(f_i) constraint string. Args: none. Returns: str."""
+    return " + ".join(FRACTIONS) if FRACTIONS else "0"
 
 
-@Reactor.relation(
-    "plasma",
-    name="Helium-3 density from fraction",
-    output="n_He3",
-)
-def helium3_density(f_He3: float, n_i: float) -> float:
-    """Return helium-3 density from ion fraction and total ion density."""
-    return f_He3 * n_i
+def _charge_sum_expr() -> str:
+    """Build sum(Z_i * f_i) constraint string. Args: none. Returns: str."""
+    terms = [f"{z}*{f}" if z != 1 else f for z, f in zip(CHARGE, FRACTIONS)]
+    return " + ".join(terms) if terms else "0"
 
 
-@Reactor.relation(
-    "plasma",
-    name="Helium-4 density from fraction",
-    output="n_He4",
-)
-def helium4_density(f_He4: float, n_i: float) -> float:
-    """Return helium-4 density from ion fraction and total ion density."""
-    return f_He4 * n_i
+# Dynamic fraction relations.
+_relations = []
 
+if FRACTIONS:
+    sum_expr = _fraction_sum_expr()
+    charge_expr = _charge_sum_expr()
 
-@Reactor.relation(
-    "plasma",
-    name="Deuterium fraction from density",
-    output="f_D",
-    constraints=("n_i > 0",),
-)
-def deuterium_fraction(n_D: float, n_i: float) -> float:
-    """Return deuterium fraction from density and total ion density."""
-    return n_D / n_i
+    def _ion_density(*args):
+        n_e = args[0]
+        denom = sum(val * w for val, w in zip(args[1:], CHARGE))
+        return n_e / denom
 
+    _relations.append(
+        _relation(
+            "Ion density from electron density and fractions",
+            "n_i",
+            ["n_e", *FRACTIONS],
+            _ion_density,
+            constraints=(f"{charge_expr} != 0",),
+        )
+    )
 
-@Reactor.relation(
-    "plasma",
-    name="Tritium fraction from density",
-    output="f_T",
-    constraints=("n_i > 0",),
-)
-def tritium_fraction(n_T: float, n_i: float) -> float:
-    """Return tritium fraction from density and total ion density."""
-    return n_T / n_i
+    def _electron_density(*args):
+        n_i = args[0]
+        denom = sum(val * w for val, w in zip(args[1:], CHARGE))
+        return n_i * denom
 
+    _relations.append(
+        _relation(
+            "Electron density from ion fractions",
+            "n_e",
+            ["n_i", *FRACTIONS],
+            _electron_density,
+        )
+    )
 
-@Reactor.relation(
-    "plasma",
-    name="Helium-3 fraction from density",
-    output="f_He3",
-    constraints=("n_i > 0",),
-)
-def helium3_fraction(n_He3: float, n_i: float) -> float:
-    """Return helium-3 fraction from density and total ion density."""
-    return n_He3 / n_i
+    def _fraction_check(*args):
+        return args[0]
 
+    _relations.append(
+        _relation(
+            "Fuel fraction sum",
+            FRACTIONS[0],
+            FRACTIONS,
+            _fraction_check,
+            constraints=(f"Abs({sum_expr} - 1) <= 1e-6",),
+            rel_tol=1e-6,
+        )
+    )
 
-@Reactor.relation(
-    "plasma",
-    name="Helium-4 fraction from density",
-    output="f_He4",
-    constraints=("n_i > 0",),
-)
-def helium4_fraction(n_He4: float, n_i: float) -> float:
-    """Return helium-4 fraction from density and total ion density."""
-    return n_He4 / n_i
+    for idx, frac in enumerate(FRACTIONS):
+        def _fraction_norm(*args, _i=idx):
+            total = sum(args)
+            if total <= 0:
+                return 1.0 / len(args)
+            return args[_i] / total
+        _relations.append(
+            _relation(
+                f"Fuel fraction equilibrium {SPECIES[idx]}",
+                frac,
+                FRACTIONS,
+                _fraction_norm,
+                constraints=(f"Abs({sum_expr} - 1) <= 1e-6",),
+                rel_tol=1e-6,
+            )
+        )
 
+    for idx, species in enumerate(SPECIES):
+        f_var = FRACTIONS[idx]
+        n_var = DENSITIES[species]
 
-@Reactor.relation(
-    "plasma",
-    name="Ion fraction normalization (solve f_D)",
-    output="f_D",
-)
-def deuterium_fraction_normalized(f_T: float, f_He3: float, f_He4: float) -> float:
-    """Return deuterium fraction from the ion fraction normalization."""
-    return 1.0 - f_T - f_He3 - f_He4
+        def _dens(*args):
+            return args[0] * args[1]
+        _relations.append(
+            _relation(
+                f"{species} density from fraction",
+                n_var,
+                [f_var, "n_i"],
+                _dens,
+            )
+        )
 
+        def _frac(*args):
+            return args[0] / args[1]
+        _relations.append(
+            _relation(
+                f"{species} fraction from density",
+                f_var,
+                [n_var, "n_i"],
+                _frac,
+                constraints=("n_i > 0",),
+            )
+        )
 
-@Reactor.relation(
-    "plasma",
-    name="Ion fraction normalization (solve f_T)",
-    output="f_T",
-)
-def tritium_fraction_normalized(f_D: float, f_He3: float, f_He4: float) -> float:
-    """Return tritium fraction from the ion fraction normalization."""
-    return 1.0 - f_D - f_He3 - f_He4
+        if len(FRACTIONS) > 1:
+            others = [f for f in FRACTIONS if f != f_var]
+            def _norm_other(*args):
+                return 1.0 - sum(args)
+            _relations.append(
+                _relation(
+                    f"Ion fraction normalization (solve {f_var})",
+                    f_var,
+                    others,
+                    _norm_other,
+                )
+            )
 
+    def _afuel(*args):
+        return sum(val * w for val, w in zip(args, MASS))
+    _relations.append(
+        _relation(
+            "Average fuel mass number",
+            "afuel",
+            FRACTIONS,
+            _afuel,
+        )
+    )
 
-@Reactor.relation(
-    "plasma",
-    name="Ion fraction normalization (solve f_He3)",
-    output="f_He3",
-)
-def helium3_fraction_normalized(f_D: float, f_T: float, f_He4: float) -> float:
-    """Return helium-3 fraction from the ion fraction normalization."""
-    return 1.0 - f_D - f_T - f_He4
-
-
-@Reactor.relation(
-    "plasma",
-    name="Ion fraction normalization (solve f_He4)",
-    output="f_He4",
-)
-def helium4_fraction_normalized(f_D: float, f_T: float, f_He3: float) -> float:
-    """Return helium-4 fraction from the ion fraction normalization."""
-    return 1.0 - f_D - f_T - f_He3
-
-
-@Reactor.relation(
-    "plasma",
-    name="Average fuel mass number",
-    output="afuel",
-)
-def average_fuel_mass_number(f_D: float, f_T: float, f_He3: float, f_He4: float) -> float:
-    """Return average ion mass number from ion fractions."""
-    return 2.0 * f_D + 3.0 * f_T + 3.0 * f_He3 + 4.0 * f_He4
-# TODO(low): improve it to work automatically by taking data from allowed_species
-
-
-# TODO(med): could add a relation to evaluate D, T, He3 injection terms at steady-state
-    # Ndot_inj_x = V_p*(n_x/tau_p_x - n_x_production + n_x_burn)
-def fuel_injection_terms():
-    pass

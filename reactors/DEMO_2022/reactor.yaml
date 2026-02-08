@@ -1,0 +1,68 @@
+metadata:
+  id: DEMO_2022
+  name: EU-DEMO 2022
+  organization: EUROFUSION
+  country: EUU
+  year: 2022
+  doi: 10.1016/j.fusengdes.2022.113080
+  notes: EU-DEMO Physics Baseline 2022
+tags:
+- tokamak
+- DEMO
+- H-mode
+solver_tags:
+  mode: default
+  verbosity: false
+variables:
+  R:
+    value: 9.0
+    fixed: true
+  a:
+    value: 2.9
+    fixed: true
+  A:
+    value: 3.1
+    fixed: true
+  kappa_95: 
+    value: 1.65
+    fixed: true
+  delta_95: 
+    value: 0.33
+    fixed: true
+  squareness: 0.0
+  B0: 5.86
+  I_p: 17.75e6
+  f_NI: 0.39
+  f_CD: 0.05
+  q95: 3.89
+  beta_N: 2.5
+  T_avg:
+    value: 12.49
+    unit: keV
+  f_GW: 1.2
+  Z_eff: 2.12
+  afuel:
+    value: 2.5
+    unit: amu
+  tau_pulse:
+    value: 7200
+    unit: s
+  H98_y2: 0.98
+  P_fus:
+    value: 2.0
+    unit: GW
+  P_aux:
+    value: 200
+    unit: MW
+  P_LH:
+    value: 120.8
+    unit: MW
+  P_sep:
+    value: 170.4
+    unit: MW
+  P_sep_over_R:
+    value: 18.9
+    unit: MW/m
+  P_sep_B_over_q95AR:
+    value: 9.2
+    unit: MW*T/m

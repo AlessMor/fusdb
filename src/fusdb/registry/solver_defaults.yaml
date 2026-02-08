@@ -1,0 +1,26 @@
+# Default solver configuration (not relation tags).
+
+# Mode can be "overwrite" or "check".
+mode: overwrite
+# Max block size for nxn solving (1..n_max).
+n_max: 4
+# Cap on overwrite passes.
+max_passes: 100
+# Fallback tolerance for variables without per-variable rel_tol.
+default_rel_tol: 0.001
+# Block solver name (only one implemented at the moment).
+solver: lsq_compact
+solving_order: [] # optional list of domain tags or Relation.name entries
+
+# Least-squares solver settings.
+lsq:
+  # Loss function for scipy.optimize.least_squares.
+  loss: soft_l1
+  # x_scale parameter (e.g., "jac" or numeric scale).
+  x_scale: jac
+  # Max function evaluations per solve.
+  max_nfev: 200
+  # Penalty residual for invalid evals/constraints.
+  penalty: 1000
+  # Scale factors applied to initial guesses.
+  multi_start_scales: [1e-3, 1e-1, 1.0, 1e1, 1e3]

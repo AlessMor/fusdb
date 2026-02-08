@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fusdb.reactor_class import Reactor
+from fusdb.relation_class import Relation_decorator as Relation
 from fusdb.relations.power_balance.fusion_power.reactivity_functions import (
     sigmav_DD_BoschHale,
     sigmav_DHe3_BoschHale,
@@ -14,10 +14,10 @@ from fusdb.relations.power_balance.fusion_power.reactivity_functions import (
 
 ################## REACTION RATES ##################
 
-@Reactor.relation(
-    "fusion_power",
+@Relation(
     name="DT reaction rate",
     output="Rr_DT",
+    tags=("fusion_power",),
 )
 def reaction_rate_dt(f_D: float, f_T: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return DT fusion reaction rate from fractions, temperature, and volume."""
@@ -25,10 +25,11 @@ def reaction_rate_dt(f_D: float, f_T: float, n_i: float, T_avg: float, V_p: floa
     return f_D * f_T * (n_i ** 2) * reactivity * V_p
 
 
-@Reactor.relation(
-    "fusion_power",
+########################################
+@Relation(
     name="DD (He3+n) reaction rate",
     output="Rr_DDn",
+    tags=("fusion_power",),
 )
 def reaction_rate_ddn(f_D: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return D(d,n)He3 reaction rate (branch) from fractions, temperature, and volume."""
@@ -36,10 +37,11 @@ def reaction_rate_ddn(f_D: float, n_i: float, T_avg: float, V_p: float) -> float
     return 0.5 * (f_D ** 2) * (n_i ** 2) * sigmav_ddn * V_p
 
 
-@Reactor.relation(
-    "fusion_power",
+########################################
+@Relation(
     name="DD (T+p) reaction rate",
     output="Rr_DDp",
+    tags=("fusion_power",),
 )
 def reaction_rate_ddp(f_D: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return D(d,p)T reaction rate (branch) from fractions, temperature, and volume."""
@@ -47,10 +49,11 @@ def reaction_rate_ddp(f_D: float, n_i: float, T_avg: float, V_p: float) -> float
     return 0.5 * (f_D ** 2) * (n_i ** 2) * sigmav_ddp * V_p
 
 
-@Reactor.relation(
-    "fusion_power",
+########################################
+@Relation(
     name="D-He3 reaction rate",
     output="Rr_DHe3",
+    tags=("fusion_power",),
 )
 def reaction_rate_dhe3(f_D: float, f_He3: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return D-He3 fusion reaction rate from fractions, temperature, and volume."""
@@ -58,10 +61,11 @@ def reaction_rate_dhe3(f_D: float, f_He3: float, n_i: float, T_avg: float, V_p: 
     return f_D * f_He3 * (n_i ** 2) * reactivity * V_p
 
 
-@Reactor.relation(
-    "fusion_power",
+########################################
+@Relation(
     name="T-T reaction rate",
     output="Rr_TT",
+    tags=("fusion_power",),
 )
 def reaction_rate_tt(f_T: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return T-T fusion reaction rate from fractions, temperature, and volume."""
@@ -69,10 +73,11 @@ def reaction_rate_tt(f_T: float, n_i: float, T_avg: float, V_p: float) -> float:
     return 0.5 * (f_T ** 2) * (n_i ** 2) * reactivity * V_p
 
 
-@Reactor.relation(
-    "fusion_power",
+########################################
+@Relation(
     name="He3-He3 reaction rate",
     output="Rr_He3He3",
+    tags=("fusion_power",),
 )
 def reaction_rate_he3he3(f_He3: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return He3-He3 fusion reaction rate from fractions, temperature, and volume."""
@@ -80,12 +85,14 @@ def reaction_rate_he3he3(f_He3: float, n_i: float, T_avg: float, V_p: float) -> 
     return 0.5 * (f_He3 ** 2) * (n_i ** 2) * reactivity * V_p
 
 
-@Reactor.relation(
-    "fusion_power",
+########################################
+@Relation(
     name="T-He3 reaction rate",
     output="Rr_THe3",
+    tags=("fusion_power",),
 )
 def reaction_rate_the3(f_T: float, f_He3: float, n_i: float, T_avg: float, V_p: float) -> float:
     """Return T-He3 fusion reaction rate from fractions, temperature, and volume."""
     reactivity = sigmav_THe3(T_avg)
     return f_T * f_He3 * (n_i ** 2) * reactivity * V_p
+

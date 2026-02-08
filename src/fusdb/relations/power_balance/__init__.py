@@ -1,12 +1,3 @@
-"""Relation modules grouped by domain."""
+"""Power balance relations."""
 
-from importlib import import_module
-from pkgutil import walk_packages
-
-
-def import_relations() -> None:
-    """Import all relation modules so decorators register their relations."""
-    for module in walk_packages(__path__, prefix=f"{__name__}."):
-        import_module(module.name)
-
-# NOTE: maybe rename power_balance/ folder to core_power_balance/ ?
+from . import power_balance  # noqa: F401

@@ -7,7 +7,7 @@ name = "fusdb"
 version = "0.1.0"
 description = "Fusion reactor scenario database with per-folder YAML and a single Reactor class."
 requires-python = ">=3.10"
-dependencies = ["PyYAML>=6.0", "sympy>=1.12", "pycountry>=24.6.1", "networkx>=3.0", "pyomo>=6.7"]
+dependencies = ["PyYAML>=6.0", "sympy>=1.12", "pycountry>=24.6.1", "hypernetx==2.4.0", "pandas==2.2.2", "fastjsonschema>=2.18", "pyomo>=6.7"]
 
 [project.scripts]
 fusdb = "fusdb.cli:main"

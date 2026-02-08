@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sympy as sp
 
-from fusdb.reactor_class import Reactor
+from fusdb.relation_class import Relation_decorator as Relation
 # Only the active default scaling is decorated for relation discovery.
 
 
@@ -373,10 +373,10 @@ def tau_E_hubbard_lower(I_p: float, B0: float, dnla20: float, P_loss: float) -> 
 
 
 
-@Reactor.relation(
-    ("confinement", "tokamak", "I-mode"),
+@Relation(
     name="tau_E_hubbard_nominal",
     output="tau_E",
+    tags=("confinement", "tokamak", "imode"),
 )
 def tau_E_hubbard_nominal(I_p: float, B0: float, dnla20: float, P_loss: float) -> float:
     """
@@ -401,8 +401,6 @@ def tau_E_hubbard_nominal(I_p: float, B0: float, dnla20: float, P_loss: float) -
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
     return 0.014 * I_p_MA ** 0.68 * B0 ** 0.77 * dnla20 ** 0.02 * P_loss_MW ** (-0.29)
-
-
 def tau_E_I_Mode_y2(I_p: float, B0: float, P_loss: float, n_la: float) -> float:
     """
     Calculate the I-Mode confinement time scaling from Walk (equation 5.2).
@@ -755,10 +753,11 @@ def tau_E_iter_ipb98y3(
 
 
 
-@Reactor.relation(
-    ("confinement", "tokamak", "H-mode"),
+########################################
+@Relation(
     name="tau_E_iter_ipb98y2",
     output="tau_E",
+    tags=("confinement", "tokamak", "hmode"),
 )
 def tau_E_iter_ipb98y2(
     I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
@@ -791,9 +790,6 @@ def tau_E_iter_ipb98y2(
           Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
     return 0.0562 * (I_p / 1e6) ** 0.93 * B0 ** 0.15 * (n_la/1e19) ** 0.41 * (P_loss/1e6)** (-0.69) * R ** 1.97 * kappa_ipb ** 0.78 * A ** (-0.58) * afuel ** 0.19
-
-
-
 def tau_E_iter_ipb98y1(
     I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:

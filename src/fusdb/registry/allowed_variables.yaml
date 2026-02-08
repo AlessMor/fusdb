@@ -18,10 +18,21 @@ a:
     - Minor radius.
 A:
   default_unit: dimensionless
+  aliases:
+    - aspect_ratio
   constraints:
     - A > 0
   description:
     - Aspect ratio (R/a).
+eps:
+  default_unit: dimensionless
+  aliases:
+    - epsilon
+    - inverse_aspect_ratio
+  constraints:
+    - eps > 0
+  description:
+    - Inverse aspect ratio (a/R).
 kappa:
   default_unit: dimensionless
   aliases:
@@ -58,12 +69,30 @@ V_p:
     - V_p > 0
   description:
     - Plasma volume.
-S_p:
+A_p:
   default_unit: m^2
+  aliases:
+    - plasma_surface_area
+    - S_p
   constraints:
-    - S_p > 0
+    - A_p > 0
   description:
-    - Plasma surface area.
+    - Surface area around the LCFS in the toroidal and poloidal direction.
+S_phi:
+  default_unit: m^2
+  aliases:
+    - plasma_cross_section
+    - S_cross
+  constraints:
+    - S_phi > 0
+  description:
+    - Surface of the plasma cross-section in the radial and poloidal direction.
+L_p:
+  default_unit: m
+  constraints:
+    - L_p > 0
+  description:
+    - Poloidal length around the plasma cross-section.
 squareness:
   default_unit: dimensionless
   aliases:
@@ -99,6 +128,8 @@ Z_min:
 ################ MAGNETIC FIELD & CURRENT ################
 B0:
   default_unit: T
+  constraints:
+    - B0 > 0
   description:
     - Toroidal field on axis.
 B_max:
@@ -111,6 +142,8 @@ B_p:
     - Poloidal field.
 I_p:
   default_unit: A
+  constraints:
+    - I_p >= 0
   description:
     - Plasma current.
 f_BS:
@@ -159,22 +192,32 @@ li:
 ################ PLASMA PRESSURE & ENERGY ################
 beta_N:
   default_unit: dimensionless
+  constraints:
+    - beta_N >= 0
   description:
     - Normalized beta.
 beta_T:
   default_unit: dimensionless
+  constraints:
+    - beta_T >= 0
   description:
     - Toroidal beta (fraction).
 beta_p:
   default_unit: dimensionless
+  constraints:
+    - beta_p >= 0
   description:
     - Poloidal beta.
 beta:
   default_unit: dimensionless
+  constraints:
+    - beta >= 0
   description:
     - Total beta.
 beta_limit:
   default_unit: dimensionless
+  constraints:
+    - beta_limit >= 0
   description:
     - Troyon beta limit.
 p_th:
@@ -628,6 +671,8 @@ P_sep_over_R:
     - P_sep divided by major radius.
 P_sep_B_over_q95AR:
   default_unit: W*T/m
+  constraints:
+    - P_sep_B_over_q95AR >= 0
   description:
     - P_sep * B0 / (q95 * A * R).
 P_loss:
