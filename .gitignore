@@ -86,6 +86,7 @@ Thumbs.db
 # Docs builds
 _build/
 site/
+site-public/
 
 # Data files (if tracking output)
 *.pkl

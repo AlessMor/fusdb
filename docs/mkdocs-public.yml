@@ -23,5 +23,8 @@ nav:
           - Core Modules: code_docs/api/core.md
           - Relation Modules: code_docs/api/relations.md
           - Registry and Utilities: code_docs/api/registry_and_utils.md
+      - Interactive:
+          - Overview: code_docs/interactive/index.md
+          - Reactor Playground: code_docs/interactive/reactor_playground.md
       - Notebooks: code_docs/notebooks.md
   - License Notes: LicenseNotes.md

@@ -1,0 +1,5 @@
+prune docs
+prune .binder
+prune .github
+prune site
+prune site-public

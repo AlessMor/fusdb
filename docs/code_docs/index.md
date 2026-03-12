@@ -24,3 +24,7 @@ interfaces, notebooks, or module-level APIs.
 ## Notebooks
 
 - [Notebook Index](notebooks.md): exploratory workflows and generated artifacts.
+
+## Interactive
+
+- [Interactive Pages](interactive/index.md): Binder-backed pages that run `fusdb` without a local install.

@@ -11,7 +11,7 @@ dependencies = ["PyYAML>=6.0", "sympy>=1.12", "pycountry>=24.6.1", "hypernetx==2
 
 [project.optional-dependencies]
 docs = [
-    "mkdocs>=1.6",
+    "mkdocs==1.6.1",
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.26",
     "pymdown-extensions>=10.11",
@@ -19,3 +19,13 @@ docs = [
 
 [project.scripts]
 fusdb = "fusdb.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+fusdb = ["registry/*.yaml"]
