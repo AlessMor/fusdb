@@ -1,15 +1,19 @@
 """Default reactor inputs and fallback relations for missing YAML values.
 Variables dict: {name: Variable}.
-Variable: dataclass with fields name, values, value_passes, history, unit, rel_tol, abs_tol,
-method, input_source, fixed.
+Variable: dataclass with compact `input_value` and `current_value` state.
 """
 
 from __future__ import annotations
 
+import inspect
 from fusdb.relation_class import Relation
-from fusdb.relation_util import build_sympy_expr, function_inputs
-from fusdb.utils import normalize_tags_to_tuple
+import warnings
+import numpy as np
+
+from fusdb.utils import as_profile_array, normalize_tags_to_tuple, within_tolerance
 from fusdb.variable_class import Variable
+from fusdb.variable_util import make_variable
+from fusdb.registry import allowed_variable_ndim
 
 
 _FRACTION_DEFAULTS: dict[str, float] = {
@@ -22,33 +26,31 @@ _FRACTION_KEYS = tuple(_FRACTION_DEFAULTS.keys())
 
 def _build_relation(name: str, output: str, func, *, tags: tuple[str, ...] = ("plasma",)) -> Relation:
     """Build a Relation without registering it globally."""
-    inputs = function_inputs(func)
-    expr, symbols = build_sympy_expr(func, inputs, output)
-    return Relation(
+    # NOTE: This intentionally keeps all signature parameter names, including *args/**kwargs names;
+    # possibly add a filter for allowed variable names in the future. (but be careful not to reject part of the relation signature!)
+    inputs = tuple(inspect.signature(func).parameters)
+    return Relation.from_callable(
         name=name,
-        output=output,
         func=func,
+        target=output,
         inputs=inputs,
         tags=normalize_tags_to_tuple(tags),
-        sympy_expr=expr,
-        _sympy_symbols=symbols,
     )
 
 
-def _set_default_input(variables: dict[str, "Variable"], name: str, value: float) -> None:
+def _set_default_input(variables: dict[str, "Variable"], name: str, value: object) -> None:
     """Set a default input value when missing. Args: variables, name, value. Returns: None."""
     var = variables.get(name)
     if var is None:
-        var = Variable(
+        var = make_variable(
             name=name,
             method="default",
             input_source="default",
+            ndim=allowed_variable_ndim(name),
         )
         variables[name] = var
-    if Variable.get_from_dict(variables, name, mode="input") is None:
-        var.values = [value]
-        var.value_passes = [0]
-        var.history = [{"pass_id": 0, "old": None, "new": value, "reason": "default"}]
+    if var.input_value is None:
+        var.add_value(value, as_input=True)
         if var.method is None:
             var.method = "default"
         var.input_source = "default"
@@ -68,21 +70,37 @@ def apply_reactor_defaults(
         List of default Relation objects (not registered globally).
     """
     default_relations: list[Relation] = []
-    seen_keys = {(rel.name, rel.output) for rel in (relations or ())}
+    seen_keys = {(rel.name, (rel._preferred_target if rel._preferred_target is not None else next(iter(rel.numeric_functions), None))) for rel in (relations or ())}
+
+    def _ensure_variable_exists(name: str) -> None:
+        """Ensure a variable object exists for relation-only defaults."""
+        if name in variables:
+            return
+        variables[name] = make_variable(
+            name=name,
+            method="default",
+            ndim=allowed_variable_ndim(name),
+        )
 
     def _add_default_relation(name: str, output: str, func, *, tags: tuple[str, ...] = ("plasma",)) -> None:
         key = (name, output)
         if key in seen_keys:
             return
+        _ensure_variable_exists(output)
         default_relations.append(_build_relation(name, output, func, tags=tags))
         seen_keys.add(key)
 
     # Gather input values for variables that already exist in the dictionary.
-    input_values = {name: Variable.get_from_dict(variables, name, mode="input") for name in variables}
+    input_values = {name: var.input_value for name, var in variables.items()}
     
     def has_input(name: str) -> bool:
         check = input_values.get(name) is not None
         return check
+
+    def _profile_or_value(value: object) -> object:
+        arr = as_profile_array(value)
+        mean_val = float(np.mean(arr)) if arr is not None else None
+        return mean_val if mean_val is not None else value
     ####################### GEOMETRY DEFAULTS ###########################################
     # Ensure squareness exists to avoid expensive inversion when missing.
     if not has_input("squareness"):
@@ -99,14 +117,20 @@ def apply_reactor_defaults(
         )
     if not has_input("n_avg"):
         _add_default_relation(
-            "Default: n_avg = n_e",
+            "Default: n_avg = mean(n_e)",
             "n_avg",
-            lambda n_e: n_e,
+            lambda n_e: _profile_or_value(n_e),
         )
-    if not has_input("n_e") and not has_input("n_i") and has_input("n_avg"):
+    if not has_input("n_e"):
         _add_default_relation(
             "Default: n_e = n_avg",
             "n_e",
+            lambda n_avg: n_avg,
+        )
+    if not has_input("n_i"):
+        _add_default_relation(
+            "Default: n_i = n_avg",
+            "n_i",
             lambda n_avg: n_avg,
         )
         
@@ -127,7 +151,13 @@ def apply_reactor_defaults(
             _add_default_relation(
                 "Default: T_e = T_i",
                 "T_e",
-                lambda T_i: T_i,
+                lambda T_i: _profile_or_value(T_i),
+            )
+        else:
+            _add_default_relation(
+                "Default: T_e = T_avg",
+                "T_e",
+                lambda T_avg: T_avg,
             )
     if not has_Ti:
         if has_Tavg:
@@ -140,23 +170,61 @@ def apply_reactor_defaults(
             _add_default_relation(
                 "Default: T_i = T_e",
                 "T_i",
-                lambda T_e: T_e,
+                lambda T_e: _profile_or_value(T_e),
+            )
+        else:
+            _add_default_relation(
+                "Default: T_i = T_avg",
+                "T_i",
+                lambda T_avg: T_avg,
             )
 
     # Fill missing T_avg
     if not has_Tavg:
         if has_Te:
             _add_default_relation(
-                "Default: T_avg = T_e",
+                "Default: T_avg = mean(T_e)",
                 "T_avg",
-                lambda T_e: T_e,
+                lambda T_e: _profile_or_value(T_e),
             )
         elif has_Ti:
             _add_default_relation(
-                "Default: T_avg = T_i",
+                "Default: T_avg = mean(T_i)",
                 "T_avg",
-                lambda T_i: T_i,
+                lambda T_i: _profile_or_value(T_i),
             )
+
+    # Consistency checks between profiles and averages (non-fatal).
+    def _warn_profile_mismatch(profile_name: str, avg_name: str) -> None:
+        profile_var = variables.get(profile_name)
+        avg_var = variables.get(avg_name)
+        profile_val = None if profile_var is None else profile_var.input_value
+        avg_val = None if avg_var is None else avg_var.input_value
+        if profile_val is None or avg_val is None:
+            return
+        arr = as_profile_array(profile_val)
+        mean_val = float(np.mean(arr)) if arr is not None else None
+        if mean_val is None:
+            return
+        try:
+            avg_scalar = float(avg_val)
+        except Exception:
+            return
+        if not within_tolerance(mean_val, avg_scalar, rel_tol=1e-2, abs_tol=1e-8):
+            warnings.warn(
+                f"Profile/average mismatch for {avg_name}: mean({profile_name})={mean_val:.6g}, {avg_name}={avg_scalar:.6g}",
+                UserWarning,
+            )
+
+    _warn_profile_mismatch("n_e", "n_avg")
+    _warn_profile_mismatch("T_e", "T_avg")
+    _warn_profile_mismatch("T_i", "T_avg")
+
+    ####################### POWER DEFAULTS #######################################
+
+    # Default ohmic heating to zero if not specified.
+    if not has_input("P_ohmic"):
+        _set_default_input(variables, "P_ohmic", 0.0)
 
     ####################### PLASMA COMPOSITION DEFAULTS #######################################
     
@@ -165,7 +233,8 @@ def apply_reactor_defaults(
         tau_p = input_values.get("tau_p")
         for species in ("D", "T", "He3", "He4"):
             name = f"tau_p_{species}"
-            if Variable.get_from_dict(variables, name, mode="input") is None:
+            var = variables.get(name)
+            if var is None or var.input_value is None:
                 _set_default_input(variables, name, float(tau_p))
                 
     # If no fractions are explicit, set D/T defaults (and others to 0).

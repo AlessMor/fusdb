@@ -4,8 +4,8 @@ General efficiency metrics"""
 from __future__ import annotations
 import numpy as np
 
-from fusdb.relation_class import Relation_decorator as Relation
-@Relation(
+from fusdb.relation_util import relation
+@relation(
     name="Fusion triple product",
     output="n_i_tau_E_T_i",
     tags=("fusion_power",),
@@ -29,10 +29,17 @@ def fusion_triple_product(
     return n_i_peak * T_i_peak * tau_E
 
 ########################################
-@Relation(
+@relation(
     name="Physics gain factor",
     output="Q_sci",
     tags=("fusion_power",),
+    inverse_functions={
+        "P_aux": lambda values: (
+            None
+            if values.get("Q_sci") in (None, 0)
+            else values.get("P_fus") / values.get("Q_sci")
+        ),
+    },
 )
 def physics_gain_factor(
     P_fus: float, P_aux: float) -> float:
@@ -56,7 +63,7 @@ def physics_gain_factor(
     return Q_phy
 
 ########################################
-@Relation(
+@relation(
     name="Engineering gain factor",
     output="Q_eng",
     tags=("fusion_power",),
@@ -72,4 +79,3 @@ def engineering_gain_factor(
     else:
         Q_eng = (P_fus_el - P_aux_el) / P_aux_el
     return Q_eng
-

@@ -11,10 +11,10 @@ solver_tags:
   verbosity: false
 variables:
   R:
-    value: 6.25
+    value: 12.5
     fixed: true
   a:
-    value: 2.0
+    value: 1.25
     fixed: true
   T_avg:
     value: 6.8
@@ -23,3 +23,6 @@ variables:
   TBR: 1.3
   tau_E: 1.7
   P_aux: 20e6
+  P_fus:
+    value: 800
+    unit: MW

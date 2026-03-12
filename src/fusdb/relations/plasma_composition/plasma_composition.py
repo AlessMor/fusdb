@@ -2,15 +2,16 @@
 from __future__ import annotations
 from inspect import Signature, Parameter
 from pathlib import Path
-from fusdb.relation_class import Relation_decorator as Relation
-from fusdb.utils import load_yaml
+import yaml
+from fusdb.relation_util import relation
 
 _REGISTRY = Path(__file__).resolve().parents[2] / "registry" / "allowed_species.yaml"
 
 def _load_species() -> dict:
     """Load allowed species metadata. Args: none. Returns: dict."""
     try:
-        return load_yaml(_REGISTRY)
+        with _REGISTRY.open("r", encoding="utf-8") as handle:
+            return yaml.safe_load(handle) or {}
     except Exception:
         return {}
 
@@ -25,7 +26,7 @@ MASS = [(_SPECIES_DATA.get(s, {}) or {}).get("atomic_mass", 1) for s in SPECIES]
 def _relation(name: str, output: str, inputs: list[str], func, constraints=None, rel_tol=None):
     """Create a Relation with standard plasma tags. Args: name, output, inputs, func. Returns: Relation."""
     func.__signature__ = Signature([Parameter(n, Parameter.POSITIONAL_OR_KEYWORD) for n in inputs])
-    return Relation(name=name, output=output, tags=("plasma",), constraints=constraints, rel_tol_default=rel_tol)(func)
+    return relation(name=name, output=output, tags=("plasma",), constraints=constraints, rel_tol_default=rel_tol)(func)
 
 
 def _fraction_sum_expr() -> str:
@@ -45,6 +46,9 @@ _relations = []
 if FRACTIONS:
     sum_expr = _fraction_sum_expr()
     charge_expr = _charge_sum_expr()
+
+    def _is_symbolic(value: object) -> bool:
+        return bool(getattr(value, "free_symbols", None) is not None)
 
     def _ion_density(*args):
         n_e = args[0]
@@ -92,6 +96,8 @@ if FRACTIONS:
     for idx, frac in enumerate(FRACTIONS):
         def _fraction_norm(*args, _i=idx):
             total = sum(args)
+            if _is_symbolic(total):
+                return args[_i] / total
             if total <= 0:
                 return 1.0 / len(args)
             return args[_i] / total
@@ -156,4 +162,3 @@ if FRACTIONS:
             _afuel,
         )
     )
-

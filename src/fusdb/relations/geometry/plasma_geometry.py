@@ -5,12 +5,12 @@ from __future__ import annotations
 import math
 import sympy as sp
 
-from fusdb.relation_class import Relation_decorator as Relation
+from fusdb.relation_util import relation
 
 ########################################################################################################################
 #                                                                                                 RADII and ASPECT RATIO
 ########################################################################################################################
-@Relation(
+@relation(
     name="Major radius",
     output="R",
     tags=("geometry",))
@@ -20,7 +20,7 @@ def major_radius(R_max: float, R_min: float) -> float:
     return (R_max + R_min) / 2
 
 ########################################
-@Relation(
+@relation(
     name="minor radius",
     output="a",
     tags=("geometry",))
@@ -30,7 +30,7 @@ def minor_radius(R_max: float, R_min: float) -> float:
     return (R_max - R_min) / 2
 
 ########################################
-@Relation(
+@relation(
     name="Aspect ratio",
     output="A",
     tags=("geometry",),
@@ -41,7 +41,7 @@ def aspect_ratio(R: float, a: float) -> float:
     return R / a
 
 ########################################
-@Relation(
+@relation(
     name="Inverse aspect ratio",
     output="eps",
     tags=("geometry",),
@@ -52,7 +52,7 @@ def inverse_aspect_ratio(R: float, a: float) -> float:
     return a / R
 
 ########################################
-@Relation(
+@relation(
     name="Inverse aspect ratio from aspect ratio",
     output="eps",
     tags=("geometry",),
@@ -68,7 +68,7 @@ def aspect_ratio_relation(A: float) -> float:
 # TODO(med): differentiate between kappa_sep = (Zmax - Zmin)/(Rmax - Rmin) and kappa_areal = S_p/(pi*a**2)
 
 ########################################
-@Relation(
+@relation(
     name="Elongation",
     output="kappa",
     tags=("geometry",),
@@ -79,7 +79,7 @@ def elongation(Z_max: float, Z_min: float, R_max: float, R_min: float) -> float:
     return (Z_max - Z_min) / (R_max - R_min)
 # TODO(med): check if "95" relations are valid for L,I and H-modes
 ########################################
-@Relation(
+@relation(
     name="Elongation 95%",
     output="kappa",
     tags=("geometry", "tokamak"),
@@ -100,7 +100,7 @@ def triangularity(delta_top: float, delta_bottom: float) -> float:
     return (delta_top + delta_bottom) / 2
 
 ########################################
-@Relation(
+@relation(
     name="Triangularity 95%",
     output="delta",
     tags=("geometry", "tokamak"),
@@ -113,7 +113,7 @@ def triangularity_95(delta_95: float) -> float:
     return 1.5 * delta_95
 
 ########################################
-@Relation(
+@relation(
     name="IPB elongation from volume",
     output="kappa_ipb",
     tags=("geometry",),
@@ -128,7 +128,7 @@ def kappa_ipb_from_volume(V_p: float, R: float, a: float) -> float:
 # Configuration-specific geometry guidance (simplified from PROCESS/STAR/ITER sources).
 # For spherical tokamaks, see Menard et al., Nucl. Fusion 2016 and PROCESS Issue #1439/#1086.
 ########################################
-@Relation(
+@relation(
     name="ST elongation vs aspect ratio",
     output="kappa",
     tags=("geometry", "sphericaltokamak"),
@@ -138,7 +138,7 @@ def st_elongation_from_aspect_ratio(A: float) -> float:
     """Return spherical tokamak elongation from aspect ratio."""
     return 0.95 * (1.9 + 1.9 / (A ** 1.4))
 ########################################
-@Relation(
+@relation(
     name="ST triangularity vs aspect ratio",
     output="delta",
     tags=("geometry", "sphericaltokamak"),
@@ -153,7 +153,7 @@ def st_triangularity_from_aspect_ratio(A: float) -> float:
 ########################################################################################################################
 
 ########################################
-@Relation(
+@relation(
     name = "Tokamak plasma poloidal length",
     output="L_p",
     tags=("geometry", "tokamak"),
@@ -176,7 +176,7 @@ def sauter_plasma_cross_sectional_length(
     return  L_p
 
 ########################################
-@Relation(
+@relation(
     name="Tokamak plasma surface",
     output="A_p",
     tags=("geometry", "tokamak"),
@@ -195,7 +195,7 @@ def sauter_plasma_surface(
     return A_p
 
 ########################################
-@Relation(
+@relation(
     name="Tokamak plasma volume",
     output="V_p",
     tags=("geometry", "tokamak"),
@@ -214,7 +214,7 @@ def sauter_plasma_volume(
     return V_p
 
 ########################################
-@Relation(
+@relation(
     name="Tokamak plasma cross-sectional surface",
     output="S_phi",
     tags=("geometry", "tokamak"),

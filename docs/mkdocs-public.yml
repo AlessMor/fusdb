@@ -1,0 +1,27 @@
+INHERIT: mkdocs.yml
+
+site_dir: ../site-public
+
+exclude_docs: |
+  /knowledgebase/
+
+nav:
+  - Home: index.md
+  - Getting Started: getting_started.md
+  - Code Docs:
+      - Overview: code_docs/index.md
+      - User Guide:
+          - Reactors: code_docs/reactors.md
+          - Reactor Class: code_docs/reactor_class.md
+          - Relations and Variables: code_docs/relations_variables.md
+          - Relation Class: code_docs/relation_class.md
+          - Variable Class: code_docs/variable_class.md
+          - RelationSystem: code_docs/relationsystem_class.md
+          - Profile Integration: code_docs/profile_integration.md
+      - API Reference:
+          - Overview: code_docs/api/index.md
+          - Core Modules: code_docs/api/core.md
+          - Relation Modules: code_docs/api/relations.md
+          - Registry and Utilities: code_docs/api/registry_and_utils.md
+      - Notebooks: code_docs/notebooks.md
+  - License Notes: LicenseNotes.md

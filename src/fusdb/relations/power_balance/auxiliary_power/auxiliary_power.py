@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from fusdb.relation_class import Relation_decorator as Relation
-@Relation(
+from fusdb.relation_util import relation
+@relation(
     name="Total auxiliary power",
     output="P_aux",
     tags=("power_exhaust", "auxiliary"),

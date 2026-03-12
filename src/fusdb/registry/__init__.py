@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Any
 import logging
 import warnings
-from ..utils import within_tolerance, load_yaml, normalize_tag, normalize_tags_to_tuple, normalize_country
-from ..variable_class import Variable
+import yaml
+from ..utils import within_tolerance, normalize_tag, normalize_tags_to_tuple, normalize_country
+from ..variable_class import Variable, Variable1D
+from ..variable_util import make_variable
 
 # Registry paths
 REGISTRY_PATH = Path(__file__).resolve().parent
@@ -28,7 +30,8 @@ def load_constants() -> dict[str, float]:
     """Load physical constants from YAML. Args: none. Returns: dict."""
     global _CONSTANTS
     if _CONSTANTS is None:
-        _CONSTANTS = load_yaml(REGISTRY_PATH / "constants.yaml")
+        with (REGISTRY_PATH / "constants.yaml").open("r", encoding="utf-8") as handle:
+            _CONSTANTS = yaml.safe_load(handle) or {}
     return _CONSTANTS
 
 
@@ -36,7 +39,8 @@ def load_solver_defaults() -> dict[str, Any]:
     """Load solver defaults. Args: none. Returns: dict."""
     global _SOLVER_DEFAULTS
     if _SOLVER_DEFAULTS is None:
-        _SOLVER_DEFAULTS = load_yaml(SOLVER_DEFAULTS_PATH)
+        with SOLVER_DEFAULTS_PATH.open("r", encoding="utf-8") as handle:
+            _SOLVER_DEFAULTS = yaml.safe_load(handle) or {}
     return _SOLVER_DEFAULTS
 
 
@@ -45,7 +49,8 @@ def load_allowed_variables() -> tuple[dict[str, dict], dict[str, str], dict[str,
     global _ALLOWED_VARIABLES, _ALIASES, _DEFAULT_UNITS
     if _ALLOWED_VARIABLES is not None:
         return _ALLOWED_VARIABLES, _ALIASES or {}, _DEFAULT_UNITS or {}
-    data = load_yaml(REGISTRY_PATH / "allowed_variables.yaml")
+    with (REGISTRY_PATH / "allowed_variables.yaml").open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
     alias_map: dict[str, str] = {}
     default_units: dict[str, str] = {}
     for name, spec in data.items():
@@ -62,11 +67,28 @@ def allowed_variable_constraints(name: str) -> tuple[str, ...]:
     return tuple((data.get(name, {}) or {}).get("constraints") or ())
 
 
+def allowed_variable_soft_constraints(name: str) -> tuple[str, ...]:
+    """Return soft constraints for an allowed variable. Args: name. Returns: tuple[str,...]."""
+    data, _, _ = load_allowed_variables()
+    return tuple((data.get(name, {}) or {}).get("soft_constraints") or ())
+
+
+def allowed_variable_ndim(name: str) -> int:
+    """Return dimensionality for an allowed variable (0 if unspecified)."""
+    data, _, _ = load_allowed_variables()
+    ndim = (data.get(name, {}) or {}).get("ndim", 0)
+    try:
+        return int(ndim)
+    except Exception:
+        return 0
+
+
 def _load_allowed_tags() -> dict[str, Any]:
     """Load allowed tags metadata. Args: none. Returns: dict."""
     global _ALLOWED_TAGS
     if _ALLOWED_TAGS is None:
-        tags = load_yaml(REGISTRY_PATH / "allowed_tags.yaml")
+        with (REGISTRY_PATH / "allowed_tags.yaml").open("r", encoding="utf-8") as handle:
+            tags = yaml.safe_load(handle) or {}
         if "solving_order" in tags:
             tags["solving_order"] = {normalize_tag(k): v for k, v in (tags.get("solving_order") or {}).items()}
         for key in ("confinement_modes", "reactor_families", "reactor_configurations"):
@@ -113,15 +135,30 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
         raw_vars = base
     def _normalize_entry(entry: object) -> dict[str, object]:
         if isinstance(entry, dict):
+            raw_value = entry.get("value")
+            if isinstance(raw_value, dict):
+                raise ValueError(
+                    "Profile dict payloads are no longer supported. "
+                    "Use a numeric scalar or 1D numeric array for 'value'."
+                )
             return {
-                "value": entry.get("value"),
+                "value": raw_value,
                 "unit": entry.get("unit"),
                 "method": entry.get("method"),
                 "rel_tol": entry.get("rel_tol"),
                 "abs_tol": entry.get("abs_tol"),
                 "fixed": bool(entry.get("fixed", False)),
+                "coord": canonical_variable_name(str(entry.get("coord"))) if entry.get("coord") else None,
             }
-        return {"value": entry, "unit": None, "method": None, "rel_tol": None, "abs_tol": None, "fixed": False}
+        return {
+            "value": entry,
+            "unit": None,
+            "method": None,
+            "rel_tol": None,
+            "abs_tol": None,
+            "fixed": False,
+            "coord": None,
+        }
     grouped: dict[str, list[tuple[str, object]]] = {}
     if isinstance(raw_vars, dict):
         for raw_name, entry in raw_vars.items():
@@ -129,9 +166,37 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                 continue
             grouped.setdefault(canonical_variable_name(raw_name), []).append((raw_name, entry))
     for name, entries in grouped.items():
-        merged: dict[str, object] = {"value": None, "unit": None, "method": None, "rel_tol": None, "abs_tol": None, "fixed": False}
+        merged: dict[str, object] = {
+            "value": None,
+            "unit": None,
+            "method": None,
+            "rel_tol": None,
+            "abs_tol": None,
+            "fixed": False,
+            "coord": None,
+        }
         value_source = unit_source = method_source = None
+        coord_source = None
         conflicts: list[str] = []
+
+        def _values_same(left: object, right: object) -> bool:
+            if left is right:
+                return True
+            lv = within_tolerance(left, right)
+            if lv:
+                return True
+            try:
+                import numpy as np
+                left_arr = np.asarray(left, dtype=float)
+                right_arr = np.asarray(right, dtype=float)
+                return bool(left_arr.shape == right_arr.shape and np.array_equal(left_arr, right_arr))
+            except Exception:
+                pass
+            try:
+                return bool(left == right)
+            except Exception:
+                return False
+
         for raw_name, entry in entries:
             item = _normalize_entry(entry)
             value = item.get("value")
@@ -139,18 +204,8 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                 if merged["value"] is None:
                     merged["value"] = value
                     value_source = raw_name
-                elif merged["value"] != value:
-                    # Check numeric tolerance if both are numeric
-                    values_conflict = True
-                    if merged["value"] is not None and value is not None:
-                        try:
-                            float(merged["value"])
-                            float(value)
-                            values_conflict = not within_tolerance(merged["value"], value)
-                        except Exception:
-                            pass  # Keep values_conflict = True for non-numeric
-                    if values_conflict:
-                        conflicts.append(f"value {raw_name}={value} conflicts with {value_source}={merged['value']}")
+                elif not _values_same(merged["value"], value):
+                    conflicts.append(f"value {raw_name}={value} conflicts with {value_source}={merged['value']}")
             unit = item.get("unit")
             if unit:
                 if merged["unit"] is None:
@@ -173,6 +228,15 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                 merged["abs_tol"] = abs_tol if merged["abs_tol"] is None else min(merged["abs_tol"], abs_tol)
             if item.get("fixed"):
                 merged["fixed"] = True
+            coord = item.get("coord")
+            if coord:
+                if merged["coord"] is None:
+                    merged["coord"] = coord
+                    coord_source = raw_name
+                elif merged["coord"] != coord:
+                    conflicts.append(
+                        f"coord {raw_name}={coord} conflicts with {coord_source}={merged['coord']}"
+                    )
         if len(entries) > 1:
             if conflicts:
                 warnings.warn(f"Conflicting aliases for '{name}': " + "; ".join(conflicts), UserWarning)
@@ -184,7 +248,18 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
         rel_tol = merged.get("rel_tol")
         abs_tol = merged.get("abs_tol")
         fixed = bool(merged.get("fixed", False))
+        coord = merged.get("coord")
         input_source = "explicit" if value is not None else None
+        ndim = allowed_variable_ndim(name)
+        is_profile = ndim == 1 and value is not None
+        if ndim == 1 and isinstance(value, list):
+            try:
+                import numpy as np
+                value = np.asarray(value, dtype=float)
+            except Exception:
+                pass
+        if ndim == 0 and isinstance(value, dict):
+            raise ValueError(f"Variable '{name}' does not allow mapping/profile inputs.")
         if rel_tol is not None and abs_tol is not None:
             if abs_tol >= rel_tol:
                 rel_tol = None
@@ -192,12 +267,12 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                 abs_tol = None
         if unit is None:
             unit = default_units.get(name)
-        if isinstance(value, str):
+        if not is_profile and isinstance(value, str):
             try:
                 value = float(value)
             except Exception:
                 pass
-        if value is not None and unit is not None:
+        if not is_profile and value is not None and unit is not None:
             target = default_units.get(name)
             if target and unit != target:
                 try:
@@ -209,7 +284,7 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                     pass
         var = parsed.get(name)
         if var is None:
-            var = Variable(
+            kwargs = dict(
                 name=name,
                 unit=unit,
                 rel_tol=rel_tol,
@@ -217,12 +292,14 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                 method=method,
                 input_source=input_source,
                 fixed=fixed,
+                ndim=ndim,
             )
+            if ndim == 1 and coord:
+                kwargs["coord"] = coord
+            var = make_variable(**kwargs)
             parsed[name] = var
         if value is not None:
-            var.values = [value]
-            var.value_passes = [0]
-            var.history = [{"pass_id": 0, "old": None, "new": value, "reason": "input"}]
+            var.add_value(value, as_input=True)
             var.input_source = "explicit"
         if fixed:
             var.fixed = True
@@ -279,11 +356,12 @@ __all__ = [
     "SPECIES_PATH",
     "SOLVER_DEFAULTS_PATH",
     # Functions
-    "load_yaml",
     "load_constants",
     "load_allowed_variables",
     "load_solver_defaults",
     "allowed_variable_constraints",
+    "allowed_variable_soft_constraints",
+    "allowed_variable_ndim",
     "normalize_tag",
     "normalize_tags_to_tuple",
     "canonical_variable_name",

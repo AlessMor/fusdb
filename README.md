@@ -23,7 +23,7 @@ fusdb/
 │   ├── relation_util.py      # Relation discovery/filtering helpers
 │   ├── relations/            # Relations grouped by domain
 │   └── registry/             # Allowed variables, constants, defaults, tags
-├── docs/                     # Sphinx docs (Markdown via MyST), notebooks, artifacts
+├── docs/                     # MkDocs docs, knowledge base pages, notebooks, artifacts
 ├── lib/                      # JS/CSS assets used by HTML graph outputs
 └── tests/                    # Tests
 ```
@@ -31,7 +31,7 @@ fusdb/
 ## Reactors
 
 Each reactor lives in `reactors/<reactor_id>/reactor.yaml` or as a standalone `reactors/<reactor_id>.yaml`.
-See `docs/reactor_class.md` for the YAML schema and examples.
+See `docs/code_docs/reactor_class.md` for the YAML schema and examples.
 
 ## Relations and RelationSystem
 
@@ -50,11 +50,16 @@ print(reactor.variables_dict["P_fus"].current_value)
 
 ## Documentation
 
-Sphinx docs live in `docs/` and use Markdown via MyST.
+Docs are built with MkDocs and include:
+- user guides for loading/solving reactors,
+- a physics/relations knowledge base,
+- API reference pages generated from source modules.
 
 ```bash
 pip install -e .[docs]
-sphinx-build -b html docs docs/_build/html
+mkdocs serve -f docs/mkdocs.yml
+# or:
+mkdocs build -f docs/mkdocs.yml
 ```
 
 ## Useful Links and References

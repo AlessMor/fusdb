@@ -1,7 +1,7 @@
 """Power exhaust relations defined once."""
 
-from fusdb.relation_class import Relation_decorator as Relation
-@Relation(
+from fusdb.relation_util import relation
+@relation(
     name="P_sep ratio",
     output="P_sep_over_R",
     tags=("power_exhaust",),
@@ -18,7 +18,7 @@ def p_sep_ratio(P_sep: float, R: float) -> float:
 
 
 ########################################
-@Relation(
+@relation(
     name="P_sep metric",
     output="P_sep_B_over_q95AR",
     tags=("power_exhaust",),

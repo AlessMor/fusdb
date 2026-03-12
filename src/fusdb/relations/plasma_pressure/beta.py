@@ -1,11 +1,11 @@
-"""Beta relations defined via @Relation decorators."""
+"""Beta relations defined via @relation decorators."""
 
 from __future__ import annotations
 
 from fusdb.registry import MU0
-from fusdb.relation_class import Relation_decorator as Relation
+from fusdb.relation_util import relation
 #TODO(low): once profiles are implemented, add a beta_avg 
-@Relation(
+@relation(
     name="Toroidal beta",
     output="beta_T",
     tags=("plasma",),
@@ -17,7 +17,7 @@ def toroidal_beta(p_th: float, B0: float) -> float:
 
 
 ########################################
-@Relation(
+@relation(
     name="Poloidal beta",
     output="beta_p",
     tags=("plasma",),
@@ -29,7 +29,7 @@ def poloidal_beta(p_th: float, B_p: float) -> float:
 
 
 ########################################
-@Relation(
+@relation(
     name="Beta decomposition",
     output="beta",
     tags=("plasma",),
@@ -42,7 +42,7 @@ def beta_decomposition(beta_T: float, beta_p: float) -> float:
 
 
 ########################################
-@Relation(
+@relation(
     name="Normalized beta",
     output="beta_N",
     tags=("plasma",),

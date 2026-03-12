@@ -2,16 +2,15 @@
 
 This module provides common utility functions for:
 - Numeric comparisons with tolerances
-- YAML file loading
 - Tag normalization and comparison
 - Country name normalization
 """
 from __future__ import annotations
 
 import math
-from pathlib import Path
-import yaml
+import warnings
 import pycountry
+import numpy as np
 
 
 def within_tolerance(
@@ -28,14 +27,14 @@ def within_tolerance(
     where scale is max(abs(a), abs(b), 1.0).
     
     Args:
-        a: First value (must be convertible to float).
-        b: Second value (must be convertible to float).
-        rel_tol: Relative tolerance (fraction of larger value).
-        abs_tol: Absolute tolerance (in same units as values).
+        a (object): First value (must be convertible to float).
+        b (object): Second value (must be convertible to float).
+        rel_tol (float): Relative tolerance (fraction of larger value).
+        abs_tol (float): Absolute tolerance (in same units as values).
     
     Returns:
-        True if values are within tolerance, False otherwise.
-        Returns False if either value is None, non-numeric, or infinite/NaN.
+        bool: True if values are within tolerance, False otherwise.
+              Returns False if either value is None, non-numeric, or infinite/NaN.
         
     Example:
         >>> within_tolerance(1.0, 1.001, rel_tol=0.01)
@@ -64,7 +63,14 @@ def within_tolerance(
 
 
 def safe_float(value: object) -> float | None:
-    """Convert value to float, returning None if conversion fails or non-finite."""
+    """Convert value to float, returning None if conversion fails or non-finite.
+    
+    Args:
+        value (object): Value to convert.
+        
+    Returns:
+        float | None: Float conversion result, or None if conversion fails or value is infinite/NaN.
+    """
     if value is None:
         return None
     try:
@@ -74,23 +80,146 @@ def safe_float(value: object) -> float | None:
         return None
 
 
-def load_yaml(path: Path | str) -> dict:
-    """Load and parse a YAML file into a dictionary.
-    
+def as_profile_array(value: object) -> np.ndarray | None:
+    """Return value as a valid 1D finite profile array.
+
     Args:
-        path: Path to YAML file.
+        value: Candidate profile payload.
 
     Returns:
-        Dictionary containing parsed YAML content.
-        Returns empty dict if file is empty or contains only None.
-        
-    Raises:
-        FileNotFoundError: If path doesn't exist.
-        yaml.YAMLError: If YAML parsing fails.
+        A 1D finite float NumPy array, or None when invalid.
     """
-    path = Path(path)
-    with path.open("r", encoding="utf-8") as handle:
-        return yaml.safe_load(handle) or {}
+    try:
+        arr = np.asarray(value, dtype=float)
+        if arr.ndim == 1 and arr.size > 0 and np.isfinite(arr).all():
+            return arr
+    except Exception:
+        pass
+    return None
+
+def _trapz(y: object, x: object) -> float:
+    """Integrate using numpy trapezoid API with backward-compatible fallback."""
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(y, x))
+    return float(np.trapz(y, x))
+
+
+def integrate_profile_over_volume(
+    profile: object,
+    V_p: object,
+    *,
+    rho: object | None = None,
+) -> float | None:
+    """Integrate a profile over volume using cfspopcon-style ``d(V/V_p)=2*rho drho``.
+
+    Args:
+        profile: Local quantity profile (or scalar value).
+        V_p: Total plasma volume.
+        rho: Optional normalized radial grid in ``[0, 1]``.
+
+    Returns:
+        Integrated scalar value or ``None`` when inputs are not usable.
+    """
+    V_scalar = safe_float(V_p)
+    if V_scalar is None or V_scalar < 0.0:
+        return None
+
+    arr = as_profile_array(profile)
+    if arr is None:
+        scalar = safe_float(profile)
+        return None if scalar is None else float(scalar * V_scalar)
+
+    if rho is None:
+        rho_arr = np.linspace(0.0, 1.0, arr.size, dtype=float)
+    else:
+        rho_arr = as_profile_array(rho)
+        if rho_arr is None:
+            return None
+        if rho_arr.size != arr.size:
+            x_old = np.linspace(0.0, 1.0, arr.size, dtype=float)
+            x_new = np.linspace(0.0, 1.0, rho_arr.size, dtype=float)
+            arr = np.interp(x_new, x_old, arr)
+
+    if rho_arr.size > 1 and np.any(np.diff(rho_arr) < 0):
+        order = np.argsort(rho_arr)
+        rho_arr = rho_arr[order]
+        arr = arr[order]
+
+    return float(V_scalar * _trapz(arr * 2.0 * rho_arr, rho_arr))
+
+
+def compare_plasma_volume_with_integrated_dv(
+    *,
+    V_p: object,
+    rho: object | None = None,
+    dV_drho: object | None = None,
+    R: object | None = None,
+    a: object | None = None,
+    kappa: object | None = None,
+    rel_tol: float = 0.01,
+    abs_tol: float = 0.0,
+    warn: bool = False,
+) -> tuple[bool, float | None, float | None]:
+    """Compare ``V_p`` with a volume reconstructed from ``dV`` integration.
+
+    Priority for reconstructed volume:
+    1. ``∫ dV_drho drho`` if ``dV_drho`` is provided.
+    2. ``2*pi^2*R*kappa*a^2`` if ``R``, ``a``, and ``kappa`` are provided.
+    3. ``V_p*∫2*rho drho`` (cfspopcon Jacobian sanity check).
+
+    Args:
+        V_p: Reference plasma volume.
+        rho: Optional normalized radial grid.
+        dV_drho: Optional Jacobian profile ``dV/drho``.
+        R: Major radius for geometric estimate.
+        a: Minor radius for geometric estimate.
+        kappa: Elongation for geometric estimate.
+        rel_tol: Relative tolerance for consistency.
+        abs_tol: Absolute tolerance for consistency.
+        warn: Emit ``UserWarning`` if mismatch exceeds tolerance.
+
+    Returns:
+        ``(ok, integrated_volume, reference_volume)``.
+    """
+    V_ref = safe_float(V_p)
+    if V_ref is None:
+        return True, None, None
+
+    V_int: float | None = None
+    rho_arr = as_profile_array(rho) if rho is not None else None
+    jac_arr = as_profile_array(dV_drho) if dV_drho is not None else None
+    if jac_arr is not None:
+        if rho_arr is None:
+            rho_arr = np.linspace(0.0, 1.0, jac_arr.size, dtype=float)
+        elif rho_arr.size != jac_arr.size:
+            x_old = np.linspace(0.0, 1.0, jac_arr.size, dtype=float)
+            x_new = np.linspace(0.0, 1.0, rho_arr.size, dtype=float)
+            jac_arr = np.interp(x_new, x_old, jac_arr)
+        V_int = _trapz(jac_arr, rho_arr)
+    else:
+        Rv = safe_float(R)
+        av = safe_float(a)
+        kv = safe_float(kappa)
+        if Rv is not None and av is not None and kv is not None:
+            V_int = float(2.0 * math.pi ** 2 * Rv * kv * av ** 2)
+        else:
+            if rho_arr is None:
+                rho_arr = np.linspace(0.0, 1.0, 101, dtype=float)
+            V_int = float(V_ref * _trapz(2.0 * rho_arr, rho_arr))
+
+    ok = within_tolerance(V_int, V_ref, rel_tol=rel_tol, abs_tol=abs_tol)
+    if warn and not ok:
+        delta = abs(V_int - V_ref) / max(abs(V_ref), 1.0)
+        warnings.warn(
+            (
+                "Plasma volume mismatch: V_p="
+                f"{V_ref:.6g}, integral(dV)={V_int:.6g}, rel_delta={delta:.3%} "
+                f"(tol={rel_tol:.3%})."
+            ),
+            UserWarning,
+            stacklevel=2,
+        )
+    return ok, V_int, V_ref
 
 
 def normalize_tag(tag: str | None) -> str:
@@ -99,10 +228,10 @@ def normalize_tag(tag: str | None) -> str:
     Converts tag to lowercase and removes non-alphanumeric characters.
     
     Args:
-        tag: Single tag string or None
+        tag (str | None): Single tag string or None.
         
     Returns:
-        Normalized tag string (empty string if None/empty)
+        str: Normalized tag string (empty string if None/empty).
         
     Examples:
         >>> normalize_tag("Tokamak-Spherical")
@@ -122,10 +251,10 @@ def normalize_tags_to_tuple(tags: object) -> tuple[str, ...]:
     (lowercase, alphanumeric only) for consistent comparison.
     
     Args:
-        tags: Tags as string, iterable of strings, or None
+        tags (object): Tags as string, iterable of strings, or None.
         
     Returns:
-        Tuple of normalized tag strings
+        tuple[str, ...]: Tuple of normalized tag strings.
         
     Examples:
         >>> normalize_tags_to_tuple("Tokamak-Spherical")
@@ -152,11 +281,11 @@ def normalize_country(country: str | None) -> str | None:
     informal names to official country names.
     
     Args:
-        country: Country name, code (ISO 3166), or alias.
+        country (str | None): Country name, code (ISO 3166), or alias.
     
     Returns:
-        Official country name from pycountry, or the original string
-        if no match found. Returns None if input is None/empty.
+        str | None: Official country name from pycountry, or the original string
+                    if no match found. Returns None if input is None/empty.
         
     Example:
         >>> normalize_country("USA")
@@ -179,14 +308,33 @@ def normalize_country(country: str | None) -> str | None:
 
 
 def normalize_solver_mode(mode: str | None) -> str:
-    """Normalize solver mode values to canonical form."""
+    """Normalize solver mode values to canonical form.
+    
+    Args:
+        mode (str | None): Solver mode string.
+        
+    Returns:
+        str: Canonical mode string ("overwrite" for override/default/None).
+    """
     if mode in ("override", "default", None):
         return "overwrite"
     return str(mode)
 
 
 def ensure_list(value: object | None, *, name: str, item_desc: str) -> list:
-    """Ensure a value is a list (or empty), raising a descriptive error otherwise."""
+    """Ensure a value is a list (or empty), raising a descriptive error otherwise.
+    
+    Args:
+        value (object | None): Value to check.
+        name (str): Parameter name for error messages.
+        item_desc (str): Description of items for error messages.
+        
+    Returns:
+        list: The value as a list, or empty list if None.
+        
+    Raises:
+        TypeError: If value is not a list or None.
+    """
     if value is None:
         return []
     if not isinstance(value, list):

@@ -17,7 +17,7 @@ other fusion reactions (p-B11,...) are not considered since the focus in on magn
 
 from __future__ import annotations
 
-from fusdb.relation_class import Relation_decorator as Relation
+from fusdb.relation_util import relation
 from fusdb.registry import (
     DD_HE3_ENERGY_J,
     DD_N_ENERGY_J,
@@ -38,7 +38,7 @@ from fusdb.relations.power_balance.fusion_power.reactivity_functions import (
     sigmav_TT,
 )
 
-@Relation(
+@relation(
     name="Total fusion power",
     output="P_fus",
     tags=("fusion_power",),
@@ -56,7 +56,7 @@ def fusion_power_total(
 
 
 ########################################
-@Relation(
+@relation(
     name="Charged fusion power",
     output="P_charged",
     tags=("fusion_power",),
@@ -81,7 +81,7 @@ def charged_fusion_power(
 # TODO(low): Implement charged fusion power from TT, He3He3, He3Tpn, He3TD, He3Tnp
     
 ########################################
-@Relation(
+@relation(
     name="Neutron fusion power",
     output="P_neutron",
     tags=("fusion_power",),
@@ -97,7 +97,7 @@ def neutron_fusion_power(
 
 ################### DT #####################
 ########################################
-@Relation(
+@relation(
     name="DT fusion power",
     output="P_fus_DT",
     tags=("fusion_power",),
@@ -108,7 +108,7 @@ def fusion_power_dt(P_fus_DT_alpha: float, P_fus_DT_n: float) -> float:
 
 
 ########################################
-@Relation(
+@relation(
     name="DT alpha power",
     output="P_fus_DT_alpha",
     tags=("fusion_power",),
@@ -118,7 +118,7 @@ def alpha_power_dt(Rr_DT: float) -> float:
     return DT_ALPHA_ENERGY_J * Rr_DT
 
 ########################################
-@Relation(
+@relation(
     name="DT neutron power",
     output="P_fus_DT_n",
     tags=("fusion_power",),
@@ -130,7 +130,7 @@ def neutron_power_dt(Rr_DT: float) -> float:
 
 #################### DD #####################
 ########################################
-@Relation(
+@relation(
     name="DD fusion power",
     output="P_fus_DD",
     tags=("fusion_power",),
@@ -141,7 +141,7 @@ def fusion_power_dd(P_fus_DDn: float, P_fus_DDp: float) -> float:
 
 
 ########################################
-@Relation(
+@relation(
     name="DD (T+p) fusion power",
     output="P_fus_DDp",
     tags=("fusion_power",),
@@ -151,7 +151,7 @@ def fusion_power_ddp(P_fus_DDp_T: float, P_fus_DDp_p: float) -> float:
     return P_fus_DDp_T + P_fus_DDp_p
 
 ########################################
-@Relation(
+@relation(
     name="DD (He3+n) fusion power",
     output="P_fus_DDn",
     tags=("fusion_power",),
@@ -162,7 +162,7 @@ def fusion_power_ddn(P_fus_DDn_He3: float, P_fus_DDn_n: float) -> float:
 
 
 ########################################
-@Relation(
+@relation(
     name="DDp triton power",
     output="P_fus_DDp_T",
     tags=("fusion_power",),
@@ -172,7 +172,7 @@ def triton_power_dd(Rr_DDp: float) -> float:
     return DD_T_ENERGY_J * Rr_DDp
 
 ########################################
-@Relation(
+@relation(
     name="DDp proton power",
     output="P_fus_DDp_p",
     tags=("fusion_power",),
@@ -182,7 +182,7 @@ def proton_power_dd(Rr_DDp: float) -> float:
     return DD_P_ENERGY_J * Rr_DDp
 
 ########################################
-@Relation(
+@relation(
     name="DDn helium-3 power",
     output="P_fus_DDn_He3",
     tags=("fusion_power",),
@@ -192,7 +192,7 @@ def he3_power_dd(Rr_DDn: float) -> float:
     return DD_HE3_ENERGY_J * Rr_DDn
 
 ########################################
-@Relation(
+@relation(
     name="DDn neutron power",
     output="P_fus_DDn_n",
     tags=("fusion_power",),
@@ -203,7 +203,7 @@ def neutron_power_dd(Rr_DDn: float) -> float:
 
 ################ DHe3 ####################
 ########################################
-@Relation(
+@relation(
     name="D-He3 fusion power",
     output="P_fus_DHe3",
     tags=("fusion_power",),
@@ -214,7 +214,7 @@ def fusion_power_dhe3(P_fus_DHe3_alpha: float, P_fus_DHe3_p: float) -> float:
 
 
 ########################################
-@Relation(
+@relation(
     name="D-He3 alpha power",
     output="P_fus_DHe3_alpha",
     tags=("fusion_power",),
@@ -225,7 +225,7 @@ def alpha_power_dhe3(Rr_DHe3: float) -> float:
 
 
 ########################################
-@Relation(
+@relation(
     name="D-He3 proton power",
     output="P_fus_DHe3_p",
     tags=("fusion_power",),
@@ -240,7 +240,7 @@ def proton_power_dhe3(Rr_DHe3: float) -> float:
 #################### TT #####################
 #TODO(low): Implement TT relations
 ########################################
-@Relation(
+@relation(
     name="TT fusion power",
     output="P_fus_TT",
     tags=("fusion_power",),

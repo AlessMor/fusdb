@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from fusdb.relation_class import Relation_decorator as Relation
+from fusdb.relation_util import relation
 # TODO(high): CHECK THE DEFINITIONS FOR P_LOSS AND ADD REFERENCES
-@Relation(
+@relation(
     name="Total plasma heating",
     output="P_heating",
     tags=("power_balance",),
@@ -15,7 +15,7 @@ def total_plasma_heating(P_ohmic: float, P_charged: float, P_aux: float) -> floa
 
 
 ########################################
-@Relation(
+@relation(
     name="Loss power to SOL and core radiation",
     output="P_loss_explicit",
     tags=("power_balance",),
@@ -26,7 +26,7 @@ def loss_power_to_exhaust(P_sep: float, P_rad: float) -> float:
 
 
 ########################################
-@Relation(
+@relation(
     name="Power balance",
     output="P_loss",
     tags=("power_balance",),

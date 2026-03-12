@@ -11,6 +11,7 @@ R:
 a:
   aliases:
     - minor_radius
+    - r_minor
   default_unit: m
   constraints:
     - a > 0
@@ -246,6 +247,9 @@ T_avg:
   description:
     - Volume-averaged electron temperature.
 T_e:
+  aliases:
+    - T_e_prof
+  ndim: 1
   default_unit: keV
   constraints:
     - T_e > 0
@@ -260,6 +264,9 @@ T0:
   description:
     - On-axis/peak electron temperature.
 T_i:
+  aliases:
+    - T_i_prof
+  ndim: 1
   default_unit: keV
   constraints:
     - T_i >= 0
@@ -288,12 +295,18 @@ n0:
   description:
     - On-axis electron density.
 n_e:
+  aliases:
+    - n_e_prof
+  ndim: 1
   default_unit: 1/m^3
   constraints:
     - n_e >= 0
   description:
     - Electron density.
 n_i:
+  aliases:
+    - n_i_prof
+  ndim: 1
   default_unit: 1/m^3
   constraints:
     - n_i >= 0
@@ -321,6 +334,7 @@ f_GW:
   default_unit: dimensionless
   constraints:
     - f_GW >= 0
+  soft_constraints:
     - f_GW <= 1
   description:
     - Greenwald fraction.
@@ -432,42 +446,91 @@ Rr_DT:
     - Rr_DT >= 0
   description:
     - D-T fusion reaction rate (volume-integrated).
+sigmav_DT_profile:
+  ndim: 1
+  default_unit: m^3/s
+  constraints:
+    - sigmav_DT_profile >= 0
+  description:
+    - D-T fusion reactivity profile.
 Rr_DDn:
   default_unit: 1/s
   constraints:
     - Rr_DDn >= 0
   description:
     - D-D fusion reaction rate (He3+n branch).
+sigmav_DDn_profile:
+  ndim: 1
+  default_unit: m^3/s
+  constraints:
+    - sigmav_DDn_profile >= 0
+  description:
+    - D-D (He3+n) branch reactivity profile.
 Rr_DDp:
   default_unit: 1/s
   constraints:
     - Rr_DDp >= 0
   description:
     - D-D fusion reaction rate (T+p branch).
+sigmav_DDp_profile:
+  ndim: 1
+  default_unit: m^3/s
+  constraints:
+    - sigmav_DDp_profile >= 0
+  description:
+    - D-D (T+p) branch reactivity profile.
 Rr_DHe3:
   default_unit: 1/s
   constraints:
     - Rr_DHe3 >= 0
   description:
     - D-He3 fusion reaction rate.
+sigmav_DHe3_profile:
+  ndim: 1
+  default_unit: m^3/s
+  constraints:
+    - sigmav_DHe3_profile >= 0
+  description:
+    - D-He3 fusion reactivity profile.
 Rr_TT:
   default_unit: 1/s
   constraints:
     - Rr_TT >= 0
   description:
     - T-T fusion reaction rate.
+sigmav_TT_profile:
+  ndim: 1
+  default_unit: m^3/s
+  constraints:
+    - sigmav_TT_profile >= 0
+  description:
+    - T-T fusion reactivity profile.
 Rr_He3He3:
   default_unit: 1/s
   constraints:
     - Rr_He3He3 >= 0
   description:
     - He3-He3 fusion reaction rate.
+sigmav_He3He3_profile:
+  ndim: 1
+  default_unit: m^3/s
+  constraints:
+    - sigmav_He3He3_profile >= 0
+  description:
+    - He3-He3 fusion reactivity profile.
 Rr_THe3:
   default_unit: 1/s
   constraints:
     - Rr_THe3 >= 0
   description:
     - T-He3 fusion reaction rate.
+sigmav_THe3_profile:
+  ndim: 1
+  default_unit: m^3/s
+  constraints:
+    - sigmav_THe3_profile >= 0
+  description:
+    - T-He3 fusion reactivity profile.
 P_fus_DT:
   default_unit: W
   constraints:

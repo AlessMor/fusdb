@@ -83,10 +83,9 @@ Thumbs.db
 .*.swp
 .*.swo
 
-# MyST/Sphinx
+# Docs builds
 _build/
-.sphinx/
-docs/_generated/
+site/
 
 # Data files (if tracking output)
 *.pkl

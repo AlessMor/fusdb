@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sympy as sp
 
-from fusdb.relation_class import Relation_decorator as Relation
+from fusdb.relation_util import relation
 # Only the active default scaling is decorated for relation discovery.
 
 
@@ -373,7 +373,7 @@ def tau_E_hubbard_lower(I_p: float, B0: float, dnla20: float, P_loss: float) -> 
 
 
 
-@Relation(
+@relation(
     name="tau_E_hubbard_nominal",
     output="tau_E",
     tags=("confinement", "tokamak", "imode"),
@@ -754,19 +754,21 @@ def tau_E_iter_ipb98y3(
 
 
 ########################################
-@Relation(
+@relation(
     name="tau_E_iter_ipb98y2",
     output="tau_E",
     tags=("confinement", "tokamak", "hmode"),
 )
 def tau_E_iter_ipb98y2(
-    I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
+    H98_y2: float, I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
     """
     Taken from PROCESS codebase.
-    Calculate the IPB98(y,2) ELMy H-mode scaling confinement time
+    Calculate the IPB98(y,2) ELMy H-mode scaling confinement time, including
+    the H98(y,2) confinement enhancement factor.
 
     Args:
+        H98_y2 (float): Confinement enhancement factor H98(y,2) [-]
         I_p (float): Plasma current [A]
         B0 (float): Toroidal magnetic field on axis[T]
         n_la (float): Line averaged electron density [m**-3]
@@ -789,7 +791,7 @@ def tau_E_iter_ipb98y2(
         None Otto Kardaun, N. K. Thomsen, and None Alexander Chudnovskiy, “Corrections to a sequence of papers in Nuclear Fusion,”
         Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
-    return 0.0562 * (I_p / 1e6) ** 0.93 * B0 ** 0.15 * (n_la/1e19) ** 0.41 * (P_loss/1e6)** (-0.69) * R ** 1.97 * kappa_ipb ** 0.78 * A ** (-0.58) * afuel ** 0.19
+    return H98_y2 * 0.0562 * (I_p / 1e6) ** 0.93 * B0 ** 0.15 * (n_la/1e19) ** 0.41 * (P_loss/1e6)** (-0.69) * R ** 1.97 * kappa_ipb ** 0.78 * A ** (-0.58) * afuel ** 0.19
 def tau_E_iter_ipb98y1(
     I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:

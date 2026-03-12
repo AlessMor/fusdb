@@ -11,10 +11,10 @@ dependencies = ["PyYAML>=6.0", "sympy>=1.12", "pycountry>=24.6.1", "hypernetx==2
 
 [project.optional-dependencies]
 docs = [
-    "myst-parser>=2.0",
-    "sphinx>=7.2",
-    "sphinxcontrib-bibtex>=2.6",
-    "sphinx-rtd-theme>=2.0",
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.26",
+    "pymdown-extensions>=10.11",
 ]
 
 [project.scripts]

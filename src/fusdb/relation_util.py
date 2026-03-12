@@ -1,134 +1,111 @@
-"""Utilities shared by Relation objects."""
+"""Utilities shared by :class:`fusdb.relation_class.Relation` objects."""
 
 from __future__ import annotations
 
-from typing import Callable, Iterable
+from typing import TYPE_CHECKING, Callable, Iterable, Mapping
 import types
-import inspect
+import warnings
 
 import sympy as sp
 
+from .utils import normalize_tags_to_tuple
 
-def function_inputs(func: Callable) -> list[str]:
-    """Return ordered input names for a callable.
+if TYPE_CHECKING:
+    from .relation_class import Relation
 
-    Args:
-        func: Callable to introspect.
-
-    Returns:
-        Ordered list of parameter names.
-    """
-    sig = inspect.signature(func)
-    inputs: list[str] = []
-    for name, param in sig.parameters.items():
-        if param.kind in (
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.KEYWORD_ONLY,
-        ):
-            inputs.append(name)
-    return inputs
+_RELATION_REGISTRY: list["Relation"] = []
 
 
-def build_sympy_expr(
-    func: Callable,
-    inputs: Iterable[str],
-    output: str,
-) -> tuple[sp.Expr | None, dict[str, sp.Symbol] | None]:
-    """Create an implicit sympy expression output - f(inputs).
-
-    Args:
-        func: Explicit relation function.
-        inputs: Ordered input variable names.
-        output: Output variable name.
-
-    Returns:
-        (expr, symbols) or (None, None) if conversion fails.
-    """
-    symbols = {name: sp.Symbol(name, real=True) for name in (*inputs, output)}
+def try_sympify_expression(
+    expression: str,
+    *,
+    local_symbols: Mapping[str, object] | None = None,
+    context: str | None = None,
+    strict: bool = False,
+) -> sp.Expr | None:
+    """Parse an expression with sympy, warning/raising on failure."""
     try:
-        expr = func(*[symbols[name] for name in inputs])
-        return symbols[output] - expr, symbols
-    except Exception:
-        pass
+        return sp.sympify(expression, locals=dict(local_symbols or {}))
+    except Exception as exc:
+        where = f" for {context}" if context else ""
+        msg = (
+            f"Sympy could not parse expression{where}: {expression!r} "
+            f"({type(exc).__name__}: {exc})"
+        )
+        if strict:
+            raise ValueError(msg) from exc
+        warnings.warn(msg, RuntimeWarning, stacklevel=2)
+        return None
 
-    class _SympyModuleProxy:
-        """Proxy math/numpy-style functions to sympy equivalents (best-effort)."""
 
-        _ALT = {
-            "arcsin": "asin",
-            "arccos": "acos",
-            "arctan": "atan",
-            "arcsinh": "asinh",
-            "arccosh": "acosh",
-            "arctanh": "atanh",
-            "log10": "log",
-            "log2": "log",
-            "power": "Pow",
-            "abs": "Abs",
-            "fabs": "Abs",
-        }
+def build_symbolic_model(
+    func: Callable,
+    arg_names: Iterable[str],
+    preferred_target: str | None,
+    *,
+    relation_name: str | None = None,
+    strict: bool = False,
+) -> tuple[sp.Expr | None, dict[str, sp.Symbol] | None]:
+    """Build implicit equation ``preferred_target - f(arg_names)``."""
+    if preferred_target is None:
+        return None, None
 
-        _CONST = {
-            "pi": sp.pi,
-            "e": sp.E,
-        }
+    arg_tuple = tuple(arg_names)
+    symbols = {name: sp.Symbol(name, real=True) for name in (*arg_tuple, preferred_target)}
 
-        def __getattr__(self, name: str) -> object:
-            if name in self._CONST:
-                return self._CONST[name]
-            if hasattr(sp, name):
-                return getattr(sp, name)
-            alt = self._ALT.get(name)
-            if alt and hasattr(sp, alt):
-                return getattr(sp, alt)
-            raise AttributeError(name)
+    direct_exc: Exception | None = None
+    try:
+        expr = func(*[symbols[name] for name in arg_tuple])
+        return symbols[preferred_target] - expr, symbols
+    except Exception as exc:
+        direct_exc = exc
 
-    proxy = _SympyModuleProxy()
+    # Inline globals patching for module-style and direct math/numpy names.
     patched_globals = dict(func.__globals__)
     patched_globals.setdefault("__builtins__", func.__globals__.get("__builtins__", __builtins__))
-    # Swap common module handles if present.
-    if "math" in patched_globals:
-        patched_globals["math"] = proxy
-    if "np" in patched_globals:
-        patched_globals["np"] = proxy
-    if "numpy" in patched_globals:
-        patched_globals["numpy"] = proxy
-    # Swap common direct imports (sin, cos, pi, etc.) if present.
-    for name in (
-        "pi",
-        "e",
-        "sin",
-        "cos",
-        "tan",
-        "asin",
-        "acos",
-        "atan",
-        "arcsin",
-        "arccos",
-        "arctan",
-        "sinh",
-        "cosh",
-        "tanh",
-        "asinh",
-        "acosh",
-        "atanh",
-        "sqrt",
-        "exp",
-        "log",
-        "log10",
-        "log2",
-        "power",
-        "abs",
-        "fabs",
-        "floor",
-        "ceil",
-    ):
+    sympy_names: dict[str, object] = {
+        "pi": sp.pi,
+        "e": sp.E,
+        "sin": sp.sin,
+        "cos": sp.cos,
+        "tan": sp.tan,
+        "asin": sp.asin,
+        "acos": sp.acos,
+        "atan": sp.atan,
+        "arcsin": sp.asin,
+        "arccos": sp.acos,
+        "arctan": sp.atan,
+        "sinh": sp.sinh,
+        "cosh": sp.cosh,
+        "tanh": sp.tanh,
+        "asinh": sp.asinh,
+        "acosh": sp.acosh,
+        "atanh": sp.atanh,
+        "sqrt": sp.sqrt,
+        "exp": sp.exp,
+        "log": sp.log,
+        "log10": sp.log,
+        "log2": sp.log,
+        "power": sp.Pow,
+        "abs": sp.Abs,
+        "fabs": sp.Abs,
+        "floor": sp.floor,
+        "ceil": getattr(sp, "ceil", sp.ceiling),
+    }
+    module_proxy = types.SimpleNamespace(
+        **{
+            **{name: getattr(sp, name) for name in dir(sp)},
+            **sympy_names,
+        }
+    )
+    for module_name in ("math", "np", "numpy"):
+        if module_name in patched_globals:
+            patched_globals[module_name] = module_proxy
+    for name, sympy_obj in sympy_names.items():
         if name in patched_globals:
-            try:
-                patched_globals[name] = getattr(proxy, name)
-            except AttributeError:
-                continue
+            patched_globals[name] = sympy_obj
+
+    proxy_exc: Exception | None = None
     try:
         patched_func = types.FunctionType(
             func.__code__,
@@ -137,146 +114,85 @@ def build_sympy_expr(
             func.__defaults__,
             func.__closure__,
         )
-        expr = patched_func(*[symbols[name] for name in inputs])
-        return symbols[output] - expr, symbols
-    except Exception:
-        return None, None
+        # Preserve keyword-only defaults for callables that use ``def f(*args, key=...)``.
+        patched_func.__kwdefaults__ = getattr(func, "__kwdefaults__", None)
+        expr = patched_func(*[symbols[name] for name in arg_tuple])
+        return symbols[preferred_target] - expr, symbols
+    except Exception as exc:
+        proxy_exc = exc
 
+    rel_label = relation_name or getattr(func, "__name__", "<unknown>")
+    direct_label = (
+        "n/a"
+        if direct_exc is None
+        else f"{type(direct_exc).__name__}: {direct_exc}"
+    )
+    proxy_label = (
+        "n/a"
+        if proxy_exc is None
+        else f"{type(proxy_exc).__name__}: {proxy_exc}"
+    )
+    msg = (
+        f"Could not convert relation '{rel_label}' to sympy expression for target "
+        f"'{preferred_target}'. direct={direct_label}; proxy={proxy_label}"
+    )
+    if strict:
+        raise ValueError(msg) from (proxy_exc or direct_exc)
+    warnings.warn(msg, RuntimeWarning, stacklevel=2)
+    return None, symbols
 
-def evaluate_constraints(
-    constraints: Iterable[str] | None,
-    values: dict[str, object],
-) -> list[str]:
-    """Evaluate constraint strings against provided values.
-
-    Args:
-        constraints: Iterable of constraint expressions.
-        values: Mapping of variable names to numeric values.
-
-    Returns:
-        List of violated constraint strings (empty if none).
-    """
-    if not constraints:
-        return []
-    failed: list[str] = []
-    for constraint in constraints:
-        try:
-            expr = sp.sympify(constraint, locals=values)
-            if expr is sp.S.true:
-                continue
-            if expr is sp.S.false:
-                failed.append(constraint)
-                continue
-            if not bool(expr):
-                failed.append(constraint)
-        except Exception:
-            # If evaluation fails, keep it undecidable rather than failing hard.
-            continue
-    return failed
-
-
-def check_relation_satisfied(
-    rel: object,
-    values: dict[str, object],
+def relation(
     *,
-    rel_tol: float | None = None,
-    abs_tol: float | None = None,
-    check_constraints: bool = True
-) -> tuple[bool, str, float | None]:
-    """Check if relation is satisfied with given values.
-    
-    Performs a comprehensive check including:
-    1. Verifying all variables are present
-    2. Checking constraints (if requested)
-    3. Evaluating the relation
-    4. Computing residual (actual - expected)
-    5. Checking if within tolerance
-    
-    Args:
-        rel: Relation object to check
-        values: Variable values dictionary
-        rel_tol: Relative tolerance (uses rel.rel_tol_default if None)
-        abs_tol: Absolute tolerance (uses rel.abs_tol_default if None)
-        check_constraints: If True, check constraints before evaluating
-        
-    Returns:
-        Tuple of (satisfied, status, residual) where:
-        - satisfied: True if relation is satisfied within tolerance
-        - status: "SAT" (satisfied), "VIOLATED" (outside tolerance), or "UNDECIDABLE" (cannot evaluate)
-        - residual: actual - expected value, or None if undecidable
+    name: str | None = None,
+    output: str,
+    tags: Iterable[str] | str | None = None,
+    rel_tol_default: float | None = None,
+    abs_tol_default: float | None = None,
+    constraints: Iterable[str] | str | None = None,
+    soft_constraints: Iterable[str] | str | None = None,
+    initial_guesses: dict[str, Callable] | None = None,
+    inverse_functions: dict[str, Callable] | None = None,
+):
+    """Decorator that builds and registers :class:`~fusdb.relation_class.Relation`.
+
+    The decorated callable is replaced by a frozen :class:`~fusdb.relation_class.Relation`
+    instance and appended to :data:`_RELATION_REGISTRY`.
     """
-    from .utils import within_tolerance
-    
-    # Check if all variables are present
-    if any(name not in values for name in rel.variables):
-        return (False, "UNDECIDABLE", None)
-    
-    # Check constraints if requested
-    if check_constraints:
-        violations = evaluate_constraints(rel.constraints, values)
-        if violations:
-            return (False, "VIOLATED", None)
-    
-    # Evaluate relation
-    try:
-        expected = rel.evaluate(**{name: values[name] for name in rel.inputs})
-    except Exception:
-        return (False, "UNDECIDABLE", None)
-    
-    actual = values.get(rel.output)
-    
-    # Convert to scalars
-    try:
-        actual_scalar = float(actual) if actual is not None else None
-        expected_scalar = float(expected) if expected is not None else None
-    except Exception:
-        return (False, "UNDECIDABLE", None)
-    
-    if actual_scalar is None or expected_scalar is None:
-        return (False, "UNDECIDABLE", None)
-    
-    # Calculate residual
-    residual = actual_scalar - expected_scalar
-    
-    # Check tolerance
-    rel_tol_val = rel_tol if rel_tol is not None else (rel.rel_tol_default or 0.0)
-    abs_tol_val = abs_tol if abs_tol is not None else (rel.abs_tol_default or 0.0)
-    
-    satisfied = within_tolerance(actual_scalar, expected_scalar, 
-                                 rel_tol=rel_tol_val, abs_tol=abs_tol_val)
-    status = "SAT" if satisfied else "VIOLATED"
-    
-    return (satisfied, status, residual)
 
+    from .relation_class import Relation
 
-def build_inverse_solver(
-    expr: sp.Expr,
-    symbols: dict[str, sp.Symbol],
-    unknown: str,
-    ordered_vars: Iterable[str],
-) -> Callable | None:
-    """Try to build a numeric inverse solver for a single unknown.
+    def decorator(func: Callable) -> Relation:
+        """Create one relation object from ``func`` and register it.
+        Uses Relation.from_callable to build the object, which handles sympy parsing and validation.
+        """
 
-    Args:
-        expr: Implicit expression equal to 0.
-        symbols: Sympy symbols by name.
-        unknown: Variable name to solve for.
-        ordered_vars: All variable names in order.
+        constraints_tuple = (
+            ()
+            if constraints is None
+            else (constraints,) if isinstance(constraints, str) else tuple(constraints)
+        )
+        soft_constraints_tuple = (
+            ()
+            if soft_constraints is None
+            else (soft_constraints,) if isinstance(soft_constraints, str) else tuple(soft_constraints)
+        )
 
-    Returns:
-        Callable or None if an inverse cannot be built.
-    """
-    try:
-        solutions = sp.solve(expr, symbols[unknown])
-    except Exception:
-        return None
-    if not solutions:
-        return None
-    try:
-        args = [symbols[name] for name in ordered_vars if name != unknown]
-        return sp.lambdify(args, solutions[0], modules=["numpy", "sympy"])
-    except Exception:
-        return None
+        relation_obj = Relation.from_callable(
+            name=name or func.__name__,
+            target=output,
+            func=func,
+            tags=normalize_tags_to_tuple(tags),
+            rel_tol_default=rel_tol_default,
+            abs_tol_default=abs_tol_default,
+            constraints=constraints_tuple,
+            soft_constraints=soft_constraints_tuple,
+            initial_guesses=initial_guesses or {},
+            inverse_functions=inverse_functions or {},
+        )
+        _RELATION_REGISTRY.append(relation_obj)
+        return relation_obj
+
+    return decorator
 
 
 def get_filtered_relations(
@@ -302,7 +218,6 @@ def get_filtered_relations(
     Returns:
         List of relations matching the criteria (or all if no filters)
     """
-    from .relation_class import _RELATION_REGISTRY
     from . import relations
     from .registry import (
         ALLOWED_CONFINEMENT_MODES,
@@ -355,7 +270,9 @@ def get_filtered_relations(
     if method_names:
         for relation in relations:
             if relation.name in method_names:
-                override_outputs.add(canonical_variable_name(relation.output))
+                target = (relation._preferred_target if relation._preferred_target is not None else next(iter(relation.numeric_functions), None))
+                if target:
+                    override_outputs.add(canonical_variable_name(target))
 
     for relation in relations:
         relation_tags = set(relation.tags)  # Already normalized by decorator
@@ -384,11 +301,13 @@ def get_filtered_relations(
 
         # Method override for outputs
         if override_outputs:
-            output_name = canonical_variable_name(relation.output)
-            if output_name in override_outputs and relation.name not in method_names:
-                if verbose:
-                    logger.info("Rejecting %s: method override", relation.name)
-                continue
+            target = (relation._preferred_target if relation._preferred_target is not None else next(iter(relation.numeric_functions), None))
+            if target:
+                output_name = canonical_variable_name(target)
+                if output_name in override_outputs and relation.name not in method_names:
+                    if verbose:
+                        logger.info("Rejecting %s: method override", relation.name)
+                    continue
 
         results.append(relation)
 

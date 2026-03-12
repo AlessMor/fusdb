@@ -1,350 +1,262 @@
-"""Relation class and decorator for physics relations."""
+"""Relation object used by the solver."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Mapping
+import inspect
 
-from .utils import normalize_tags_to_tuple
-from .relation_util import (
-    build_inverse_solver,
-    build_sympy_expr,
-    evaluate_constraints,
-    function_inputs,
-)
+import sympy as sp
 
-# Central relation registry - populated by @Relation decorator
-_RELATION_REGISTRY: list['Relation'] = []
+from .relation_util import build_symbolic_model, try_sympify_expression
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, slots=True, frozen=True)
 class Relation:
-    """Container for a single physical relation.
-
-    Args:
-        name: Human-readable relation name.
-        output: Canonical output variable name.
-        func: Explicit function returning output from inputs.
-        inputs: Ordered input variable names.
-        tags: Relation tags for filtering.
-        rel_tol_default: Default relative tolerance for checks.
-        abs_tol_default: Default absolute tolerance for checks.
-        constraints: Constraint expressions evaluated on variables.
-        initial_guesses: Optional initial guess callables per variable.
-        solve_for: Optional explicit solvers for variables.
-    """
+    """Immutable relation metadata and evaluation helpers."""
 
     name: str
-    output: str
-    func: Callable
-    inputs: list[str]
+    variables: dict[str, sp.Symbol]
+    numeric_functions: dict[str, tuple[tuple[str, ...], Callable]]
+    _preferred_target: str | None = field(default=None, repr=False)
     tags: tuple[str, ...] = field(default_factory=tuple)
     rel_tol_default: float | None = None
     abs_tol_default: float | None = None
     constraints: tuple[str, ...] = field(default_factory=tuple)
+    soft_constraints: tuple[str, ...] = field(default_factory=tuple)
     initial_guesses: dict[str, Callable] = field(default_factory=dict)
-    solve_for: dict[str, Callable] | None = None
-    sympy_expr: object | None = None
-    _sympy_symbols: dict[str, object] | None = None
-    _inverse_cache: dict[str, Callable] = field(default_factory=dict, repr=False)
+    inverse_functions: dict[str, Callable] = field(default_factory=dict)
+    sympy_expression: sp.Expr | None = None
+
+    def __post_init__(self) -> None:
+        """Normalize mutable inputs into stable runtime containers."""
+        from .registry import canonical_variable_name
+
+        canonical_vars: dict[str, sp.Symbol] = {}
+        for raw_name, symbol in (self.variables or {}).items():
+            c_name = canonical_variable_name(str(raw_name))
+            if c_name in canonical_vars:
+                continue
+            if isinstance(symbol, sp.Symbol) and symbol.name == c_name:
+                canonical_vars[c_name] = symbol
+            else:
+                canonical_vars[c_name] = sp.Symbol(c_name, real=True)
+
+        canonical_numeric: dict[str, tuple[tuple[str, ...], Callable]] = {}
+        for raw_target, spec in (self.numeric_functions or {}).items():
+            try:
+                arg_names, fn = spec
+            except Exception as exc:
+                raise ValueError(
+                    f"Relation '{self.name}' has invalid numeric_functions entry for "
+                    f"target '{raw_target}': expected (inputs, callable)"
+                ) from exc
+            c_target = canonical_variable_name(str(raw_target))
+            c_args = tuple(canonical_variable_name(str(name)) for name in arg_names)
+            if not callable(fn):
+                raise ValueError(
+                    f"Relation '{self.name}' numeric function for target '{c_target}' is not callable"
+                )
+            canonical_numeric[c_target] = (c_args, fn)
+            canonical_vars.setdefault(c_target, sp.Symbol(c_target, real=True))
+            for name in c_args:
+                canonical_vars.setdefault(name, sp.Symbol(name, real=True))
+
+        target = None if self._preferred_target is None else canonical_variable_name(str(self._preferred_target))
+        if target is not None:
+            canonical_vars.setdefault(target, sp.Symbol(target, real=True))
+
+        canonical_overrides = {
+            canonical_variable_name(str(name)): fn
+            for name, fn in (self.inverse_functions or {}).items()
+        }
+
+        object.__setattr__(self, "variables", canonical_vars)
+        object.__setattr__(self, "numeric_functions", canonical_numeric)
+        object.__setattr__(self, "_preferred_target", target)
+        object.__setattr__(self, "tags", tuple(self.tags))
+        object.__setattr__(self, "constraints", tuple(self.constraints))
+        object.__setattr__(self, "soft_constraints", tuple(self.soft_constraints))
+        object.__setattr__(self, "initial_guesses", dict(self.initial_guesses or {}))
+        object.__setattr__(self, "inverse_functions", canonical_overrides)
 
     @property
-    def variables(self) -> tuple[str, ...]:
-        """Return ordered variables (inputs + output). Args: none. Returns: tuple."""
-        return tuple([*self.inputs, self.output])
+    def preferred_target(self) -> str | None:
+        """Return the preferred numeric target for this relation."""
+        if self._preferred_target is not None:
+            return self._preferred_target
+        return next(iter(self.numeric_functions), None)
 
-    def evaluate(self, **kwargs: object) -> object:
-        """Evaluate the relation function with provided input values.
-        
-        This method computes the output of the relation by calling the underlying
-        function with the provided input values. It extracts values from kwargs
-        in the correct order based on self.inputs.
+    def required_inputs(self, output: str | None = None) -> tuple[str, ...]:
+        """Return ordered input names for the requested output variable."""
+        out = self.preferred_target if output is None else output
+        if out is not None and out in self.numeric_functions:
+            return self.numeric_functions[out][0]
+        if out is None:
+            return tuple(self.variables)
+        return tuple(name for name in self.variables if name != out)
 
-        Args:
-            **kwargs: Input variable values as keyword arguments.
-                     Must contain all variables in self.inputs.
-
-        Returns:
-            The computed output value from the relation function.
-            
-        Raises:
-            KeyError: If any required input variable is missing from kwargs.
-            
-        Example:
-            >>> # For a relation: output = input1 + input2
-            >>> result = relation.evaluate(input1=5.0, input2=3.0)
-            >>> # result = 8.0
-        """
-        # Extract input values in the correct order as specified by self.inputs
-        args = [kwargs[name] for name in self.inputs]
-        
-        # Call the underlying physics function with ordered arguments
-        return self.func(*args)
-
-    def constraint_violations(self, values: dict[str, object]) -> list[str]:
-        """Check which constraints are violated for given variable values.
-        
-        Constraints are expressions that must be satisfied for the relation to be
-        physically valid. For example, constraints might enforce that certain
-        variables must be positive or within specific ranges.
-        
-        Args:
-            values: Dictionary mapping variable names to their values.
-        
-        Returns:
-            List of constraint expressions that evaluated to False.
-            Empty list if all constraints are satisfied.
-            
-        Example:
-            >>> # Relation with constraint "x > 0"
-            >>> violations = relation.constraint_violations({"x": -1.0})
-            >>> # violations = ["x > 0"]
-        """
-        # Delegate to utility function that evaluates each constraint expression
-        return evaluate_constraints(self.constraints, values)
-    
-    def check_satisfied(
-        self, 
-        values: dict[str, object],
+    @classmethod
+    def from_callable(
+        cls,
         *,
-        rel_tol: float | None = None,
-        abs_tol: float | None = None,
-        check_constraints: bool = True
-    ) -> tuple[bool, str, float | None]:
-        """Check if relation is satisfied with given values.
-        
-        Convenience wrapper around check_relation_satisfied utility.
-        
-        Args:
-            values: Variable values to check
-            rel_tol: Relative tolerance (uses rel_tol_default if None)
-            abs_tol: Absolute tolerance (uses abs_tol_default if None)
-            check_constraints: If True, check constraints before evaluating
-            
-        Returns:
-            Tuple of (satisfied, status, residual) where:
-            - satisfied: True if relation is satisfied
-            - status: "SAT", "VIOLATED", or "UNDECIDABLE"
-            - residual: actual - expected value, or None if undecidable
-            
-        Example:
-            >>> rel = some_relation
-            >>> values = {"var1": 1.0, "var2": 2.0, "output": 3.0}
-            >>> satisfied, status, residual = rel.check_satisfied(values)
-            >>> print(f"Status: {status}, Residual: {residual}")
-        """
-        from .relation_util import check_relation_satisfied
-        return check_relation_satisfied(self, values, 
-                                       rel_tol=rel_tol, 
-                                       abs_tol=abs_tol,
-                                       check_constraints=check_constraints)
-    
-    def get_residual(self, values: dict[str, object]) -> float | None:
-        """Get residual (actual - expected) for this relation.
-        
-        Args:
-            values: Variable values
-            
-        Returns:
-            Residual value or None if relation cannot be evaluated
-            
-        Example:
-            >>> rel = some_relation
-            >>> values = {"var1": 1.0, "var2": 2.0, "output": 3.1}
-            >>> residual = rel.get_residual(values)
-            >>> print(f"Residual: {residual}")  # 0.1
-        """
-        _, _, residual = self.check_satisfied(values, check_constraints=False)
-        return residual
+        name: str,
+        func: Callable,
+        target: str | None = None,
+        variables: Iterable[str] | None = None,
+        inputs: Iterable[str] | None = None,
+        tags: Iterable[str] = (),
+        rel_tol_default: float | None = None,
+        abs_tol_default: float | None = None,
+        constraints: Iterable[str] = (),
+        soft_constraints: Iterable[str] = (),
+        initial_guesses: dict[str, Callable] | None = None,
+        inverse_functions: dict[str, Callable] | None = None,
+        numeric_functions: dict[str, tuple[tuple[str, ...], Callable]] | None = None,
+        strict_symbolic: bool = False,
+    ) -> "Relation":
+        """Create a relation from a python callable and derive symbolic metadata."""
+        if inputs is None:
+            inputs = tuple(inspect.signature(func).parameters)
+        else:
+            inputs = tuple(inputs)
+
+        base_vars: list[str] = list(variables or ())
+        for name in inputs:
+            if name not in base_vars:
+                base_vars.append(name)
+        if target is not None and target not in base_vars:
+            base_vars.append(target)
+
+        expr, symbols = build_symbolic_model(
+            func,
+            inputs,
+            target,
+            relation_name=name,
+            strict=strict_symbolic,
+        )
+        symbols_map = (
+            symbols
+            if symbols is not None
+            else {name: sp.Symbol(name, real=True) for name in base_vars}
+        )
+        for var_name in base_vars:
+            symbols_map.setdefault(var_name, sp.Symbol(var_name, real=True))
+
+        numeric_map: dict[str, tuple[tuple[str, ...], Callable]] = dict(numeric_functions or {})
+        if target is not None and target not in numeric_map:
+            numeric_map[target] = (tuple(inputs), func)
+
+        constraints_tuple = tuple(constraints)
+        soft_constraints_tuple = tuple(soft_constraints)
+        for expr_str in constraints_tuple:
+            try_sympify_expression(
+                str(expr_str),
+                local_symbols=symbols_map,
+                context=f"relation '{name}' hard constraints",
+                strict=strict_symbolic,
+            )
+        for expr_str in soft_constraints_tuple:
+            try_sympify_expression(
+                str(expr_str),
+                local_symbols=symbols_map,
+                context=f"relation '{name}' soft constraints",
+                strict=strict_symbolic,
+            )
+
+        return cls(
+            name=name,
+            variables=symbols_map,
+            numeric_functions=numeric_map,
+            _preferred_target=target,
+            tags=tuple(tags),
+            rel_tol_default=rel_tol_default,
+            abs_tol_default=abs_tol_default,
+            constraints=constraints_tuple,
+            soft_constraints=soft_constraints_tuple,
+            initial_guesses=initial_guesses or {},
+            inverse_functions=inverse_functions or {},
+            sympy_expression=expr,
+        )
+
+    def evaluate(self, values: Mapping[str, object], target: str | None = None) -> object:
+        """Evaluate a numeric function for the requested target (or default)."""
+        eval_target = target
+        if eval_target is None:
+            eval_target = self.preferred_target
+        if eval_target is None:
+            raise ValueError(f"Relation '{self.name}' has no preferred target")
+        spec = self.numeric_functions.get(eval_target)
+        if spec is None:
+            raise KeyError(f"Relation '{self.name}' has no numeric function for target '{eval_target}'")
+        ordered, fn = spec
+        return fn(*(values[name] for name in ordered))
 
     def inverse_solver(self, unknown: str) -> Callable | None:
-        """Get or build a symbolic inverse solver for a specific variable.
-        
-        This method creates a callable that can solve the relation for the specified
-        unknown variable, given all other variables. The solver is built once using
-        symbolic mathematics (SymPy) and then cached for future use.
-        
-        Args:
-            unknown: Name of the variable to solve for.
-        
-        Returns:
-            Callable that takes all other variables and returns the unknown value,
-            or None if symbolic inversion is not possible.
-            
-        Example:
-            >>> # For relation: c = a + b
-            >>> solver_a = relation.inverse_solver('a')  # Returns function: a = c - b
-            >>> result = solver_a(b=3.0, c=8.0)  # result = 5.0
-        """
-        # Check if we already built and cached this inverse solver
-        if unknown in self._inverse_cache:
-            return self._inverse_cache[unknown]
-        
-        # Can't build inverse without symbolic expression
-        if self.sympy_expr is None or self._sympy_symbols is None:
+        """Return numeric solver callable for the requested unknown."""
+        if unknown not in self.variables:
             return None
-        
-        # Build the symbolic inverse solver using SymPy
-        solver = build_inverse_solver(self.sympy_expr, self._sympy_symbols, unknown, self.variables)
-        
-        # Cache for future use to avoid rebuilding
-        self._inverse_cache[unknown] = solver
+
+        if unknown in self.numeric_functions:
+            return self.numeric_functions[unknown][1]
+
+        if self.sympy_expression is None:
+            return None
+
+        candidate_symbol = self.variables.get(unknown)
+        if candidate_symbol is None:
+            return None
+
+        try:
+            solutions = sp.solve(self.sympy_expression, candidate_symbol)
+        except Exception:
+            return None
+        if not solutions:
+            return None
+
+        ordered = tuple(name for name in self.variables if name != unknown)
+        try:
+            args = [self.variables[name] for name in ordered]
+            solver = sp.lambdify(args, solutions[0], modules=["numpy", "sympy"])
+        except Exception:
+            return None
+
+        self.numeric_functions[unknown] = (ordered, solver)
         return solver
 
-    def solve_for_value(self, unknown: str, values: dict[str, object]) -> object | None:
-        """Compute the value of an unknown variable from known variables.
-        
-        This method attempts to solve the relation for the specified unknown variable
-        using either an explicit solver (if provided) or automatic symbolic inversion.
-        It's the primary method used by the solver system to compute missing values.
+    def solve_for_value(self, unknown: str, values: Mapping[str, object]) -> object | None:
+        """Solve for one variable from a mapping of known values."""
+        if unknown not in self.variables:
+            return None
 
-        Args:
-            unknown: Name of the variable to compute.
-            values: Dictionary of known variable values.
-
-        Returns:
-            The computed value for the unknown variable, or None if:
-            - Required variables are missing from values
-            - Solving fails (e.g., division by zero, invalid domain)
-            - No solver is available (neither explicit nor symbolic)
-            
-        Example:
-            >>> # For relation: c = a + b
-            >>> result = relation.solve_for_value('a', {'b': 3.0, 'c': 8.0})
-            >>> # result = 5.0
-        """
-        # First, try using an explicit solver if one was provided
-        # Explicit solvers are hand-written functions for complex inversions
-        if self.solve_for and unknown in self.solve_for:
+        override_fn = self.inverse_functions.get(unknown)
+        if override_fn is not None:
             try:
-                return self.solve_for[unknown](values)
+                return override_fn(values)
             except Exception:
-                # Explicit solver failed, fall through to symbolic
                 return None
-        
-        # No explicit solver, try building/using symbolic inverse
-        solver = self.inverse_solver(unknown)
-        if solver is None:
-            # Symbolic inversion not possible
+
+        if unknown not in self.numeric_functions:
+            if self.inverse_solver(unknown) is None:
+                return None
+
+        spec = self.numeric_functions.get(unknown)
+        if spec is None:
             return None
-        
-        # Collect all known variable values in order (excluding the unknown)
-        args: list[object] = []
-        for name in self.variables:
-            if name == unknown:
-                continue  # Skip the variable we're solving for
-            if name not in values:
-                # Missing a required variable, can't solve
-                return None
-            args.append(values[name])
-        
-        # Attempt to evaluate the symbolic solver
+
+        ordered, fn = spec
         try:
-            result = solver(*args)
-        except Exception:
-            # Solver failed (e.g., sqrt of negative, division by zero)
+            args = tuple(values[name] for name in ordered)
+        except KeyError:
             return None
-        
-        # Try to convert result to float for numerical consistency
+
+        try:
+            result = fn(*args)
+        except Exception:
+            return None
+
         try:
             scalar = float(result)
         except Exception:
-            # Result is symbolic or can't be converted
             scalar = None
-        
-        # Return float if possible, otherwise return the raw result
         return scalar if scalar is not None else result
-
-
-def Relation_decorator(
-    *,
-    name: str | None = None,
-    output: str,
-    tags: Iterable[str] | str | None = None,
-    rel_tol_default: float | None = None,
-    abs_tol_default: float | None = None,
-    constraints: Iterable[str] | None = None,
-    initial_guesses: dict[str, Callable] | None = None,
-    solve_for: dict[str, Callable] | None = None,
-):
-    """Decorator factory to transform a physics function into a Relation object.
-    
-    This decorator wraps a regular Python function and creates a Relation object
-    that can be used by the solver system. It automatically extracts function inputs,
-    builds symbolic representations for automatic inversion, and registers the
-    relation in the global registry.
-    
-    Args:
-        name: Human-readable name for the relation. If None, uses function name.
-        output: Name of the output variable that this relation computes.
-        tags: Classification tags for filtering (e.g., "geometry", "fusion_power").
-              Can be a single string or iterable of strings.
-        rel_tol_default: Default relative tolerance for satisfaction checks.
-                         Used when checking if relation is satisfied.
-        abs_tol_default: Default absolute tolerance for satisfaction checks.
-                         Used when checking if relation is satisfied.
-        constraints: Physical constraints that must be satisfied (e.g., "x > 0").
-                    Each is a string expression evaluated with variable values.
-        initial_guesses: Dict of callables providing initial guesses for variables
-                        when using iterative solvers.
-        solve_for: Dict mapping variable names to explicit inverse solver functions.
-                  Used when symbolic inversion is not possible or inefficient.
-    
-    Returns:
-        Decorator function that transforms a function into a Relation.
-        
-    Example:
-        >>> @Relation(
-        ...     name="Sum relation",
-        ...     output="c",
-        ...     tags="arithmetic",
-        ...     constraints=("a > 0", "b > 0")
-        ... )
-        ... def sum_relation(a: float, b: float) -> float:
-        ...     return a + b
-    """
-
-    def decorator(func: Callable) -> Relation:
-        """Inner decorator that actually creates the Relation object."""
-        
-        # Extract input parameter names from function signature
-        inputs = function_inputs(func)
-        
-        # Build symbolic expression for automatic inversion using SymPy
-        # This allows solving for any variable given the others
-        expr, symbols = build_sympy_expr(func, inputs, output)
-        
-        # Create the Relation object with all metadata
-        # Handle constraints: if it's a string, wrap it; if iterable, convert to tuple
-        if constraints is None:
-            constraints_tuple = ()
-        elif isinstance(constraints, str):
-            constraints_tuple = (constraints,)
-        else:
-            constraints_tuple = tuple(constraints)
-        
-        relation = Relation(
-            name=name or func.__name__,  # Use provided name or fall back to function name
-            output=output,
-            func=func,
-            inputs=inputs,
-            tags=normalize_tags_to_tuple(tags),  # Convert tags to normalized tuple
-            rel_tol_default=rel_tol_default,
-            abs_tol_default=abs_tol_default,
-            constraints=constraints_tuple,  # Ensure constraints is a tuple
-            initial_guesses=initial_guesses or {},
-            solve_for=solve_for,
-            sympy_expr=expr,  # Symbolic representation for inversion
-            _sympy_symbols=symbols,  # Symbol mapping for SymPy
-        )
-        
-        # Preserve original function metadata for better debugging/introspection
-        relation.__name__ = func.__name__
-        relation.__doc__ = func.__doc__
-        
-        # Auto-register in global registry so it can be discovered by solver
-        _RELATION_REGISTRY.append(relation)
-        
-        return relation
-
-    return decorator

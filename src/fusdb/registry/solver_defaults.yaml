@@ -10,6 +10,8 @@ max_passes: 100
 default_rel_tol: 0.001
 # Block solver name (only one implemented at the moment).
 solver: lsq_compact
+# Enable verbose solver/runtime logging when true.
+verbosity: false
 solving_order: [] # optional list of domain tags or Relation.name entries
 
 # Least-squares solver settings.
