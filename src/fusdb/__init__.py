@@ -25,7 +25,7 @@ from .registry import (
 
 
 def _export_relations_at_package_level() -> tuple[str, ...]:
-    """Expose relation objects as ``fusdb.<relation_function_name>``."""
+    """Expose relation objects and public functions as ``fusdb.<name>``."""
     from . import relations
 
     relations.import_relations()
@@ -40,7 +40,13 @@ def _export_relations_at_package_level() -> tuple[str, ...]:
         for attr_name, attr_value in vars(module).items():
             if attr_name.startswith("_"):
                 continue
-            if not isinstance(attr_value, Relation):
+            is_relation = isinstance(attr_value, Relation)
+            is_own_callable = (
+                callable(attr_value)
+                and not is_relation
+                and getattr(attr_value, "__module__", None) == module_name
+            )
+            if not is_relation and not is_own_callable:
                 continue
             if attr_name in package_globals and package_globals[attr_name] is not attr_value:
                 continue
