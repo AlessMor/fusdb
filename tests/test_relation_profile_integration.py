@@ -8,8 +8,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from fusdb.relations.power_balance.fusion_power.reactivity_functions import sigmav_DT_BoschHale
-from fusdb.relations.power_balance.fusion_power.reactivity_profile import sigmav_dt_profile
+from fusdb.relations.reactivities.reactivity_functions import sigmav_DT_BoschHale
+from fusdb.relations.reactivities.reactivity_profile import sigmav_dt_profile
 from fusdb.relations.power_balance.fusion_power.reaction_rate import reaction_rate_dt
 from fusdb.relations.plasma_pressure.plasma_pressure import thermal_pressure
 from fusdb.relations.plasma_composition import plasma_composition as composition_relations

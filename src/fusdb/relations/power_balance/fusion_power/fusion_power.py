@@ -29,7 +29,7 @@ from fusdb.registry import (
     DT_N_ENERGY_J,
     TT_REACTION_ENERGY_J,
 )
-from fusdb.relations.power_balance.fusion_power.reactivity_functions import (
+from fusdb.relations.reactivities.reactivity_functions import (
     sigmav_DD_BoschHale,
     sigmav_DHe3_BoschHale,
     sigmav_DT_BoschHale,
@@ -248,4 +248,3 @@ def proton_power_dhe3(Rr_DHe3: float) -> float:
 def fusion_power_tt(Rr_TT: float) -> float:
     """Return total fusion power from T-T reactions."""
     return TT_REACTION_ENERGY_J * Rr_TT
-

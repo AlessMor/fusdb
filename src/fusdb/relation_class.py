@@ -116,15 +116,16 @@ class Relation:
         strict_symbolic: bool = False,
     ) -> "Relation":
         """Create a relation from a python callable and derive symbolic metadata."""
+        relation_name = name
         if inputs is None:
             inputs = tuple(inspect.signature(func).parameters)
         else:
             inputs = tuple(inputs)
 
         base_vars: list[str] = list(variables or ())
-        for name in inputs:
-            if name not in base_vars:
-                base_vars.append(name)
+        for input_name in inputs:
+            if input_name not in base_vars:
+                base_vars.append(input_name)
         if target is not None and target not in base_vars:
             base_vars.append(target)
 
@@ -132,7 +133,7 @@ class Relation:
             func,
             inputs,
             target,
-            relation_name=name,
+            relation_name=relation_name,
             strict=strict_symbolic,
         )
         symbols_map = (
@@ -153,19 +154,19 @@ class Relation:
             try_sympify_expression(
                 str(expr_str),
                 local_symbols=symbols_map,
-                context=f"relation '{name}' hard constraints",
+                context=f"relation '{relation_name}' hard constraints",
                 strict=strict_symbolic,
             )
         for expr_str in soft_constraints_tuple:
             try_sympify_expression(
                 str(expr_str),
                 local_symbols=symbols_map,
-                context=f"relation '{name}' soft constraints",
+                context=f"relation '{relation_name}' soft constraints",
                 strict=strict_symbolic,
             )
 
         return cls(
-            name=name,
+            name=relation_name,
             variables=symbols_map,
             numeric_functions=numeric_map,
             _preferred_target=target,

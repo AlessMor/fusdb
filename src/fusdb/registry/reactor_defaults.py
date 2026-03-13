@@ -23,6 +23,15 @@ _FRACTION_DEFAULTS: dict[str, float] = {
     "f_He4": 0.0,
 }
 _FRACTION_KEYS = tuple(_FRACTION_DEFAULTS.keys())
+_REACTIVITY_PROFILE_DEFAULT_METHODS: dict[str, str] = {
+    "sigmav_DT_profile": "DT reactivity profile BoschHale",
+    "sigmav_DDn_profile": "DDn reactivity profile BoschHale",
+    "sigmav_DDp_profile": "DDp reactivity profile BoschHale",
+    "sigmav_DHe3_profile": "DHe3 reactivity profile BoschHale",
+    "sigmav_TT_profile": "TT reactivity profile",
+    "sigmav_He3He3_profile": "He3He3 reactivity profile",
+    "sigmav_THe3_profile": "THe3 reactivity profile",
+}
 
 def _build_relation(name: str, output: str, func, *, tags: tuple[str, ...] = ("plasma",)) -> Relation:
     """Build a Relation without registering it globally."""
@@ -54,6 +63,21 @@ def _set_default_input(variables: dict[str, "Variable"], name: str, value: objec
         if var.method is None:
             var.method = "default"
         var.input_source = "default"
+
+
+def _set_default_method(variables: dict[str, "Variable"], name: str, method: str) -> None:
+    """Ensure a variable exists and has a default method when none was specified."""
+    var = variables.get(name)
+    if var is None:
+        var = make_variable(
+            name=name,
+            method=method,
+            ndim=allowed_variable_ndim(name),
+        )
+        variables[name] = var
+        return
+    if var.method is None:
+        var.method = method
 
 
 def apply_reactor_defaults(
@@ -225,6 +249,11 @@ def apply_reactor_defaults(
     # Default ohmic heating to zero if not specified.
     if not has_input("P_ohmic"):
         _set_default_input(variables, "P_ohmic", 0.0)
+
+    ####################### REACTIVITY METHOD DEFAULTS #######################################
+
+    for name, method in _REACTIVITY_PROFILE_DEFAULT_METHODS.items():
+        _set_default_method(variables, name, method)
 
     ####################### PLASMA COMPOSITION DEFAULTS #######################################
     
