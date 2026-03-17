@@ -9,7 +9,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from fusdb.relations.reactivities.reactivity_functions import sigmav_DT_BoschHale
-from fusdb.relations.reactivities.reactivity_profile import sigmav_dt_profile
 from fusdb.relations.power_balance.fusion_power.reaction_rate import reaction_rate_dt
 from fusdb.relations.plasma_pressure.plasma_pressure import thermal_pressure
 from fusdb.relations.plasma_composition import plasma_composition as composition_relations
@@ -41,10 +40,10 @@ def test_reaction_rate_total_from_profile_pipeline_matches_expected():
         _make_var("T_i", t_i_profile, ndim=1),
         _make_var("V_p", v_p, ndim=0),
     ]
-    system = RelationSystem([sigmav_dt_profile, reaction_rate_dt], variables, mode="overwrite")
+    system = RelationSystem([sigmav_DT_BoschHale, reaction_rate_dt], variables, mode="overwrite")
     system.solve()
 
-    sigmav_profile = system.variables_dict["sigmav_DT_profile"].current_value
+    sigmav_profile = system.variables_dict["sigmav_DT"].current_value
     rr = system.variables_dict["Rr_DT"].current_value
 
     expected_integrand = f_d * f_t * (n_i_profile ** 2) * np.asarray(sigmav_DT_BoschHale(t_i_profile), dtype=float)

@@ -6,7 +6,8 @@ import math
 from typing import Mapping
 
 from fusdb.relations.reactivities.reactivity_functions import (
-    sigmav_DD_BoschHale,
+    sigmav_DDn_BoschHale,
+    sigmav_DDp_BoschHale,
     sigmav_DHe3_BoschHale,
     sigmav_DT_BoschHale,
 )
@@ -97,7 +98,8 @@ def solve_steady_state_composition(
         sigmav_dhe3 = 0.0
     else:
         sigmav_dt = float(sigmav_DT_BoschHale(T_val))
-        _, sigmav_ddn, sigmav_ddp = sigmav_DD_BoschHale(T_val)
+        sigmav_ddn = float(sigmav_DDn_BoschHale(T_val))
+        sigmav_ddp = float(sigmav_DDp_BoschHale(T_val))
         sigmav_dhe3 = float(sigmav_DHe3_BoschHale(T_val))
 
     densities: dict[str, float] = {species: 0.0 for species in _SPECIES}

@@ -7,29 +7,25 @@ This repository is meant as a practical research tool, not as a scientific sourc
 used in analysis.
 
 ## Installation
-
-If the package has been published to PyPI:
+<!-- If the package has been published to PyPI:
 
 ```bash
 pip install fusdb
-```
-
+``` -->
 From this repository:
-
 ```bash
 pip install -e .
 ```
+<!-- 
+## Build Documentation
 
-To build or serve the documentation locally:
-
-```bash
-pip install -e .[docs]
-mkdocs serve -f docs/mkdocs.yml
-```
+1. Run the docs server:
+   `mkdocs serve -f docs/mkdocs.yml`
+2. Open the local URL printed in terminal (typically `http://127.0.0.1:8000`).
+3. For a local build:
+   `mkdocs build -f docs/mkdocs.yml` -->
 
 ## Where To Look Next
 
-- Getting started: [`docs/getting_started.md`](docs/getting_started.md)
 - Code documentation: [`docs/code_docs/index.md`](docs/code_docs/index.md)
-- Local full docs, including the work-in-progress knowledge base: `mkdocs serve -f docs/mkdocs.yml`
-- Public docs preview: `mkdocs serve -f docs/mkdocs-public.yml`
+- Explore reactors: [`docs/code_docs/reactor_browser.ipynb`](docs/code_docs/reactor_browser.ipynb) The notebook 

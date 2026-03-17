@@ -1,3 +1,9 @@
+---
+
+status: Online
+
+---
+
 # Relation Class
 
 `fusdb.relation_class.Relation` represents one physics relation:

@@ -1,3 +1,9 @@
+---
+
+status: Online
+
+---
+
 # RelationSystem
 
 `RelationSystem` orchestrates the solve process across a set of relations and variables, handling inference, constraints, and diagnostics.

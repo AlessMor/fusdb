@@ -1,2 +1,0 @@
--e .
-ipywidgets>=8

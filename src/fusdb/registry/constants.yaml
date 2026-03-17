@@ -1,6 +1,7 @@
 # Shared physical constants and reaction energies
 
 # Conversion factors
+ATOMIC_MASS_UNIT_KG: 1.66053906660e-27  # 1 atomic mass unit in kilograms
 MEV_TO_J: 1.602176634e-13  # 1 MeV in joules
 KEV_TO_J: 1.602176634e-16  # 1 keV in joules
 

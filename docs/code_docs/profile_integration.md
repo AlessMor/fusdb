@@ -1,3 +1,9 @@
+---
+
+status: Online
+
+---
+
 # Profile Integration In Relations
 
 This page defines the explicit-only profile integration convention.

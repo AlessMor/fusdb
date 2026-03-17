@@ -1,3 +1,9 @@
+---
+
+status: Online
+
+---
+
 # Code Docs
 
 This section contains the code-specific documentation for `fusdb`.
@@ -7,6 +13,7 @@ interfaces, notebooks, or module-level APIs.
 ## User Guide
 
 - [Reactors](reactors.md): scenario layout, YAML loading, and solve entrypoints.
+- [Reactivities](reactivities.md): source-specific fusion reactivity relations and the interactive plotter entrypoint.
 - [Reactor Class](reactor_class.md): class fields, methods, and examples.
 - [Relations and Variables](relations_variables.md): core concepts and graph view.
 - [Relation Class](relation_class.md): relation definition and solver-facing behavior.
@@ -27,4 +34,8 @@ interfaces, notebooks, or module-level APIs.
 
 ## Interactive
 
-- [Interactive Pages](interactive/index.md): Binder-backed pages that run `fusdb` without a local install.
+- [Interactive Pages](interactive/index.md): embedded Bokeh widgets and rendered notebook pages for browser-based exploration.
+
+## Shared References
+
+- [Bibliography](../bibliography.md): shared BibTeX database rendered through `mkdocs-bibtex` and cited with the standard MkDocs BibTeX syntax.

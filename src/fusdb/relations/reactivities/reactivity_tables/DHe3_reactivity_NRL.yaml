@@ -1,0 +1,21 @@
+table_kind: reactivity
+library: NRL Plasma Formulary
+reaction: DHe3
+min_energy_eV: 1000.0
+max_energy_eV: 1000000.0
+columns:
+- name: temperature
+  unit: eV
+- name: sigmav
+  unit: cm^3/s
+data: |-
+  1000,1.0e-26
+  2000,1.4e-23
+  5000,6.7e-21
+  10000,2.3e-19
+  20000,3.8e-18
+  50000,5.4e-17
+  100000,1.6e-16
+  200000,2.4e-16
+  500000,2.3e-16
+  1000000,1.8e-16

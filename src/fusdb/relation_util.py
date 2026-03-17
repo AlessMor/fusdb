@@ -14,8 +14,6 @@ if TYPE_CHECKING:
     from .relation_class import Relation
 
 _RELATION_REGISTRY: list["Relation"] = []
-
-
 def try_sympify_expression(
     expression: str,
     *,
@@ -145,6 +143,7 @@ def relation(
     *,
     name: str | None = None,
     output: str,
+    inputs: Iterable[str] | None = None,
     tags: Iterable[str] | str | None = None,
     rel_tol_default: float | None = None,
     abs_tol_default: float | None = None,
@@ -181,6 +180,7 @@ def relation(
             name=name or func.__name__,
             target=output,
             func=func,
+            inputs=inputs,
             tags=normalize_tags_to_tuple(tags),
             rel_tol_default=rel_tol_default,
             abs_tol_default=abs_tol_default,

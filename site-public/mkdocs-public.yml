@@ -1,9 +1,13 @@
 INHERIT: mkdocs.yml
 
 site_dir: ../site-public
+extra:
+  publish_mode: public
 
-exclude_docs: |
-  /knowledgebase/
+not_in_nav: |
+  /physics_domains.md
+  /relation_interactions.md
+  /workflows.md
 
 nav:
   - Home: index.md
@@ -12,6 +16,7 @@ nav:
       - Overview: code_docs/index.md
       - User Guide:
           - Reactors: code_docs/reactors.md
+          - Reactivities: code_docs/reactivities.md
           - Reactor Class: code_docs/reactor_class.md
           - Relations and Variables: code_docs/relations_variables.md
           - Relation Class: code_docs/relation_class.md
@@ -25,6 +30,15 @@ nav:
           - Registry and Utilities: code_docs/api/registry_and_utils.md
       - Interactive:
           - Overview: code_docs/interactive/index.md
-          - Reactor Playground: code_docs/interactive/reactor_playground.md
-      - Notebooks: code_docs/notebooks.md
+          - Reactivity Plotter: code_docs/interactive/reactivity_plotter.md
+          - Reactor Playground: code_docs/interactive/reactor_playground.ipynb
+      - Notebooks:
+          - Overview: code_docs/notebooks.md
+          - Reactor Browser: code_docs/reactor_browser.ipynb
+          - Relation Graph Generator: code_docs/relation_graph_generator.ipynb
+          - Tau_E Solver: code_docs/tau_E_solver.ipynb
+  - Knowledge Base:
+      - Overview: knowledgebase/index.md
+      - Cross Sections and Reactivities: "knowledgebase/Plasma Physics/cross_sections_reactivities.md"
+  - Bibliography: bibliography.md
   - License Notes: LicenseNotes.md

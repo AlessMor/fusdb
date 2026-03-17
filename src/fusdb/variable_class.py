@@ -39,12 +39,15 @@ class Variable:
 
     def __post_init__(self) -> None:
         """Validate dimensionality and abstract-ish base instantiation."""
+        from .registry import canonical_variable_name
+
         if self.__class__ is Variable:
             raise TypeError(
                 "Variable is abstract. Use Variable0D, Variable1D, or variable_util.make_variable()."
             )
         if self.ndim not in (0, 1):
             raise ValueError("Variable ndim must be 0 or 1.")
+        self.name = canonical_variable_name(self.name)
 
 @dataclass(slots=True)
 class Variable0D(Variable):

@@ -1,3 +1,9 @@
+---
+
+status: Online
+
+---
+
 # Core Modules
 
 ## `fusdb`

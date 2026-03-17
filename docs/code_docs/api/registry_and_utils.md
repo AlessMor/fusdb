@@ -1,3 +1,9 @@
+---
+
+status: Online
+
+---
+
 # Registry and Utilities
 
 ## `fusdb.registry`

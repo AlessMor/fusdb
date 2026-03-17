@@ -4,25 +4,30 @@ H:
   atomic_symbol: "H"
   atomic_number: 1
   atomic_mass: 1
+  isotopic_mass_u: 1.008
 D:
   full_name: deuterium
   atomic_symbol: "H"
   atomic_number: 1
   atomic_mass: 2
+  isotopic_mass_u: 2.014
 T:
   full_name: tritium
   atomic_symbol: "H"
   atomic_number: 1
   atomic_mass: 3
+  isotopic_mass_u: 3.016
 He3:
   full_name: helium-3
   atomic_symbol: "He"
   atomic_number: 2
   atomic_mass: 3
+  isotopic_mass_u: 3.016
 He4:
   full_name: helium-4
   atomic_symbol: "He"
   atomic_number: 2
   atomic_mass: 4
+  isotopic_mass_u: 4.003
 
 # TODO(low): add specific data for each species (radas data as in cfspopcon?)

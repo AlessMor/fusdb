@@ -30,12 +30,8 @@ from fusdb.registry import (
     TT_REACTION_ENERGY_J,
 )
 from fusdb.relations.reactivities.reactivity_functions import (
-    sigmav_DD_BoschHale,
     sigmav_DHe3_BoschHale,
     sigmav_DT_BoschHale,
-    sigmav_He3He3,
-    sigmav_THe3,
-    sigmav_TT,
 )
 
 @relation(

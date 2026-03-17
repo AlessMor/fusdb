@@ -1,21 +1,11 @@
 """Ion composition relations generalized by allowed species."""
 from __future__ import annotations
 from inspect import Signature, Parameter
-from pathlib import Path
-import yaml
+
 from fusdb.relation_util import relation
+from fusdb.registry import load_allowed_species
 
-_REGISTRY = Path(__file__).resolve().parents[2] / "registry" / "allowed_species.yaml"
-
-def _load_species() -> dict:
-    """Load allowed species metadata. Args: none. Returns: dict."""
-    try:
-        with _REGISTRY.open("r", encoding="utf-8") as handle:
-            return yaml.safe_load(handle) or {}
-    except Exception:
-        return {}
-
-_SPECIES_DATA = _load_species()
+_SPECIES_DATA = load_allowed_species()
 SPECIES = tuple(_SPECIES_DATA.keys())
 FRACTIONS = [f"f_{s}" for s in SPECIES]
 DENSITIES = {s: f"n_{s}" for s in SPECIES}

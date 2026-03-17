@@ -13,7 +13,7 @@ import numpy as np
 from fusdb.utils import as_profile_array, normalize_tags_to_tuple, within_tolerance
 from fusdb.variable_class import Variable
 from fusdb.variable_util import make_variable
-from fusdb.registry import allowed_variable_ndim
+from fusdb.registry import allowed_variable_ndim, canonical_variable_name
 
 
 _FRACTION_DEFAULTS: dict[str, float] = {
@@ -23,14 +23,14 @@ _FRACTION_DEFAULTS: dict[str, float] = {
     "f_He4": 0.0,
 }
 _FRACTION_KEYS = tuple(_FRACTION_DEFAULTS.keys())
-_REACTIVITY_PROFILE_DEFAULT_METHODS: dict[str, str] = {
-    "sigmav_DT_profile": "DT reactivity profile BoschHale",
-    "sigmav_DDn_profile": "DDn reactivity profile BoschHale",
-    "sigmav_DDp_profile": "DDp reactivity profile BoschHale",
-    "sigmav_DHe3_profile": "DHe3 reactivity profile BoschHale",
-    "sigmav_TT_profile": "TT reactivity profile",
-    "sigmav_He3He3_profile": "He3He3 reactivity profile",
-    "sigmav_THe3_profile": "THe3 reactivity profile",
+_REACTIVITY_DEFAULT_METHODS: dict[str, str] = {
+    "sigmav_DT": "DT reactivity BoschHale",
+    "sigmav_DDn": "DDn reactivity BoschHale",
+    "sigmav_DDp": "DDp reactivity BoschHale",
+    "sigmav_DHe3": "DHe3 reactivity BoschHale",
+    "sigmav_TT": "TT reactivity CF88",
+    "sigmav_He3He3": "He3He3 reactivity CF88",
+    "sigmav_THe3": "THe3 reactivity CF88",
 }
 
 def _build_relation(name: str, output: str, func, *, tags: tuple[str, ...] = ("plasma",)) -> Relation:
@@ -93,6 +93,15 @@ def apply_reactor_defaults(
     Returns:
         List of default Relation objects (not registered globally).
     """
+    normalized_variables: dict[str, Variable] = {}
+    for raw_name, var in list(variables.items()):
+        canonical_name = canonical_variable_name(getattr(var, "name", raw_name))
+        if canonical_name not in normalized_variables or raw_name == canonical_name:
+            normalized_variables[canonical_name] = var
+    if normalized_variables.keys() != variables.keys():
+        variables.clear()
+        variables.update(normalized_variables)
+
     default_relations: list[Relation] = []
     seen_keys = {(rel.name, (rel._preferred_target if rel._preferred_target is not None else next(iter(rel.numeric_functions), None))) for rel in (relations or ())}
 
@@ -252,7 +261,7 @@ def apply_reactor_defaults(
 
     ####################### REACTIVITY METHOD DEFAULTS #######################################
 
-    for name, method in _REACTIVITY_PROFILE_DEFAULT_METHODS.items():
+    for name, method in _REACTIVITY_DEFAULT_METHODS.items():
         _set_default_method(variables, name, method)
 
     ####################### PLASMA COMPOSITION DEFAULTS #######################################

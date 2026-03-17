@@ -12,6 +12,11 @@ site_dir: ../site
 repo_url: https://github.com/AlessMor/fusdb
 repo_name: AlessMor/fusdb
 
+exclude_docs: |
+  /_private/
+  /hooks/
+  /scripts/
+
 theme:
   name: material
   features:
@@ -24,8 +29,18 @@ theme:
       primary: teal
       accent: amber
 
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
 plugins:
   - search
+  - mkdocs-jupyter:
+      execute: false
+      include_source: true
+  - gen-files:
+      scripts:
+        - scripts/build_docs_assets.py
   - mkdocstrings:
       handlers:
         python:
@@ -36,15 +51,30 @@ plugins:
             show_signature_annotations: true
             separate_signature: true
             members_order: source
+  - bibtex:
+      bib_file: bibliography.bib
+      bib_by_default: false
+      enable_inline_citations: false
+
+hooks:
+  - hooks/status_filter.py
+
+not_in_nav: |
+  /knowledgebase/_templates/**
 
 markdown_extensions:
   - admonition
+  - footnotes:
+      BACKLINK_TEXT: ""
   - tables
   - toc:
       permalink: true
+  - pymdownx.arithmatex:
+      generic: true
   - pymdownx.details
   - pymdownx.highlight
   - pymdownx.inlinehilite
+  - pymdownx.magiclink
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
@@ -56,6 +86,7 @@ nav:
       - Overview: code_docs/index.md
       - User Guide:
           - Reactors: code_docs/reactors.md
+          - Reactivities: code_docs/reactivities.md
           - Reactor Class: code_docs/reactor_class.md
           - Relations and Variables: code_docs/relations_variables.md
           - Relation Class: code_docs/relation_class.md
@@ -69,23 +100,18 @@ nav:
           - Registry and Utilities: code_docs/api/registry_and_utils.md
       - Interactive:
           - Overview: code_docs/interactive/index.md
-          - Reactor Playground: code_docs/interactive/reactor_playground.md
-      - Notebooks: code_docs/notebooks.md
+          - Reactivity Plotter: code_docs/interactive/reactivity_plotter.md
+          - Reactor Playground: code_docs/interactive/reactor_playground.ipynb
+      - Notebooks:
+          - Overview: code_docs/notebooks.md
+          - Reactor Browser: code_docs/reactor_browser.ipynb
+          - Relation Graph Generator: code_docs/relation_graph_generator.ipynb
+          - Tau_E Solver: code_docs/tau_E_solver.ipynb
   - Knowledge Base:
       - Overview: knowledgebase/index.md
-      - Physics Domains: knowledgebase/physics_domains.md
-      - Relation Interactions: knowledgebase/relation_interactions.md
-      - Workflow Playbooks: knowledgebase/workflows.md
-      - Fusion Frontiers:
-          - Overview: "knowledgebase/Fusion Frontiers/index.md"
-      - Fusion Reactors:
-          - Overview: "knowledgebase/Fusion Reactors/index.md"
-      - Plasma Physics:
-          - Overview: "knowledgebase/Plasma Physics/index.md"
-      - Material:
-          - Overview: "knowledgebase/Material/index.md"
-      - Decommissioning for Fusion:
-          - Overview: "knowledgebase/Decommissioning for Fusion/index.md"
-      - Other Pages:
-          - Overview: "knowledgebase/Other pages/index.md"
+      - Physics Domains: physics_domains.md
+      - Relation Interactions: relation_interactions.md
+      - Workflow Playbooks: workflows.md
+      - Cross Sections and Reactivities: "knowledgebase/Plasma Physics/cross_sections_reactivities.md"
+  - Bibliography: bibliography.md
   - License Notes: LicenseNotes.md

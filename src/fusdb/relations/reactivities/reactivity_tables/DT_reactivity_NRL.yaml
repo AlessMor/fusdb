@@ -1,0 +1,21 @@
+table_kind: reactivity
+library: NRL Plasma Formulary
+reaction: DT total
+min_energy_eV: 1000.0
+max_energy_eV: 1000000.0
+columns:
+- name: temperature
+  unit: eV
+- name: sigmav
+  unit: cm^3/s
+data: |-
+  1000,5.5e-21
+  2000,2.6e-19
+  5000,1.3e-17
+  10000,1.1e-16
+  20000,4.2e-16
+  50000,8.7e-16
+  100000,8.5e-16
+  200000,6.3e-16
+  500000,3.7e-16
+  1000000,2.7e-16

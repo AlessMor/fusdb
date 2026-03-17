@@ -1,3 +1,9 @@
+---
+
+status: Online
+
+---
+
 # Relations and Variables
 
 Relations are deterministic physics/engineering formulas expressed as Python callables with explicit inputs and one output. Variables are typed containers that store values, tolerances, provenance, and solver history. Together they let the solver infer missing values while checking consistency.

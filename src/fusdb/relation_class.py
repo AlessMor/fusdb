@@ -96,6 +96,17 @@ class Relation:
             return tuple(self.variables)
         return tuple(name for name in self.variables if name != out)
 
+    def __call__(self, *args, **kwargs):
+        """Delegate direct calls to the preferred numeric function."""
+        target = self.preferred_target
+        if target is None:
+            raise TypeError(f"Relation '{self.name}' is not directly callable")
+        spec = self.numeric_functions.get(target)
+        if spec is None:
+            raise TypeError(f"Relation '{self.name}' has no callable numeric function for target '{target}'")
+        _, fn = spec
+        return fn(*args, **kwargs)
+
     @classmethod
     def from_callable(
         cls,

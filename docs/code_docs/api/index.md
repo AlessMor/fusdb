@@ -1,3 +1,9 @@
+---
+
+status: Online
+
+---
+
 # API Reference Overview
 
 API pages are generated with `mkdocstrings` directly from source under `src/fusdb`.

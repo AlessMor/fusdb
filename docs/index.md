@@ -26,13 +26,16 @@ This documentation is split into three complementary parts:
 
 ## Knowledge Base
 
-The Knowledge Base is currently work in progress and is excluded from the
-public build.
+The Knowledge Base is still work in progress.
 
-Use the full local docs config to view it:
+Published pages live under `docs/knowledgebase/`.
+
+Draft pages can stay in the same tree with `status: Draft` front matter and are
+hidden from the site until promoted.
+
+Private or scratch notes can live under `docs/_private/` and are excluded from
+both Git and MkDocs.
+
+Use the single docs config for local preview:
 
 - `mkdocs serve -f docs/mkdocs.yml`
-
-Use the public config to preview exactly what GitHub Pages will publish:
-
-- `mkdocs serve -f docs/mkdocs-public.yml`

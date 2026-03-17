@@ -32,9 +32,9 @@ def _integrate_reaction_rate(integrand: float, V_p: float, *, label: str) -> flo
     output="Rr_DT",
     tags=("fusion_power",),
 )
-def reaction_rate_dt(f_D: float, f_T: float, n_i: float, sigmav_DT_profile: float, V_p: float) -> float:
+def reaction_rate_dt(f_D: float, f_T: float, n_i: float, sigmav_DT: float, V_p: float) -> float:
     """Return volume-integrated DT reaction rate [1/s]."""
-    integrand = f_D * f_T * (n_i ** 2) * sigmav_DT_profile
+    integrand = f_D * f_T * (n_i ** 2) * sigmav_DT
     return _integrate_reaction_rate(integrand, V_p, label="DT")
 
 
@@ -43,9 +43,9 @@ def reaction_rate_dt(f_D: float, f_T: float, n_i: float, sigmav_DT_profile: floa
     output="Rr_DDn",
     tags=("fusion_power",),
 )
-def reaction_rate_ddn(f_D: float, n_i: float, sigmav_DDn_profile: float, V_p: float) -> float:
+def reaction_rate_ddn(f_D: float, n_i: float, sigmav_DDn: float, V_p: float) -> float:
     """Return volume-integrated D(d,n)He3 reaction rate [1/s]."""
-    integrand = 0.5 * (f_D ** 2) * (n_i ** 2) * sigmav_DDn_profile
+    integrand = 0.5 * (f_D ** 2) * (n_i ** 2) * sigmav_DDn
     return _integrate_reaction_rate(integrand, V_p, label="DDn")
 
 
@@ -54,9 +54,9 @@ def reaction_rate_ddn(f_D: float, n_i: float, sigmav_DDn_profile: float, V_p: fl
     output="Rr_DDp",
     tags=("fusion_power",),
 )
-def reaction_rate_ddp(f_D: float, n_i: float, sigmav_DDp_profile: float, V_p: float) -> float:
+def reaction_rate_ddp(f_D: float, n_i: float, sigmav_DDp: float, V_p: float) -> float:
     """Return volume-integrated D(d,p)T reaction rate [1/s]."""
-    integrand = 0.5 * (f_D ** 2) * (n_i ** 2) * sigmav_DDp_profile
+    integrand = 0.5 * (f_D ** 2) * (n_i ** 2) * sigmav_DDp
     return _integrate_reaction_rate(integrand, V_p, label="DDp")
 
 
@@ -65,9 +65,9 @@ def reaction_rate_ddp(f_D: float, n_i: float, sigmav_DDp_profile: float, V_p: fl
     output="Rr_DHe3",
     tags=("fusion_power",),
 )
-def reaction_rate_dhe3(f_D: float, f_He3: float, n_i: float, sigmav_DHe3_profile: float, V_p: float) -> float:
+def reaction_rate_dhe3(f_D: float, f_He3: float, n_i: float, sigmav_DHe3: float, V_p: float) -> float:
     """Return volume-integrated D-He3 reaction rate [1/s]."""
-    integrand = f_D * f_He3 * (n_i ** 2) * sigmav_DHe3_profile
+    integrand = f_D * f_He3 * (n_i ** 2) * sigmav_DHe3
     return _integrate_reaction_rate(integrand, V_p, label="DHe3")
 
 
@@ -76,9 +76,9 @@ def reaction_rate_dhe3(f_D: float, f_He3: float, n_i: float, sigmav_DHe3_profile
     output="Rr_TT",
     tags=("fusion_power",),
 )
-def reaction_rate_tt(f_T: float, n_i: float, sigmav_TT_profile: float, V_p: float) -> float:
+def reaction_rate_tt(f_T: float, n_i: float, sigmav_TT: float, V_p: float) -> float:
     """Return volume-integrated T-T reaction rate [1/s]."""
-    integrand = 0.5 * (f_T ** 2) * (n_i ** 2) * sigmav_TT_profile
+    integrand = 0.5 * (f_T ** 2) * (n_i ** 2) * sigmav_TT
     return _integrate_reaction_rate(integrand, V_p, label="TT")
 
 
@@ -87,9 +87,9 @@ def reaction_rate_tt(f_T: float, n_i: float, sigmav_TT_profile: float, V_p: floa
     output="Rr_He3He3",
     tags=("fusion_power",),
 )
-def reaction_rate_he3he3(f_He3: float, n_i: float, sigmav_He3He3_profile: float, V_p: float) -> float:
+def reaction_rate_he3he3(f_He3: float, n_i: float, sigmav_He3He3: float, V_p: float) -> float:
     """Return volume-integrated He3-He3 reaction rate [1/s]."""
-    integrand = 0.5 * (f_He3 ** 2) * (n_i ** 2) * sigmav_He3He3_profile
+    integrand = 0.5 * (f_He3 ** 2) * (n_i ** 2) * sigmav_He3He3
     return _integrate_reaction_rate(integrand, V_p, label="He3He3")
 
 
@@ -98,7 +98,7 @@ def reaction_rate_he3he3(f_He3: float, n_i: float, sigmav_He3He3_profile: float,
     output="Rr_THe3",
     tags=("fusion_power",),
 )
-def reaction_rate_the3(f_T: float, f_He3: float, n_i: float, sigmav_THe3_profile: float, V_p: float) -> float:
+def reaction_rate_the3(f_T: float, f_He3: float, n_i: float, sigmav_THe3: float, V_p: float) -> float:
     """Return volume-integrated T-He3 reaction rate [1/s]."""
-    integrand = f_T * f_He3 * (n_i ** 2) * sigmav_THe3_profile
+    integrand = f_T * f_He3 * (n_i ** 2) * sigmav_THe3
     return _integrate_reaction_rate(integrand, V_p, label="THe3")

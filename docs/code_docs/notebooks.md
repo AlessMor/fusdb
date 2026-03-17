@@ -1,19 +1,27 @@
+---
+
+status: Online
+
+---
+
 # Notebooks
 
-Notebook-based exploratory workflows live under `docs/code_docs/`.
+Notebook-based exploratory workflows live under `docs/code_docs/` and are
+rendered in the docs site through `mkdocs-jupyter`.
 
 ## Available Notebooks
 
 - [Reactor Browser](reactor_browser.ipynb): compare reactors and inspect key variables.
-- [Relation Graph Generator](relation_graph_generator.ipynb): build graph visualizations for relations/variables.
-- [Tau_E Solver](tau_E_solver.ipynb): experiments around confinement/power-loss coupling.
+- [Relation Graph Generator](relation_graph_generator.ipynb): build graph visualizations for relations and variables.
+- [Tau_E Solver](tau_E_solver.ipynb): experiments around confinement and power-loss coupling.
+- [Reactor Playground](interactive/reactor_playground.ipynb): minimal load-and-solve notebook for a single reactor.
 
-## Usage
+## Local Usage
 
 1. Install Jupyter if needed: `pip install jupyterlab`
 2. Start Jupyter: `python -m jupyter lab`
 3. Open notebooks from the `docs/code_docs/` folder.
 
 For website-friendly interactive examples, see the
-[Interactive Pages](interactive/index.md) section. Those pages pair static
-documentation with companion notebooks that can be launched in Binder.
+[Interactive Pages](interactive/index.md) section. Those pages now mix
+standalone Bokeh assets with notebooks rendered directly by MkDocs.
