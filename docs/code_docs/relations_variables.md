@@ -11,7 +11,7 @@ Relations are deterministic physics/engineering formulas expressed as Python cal
 ## Relation Graph
 
 <div style="width: 100%; height: 900px; border: 1px solid #e1e4e5;">
-  <iframe src="relations_variables_graph.html" style="width: 100%; height: 100%; border: 0;" loading="lazy"></iframe>
+  <iframe src="../relations_variables_graph.html" style="width: 100%; height: 100%; border: 0;" loading="lazy"></iframe>
 </div>
 
 ## Relations

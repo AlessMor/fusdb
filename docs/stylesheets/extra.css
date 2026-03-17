@@ -31,7 +31,6 @@
 .home-hero {
   --hero-opacity: 1;
   --hero-shift: 0px;
-  --hero-overlay: 0.24;
   position: relative;
   margin: -1rem calc(50% - 50vw) 2.75rem;
   min-height: clamp(28rem, 70vh, 46rem);
@@ -46,10 +45,12 @@
   inset: 0;
 }
 
-.home-hero__media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.home-hero__media {
+  background-image:
+    url("../assets/images/fusdb-home-hero.svg");
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
   opacity: var(--hero-opacity);
   transform: translateY(var(--hero-shift)) scale(1.03);
   transform-origin: center center;
@@ -58,9 +59,9 @@
 
 .home-hero__veil {
   background:
-    linear-gradient(180deg, rgba(7, 17, 23, 0.28) 0%, rgba(7, 17, 23, 0.58) 50%, rgba(7, 17, 23, 0.94) 100%),
-    linear-gradient(90deg, rgba(7, 17, 23, 0.88) 0%, rgba(7, 17, 23, 0.50) 44%, rgba(7, 17, 23, 0.72) 100%);
-  opacity: calc(0.62 + (1 - var(--hero-opacity)) * 0.28);
+    linear-gradient(180deg, rgba(7, 17, 23, 0.10) 0%, rgba(7, 17, 23, 0.42) 52%, rgba(7, 17, 23, 0.92) 100%),
+    linear-gradient(90deg, rgba(7, 17, 23, 0.86) 0%, rgba(7, 17, 23, 0.42) 46%, rgba(7, 17, 23, 0.70) 100%);
+  opacity: calc(0.78 + (1 - var(--hero-opacity)) * 0.16);
 }
 
 .home-hero__content {
@@ -68,11 +69,12 @@
   z-index: 1;
   max-width: 44rem;
   padding: clamp(6rem, 12vh, 9rem) clamp(1.25rem, 4vw, 4rem) clamp(3rem, 9vh, 6rem);
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
 }
 
 .home-hero__eyebrow {
   margin: 0 0 0.9rem;
-  color: #7fe0d5;
+  color: #8ce8dc;
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -104,7 +106,7 @@
 
 .home-hero .md-button {
   border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   color: #f5fbfb;
   backdrop-filter: blur(12px);
 }
@@ -180,6 +182,10 @@
 
 [data-md-color-scheme="slate"] .home-card span:last-child {
   color: rgba(255, 255, 255, 0.68);
+}
+
+.md-typeset .home-card:hover {
+  text-decoration: none;
 }
 
 @media screen and (max-width: 76.1875em) {
