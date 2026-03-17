@@ -27,5 +27,6 @@ pip install -e .
 
 ## Where To Look Next
 
-- Code documentation: [`docs/code_docs/index.md`](docs/code_docs/index.md)
-- Explore reactors: [`docs/code_docs/reactor_browser.ipynb`](docs/code_docs/reactor_browser.ipynb) The notebook 
+- Documentation site: [https://alessmor.github.io/fusdb/](https://alessmor.github.io/fusdb/)
+- Code documentation: [https://alessmor.github.io/fusdb/code_docs/](https://alessmor.github.io/fusdb/code_docs/)
+- Explore reactors: [https://alessmor.github.io/fusdb/code_docs/reactor_browser/](https://alessmor.github.io/fusdb/code_docs/reactor_browser/)

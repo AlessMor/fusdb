@@ -32,9 +32,10 @@ interfaces, notebooks, or module-level APIs.
 
 - [Notebook Index](notebooks.md): exploratory workflows and generated artifacts.
 
-## Interactive
+## Interactive Tools
 
-- [Interactive Pages](interactive/index.md): embedded Bokeh widgets and rendered notebook pages for browser-based exploration.
+- [Reactivity Plotter](reactivity_plotter.md): embedded Bokeh widget for source-to-source reactivity comparison.
+- [Reactor Playground](reactor_playground.ipynb): minimal load-and-solve notebook rendered directly in the docs site.
 
 ## Shared References
 

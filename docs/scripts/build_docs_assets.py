@@ -16,6 +16,7 @@ if SRC_ROOT not in sys.path:
     sys.path.insert(0, SRC_ROOT)
 
 from fusdb.plotting.reactivity_plotter import render_reactivity_plotter_html
+from fusdb.plotting.relation_graph import render_relation_graph_html
 
 
 def render_getting_started_markdown() -> str:
@@ -34,6 +35,13 @@ def render_getting_started_markdown() -> str:
         "---\n\n"
         "# Getting Started\n\n"
         + body
+        + "\n\n"
+        + "## Usage Guide\n\n"
+        + "- [Reactors](code_docs/reactors.md)\n"
+        + "- [Reactivities](code_docs/reactivities.md)\n"
+        + "- [Reactivity plotter](code_docs/reactivity_plotter.md)\n"
+        + "- [Reactor browser notebook](code_docs/reactor_browser.ipynb)\n"
+        + "- [Reactor playground notebook](code_docs/reactor_playground.ipynb)\n"
         + "\n"
     )
 
@@ -41,7 +49,7 @@ def render_getting_started_markdown() -> str:
 with mkdocs_gen_files.open("getting_started.md", "w") as generated_page:
     generated_page.write(render_getting_started_markdown())
 
-with mkdocs_gen_files.open("code_docs/interactive/reactivity_plotter.html", "w") as generated_page:
+with mkdocs_gen_files.open("code_docs/reactivity_plotter.html", "w") as generated_page:
     generated_page.write(
         render_reactivity_plotter_html(
             x_limits=(1.0, 5.0e2),
@@ -49,3 +57,6 @@ with mkdocs_gen_files.open("code_docs/interactive/reactivity_plotter.html", "w")
             num_points=1200,
         )
     )
+
+with mkdocs_gen_files.open("code_docs/relations_variables_graph.html", "w") as generated_page:
+    generated_page.write(render_relation_graph_html())

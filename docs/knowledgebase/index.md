@@ -4,7 +4,7 @@ status: Online
 
 # Knowledge Base
 
-This section mixes short published notes with larger local working material.
+This section contains the published physics and modelling notes for `fusdb`.
 
 ## Published Pages
 

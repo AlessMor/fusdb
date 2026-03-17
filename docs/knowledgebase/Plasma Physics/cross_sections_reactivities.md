@@ -43,7 +43,7 @@ Often the particles move with a distribution of relative velocities, $f(v)$
 
 <div style="width: 100%; height: 760px; border: 1px solid #e1e4e5;">
   <iframe
-    src="../../../code_docs/interactive/reactivity_plotter.html"
+    src="../../../code_docs/reactivity_plotter.html"
     style="width: 100%; height: 100%; border: 0;"
     loading="lazy"
   ></iframe>
@@ -52,7 +52,7 @@ Often the particles move with a distribution of relative velocities, $f(v)$
 The implemented `fusdb` relations can be browsed in the
 [reactivity API reference](../../code_docs/api/relations.md#fusdb.relations.reactivities.reactivity_functions)
 and compared in the
-[interactive reactivity plotter](../../code_docs/interactive/reactivity_plotter.md).
+[interactive reactivity plotter](../../code_docs/reactivity_plotter.md).
 
 ### Bosch and Hale, 1992
 

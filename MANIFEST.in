@@ -1,4 +1,4 @@
+# Controls source-distribution contents: exclude docs, CI config, and built site from `python -m build --sdist`.
 prune docs
 prune .github
 prune site
-prune site-public

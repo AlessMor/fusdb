@@ -4,11 +4,13 @@ status: Online
 
 ---
 
-# API Reference Overview
+# Source Documentation
 
-API pages are generated with `mkdocstrings` directly from source under `src/fusdb`.
+These pages are generated from the Python source under `src/fusdb` with
+`mkdocstrings`.
 
-Use this section for code-level details on classes, functions, and modules.
+Use them for code-level details on modules, classes, functions, and registered
+relations.
 
 - [Core Modules](core.md)
 - [Relation Modules](relations.md)

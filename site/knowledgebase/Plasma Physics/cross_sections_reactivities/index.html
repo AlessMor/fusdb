@@ -1,0 +1,1893 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Fusion reactor scenario database, physics relations, and solver documentation">
+      
+      
+      
+        <link rel="canonical" href="https://alessmor.github.io/fusdb/knowledgebase/Plasma%20Physics/cross_sections_reactivities/">
+      
+      
+        <link rel="prev" href="../../../workflows/">
+      
+      
+        <link rel="next" href="../../../code_docs/api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+    
+    
+      
+        <title>Cross Sections and Reactivities - fusdb</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#nuclear-fusion-reaction-rate-reactivity-and-cross-section" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="fusdb" class="md-header__button md-logo" aria-label="fusdb" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            fusdb
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Cross Sections and Reactivities
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="amber"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/AlessMor/fusdb" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AlessMor/fusdb
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="fusdb" class="md-nav__button md-logo" aria-label="fusdb" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    fusdb
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/AlessMor/fusdb" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AlessMor/fusdb
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation and Usage
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/reactors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reactors
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/reactivities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reactivities
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/reactivity_plotter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reactivity Plotter
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/reactor_browser/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FusionDB reactor browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/reactor_playground/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reactor Playground
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/tau_E_solver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analytical Solution of tau_E and P_loss (IPB98(y,2))
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Knowledge Base
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Knowledge Base
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Knowledge Base
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../physics_domains/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics Domains
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../relation_interactions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relation Interactions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow Playbooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross Sections and Reactivities
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross Sections and Reactivities
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reaction-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reaction Rate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reactivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reactivity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-section" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-Section
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusion-plasma-reactivity-fits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fusion plasma reactivity fits:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fusion plasma reactivity fits:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bosch-and-hale-1992" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bosch and Hale, 1992
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nrl-plasma-formualry-1972-ongoing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NRL plasma formualry, 1972 - ongoing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#endfb-1966-ongoing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ENDF/B, 1966 - ongoing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-fits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other fits:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references-and-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References and Links:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="References and Links:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bibliography" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bibliography:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Source Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Source Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/api/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Modules
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/api/relations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relation Modules
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/api/registry_and_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Registry and Utilities
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/reactor_class/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reactor Class
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/relation_class/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relation Class
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/variable_class/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Variable Class
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/relationsystem_class/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RelationSystem
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/relations_variables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relations and Variables
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/profile_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Profile Integration
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--Online"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../code_docs/relation_graph_generator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relation Graph Generator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    References
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    References
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../bibliography/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bibliography
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../LicenseNotes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reaction-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reaction Rate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reactivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reactivity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-section" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-Section
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusion-plasma-reactivity-fits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fusion plasma reactivity fits:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fusion plasma reactivity fits:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bosch-and-hale-1992" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bosch and Hale, 1992
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nrl-plasma-formualry-1972-ongoing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NRL plasma formualry, 1972 - ongoing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#endfb-1966-ongoing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ENDF/B, 1966 - ongoing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-fits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other fits:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references-and-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References and Links:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="References and Links:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bibliography" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bibliography:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="nuclear-fusion-reaction-rate-reactivity-and-cross-section">Nuclear Fusion Reaction Rate, Reactivity and Cross-Section<a class="headerlink" href="#nuclear-fusion-reaction-rate-reactivity-and-cross-section" title="Permanent link">&para;</a></h1>
+<div class="admonition abstract">
+<p class="admonition-title">The Reaction Rate</p>
+<div class="arithmatex">\[
+R_r(T) = n_a * n_b * \langle \sigma v \rangle (T) * V
+\]</div>
+</div>
+<h3 id="reaction-rate">Reaction Rate<a class="headerlink" href="#reaction-rate" title="Permanent link">&para;</a></h3>
+<p>Measuring the reaction rate of a fusion rection often reduces to finding a formula for the average reactivity of a reaction depending on temperature (or better, energy).</p>
+<h3 id="reactivity">Reactivity<a class="headerlink" href="#reactivity" title="Permanent link">&para;</a></h3>
+<p>The averaged reactivity is defined as the integral of the cross section of the reaction over the velocity distribution of the incident particles:</p>
+<div class="arithmatex">\[
+\langle \sigma v \rangle = \int_0^\infty \sigma(v)vf(v)\,\mathrm{d}v.
+\]</div>
+<p>A Maxwellian distribution for the velocity distribution (<span class="arithmatex">\(f_\mathrm{MB}(v) = 4\pi v^2 \left(\frac{\mu}{2\pi k_\mathrm{B}T}\right)^{3/2}\exp\left(-\frac{\mu v_i^2}{2k_\mathrm{B}T}\right)\)</span>) is often assumed for this purpose, resulting in the expression:</p>
+<div class="arithmatex">\[
+\langle \sigma v \rangle = \frac{4}{\sqrt{2\pi\mu}}\frac{1}{(k_\mathrm{B}T)^{3/2}} \int_0^\infty \sigma(E)E\exp\left(-\frac{E}{k_\mathrm{B}T}\right)\,\mathrm{d}E,
+\]</div>
+<p>with <span class="arithmatex">\(\mu = m_a m_X/(m_a+m_X)\)</span> the reduced mass of the colliding particles.</p>
+<!-- NOTE: Here T is expressed in K -->
+
+<h3 id="cross-section">Cross-Section<a class="headerlink" href="#cross-section" title="Permanent link">&para;</a></h3>
+<p>Considering a generic reaction a + X -&gt; Y + b, the cross section <span class="arithmatex">\(\sigma\)</span>(<span class="arithmatex">\(v\)</span>) = <span class="arithmatex">\(\frac{number of reactions/nuclei X/ unit time}{number of incident particles/cm^2/unit time}\)</span> [cm<span class="arithmatex">\(^2\)</span>] </p>
+<p>Often the particles move with a distribution of relative velocities, <span class="arithmatex">\(f(v)\)</span>
+<sup id="fnref:clayton_1983"><a class="footnote-ref" href="#fn:clayton_1983">1</a></sup></p>
+<!-- NOTE: Here velocity v and energy may be used interchangeably. This definition assumes particles X are static. -->
+<!-- TODO: explain difference between lab and com reference frames -->
+
+<h2 id="fusion-plasma-reactivity-fits">Fusion plasma reactivity fits:<a class="headerlink" href="#fusion-plasma-reactivity-fits" title="Permanent link">&para;</a></h2>
+<div style="width: 100%; height: 760px; border: 1px solid #e1e4e5;">
+  <iframe
+    src="../../../code_docs/reactivity_plotter.html"
+    style="width: 100%; height: 100%; border: 0;"
+    loading="lazy"
+  ></iframe>
+</div>
+
+<p>The implemented <code>fusdb</code> relations can be browsed in the
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions">reactivity API reference</a>
+and compared in the
+<a href="../../../code_docs/reactivity_plotter/">interactive reactivity plotter</a>.</p>
+<h3 id="bosch-and-hale-1992">Bosch and Hale, 1992<a class="headerlink" href="#bosch-and-hale-1992" title="Permanent link">&para;</a></h3>
+<p>The most renowened analytical fits for fusion relevant applications were defined by Bosch and Hale in 1992 <sup id="fnref:bosch_hale_1992"><a class="footnote-ref" href="#fn:bosch_hale_1992">2</a></sup> (check also the corrigendum of 1993). Bosch &amp; Hale provide a 9-parameters fit for <span class="arithmatex">\(\sigma\)</span>(E) and Maxwellian <span class="arithmatex">\(\langle \sigma \rangle\)</span>(T) for light ions fusion reactions, based on improved evaluations using R-matrix methods and newer measurements than their predecessors.</p>
+<p>It is implemented in both cfspopcon and PROCESS codes.</p>
+<p>In <code>fusdb</code>, Bosch-Hale reactivities are available for
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DT_BoschHale">DT</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DD_BoschHale">DD</a>,
+and its two channels:
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DDn_BoschHale">DDn</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DDp_BoschHale">DDp</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DHe3_BoschHale">DHe3</a>.</p>
+<h3 id="nrl-plasma-formualry-1972-ongoing">NRL plasma formualry, 1972 - ongoing<a class="headerlink" href="#nrl-plasma-formualry-1972-ongoing" title="Permanent link">&para;</a></h3>
+<p>The NRL plasma formulary <sup id="fnref:beresnyak_2023_nrl_plasma_formulary"><a class="footnote-ref" href="#fn:beresnyak_2023_nrl_plasma_formulary">3</a></sup> fits and tabulated data comes from the 5-parameters fit of <sup id="fnref:duane_1972"><a class="footnote-ref" href="#fn:duane_1972">4</a></sup> and reported also in <sup id="fnref:miley_1974"><a class="footnote-ref" href="#fn:miley_1974">5</a></sup>. These fits are generally accepted in publications, but may give different results if compared to more modern data.</p>
+<p>It also cites a more modern 3-parameters fit <sup id="fnref:li_2008"><a class="footnote-ref" href="#fn:li_2008">6</a></sup>.</p>
+<p>In <code>fusdb</code>, NRL reactivities are available for
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DT_NRL">DT</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DD_NRL">DD</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DHe3_NRL">DHe3</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_TT_NRL">TT</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_NRL">THe3</a>.</p>
+<h3 id="endfb-1966-ongoing">ENDF/B, 1966 - ongoing<a class="headerlink" href="#endfb-1966-ongoing" title="Permanent link">&para;</a></h3>
+<p>The Evaluated Nuclear Data File database includes experimental data for several nuclear reactions, including collisions of deuterons, tritons and helium-3 with other light nuclei. The latest release (as of 2026) is ENDF/B-VIII.1 <sup id="fnref:nobre_endfb-viii1_2025"><a class="footnote-ref" href="#fn:nobre_endfb-viii1_2025">7</a></sup>.</p>
+<p>In <code>fusdb</code>, ENDF/B reactivities are available for
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DT_ENDFB_VIII1">DT</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DD_ENDFB_VIII1">DD</a> and its channels:
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DDn_ENDFB_VIII1">DDn</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DDp_ENDFB_VIII1">DDp</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DHe3_ENDFB_VIII1">DHe3</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_TT_ENDFB_VIII1">TT</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_He3He3_ENDFB_VIII1">He3He3</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_ENDFB_VIII1">THe3 total</a>,
+and branch-resolved
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_D_ENDFB_VIII1">THe3_D</a>
+and
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_np_ENDFB_VIII1">THe3_np</a>.</p>
+<h3 id="other-fits">Other fits:<a class="headerlink" href="#other-fits" title="Permanent link">&para;</a></h3>
+<p><sup id="fnref:caughlan_fowler_1988"><a class="footnote-ref" href="#fn:caughlan_fowler_1988">8</a></sup>, <sup id="fnref:hively_1977"><a class="footnote-ref" href="#fn:hively_1977">9</a></sup></p>
+<p>In <code>fusdb</code>, this currently includes
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DT_Hively">DT Hively</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DD_Hively">DD Hively</a> and its two channels
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DDn_Hively">DDn Hively</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_DDp_Hively">DDp Hively</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_TT_CF88">TT CF88</a>,
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_He3He3_CF88">He3He3 CF88</a>,
+and
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_CF88">THe3 CF88</a> and its channels:
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_D_CF88">THe3_D CF88</a>.
+<a href="../../../code_docs/api/relations/#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_np_CF88">THe3_np CF88</a>.</p>
+<h2 id="references-and-links">References and Links:<a class="headerlink" href="#references-and-links" title="Permanent link">&para;</a></h2>
+<h3 id="see-also">See also:<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><a href="https://scipython.com/blog/nuclear-fusion-cross-sections/">SciPython: Nuclear fusion cross-sections</a></p>
+</li>
+<li>
+<p>A comprehensive discussion on the reaction rate is done on <sup id="fnref:freidberg_2007"><a class="footnote-ref" href="#fn:freidberg_2007">10</a></sup></p>
+</li>
+<li>
+<p>ENDF website: <a href="https://www.nndc.bnl.gov/endf/">https://www.nndc.bnl.gov/endf/</a></p>
+</li>
+</ul>
+<h3 id="bibliography">Bibliography:<a class="headerlink" href="#bibliography" title="Permanent link">&para;</a></h3>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:clayton_1983">
+<p>Donald D. Clayton. <em>Principles of Stellar Evolution and Nucleosynthesis</em>. University of Chicago Press, 1983. ISBN 9780226109534. URL: <a href="https://press.uchicago.edu/ucp/books/book/chicago/P/bo24324962.html">https://press.uchicago.edu/ucp/books/book/chicago/P/bo24324962.html</a>.&#160;<a class="footnote-backref" href="#fnref:clayton_1983" title="Jump back to footnote 1 in the text"></a></p>
+</li>
+<li id="fn:bosch_hale_1992">
+<p>Hans-S Bosch and George M. Hale. Improved formulas for fusion cross-sections and thermal reactivities. <em>Nuclear Fusion</em>, 32(4):611–631, 1992. URL: <a href="https://doi.org/10.1088/0029-5515/32/4/I07">https://doi.org/10.1088/0029-5515/32/4/I07</a>, <a href="https://doi.org/10.1088/0029-5515/32/4/I07">doi:10.1088/0029-5515/32/4/I07</a>.&#160;<a class="footnote-backref" href="#fnref:bosch_hale_1992" title="Jump back to footnote 2 in the text"></a></p>
+</li>
+<li id="fn:beresnyak_2023_nrl_plasma_formulary">
+<p>Andrei Beresnyak. <em>NRL Plasma Formulary</em>. Naval Research Laboratory, 2023. URL: <a href="https://www.nrl.navy.mil/Portals/38/PDF%20Files/NRL_Plasma_Formulary_2023.pdf?ver=Ffbv5HssiwiNJk2ZA2Zi9g%3D%3D">https://www.nrl.navy.mil/Portals/38/PDF%20Files/NRL_Plasma_Formulary_2023.pdf?ver=Ffbv5HssiwiNJk2ZA2Zi9g%3D%3D</a>.&#160;<a class="footnote-backref" href="#fnref:beresnyak_2023_nrl_plasma_formulary" title="Jump back to footnote 3 in the text"></a></p>
+</li>
+<li id="fn:duane_1972">
+<p>B H Duane. Fusion cross section theory. Technical Report, Originating Research Org. not identified, 01 1972. URL: <a href="https://www.osti.gov/biblio/4588400">https://www.osti.gov/biblio/4588400</a>.&#160;<a class="footnote-backref" href="#fnref:duane_1972" title="Jump back to footnote 4 in the text"></a></p>
+</li>
+<li id="fn:miley_1974">
+<p>George H Miley, Harry Towner, and Nenad Ivich. Fusion cross sections and reactivities. Technical Report, Illinois Univ., Urbana (USA), 1974.&#160;<a class="footnote-backref" href="#fnref:miley_1974" title="Jump back to footnote 5 in the text"></a></p>
+</li>
+<li id="fn:li_2008">
+<p>Xing Z. Li, Qing M. Wei, and Bin Liu. A new simple formula for fusion cross-sections of light nuclei. <em>Nuclear Fusion</em>, 48(12):125003, December 2008. URL: <a href="https://iopscience.iop.org/article/10.1088/0029-5515/48/12/125003">https://iopscience.iop.org/article/10.1088/0029-5515/48/12/125003</a> (visited on 2026-03-15), <a href="https://doi.org/10.1088/0029-5515/48/12/125003">doi:10.1088/0029-5515/48/12/125003</a>.&#160;<a class="footnote-backref" href="#fnref:li_2008" title="Jump back to footnote 6 in the text"></a></p>
+</li>
+<li id="fn:nobre_endfb-viii1_2025">
+<p>G. P. A. Nobre, R. Capote, M. T. Pigni, A. Trkov, C. M. Mattoon, D. Neudecker, D. A. Brown, M. B. Chadwick, A. C. Kahler, N. A. Kleedtke, M. Zerkle, A. I. Hawari, C. W. Chapman, N. C. Fleming, J. L. Wormald, K. Ramić, Y. Danon, N. A. Gibson, P. Brain, M. W. Paris, G. M. Hale, I. J. Thompson, D. P. Barry, I. Stetcu, W. Haeck, A. E. Lovell, M. R. Mumpower, G. Potel, K. Kravvaris, G. Noguere, J. D. McDonnell, A. D. Carlson, M. Dunn, T. Kawano, D. Wiarda, I. Al-Qasir, G. Arbanas, R. Arcilla, B. Beck, D. Bernard, R. Beyer, J. M. Brown, O. Cabellos, R. J. Casperson, Y. Cheng, E. V. Chimanski, R. Coles, M. Cornock, J. Cotchen, J. P. W. Crozier, D. E. Cullen, A. Daskalakis, M.-A. Descalle, D. D. DiJulio, P. Dimitriou, A. C. Dreyfuss, I. Durán, R. Ferrer, T. Gaines, V. Gillette, G. Gert, K. H. Guber, J. D. Haverkamp, M. W. Herman, J. Holmes, M. Hursin, N. Jisrawi, A. R. Junghans, K. J. Kelly, H. I. Kim, K. S. Kim, A. J. Koning, M. Koštál, B. K. Laramee, A. Lauer-Coles, L. Leal, H. Y. Lee, A. M. Lewis, J. Malec, J. I. Márquez Damián, W. J. Marshall, A. Mattera, G. Muhrer, A. Ney, W. E. Ormand, D. K. Parsons, C. M. Percher, V. G. Pronyaev, A. Qteish, S. Quaglioni, M. Rapp, J. J. Ressler, M. Rising, D. Rochman, P. K. Romano, D. Roubtsov, G. Schnabel, M. Schulc, G. J. Siemers, A. A. Sonzogni, P. Talou, J. Thompson, T. H. Trumbull, S. C. van der Marck, M. Vorabbi, C. Wemple, K. A. Wendt, M. White, and R. Q. Wright. ENDF/B-VIII.1: Updated Nuclear Reaction Data Library for Science and Applications. November 2025. arXiv:2511.03564 [physics]. URL: <a href="http://arxiv.org/abs/2511.03564">http://arxiv.org/abs/2511.03564</a> (visited on 2026-03-15), <a href="https://doi.org/10.48550/arXiv.2511.03564">doi:10.48550/arXiv.2511.03564</a>.&#160;<a class="footnote-backref" href="#fnref:nobre_endfb-viii1_2025" title="Jump back to footnote 7 in the text"></a></p>
+</li>
+<li id="fn:caughlan_fowler_1988">
+<p>George R. Caughlan and William A. Fowler. Thermonuclear reaction rates v. <em>Atomic Data and Nuclear Data Tables</em>, 40(2):283–334, 1988. URL: <a href="https://doi.org/10.1016/0092-640X(88)90009-5">https://doi.org/10.1016/0092-640X(88)90009-5</a>, <a href="https://doi.org/10.1016/0092-640X(88)90009-5">doi:10.1016/0092-640X(88)90009-5</a>.&#160;<a class="footnote-backref" href="#fnref:caughlan_fowler_1988" title="Jump back to footnote 8 in the text"></a></p>
+</li>
+<li id="fn:hively_1977">
+<p>Lee M. Hively. Convenient computational forms for maxwellian reactivities. <em>Nuclear Fusion</em>, 17(4):873–876, 1977. URL: <a href="https://doi.org/10.1088/0029-5515/17/4/019">https://doi.org/10.1088/0029-5515/17/4/019</a>, <a href="https://doi.org/10.1088/0029-5515/17/4/019">doi:10.1088/0029-5515/17/4/019</a>.&#160;<a class="footnote-backref" href="#fnref:hively_1977" title="Jump back to footnote 9 in the text"></a></p>
+</li>
+<li id="fn:freidberg_2007">
+<p>Jeffrey P. Freidberg. <em>Plasma Physics and Fusion Energy</em>. Cambridge University Press, 2007. URL: <a href="https://doi.org/10.1017/CBO9780511755705">https://doi.org/10.1017/CBO9780511755705</a>, <a href="https://doi.org/10.1017/CBO9780511755705">doi:10.1017/CBO9780511755705</a>.&#160;<a class="footnote-backref" href="#fnref:freidberg_2007" title="Jump back to footnote 10 in the text"></a></p>
+</li>
+</ol>
+</div>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "navigation.expand", "content.code.copy", "search.highlight"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

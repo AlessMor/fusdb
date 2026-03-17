@@ -1,41 +1,44 @@
 # fusdb Documentation
 
-`fusdb` is a lightweight fusion reactor scenario database and solver.
-It combines structured reactor data (`reactor.yaml`) with physics relations
-that infer missing quantities and check consistency.
+`fusdb` is a lightweight fusion reactor scenario database and solver for fusion
+studies. It combines structured reactor inputs (`reactor.yaml`) with physics
+relations that infer missing quantities and check consistency.
 
-This documentation is split into three complementary parts:
+This site is organised around three entry points:
 
-- **Main Pages**: top-level entrypoints for getting started with the code and navigation.
-- **Code Docs**: user guides, class references, notebooks, and API docs for the codebase.
-- **Knowledge Base**: an attempt at making a comprehensive and organized knowledge base on all that is fusion. Currently a work in progress...
+## Getting Started
 
-## Start Here
+Use this path when you want to install `fusdb`, load a reactor, and start using
+the main tools.
 
-- [Getting Started](getting_started.md)
-- [Code Docs Overview](code_docs/index.md)
-
-## Code Docs
-
-- [Overview](code_docs/index.md)
+- [Installation and usage guide](getting_started.md)
 - [Reactors](code_docs/reactors.md)
-- [Relations and Variables](code_docs/relations_variables.md)
-- [RelationSystem](code_docs/relationsystem_class.md)
-- [API Overview](code_docs/api/index.md)
-- [Notebooks](code_docs/notebooks.md)
+- [Reactivity plotter](code_docs/reactivity_plotter.md)
+- [Reactor browser notebook](code_docs/reactor_browser.ipynb)
 
 ## Knowledge Base
 
-The Knowledge Base is still work in progress.
+Use this path for physics notes, definitions, and model context.
 
-Published pages live under `docs/knowledgebase/`.
+- [Knowledge Base](knowledgebase/index.md)
+- [Cross Sections and Reactivities](knowledgebase/Plasma%20Physics/cross_sections_reactivities.md)
+- [Physics Domains](physics_domains.md)
+- [Relation Interactions](relation_interactions.md)
+- [Workflow Playbooks](workflows.md)
 
-Draft pages can stay in the same tree with `status: Draft` front matter and are
-hidden from the site until promoted.
+Draft pages can stay under `docs/knowledgebase/` with `status: Draft` and are
+hidden from the built site until promoted.
 
-Private or scratch notes can live under `docs/_private/` and are excluded from
-both Git and MkDocs.
+## Source Documentation
 
-Use the single docs config for local preview:
+Use this path for module, class, and function-level reference material generated
+from the source code.
+
+- [API overview](code_docs/api/index.md)
+- [Core modules](code_docs/api/core.md)
+- [Relation modules](code_docs/api/relations.md)
+- [Registry and utilities](code_docs/api/registry_and_utils.md)
+
+## Local Preview
 
 - `mkdocs serve -f docs/mkdocs.yml`

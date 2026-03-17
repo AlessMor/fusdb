@@ -14,7 +14,7 @@ rendered in the docs site through `mkdocs-jupyter`.
 - [Reactor Browser](reactor_browser.ipynb): compare reactors and inspect key variables.
 - [Relation Graph Generator](relation_graph_generator.ipynb): build graph visualizations for relations and variables.
 - [Tau_E Solver](tau_E_solver.ipynb): experiments around confinement and power-loss coupling.
-- [Reactor Playground](interactive/reactor_playground.ipynb): minimal load-and-solve notebook for a single reactor.
+- [Reactor Playground](reactor_playground.ipynb): minimal load-and-solve notebook for a single reactor.
 
 ## Local Usage
 
@@ -23,5 +23,5 @@ rendered in the docs site through `mkdocs-jupyter`.
 3. Open notebooks from the `docs/code_docs/` folder.
 
 For website-friendly interactive examples, see the
-[Interactive Pages](interactive/index.md) section. Those pages now mix
-standalone Bokeh assets with notebooks rendered directly by MkDocs.
+[Reactivity Plotter](reactivity_plotter.md) and the rendered notebooks in this
+section.
