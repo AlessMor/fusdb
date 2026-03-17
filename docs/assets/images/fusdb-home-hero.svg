@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10242C"/>
+      <stop offset="0.55" stop-color="#183B45"/>
+      <stop offset="1" stop-color="#244A54"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1160 244) rotate(90) scale(214 214)">
+      <stop stop-color="#FFF0AE"/>
+      <stop offset="0.38" stop-color="#FFD276"/>
+      <stop offset="1" stop-color="#FFD276" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ridge1" x1="112" y1="544" x2="1310" y2="740" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17373E"/>
+      <stop offset="1" stop-color="#10262D"/>
+    </linearGradient>
+    <linearGradient id="ridge2" x1="96" y1="618" x2="1386" y2="862" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2B5C67"/>
+      <stop offset="1" stop-color="#17333B"/>
+    </linearGradient>
+    <linearGradient id="ridge3" x1="0" y1="664" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F8A95"/>
+      <stop offset="1" stop-color="#21454E"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <circle cx="1160" cy="244" r="214" fill="url(#sun)"/>
+
+  <g opacity="0.28" stroke="#A7F3E7" stroke-width="1.4">
+    <path d="M-44 676C198 580 392 556 590 610C762 658 906 660 1098 560C1260 476 1404 454 1654 540"/>
+    <path d="M-26 720C200 630 398 610 610 652C786 686 930 688 1108 612C1280 540 1418 520 1638 594"/>
+  </g>
+
+  <path d="M0 590L160 548L302 566L470 520L640 560L790 508L946 544L1118 486L1266 520L1414 478L1600 540V900H0V590Z" fill="url(#ridge1)"/>
+  <path d="M0 676L138 624L272 660L424 618L604 676L786 610L950 666L1120 606L1308 670L1470 626L1600 658V900H0V676Z" fill="url(#ridge2)"/>
+  <path d="M0 760L162 718L310 746L486 700L672 762L842 712L1018 758L1178 720L1360 772L1496 738L1600 756V900H0V760Z" fill="url(#ridge3)"/>
+
+  <g opacity="0.62">
+    <circle cx="282" cy="184" r="2.5" fill="#E3FFF9"/>
+    <circle cx="356" cy="148" r="1.8" fill="#C5FFF5"/>
+    <circle cx="460" cy="212" r="2.2" fill="#FEE3A1"/>
+    <circle cx="1316" cy="176" r="2.4" fill="#E6FFF9"/>
+    <circle cx="1380" cy="232" r="1.8" fill="#C0FFF4"/>
+    <circle cx="1464" cy="188" r="2.1" fill="#FEE29F"/>
+  </g>
+</svg>
