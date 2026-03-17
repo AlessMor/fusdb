@@ -20,6 +20,8 @@ exclude_docs: |
 theme:
   name: material
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
     - content.code.copy
@@ -29,7 +31,12 @@ theme:
       primary: teal
       accent: amber
 
+extra_css:
+  - stylesheets/extra.css
+
 extra_javascript:
+  - javascripts/header_home.js
+  - javascripts/home_hero.js
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
@@ -60,6 +67,7 @@ hooks:
   - hooks/status_filter.py
 
 not_in_nav: |
+  /index.md
   /code_docs/index.md
   /code_docs/notebooks.md
   /knowledgebase/_templates/**
@@ -82,7 +90,6 @@ markdown_extensions:
       alternate_style: true
 
 nav:
-  - Home: index.md
   - Getting Started:
       - Installation and Usage: getting_started.md
       - Reactors: code_docs/reactors.md

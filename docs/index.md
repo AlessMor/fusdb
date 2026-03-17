@@ -1,44 +1,62 @@
-# fusdb Documentation
+---
+status: Online
+---
 
-`fusdb` is a lightweight fusion reactor scenario database and solver for fusion
-studies. It combines structured reactor inputs (`reactor.yaml`) with physics
-relations that infer missing quantities and check consistency.
+<section class="home-hero" data-home-hero>
+  <div class="home-hero__media" aria-hidden="true">
+    <img
+      src="assets/images/fusdb-home-hero.svg"
+      alt=""
+      loading="eager"
+      decoding="async"
+    />
+  </div>
+  <div class="home-hero__veil"></div>
+  <div class="home-hero__content">
+    <p class="home-hero__eyebrow">Fusion reactor scenario database and solver</p>
+    <h1>fusdb</h1>
+    <p class="home-hero__lead">
+      Structured reactor inputs, physics relations, and interactive documentation
+      for fusion studies.
+    </p>
+    <div class="home-hero__actions">
+      <a class="md-button md-button--primary" href="getting_started/">Getting Started</a>
+      <a class="md-button" href="knowledgebase/">Knowledge Base</a>
+      <a class="md-button" href="code_docs/api/">Source Documentation</a>
+    </div>
+  </div>
+</section>
 
-This site is organised around three entry points:
+<div class="home-grid">
+  <a class="home-card" href="getting_started/">
+    <span class="home-card__label">Getting Started</span>
+    <strong>Install `fusdb`, load reactors, and use the main tools.</strong>
+    <span>Includes the usage guide, reactor browser notebook, and reactivity plotter.</span>
+  </a>
 
-## Getting Started
+  <a class="home-card" href="knowledgebase/">
+    <span class="home-card__label">Knowledge Base</span>
+    <strong>Physics notes, definitions, and modelling context.</strong>
+    <span>Published topic pages plus cross-sections and reactivity notes.</span>
+  </a>
 
-Use this path when you want to install `fusdb`, load a reactor, and start using
-the main tools.
+  <a class="home-card" href="code_docs/api/">
+    <span class="home-card__label">Source Documentation</span>
+    <strong>Module, class, and function-level API reference.</strong>
+    <span>Generated from the source and linked to the higher-level guides.</span>
+  </a>
+
+  <a class="home-card" href="bibliography/">
+    <span class="home-card__label">References</span>
+    <strong>Central bibliography and supporting notes.</strong>
+    <span>Shared citations for code docs and knowledge-base pages.</span>
+  </a>
+</div>
+
+## Quick Paths
 
 - [Installation and usage guide](getting_started.md)
-- [Reactors](code_docs/reactors.md)
 - [Reactivity plotter](code_docs/reactivity_plotter.md)
-- [Reactor browser notebook](code_docs/reactor_browser.ipynb)
-
-## Knowledge Base
-
-Use this path for physics notes, definitions, and model context.
-
-- [Knowledge Base](knowledgebase/index.md)
-- [Cross Sections and Reactivities](knowledgebase/Plasma%20Physics/cross_sections_reactivities.md)
-- [Physics Domains](physics_domains.md)
-- [Relation Interactions](relation_interactions.md)
-- [Workflow Playbooks](workflows.md)
-
-Draft pages can stay under `docs/knowledgebase/` with `status: Draft` and are
-hidden from the built site until promoted.
-
-## Source Documentation
-
-Use this path for module, class, and function-level reference material generated
-from the source code.
-
+- [Cross sections and reactivities](knowledgebase/Plasma%20Physics/cross_sections_reactivities.md)
 - [API overview](code_docs/api/index.md)
-- [Core modules](code_docs/api/core.md)
-- [Relation modules](code_docs/api/relations.md)
-- [Registry and utilities](code_docs/api/registry_and_utils.md)
-
-## Local Preview
-
-- `mkdocs serve -f docs/mkdocs.yml`
+- [Bibliography](bibliography.md)
