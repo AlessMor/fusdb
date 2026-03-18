@@ -8,7 +8,7 @@ This section contains the published physics and modelling notes for `fusdb`.
 
 ## Published Pages
 
-- [Cross Sections and Reactivities](Plasma%20Physics/cross_sections_reactivities.md)
+- [Cross Sections and Reactivities](plasma_physics/cross_sections_reactivities.md)
 
 ## Local Drafts
 

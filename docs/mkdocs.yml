@@ -103,7 +103,7 @@ nav:
       - Physics Domains: physics_domains.md
       - Relation Interactions: relation_interactions.md
       - Workflow Playbooks: workflows.md
-      - Cross Sections and Reactivities: "knowledgebase/Plasma Physics/cross_sections_reactivities.md"
+      - Cross Sections and Reactivities: knowledgebase/plasma_physics/cross_sections_reactivities.md
   - Source Documentation:
       - Overview: code_docs/api/index.md
       - Core Modules: code_docs/api/core.md

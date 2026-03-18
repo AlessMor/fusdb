@@ -14,7 +14,7 @@ citations into the shared `fusdb` bibliography for reactivity relations.
 The reactivity layer provides source-specific `<sigma v>` relations for the
 main fusion channels and a standalone interactive plotter for comparing those
 sources. Narrative background lives in the
-[cross-sections and reactivities knowledge page](../knowledgebase/Plasma%20Physics/cross_sections_reactivities.md);
+[cross-sections and reactivities knowledge page](../knowledgebase/plasma_physics/cross_sections_reactivities.md);
 this page stays focused on code-facing entrypoints.
 
 ## Source References
@@ -49,7 +49,7 @@ this page stays focused on code-facing entrypoints.
 
 ## See Also
 
-- [Cross Sections and Reactivities](../knowledgebase/Plasma%20Physics/cross_sections_reactivities.md)
+- [Cross Sections and Reactivities](../knowledgebase/plasma_physics/cross_sections_reactivities.md)
 - [Interactive Reactivity Plotter](reactivity_plotter.md)
 - [Relation Modules API](api/relations.md)
 - [Shared Bibliography](../bibliography.md)

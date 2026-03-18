@@ -6,12 +6,14 @@ function updateHomeHero() {
   }
 
   const rect = currentHero.getBoundingClientRect();
-  const range = Math.max(currentHero.offsetHeight * 0.9, 1);
+  const range = Math.max(currentHero.offsetHeight * 0.78, 1);
   const progress = Math.min(Math.max(-rect.top / range, 0), 1);
-  const opacity = 1 - progress * 0.78;
-  const shift = `${progress * -32}px`;
+  const opacity = 1 - progress;
+  const shift = `${progress * -56}px`;
+  const blur = `${progress * 10}px`;
   currentHero.style.setProperty("--hero-opacity", opacity.toFixed(3));
   currentHero.style.setProperty("--hero-shift", shift);
+  currentHero.style.setProperty("--hero-blur", blur);
 }
 
 function wireHomeHero() {

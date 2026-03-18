@@ -640,6 +640,11 @@ class RelationSystem:
                 if change > (rel_tol or 0.0):
                     return False
 
+            if protect_explicit and name in self._state["overrides"] and cur_scalar is not None:
+                change = abs(value_scalar - cur_scalar) / max(abs(cur_scalar), 1.0)
+                if change > (rel_tol or 0.0):
+                    return False
+
             accepted[name] = value
 
         if not accepted:
@@ -1766,6 +1771,81 @@ class RelationSystem:
                                         log_message(self._log, logging.DEBUG, "    ✗ Backward solve rejected for %s", missing_var)
                 else:
                     # 2.1.c.3) Full check/evaluate path when all variables are currently known.
+                    target_var = self._graph["vars"].get(target_name) if target_name is not None else None
+                    if (
+                        target_name is not None
+                        and target_var is not None
+                        and target_var.input_source == "explicit"
+                    ):
+                        try:
+                            target_expected = rel.evaluate(rel_values)
+                        except Exception:
+                            target_expected = None
+                        target_expected_scalar = safe_float(target_expected)
+                        target_actual_scalar = safe_float(rel_values.get(target_name))
+                        target_rel_tol = (
+                            rel.rel_tol_default
+                            if rel.rel_tol_default is not None
+                            else (target_var.rel_tol if target_var.rel_tol is not None else 0.0)
+                        )
+                        target_abs_tol = (
+                            rel.abs_tol_default
+                            if rel.abs_tol_default is not None
+                            else (target_var.abs_tol if target_var.abs_tol is not None else 0.0)
+                        )
+                        target_violated = (
+                            target_expected_scalar is not None
+                            and target_actual_scalar is not None
+                            and not within_tolerance(
+                                target_actual_scalar,
+                                target_expected_scalar,
+                                rel_tol=target_rel_tol or 0.0,
+                                abs_tol=target_abs_tol or 0.0,
+                            )
+                        )
+                        if target_violated:
+                            derived_candidates = [
+                                name
+                                for name in rels_to_vars.get(rel, ())
+                                if name != target_name
+                                and (var := self._graph["vars"].get(name)) is not None
+                                and not var.fixed
+                                and var.input_source != "explicit"
+                            ]
+                            if len(derived_candidates) == 1:
+                                derived_name = derived_candidates[0]
+                                known_values = {
+                                    name: value
+                                    for name, value in rel_values.items()
+                                    if name != derived_name and value is not None
+                                }
+                                solved_value = self._solve_for_value(rel, derived_name, known_values)
+                                solved_scalar = safe_float(solved_value)
+                                if solved_scalar is not None:
+                                    self._state["overrides"][derived_name] = {
+                                        "value": solved_scalar,
+                                        "relation": rel.name,
+                                    }
+                                    relation_applied = self._accept_candidate_values(
+                                        {derived_name: solved_scalar},
+                                        rels=[rel],
+                                        reason="relation_inverse",
+                                        relation=rel.name,
+                                        protect_explicit=False,
+                                        warn_input=False,
+                                        check_violation_increase=False,
+                                    )
+                                    if relation_applied:
+                                        log_message(
+                                            self._log,
+                                            logging.DEBUG,
+                                            "  Relation '%s': synced %s = %s from explicit %s",
+                                            rel.name,
+                                            derived_name,
+                                            solved_scalar,
+                                            target_name,
+                                        )
+                                        continue
                     if target_name is not None:
                         out = target_name
                         try:

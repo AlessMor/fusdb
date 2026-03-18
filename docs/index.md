@@ -50,6 +50,6 @@ status: Online
 
 - [Installation and usage guide](getting_started.md)
 - [Reactivity plotter](code_docs/reactivity_plotter.md)
-- [Cross sections and reactivities](knowledgebase/Plasma%20Physics/cross_sections_reactivities.md)
+- [Cross sections and reactivities](knowledgebase/plasma_physics/cross_sections_reactivities.md)
 - [API overview](code_docs/api/index.md)
 - [Bibliography](bibliography.md)

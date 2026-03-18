@@ -801,7 +801,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../knowledgebase/Plasma%20Physics/cross_sections_reactivities/" class="md-nav__link">
+      <a href="../../../knowledgebase/plasma_physics/cross_sections_reactivities/" class="md-nav__link">
         
   
   
@@ -2176,6 +2176,67 @@
   
     <nav class="md-nav" aria-label="composition_solver">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CompositionSteadyStateSystem
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CompositionSteadyStateSystem">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.initial_state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        initial_state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.rhs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rhs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.residual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        residual
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.solve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        solve
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#fusdb.relations.plasma_composition.composition_solver.solve_steady_state_composition" class="md-nav__link">
@@ -5026,6 +5087,67 @@
   
     <nav class="md-nav" aria-label="composition_solver">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CompositionSteadyStateSystem
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CompositionSteadyStateSystem">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.initial_state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        initial_state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.rhs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rhs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.residual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        residual
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.solve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        solve
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#fusdb.relations.plasma_composition.composition_solver.solve_steady_state_composition" class="md-nav__link">
@@ -11772,7 +11894,51 @@ See :cite:<code>sauter_geometric_2016</code>.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Solver for steady-state plasma composition.</p>
+        <p>Residual-based steady-state plasma composition solver.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h4 id="fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">CompositionSteadyStateSystem</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Fast steady-state composition model with a SciPy root solve.</p>
+<p>The class is steady-state first: it precomputes the reaction coefficients and
+solves the particle balance residual directly. The same balance is exposed as
+<code>rhs</code> so the model can later be reused with <code>solve_ivp</code> if needed.</p>
+
 
 
 
@@ -11797,17 +11963,112 @@ See :cite:<code>sauter_geometric_2016</code>.</p>
 <div class="doc doc-object doc-function">
 
 
+<h5 id="fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.initial_state" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">initial_state</span>
+
+
+<a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.initial_state" class="headerlink" title="Permanent link">&para;</a></h5>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">initial_state</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the full tracked-fraction state used as the default root initial guess.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.rhs" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">rhs</span>
+
+
+<a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.rhs" class="headerlink" title="Permanent link">&para;</a></h5>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">rhs</span><span class="p">(</span><span class="n">_t</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return full tracked-species fraction derivatives with total tracked fraction preserved.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.residual" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">residual</span>
+
+
+<a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.residual" class="headerlink" title="Permanent link">&para;</a></h5>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">residual</span><span class="p">(</span><span class="n">reduced</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the reduced steady-state residual used by scipy.optimize.root.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.solve" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">solve</span>
+
+
+<a href="#fusdb.relations.plasma_composition.composition_solver.CompositionSteadyStateSystem.solve" class="headerlink" title="Permanent link">&para;</a></h5>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">solve</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">tol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-10</span><span class="p">,</span> <span class="n">maxfev</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;hybr&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Solve the steady-state composition and return tracked fractions.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+<div class="doc doc-object doc-function">
+
+
 <h4 id="fusdb.relations.plasma_composition.composition_solver.solve_steady_state_composition" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">solve_steady_state_composition</span>
 
 
 <a href="#fusdb.relations.plasma_composition.composition_solver.solve_steady_state_composition" class="headerlink" title="Permanent link">&para;</a></h4>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">solve_steady_state_composition</span><span class="p">(</span><span class="n">n_i</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">T_avg</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">fractions</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tau_p</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">max_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span> <span class="n">tol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-06</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">solve_steady_state_composition</span><span class="p">(</span><span class="n">n_i</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">T_avg</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">fractions</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tau_p</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">initial_guess</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">temperatures</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">source_distribution</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">f_imp</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">reactivity_functions</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">float</span><span class="p">],</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-10</span><span class="p">,</span> <span class="n">max_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;hybr&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Solve for steady-state ion fractions given total density, temperature, and confinement times.</p>
+        <p>Solve for the steady-state tracked ion fractions.</p>
+<p>The tracked species fractions are constrained to sum to <code>1 - f_imp</code>.
+<code>source_distribution</code> defines the external particle source mix used to keep
+the tracked fraction total constant during the steady-state balance.
+<code>initial_guess</code> controls only the nonlinear solver start point. <code>fractions</code>
+is retained as a shorthand that seeds both when the explicit arguments are not
+provided.</p>
 
 
     </div>
