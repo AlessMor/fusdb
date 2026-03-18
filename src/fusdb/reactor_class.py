@@ -13,15 +13,33 @@ import warnings
 from .relation_class import Relation
 from .relationsystem_class import RelationSystem
 from .relation_util import get_filtered_relations
-from .logging_util import (
-    make_logger,
-    set_log_verbosity,
-    log_message,
-)
-from .utils import normalize_tag, normalize_tags_to_tuple
+from .utils import as_profile_array, normalize_tag, normalize_tags_to_tuple, safe_float, within_tolerance
 from .variable_class import Variable
+from .variable_util import make_variable
 
 logger = logging.getLogger(__name__)
+
+
+def make_logger(
+    module_logger: logging.Logger,
+    owner: str,
+    *,
+    verbose: bool,
+) -> logging.Logger:
+    """Return a child logger configured for the requested verbosity."""
+    log = module_logger.getChild(owner)
+    log.setLevel(logging.INFO if verbose else logging.WARNING)
+    return log
+
+
+def set_log_verbosity(log: logging.Logger, *, verbose: bool) -> None:
+    """Set logger level from boolean verbosity."""
+    log.setLevel(logging.INFO if verbose else logging.WARNING)
+
+
+def log_message(log: logging.Logger, level: int, msg: str, *args: object) -> None:
+    """Emit one log message preserving the class call-site location."""
+    log.log(level, msg, *args, stacklevel=2)
 
 @dataclass
 class Reactor:
@@ -165,42 +183,106 @@ class Reactor:
                 seen.append(rel)
                 yield rel
 
-    def solve(
-        self,
-        mode: str | None = None,
-        *,
-        verbose: bool | None = None,
-        enforce_constraint_tags: Iterable[str] | None = None,
-        enforce_constraint_names: Iterable[str] | None = None,
-    ) -> None:
-        """Solve for unknown reactor variables using physics relations.
-        
-        Executes the iterative solver to compute unknown variables from known ones.
-        If solving_order is specified, solves each domain in sequence.
-        
-        Args:
-            mode: Override solver mode ("overwrite" or "check").
-                 If None, uses self.solver_mode.
-            verbose: Override verbosity setting. If None, uses self.verbose.
-            enforce_constraint_tags: Relation tags whose soft constraints should be enforced.
-            enforce_constraint_names: Relation names/outputs or variable names whose soft constraints should be enforced.
-        Example:
-            >>> reactor = Reactor.from_yaml('reactors/ARC_2015/reactor.yaml')
-            >>> reactor.solve(verbose=True)  # Show detailed solving progress
-        """
-        # Use provided mode/verbosity or fall back to instance defaults
-        solver_mode = mode or self.solver_mode
-        verbosity = self.verbose if verbose is None else verbose
-        set_log_verbosity(self._log, verbose=verbosity)
-        log_message(
-            self._log,
-            logging.INFO,
-            "Solving reactor %s (%s) with mode=%s",
-            self.id or "unknown",
-            self.name or "unknown",
-            solver_mode,
+    def _fraction_seed_from_inputs(self) -> dict[str, float] | None:
+        """Return explicit ion-fraction inputs used as the initial composition seed."""
+        seed: dict[str, float] = {}
+        has_explicit_fraction = False
+        for name in ("f_D", "f_T", "f_He3", "f_He4"):
+            var = self.variables_dict.get(name)
+            if var is None or var.input_value is None:
+                continue
+            scalar = safe_float(var.input_value)
+            if scalar is None:
+                continue
+            seed[name] = scalar
+            if var.input_source == "explicit":
+                has_explicit_fraction = True
+        if not has_explicit_fraction:
+            return None
+        return seed
+
+    def _scalar_value(self, name: str) -> float | None:
+        """Return a scalar value for a reactor variable, averaging profiles when needed."""
+        var = self.variables_dict.get(name)
+        if var is None:
+            return None
+        for candidate in (var.current_value, var.input_value):
+            scalar = safe_float(candidate)
+            if scalar is not None:
+                return scalar
+            arr = as_profile_array(candidate)
+            if arr is not None:
+                return float(arr.mean())
+        return None
+
+    def _steady_state_composition_inputs(self) -> tuple[float, float, dict[str, float], dict[str, float]] | None:
+        """Gather the scalar inputs required by the steady-state composition solver."""
+        seed = self._fraction_seed_from_inputs()
+        if not seed:
+            return None
+
+        n_i = self._scalar_value("n_i")
+        t_avg = self._scalar_value("T_avg")
+
+        if n_i is None or t_avg is None:
+            return None
+
+        tau_p: dict[str, float] = {}
+        for species in ("D", "T", "He3", "He4"):
+            name = f"tau_p_{species}"
+            tau_value = self._scalar_value(name)
+            if tau_value is None:
+                return None
+            tau_p[name] = tau_value
+
+        return n_i, t_avg, seed, tau_p
+
+    def _apply_steady_state_composition(self) -> bool:
+        """Overwrite current ion fractions with the steady-state composition from the explicit seed mix."""
+        inputs = self._steady_state_composition_inputs()
+        if inputs is None:
+            return False
+
+        from .relations.plasma_composition.composition_solver import solve_steady_state_composition
+
+        n_i, t_avg, seed, tau_p = inputs
+        solved = solve_steady_state_composition(
+            n_i=n_i,
+            T_avg=t_avg,
+            fractions=seed,
+            tau_p=tau_p,
         )
-        
+
+        changed = False
+        for name, value in solved.items():
+            var = self.variables_dict.get(name)
+            current = None if var is None else safe_float(var.current_value)
+            if current is not None and within_tolerance(current, value, rel_tol=1e-8, abs_tol=1e-10):
+                continue
+            if var is None:
+                var = make_variable(name=name, ndim=0)
+                self.variables_dict[name] = var
+            if var.add_value(value, reason="steady_state_composition", as_input=False):
+                changed = True
+
+        if changed:
+            log_message(
+                self._log,
+                logging.INFO,
+                "Applied steady-state composition from explicit fraction seed: %s",
+                {key: f"{value:.6g}" for key, value in solved.items()},
+            )
+        return changed
+
+    def _solve_once(
+        self,
+        *,
+        solver_mode: str,
+        verbosity: bool,
+        enforce_constraint_tags: tuple[str, ...],
+        enforce_constraint_names: tuple[str, ...],
+    ) -> None:
+        """Run one full relation solve with the current reactor variables."""
         if not self.solving_order:
             rels = list(self.relations)
             log_message(self._log, logging.INFO, "Solving %d relations (no domains)", len(rels))
@@ -209,8 +291,8 @@ class Reactor:
                 list(self.variables_dict.values()),
                 mode=solver_mode,
                 verbose=verbosity,
-                enforce_constraint_tags=tuple(enforce_constraint_tags or ()),
-                enforce_constraint_names=tuple(enforce_constraint_names or ()),
+                enforce_constraint_tags=enforce_constraint_tags,
+                enforce_constraint_names=enforce_constraint_names,
             )
             system.solve()
             self.variables_dict.update(system.variables_dict)
@@ -268,11 +350,66 @@ class Reactor:
                 list(self.variables_dict.values()),
                 mode=solver_mode,
                 verbose=verbosity,
-                enforce_constraint_tags=tuple(enforce_constraint_tags or ()),
-                enforce_constraint_names=tuple(enforce_constraint_names or ()),
+                enforce_constraint_tags=enforce_constraint_tags,
+                enforce_constraint_names=enforce_constraint_names,
             )
             system.solve()
             self.variables_dict.update(system.variables_dict)
+
+    def solve(
+        self,
+        mode: str | None = None,
+        *,
+        verbose: bool | None = None,
+        enforce_constraint_tags: Iterable[str] | None = None,
+        enforce_constraint_names: Iterable[str] | None = None,
+    ) -> None:
+        """Solve for unknown reactor variables using physics relations.
+        
+        Executes the iterative solver to compute unknown variables from known ones.
+        If solving_order is specified, solves each domain in sequence.
+        
+        Args:
+            mode: Override solver mode ("overwrite" or "check").
+                 If None, uses self.solver_mode.
+            verbose: Override verbosity setting. If None, uses self.verbose.
+            enforce_constraint_tags: Relation tags whose soft constraints should be enforced.
+            enforce_constraint_names: Relation names/outputs or variable names whose soft constraints should be enforced.
+        Example:
+            >>> reactor = Reactor.from_yaml('reactors/ARC_2015/reactor.yaml')
+            >>> reactor.solve(verbose=True)  # Show detailed solving progress
+        """
+        # Use provided mode/verbosity or fall back to instance defaults
+        solver_mode = mode or self.solver_mode
+        verbosity = self.verbose if verbose is None else verbose
+        set_log_verbosity(self._log, verbose=verbosity)
+        log_message(
+            self._log,
+            logging.INFO,
+            "Solving reactor %s (%s) with mode=%s",
+            self.id or "unknown",
+            self.name or "unknown",
+            solver_mode,
+        )
+
+        constraint_tags_tuple = tuple(enforce_constraint_tags or ())
+        constraint_names_tuple = tuple(enforce_constraint_names or ())
+
+        self._solve_once(
+            solver_mode=solver_mode,
+            verbosity=verbosity,
+            enforce_constraint_tags=constraint_tags_tuple,
+            enforce_constraint_names=constraint_names_tuple,
+        )
+        for _ in range(2):
+            if not self._apply_steady_state_composition():
+                break
+            self._solve_once(
+                solver_mode=solver_mode,
+                verbosity=verbosity,
+                enforce_constraint_tags=constraint_tags_tuple,
+                enforce_constraint_names=constraint_names_tuple,
+            )
 
     def diagnose(self) -> dict[str, object]:
         """Run comprehensive diagnostics on reactor consistency.
@@ -525,292 +662,23 @@ class Reactor:
         best: dict[str, str] | None = None,
         ax=None,
     ):
-        """Plot POPCON results with masked fill and contour overlays.
+        """Plot POPCON results with masked fill and contour overlays."""
+        from .plotting.popcon import plot_popcon
 
-        Args:
-            result: Output from Reactor.popcon.
-            x: Name of x-axis scan variable.
-            y: Name of y-axis scan variable.
-            fill: Name of output variable for filled colormap.
-            contours: Additional output variables to contour.
-            contour_levels: Optional mapping of contour variable -> list of levels.
-            contour_counts: Optional mapping of contour variable -> number of contour lines.
-            constraint_contours: If True, plot margin==0 constraint contours.
-            slice: Mapping of remaining axes to fixed index or value.
-            reduce: {"metric": name, "mode": "max"|"min"} to reduce remaining dims.
-            best: {"metric": name, "mode": "max"|"min"} for annotating best point.
-            ax: Optional matplotlib Axes to plot on.
-
-        Returns:
-            Matplotlib Axes.
-        """
-        import numpy as np
-        import matplotlib.pyplot as plt
-
-        axes = result.get("axes", {})
-        axis_order = result.get("axis_order", list(axes.keys()))
-        outputs = result.get("outputs", {})
-        margins = result.get("margins", {})
-        allowed = result.get("allowed")
-
-        if x not in axes or y not in axes:
-            raise ValueError("x and y must be scan axes present in result['axes'].")
-
-        if allowed is None:
-            raise ValueError("Result missing 'allowed' mask.")
-
-        x_vals = axes[x]
-        y_vals = axes[y]
-
-        def _select_2d(arr: np.ndarray, *, label: str) -> np.ndarray:
-            data = np.asarray(arr)
-            if data.ndim == 0:
-                return np.broadcast_to(data, (len(x_vals), len(y_vals)))
-            if data.ndim == 1:
-                if data.shape[0] == len(x_vals):
-                    return np.broadcast_to(data[:, None], (len(x_vals), len(y_vals)))
-                if data.shape[0] == len(y_vals):
-                    return np.broadcast_to(data[None, :], (len(x_vals), len(y_vals)))
-                raise ValueError(f"{label} length must match x or y axis for plotting.")
-            if data.ndim < 2:
-                raise ValueError(f"{label} must be at least 2D for plotting.")
-
-            if data.ndim > 2:
-                if slice is None and reduce is None:
-                    raise ValueError("Provide slice or reduce for scans with >2 dimensions.")
-
-                if slice is not None:
-                    indexers = []
-                    for name in axis_order:
-                        if name in (x, y):
-                            indexers.append(slice(None))
-                            continue
-                        if name not in slice:
-                            raise ValueError(f"Missing slice for axis '{name}'.")
-                        selector = slice[name]
-                        axis_vals = axes[name]
-                        if isinstance(selector, int):
-                            indexers.append(selector)
-                        else:
-                            idx = int(np.argmin(np.abs(axis_vals - float(selector))))
-                            indexers.append(idx)
-                    data = data[tuple(indexers)]
-                else:
-                    metric_name = reduce.get("metric") if reduce else None
-                    mode = reduce.get("mode", "max") if reduce else "max"
-                    metric = outputs.get(metric_name) if metric_name else None
-                    if metric is None:
-                        raise ValueError("reduce requires a metric present in outputs.")
-
-                    perm = [axis_order.index(x), axis_order.index(y)]
-                    perm += [axis_order.index(name) for name in axis_order if name not in (x, y)]
-                    data_r = np.moveaxis(data, perm, range(len(perm)))
-                    metric_r = np.moveaxis(np.asarray(metric), perm, range(len(perm)))
-                    allowed_r = np.moveaxis(np.asarray(allowed), perm, range(len(perm)))
-
-                    flat_data = data_r.reshape(data_r.shape[0], data_r.shape[1], -1)
-                    flat_metric = metric_r.reshape(metric_r.shape[0], metric_r.shape[1], -1)
-                    flat_allowed = allowed_r.reshape(allowed_r.shape[0], allowed_r.shape[1], -1)
-
-                    if mode == "min":
-                        masked = np.where(flat_allowed, flat_metric, np.inf)
-                        best_idx = np.nanargmin(masked, axis=2)
-                    else:
-                        masked = np.where(flat_allowed, flat_metric, -np.inf)
-                        best_idx = np.nanargmax(masked, axis=2)
-
-                    data = np.take_along_axis(flat_data, best_idx[..., None], axis=2)[..., 0]
-
-            remaining = [name for name in axis_order if name in (x, y)]
-            if remaining != [x, y]:
-                data = np.moveaxis(data, [remaining.index(x), remaining.index(y)], [0, 1])
-
-            return data
-
-        def _as_float_array(arr: np.ndarray) -> np.ndarray:
-            if arr.dtype != object:
-                return arr
-            out = np.empty(arr.shape, dtype=float)
-            it = np.nditer(arr, flags=["multi_index", "refs_ok"])
-            for item in it:
-                try:
-                    out[it.multi_index] = float(item.item())
-                except Exception:
-                    out[it.multi_index] = np.nan
-            return out
-
-        fill_data = outputs.get(fill)
-        if fill_data is None:
-            raise ValueError(f"Fill variable '{fill}' not found in outputs.")
-
-        fill_2d = _select_2d(_as_float_array(np.asarray(fill_data)), label=fill)
-        allowed_2d = _select_2d(np.asarray(allowed), label="allowed")
-
-        masked_fill = np.ma.masked_where(~allowed_2d, fill_2d)
-
-        if ax is None:
-            _, ax = plt.subplots(figsize=(7, 5))
-
-        def _plot_ready(data: np.ndarray) -> np.ndarray:
-            arr = np.asarray(data)
-            if arr.shape == (len(x_vals), len(y_vals)):
-                return arr.T
-            return arr
-
-        mesh = ax.pcolormesh(x_vals, y_vals, _plot_ready(masked_fill), shading="auto", cmap="viridis")
-        plt.colorbar(mesh, ax=ax, label=fill)
-
-        legend_handles = []
-        legend_labels = []
-        pretty_names = {"Q_sci": "Q", "n_GW": "n_greenwald"}
-
-        contour_colors = [
-            "#d62728",  # red
-            "#ff7f0e",  # orange
-            "#8c564b",  # brown
-            "#e377c2",  # magenta
-            "#7f7f7f",  # gray
-            "#a52a2a",  # dark red
-            "#4d4d4d",  # dark gray
-            "#b15928",  # dark orange/brown
-        ]
-        color_cycle = contour_colors
-        color_idx = 0
-
-        def _next_color() -> tuple[float, float, float]:
-            nonlocal color_idx
-            color = color_cycle[color_idx % len(color_cycle)]
-            color_idx += 1
-            return color
-
-        def _label_values(cs):
-            if not cs.levels.size:
-                return
-            ax.clabel(
-                cs,
-                fmt=lambda val: f"{val:g}",
-                inline=True,
-                fontsize=8,
-            )
-
-        if constraint_contours:
-            for name, margin in margins.items():
-                if margin is None:
-                    continue
-                margin_2d = _select_2d(_as_float_array(np.asarray(margin)), label=name)
-                color = _next_color()
-                cs = ax.contour(
-                    x_vals,
-                    y_vals,
-                    _plot_ready(margin_2d),
-                    levels=[0.0],
-                    colors=[color],
-                    linewidths=1.0,
-                )
-                _label_values(cs)
-                from matplotlib.lines import Line2D
-                legend_handles.append(Line2D([], [], color=color, linewidth=1.0))
-                legend_labels.append(pretty_names.get(name, name))
-
-        if contours:
-            for name in contours:
-                data = outputs.get(name)
-                if data is None:
-                    continue
-                if name in ("n_GW", "n_greenwald"):
-                    try:
-                        val = float(np.asarray(data, dtype=float).reshape(-1)[0])
-                    except Exception:
-                        continue
-                    color = _next_color()
-                    from matplotlib.lines import Line2D
-                    if y in ("n_avg", "n_e"):
-                        ax.axhline(val, color=color, linewidth=1.2)
-                        ax.text(x_vals[len(x_vals) // 2], val, f"{val:g}", color=color, fontsize=8, va="bottom")
-                    elif x in ("n_avg", "n_e"):
-                        ax.axvline(val, color=color, linewidth=1.2)
-                        ax.text(val, y_vals[len(y_vals) // 2], f"{val:g}", color=color, fontsize=8, ha="left")
-                    legend_handles.append(Line2D([], [], color=color, linewidth=1.2))
-                    legend_labels.append(pretty_names.get(name, name))
-                    continue
-                data_2d = _select_2d(_as_float_array(np.asarray(data)), label=name)
-                color = _next_color()
-                levels = None
-                if contour_levels and name in contour_levels:
-                    levels = contour_levels[name]
-                elif contour_counts and name in contour_counts:
-                    try:
-                        levels = int(contour_counts[name])
-                    except Exception:
-                        levels = None
-                finite = np.isfinite(data_2d)
-                is_constant = False
-                if finite.any():
-                    vmin = float(np.nanmin(data_2d))
-                    vmax = float(np.nanmax(data_2d))
-                    scale = max(abs(vmin), abs(vmax), 1.0)
-                    is_constant = abs(vmax - vmin) <= 1e-12 * scale
-                if levels is None and is_constant and fill_2d is not None:
-                    const_val = float(np.nanmean(data_2d))
-                    cs = ax.contour(
-                        x_vals,
-                        y_vals,
-                        _plot_ready(fill_2d),
-                        levels=[const_val],
-                        colors=[color],
-                        linewidths=0.9,
-                        alpha=0.9,
-                    )
-                    _label_values(cs)
-                    from matplotlib.lines import Line2D
-                    legend_handles.append(Line2D([], [], color=color, linewidth=1.0))
-                    legend_labels.append(pretty_names.get(name, name))
-                    continue
-                cs = ax.contour(
-                    x_vals,
-                    y_vals,
-                    _plot_ready(data_2d),
-                    levels=levels,
-                    colors=[color],
-                    linewidths=0.9,
-                    alpha=0.9,
-                )
-                _label_values(cs)
-                from matplotlib.lines import Line2D
-                legend_handles.append(Line2D([], [], color=color, linewidth=1.0))
-                legend_labels.append(pretty_names.get(name, name))
-
-        if best:
-            metric_name = best.get("metric")
-            mode = best.get("mode", "max")
-            metric = outputs.get(metric_name)
-            if metric is not None:
-                metric_2d = _select_2d(_as_float_array(np.asarray(metric)), label=metric_name)
-                metric_masked = np.where(allowed_2d, metric_2d, np.nan)
-                if np.all(np.isnan(metric_masked)):
-                    return ax
-                if mode == "min":
-                    idx = np.nanargmin(metric_masked)
-                else:
-                    idx = np.nanargmax(metric_masked)
-                ix, iy = np.unravel_index(idx, metric_masked.shape)
-                ax.scatter([x_vals[ix]], [y_vals[iy]], color="red", s=30, zorder=5)
-                ax.annotate(
-                    f"{metric_name}={metric_2d[ix, iy]:.3g}",
-                    (x_vals[ix], y_vals[iy]),
-                    textcoords="offset points",
-                    xytext=(6, 6),
-                    color="red",
-                )
-
-        if legend_handles:
-            ax.legend(legend_handles, legend_labels, title="Contours", loc="best", fontsize=8)
-
-        ax.set_xlabel(x)
-        ax.set_ylabel(y)
-        ax.set_title(f"POPCON: {fill}")
-        ax.grid(True, alpha=0.3)
-        return ax
+        return plot_popcon(
+            result,
+            x=x,
+            y=y,
+            fill=fill,
+            contours=contours,
+            contour_levels=contour_levels,
+            contour_counts=contour_counts,
+            constraint_contours=constraint_contours,
+            slice=slice,
+            reduce=reduce,
+            best=best,
+            ax=ax,
+        )
 
     def __repr__(self) -> str:
         """Return a string representation of the reactor for display.
@@ -830,41 +698,7 @@ class Reactor:
         return "".join(parts)
 
     def plot_cross_sections(self, *, ax=None, label: str | None = None):
-        """Plot plasma cross-section using 95% flux surface geometry.
-        
-        Args: ax (matplotlib Axes), label (str). Returns: matplotlib Axes.
-        """
-        import numpy as np
-        import matplotlib.pyplot as plt
+        """Plot plasma cross-section using 95% flux surface geometry."""
+        from .plotting.cross_sections import plot_cross_sections
 
-        values = {}
-        for name in ("R", "a", "kappa_95", "delta_95"):
-            var = self.variables_dict.get(name)
-            values[name] = None if var is None else var.current_value if var.current_value is not None else var.input_value
-        R, a, kappa_95, delta_95 = (
-            values["R"],
-            values["a"],
-            values["kappa_95"],
-            values["delta_95"],
-        )
-        
-        if any(val is None for val in (R, a, kappa_95, delta_95)):
-            missing = []
-            if R is None: missing.append("R")
-            if a is None: missing.append("a")
-            if kappa_95 is None: missing.append("kappa_95")
-            if delta_95 is None: missing.append("delta_95")
-            raise ValueError(f"Missing 95% geometry variables for plotting: {', '.join(missing)}")
-        
-        Rv, av, kv, dv = R, a, kappa_95, delta_95
-        if ax is None:
-            _, ax = plt.subplots(figsize=(6, 5))
-        theta = np.linspace(0, 2 * np.pi, 200)
-        r_vals = Rv + av * np.cos(theta + dv * np.sin(theta))
-        z_vals = kv * av * np.sin(theta)
-        ax.plot(r_vals, z_vals, label=label or self.name)
-        ax.set_aspect("equal", adjustable="box")
-        ax.set_xlabel("R [m]")
-        ax.set_ylabel("Z [m]")
-        ax.grid(True, alpha=0.3)
-        return ax
+        return plot_cross_sections(self, ax=ax, label=label)

@@ -1,0 +1,66 @@
+settings:
+  table_dir: ../relations/reactivities/reactivity_tables
+
+  energy_grid:
+    start_log10_kev: 0.0
+    stop_log10_kev: 5.0
+    num_points: 1000
+
+  allowed_interpolation_kinds:
+    - pchip
+    - linear
+    - nearest
+    - zero
+    - slinear
+    - quadratic
+    - cubic
+
+
+# List all allowed reactions, including branching explicitly
+DT:
+  reactants: [D, T]
+  products: [n, He4]
+  sigmav_variable: sigmav_DT
+  default_method: BoschHale
+
+DDn:
+  reactants: [D, D]
+  products: [n, He3]
+  sigmav_variable: sigmav_DDn
+  default_method: BoschHale
+
+DDp:
+  reactants: [D, D]
+  products: [p, T]
+  sigmav_variable: sigmav_DDp
+  default_method: BoschHale
+
+DHe3:
+  reactants: [D, He3]
+  products: [p, He4]
+  sigmav_variable: sigmav_DHe3
+  default_method: BoschHale
+
+TT:
+  reactants: [T, T]
+  products: [n, n, He4]
+  sigmav_variable: sigmav_TT
+  default_method: CF88
+
+He3He3:
+  reactants: [He3, He3]
+  products: [p, p, He4]
+  sigmav_variable: sigmav_He3He3
+  default_method: CF88
+
+THe3_D:
+  reactants: [T, He3]
+  products: [D, He4]
+  sigmav_variable: sigmav_THe3_D
+  default_method: CF88
+
+THe3_np:
+  reactants: [T, He3]
+  products: [n, p, He4]
+  sigmav_variable: sigmav_THe3_np
+  default_method: CF88

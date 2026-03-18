@@ -39,6 +39,7 @@ from fusdb.relations.reactivities.reactivity_functions import (
     sigmav_THe3_D_CF88,
     sigmav_THe3_D_ENDFB_VIII0,
     sigmav_THe3_D_ENDFB_VIII1,
+    sigmav_THe3_D_NRL,
     sigmav_THe3_CF88,
     sigmav_THe3_ENDFB_VIII1,
     sigmav_THe3_ENDFB_VIII0,
@@ -46,6 +47,7 @@ from fusdb.relations.reactivities.reactivity_functions import (
     sigmav_THe3_np_CF88,
     sigmav_THe3_np_ENDFB_VIII0,
     sigmav_THe3_np_ENDFB_VIII1,
+    sigmav_THe3_np_NRL,
     sigmav_TT_CF88,
     sigmav_TT_ENDFB_VIII1,
     sigmav_TT_ENDFB_VIII0,
@@ -350,9 +352,11 @@ def test_reactivity_relations_have_method_specific_names():
     assert sigmav_THe3_D_CF88.name == "THe3_D reactivity CF88"
     assert sigmav_THe3_D_ENDFB_VIII0.name == "THe3_D reactivity ENDFB-VIII0"
     assert sigmav_THe3_D_ENDFB_VIII1.name == "THe3_D reactivity ENDFB-VIII1"
+    assert sigmav_THe3_D_NRL.name == "THe3_D reactivity NRL"
     assert sigmav_THe3_np_CF88.name == "THe3_np reactivity CF88"
     assert sigmav_THe3_np_ENDFB_VIII0.name == "THe3_np reactivity ENDFB-VIII0"
     assert sigmav_THe3_np_ENDFB_VIII1.name == "THe3_np reactivity ENDFB-VIII1"
+    assert sigmav_THe3_np_NRL.name == "THe3_np reactivity NRL"
     assert sigmav_THe3_CF88.name == "THe3 reactivity CF88"
     assert sigmav_THe3_ENDFB_VIII0.name == "THe3 reactivity ENDFB-VIII0"
     assert sigmav_THe3_NRL.name == "THe3 reactivity NRL"
@@ -384,7 +388,8 @@ def test_reactor_defaults_assign_reactivity_methods_without_overwriting_user_cho
     assert variables["sigmav_DHe3"].method == "DHe3 reactivity BoschHale"
     assert variables["sigmav_TT"].method == "TT reactivity CF88"
     assert variables["sigmav_He3He3"].method == "He3He3 reactivity CF88"
-    assert variables["sigmav_THe3"].method == "THe3 reactivity CF88"
+    assert variables["sigmav_THe3_D"].method == "THe3_D reactivity CF88"
+    assert variables["sigmav_THe3_np"].method == "THe3_np reactivity CF88"
 
 
 def test_removed_reactivity_profile_variable_aliases_are_not_registered():

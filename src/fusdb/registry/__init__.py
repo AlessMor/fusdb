@@ -17,7 +17,7 @@ TAGS_PATH = REGISTRY_PATH / "allowed_tags.yaml"
 VARIABLES_PATH = REGISTRY_PATH / "allowed_variables.yaml"
 SPECIES_PATH = REGISTRY_PATH / "allowed_species.yaml"
 SOLVER_DEFAULTS_PATH = REGISTRY_PATH / "solver_defaults.yaml"
-REACTIVITY_CONFIG_PATH = REGISTRY_PATH / "reactivity_tables.yaml"
+ALLOWED_REACTIONS_PATH = REGISTRY_PATH / "allowed_reactions.yaml"
 
 # Private caches
 _ALLOWED_VARIABLES: dict[str, dict] | None = None
@@ -27,7 +27,8 @@ _ALLOWED_TAGS: dict[str, Any] | None = None
 _ALLOWED_SPECIES: dict[str, dict[str, Any]] | None = None
 _CONSTANTS: dict[str, float] | None = None
 _SOLVER_DEFAULTS: dict[str, Any] | None = None
-_REACTIVITY_CONFIG: dict[str, Any] | None = None
+_ALLOWED_REACTIONS_DOCUMENT: dict[str, Any] | None = None
+_ALLOWED_REACTIONS: dict[str, dict[str, Any]] | None = None
 
 
 def load_constants() -> dict[str, float]:
@@ -48,13 +49,33 @@ def load_allowed_species() -> dict[str, dict[str, Any]]:
     return _ALLOWED_SPECIES
 
 
+def load_allowed_reactions_document() -> dict[str, Any]:
+    """Load the raw reaction registry YAML document."""
+    global _ALLOWED_REACTIONS_DOCUMENT
+    if _ALLOWED_REACTIONS_DOCUMENT is None:
+        with ALLOWED_REACTIONS_PATH.open("r", encoding="utf-8") as handle:
+            _ALLOWED_REACTIONS_DOCUMENT = yaml.safe_load(handle) or {}
+    return _ALLOWED_REACTIONS_DOCUMENT
+
+
+def load_allowed_reactions() -> dict[str, dict[str, Any]]:
+    """Load allowed reaction metadata from YAML."""
+    global _ALLOWED_REACTIONS
+    if _ALLOWED_REACTIONS is None:
+        document = load_allowed_reactions_document()
+        _ALLOWED_REACTIONS = {
+            name: spec
+            for name, spec in document.items()
+            if isinstance(name, str) and name != "settings" and isinstance(spec, dict)
+        }
+    return _ALLOWED_REACTIONS
+
+
 def load_reactivity_table_config() -> dict[str, Any]:
-    """Load shared reactivity-table settings from YAML."""
-    global _REACTIVITY_CONFIG
-    if _REACTIVITY_CONFIG is None:
-        with REACTIVITY_CONFIG_PATH.open("r", encoding="utf-8") as handle:
-            _REACTIVITY_CONFIG = yaml.safe_load(handle) or {}
-    return _REACTIVITY_CONFIG
+    """Load shared reactivity-table settings from the reaction registry."""
+    document = load_allowed_reactions_document()
+    settings = document.get("settings", {})
+    return settings if isinstance(settings, dict) else {}
 
 
 def load_solver_defaults() -> dict[str, Any]:
@@ -138,6 +159,7 @@ _constants_dict = load_constants()
 for _const_name, _const_value in _constants_dict.items():
     globals()[_const_name] = _const_value
 
+_allowed_reactions = load_allowed_reactions()
 _reactivity_config = load_reactivity_table_config()
 _reactivity_energy_grid = _reactivity_config.get("energy_grid", {}) or {}
 REACTIVITY_TABLES_DIR = (REGISTRY_PATH / _reactivity_config.get("table_dir", "")).resolve()
@@ -145,8 +167,9 @@ REACTIVITY_ALLOWED_INTERPOLATION_KINDS = tuple(
     _reactivity_config.get("allowed_interpolation_kinds", ()) or ()
 )
 REACTIVITY_CROSS_SECTION_REACTANTS = {
-    name: tuple(reactants)
-    for name, reactants in (_reactivity_config.get("cross_section_reactants", {}) or {}).items()
+    name: tuple(spec.get("reactants", ()) or ())
+    for name, spec in _allowed_reactions.items()
+    if isinstance(spec.get("reactants"), list)
 }
 REACTIVITY_ENERGY_GRID_KEV = np.logspace(
     float(_reactivity_energy_grid.get("start_log10_kev", 0.0)),
@@ -154,6 +177,11 @@ REACTIVITY_ENERGY_GRID_KEV = np.logspace(
     int(_reactivity_energy_grid.get("num_points", 1000)),
     dtype=float,
 )
+REACTIVITY_DEFAULT_METHODS = {
+    str(spec["sigmav_variable"]): f"{reaction} reactivity {spec['default_method']}"
+    for reaction, spec in _allowed_reactions.items()
+    if isinstance(spec.get("sigmav_variable"), str) and isinstance(spec.get("default_method"), str)
+}
 
 
 def canonical_variable_name(name: str) -> str:
@@ -407,11 +435,13 @@ __all__ = [
     "VARIABLES_PATH",
     "SPECIES_PATH",
     "SOLVER_DEFAULTS_PATH",
-    "REACTIVITY_CONFIG_PATH",
+    "ALLOWED_REACTIONS_PATH",
     # Functions
     "load_constants",
     "load_allowed_species",
     "load_allowed_variables",
+    "load_allowed_reactions_document",
+    "load_allowed_reactions",
     "load_reactivity_table_config",
     "load_solver_defaults",
     "allowed_variable_constraints",
@@ -432,6 +462,7 @@ __all__ = [
     "OPTIONAL_METADATA_FIELDS",
     "REQUIRED_FIELDS",
     "RESERVED_KEYS",
+    "REACTIVITY_DEFAULT_METHODS",
     "REACTIVITY_TABLES_DIR",
     "REACTIVITY_ALLOWED_INTERPOLATION_KINDS",
     "REACTIVITY_CROSS_SECTION_REACTANTS",

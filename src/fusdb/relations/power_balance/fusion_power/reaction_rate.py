@@ -94,11 +94,32 @@ def reaction_rate_he3he3(f_He3: float, n_i: float, sigmav_He3He3: float, V_p: fl
 
 
 @relation(
+    name="T-He3 alpha+D reaction rate",
+    output="Rr_THe3_D",
+    tags=("fusion_power",),
+)
+def reaction_rate_the3_d(f_T: float, f_He3: float, n_i: float, sigmav_THe3_D: float, V_p: float) -> float:
+    """Return volume-integrated T-He3 alpha + D branch reaction rate [1/s]."""
+    integrand = f_T * f_He3 * (n_i ** 2) * sigmav_THe3_D
+    return _integrate_reaction_rate(integrand, V_p, label="THe3_D")
+
+
+@relation(
+    name="T-He3 alpha+n+p reaction rate",
+    output="Rr_THe3_np",
+    tags=("fusion_power",),
+)
+def reaction_rate_the3_np(f_T: float, f_He3: float, n_i: float, sigmav_THe3_np: float, V_p: float) -> float:
+    """Return volume-integrated T-He3 alpha + n + p branch reaction rate [1/s]."""
+    integrand = f_T * f_He3 * (n_i ** 2) * sigmav_THe3_np
+    return _integrate_reaction_rate(integrand, V_p, label="THe3_np")
+
+
+@relation(
     name="T-He3 reaction rate",
     output="Rr_THe3",
     tags=("fusion_power",),
 )
-def reaction_rate_the3(f_T: float, f_He3: float, n_i: float, sigmav_THe3: float, V_p: float) -> float:
-    """Return volume-integrated T-He3 reaction rate [1/s]."""
-    integrand = f_T * f_He3 * (n_i ** 2) * sigmav_THe3
-    return _integrate_reaction_rate(integrand, V_p, label="THe3")
+def reaction_rate_the3(Rr_THe3_D: float, Rr_THe3_np: float) -> float:
+    """Return total T-He3 reaction rate from the two implemented branches."""
+    return Rr_THe3_D + Rr_THe3_np

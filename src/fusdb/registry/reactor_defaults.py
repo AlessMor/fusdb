@@ -13,7 +13,7 @@ import numpy as np
 from fusdb.utils import as_profile_array, normalize_tags_to_tuple, within_tolerance
 from fusdb.variable_class import Variable
 from fusdb.variable_util import make_variable
-from fusdb.registry import allowed_variable_ndim, canonical_variable_name
+from fusdb.registry import REACTIVITY_DEFAULT_METHODS, allowed_variable_ndim, canonical_variable_name
 
 
 _FRACTION_DEFAULTS: dict[str, float] = {
@@ -23,16 +23,6 @@ _FRACTION_DEFAULTS: dict[str, float] = {
     "f_He4": 0.0,
 }
 _FRACTION_KEYS = tuple(_FRACTION_DEFAULTS.keys())
-_REACTIVITY_DEFAULT_METHODS: dict[str, str] = {
-    "sigmav_DT": "DT reactivity BoschHale",
-    "sigmav_DDn": "DDn reactivity BoschHale",
-    "sigmav_DDp": "DDp reactivity BoschHale",
-    "sigmav_DHe3": "DHe3 reactivity BoschHale",
-    "sigmav_TT": "TT reactivity CF88",
-    "sigmav_He3He3": "He3He3 reactivity CF88",
-    "sigmav_THe3": "THe3 reactivity CF88",
-}
-
 def _build_relation(name: str, output: str, func, *, tags: tuple[str, ...] = ("plasma",)) -> Relation:
     """Build a Relation without registering it globally."""
     # NOTE: This intentionally keeps all signature parameter names, including *args/**kwargs names;
@@ -261,7 +251,7 @@ def apply_reactor_defaults(
 
     ####################### REACTIVITY METHOD DEFAULTS #######################################
 
-    for name, method in _REACTIVITY_DEFAULT_METHODS.items():
+    for name, method in REACTIVITY_DEFAULT_METHODS.items():
         _set_default_method(variables, name, method)
 
     ####################### PLASMA COMPOSITION DEFAULTS #######################################

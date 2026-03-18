@@ -524,6 +524,18 @@ Rr_THe3:
     - Rr_THe3 >= 0
   description:
     - T-He3 fusion reaction rate.
+Rr_THe3_D:
+  default_unit: 1/s
+  constraints:
+    - Rr_THe3_D >= 0
+  description:
+    - T-He3 fusion reaction rate for the alpha + D branch.
+Rr_THe3_np:
+  default_unit: 1/s
+  constraints:
+    - Rr_THe3_np >= 0
+  description:
+    - T-He3 fusion reaction rate for the alpha + n + p branch.
 sigmav_THe3:
   ndim: 1
   default_unit: m^3/s

@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -35,3 +37,21 @@ def test_arc_greenwald_fraction_is_loaded_and_kept_fixed() -> None:
     assert reactor.variables_dict["f_GW"].current_value == 0.67
     assert reactor.variables_dict["f_GW"].fixed is True
     assert reactor.variables_dict["n_GW"].current_value == reactor.variables_dict["n_avg"].current_value / reactor.variables_dict["f_GW"].current_value
+
+
+def test_arc_fraction_inputs_seed_steady_state_composition() -> None:
+    """Expected: ARC keeps 50/50 D-T as the input seed, but the solved composition includes burn products."""
+    reactor = Reactor.from_yaml(ROOT / "reactors" / "ARC_2015" / "reactor.yaml")
+    reactor.solve()
+
+    assert reactor.variables_dict["f_D"].input_value == 0.5
+    assert reactor.variables_dict["f_T"].input_value == 0.5
+    assert reactor.variables_dict["f_D"].current_value < 0.5
+    assert reactor.variables_dict["f_T"].current_value < 0.5
+    assert reactor.variables_dict["f_He4"].current_value > 0.0
+    assert (
+        reactor.variables_dict["f_D"].current_value
+        + reactor.variables_dict["f_T"].current_value
+        + reactor.variables_dict["f_He3"].current_value
+        + reactor.variables_dict["f_He4"].current_value
+    ) == pytest.approx(1.0, abs=1e-12)

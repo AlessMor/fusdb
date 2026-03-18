@@ -8,6 +8,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from fusdb.registry import REACTIVITY_DEFAULT_METHODS
+from fusdb.registry import load_allowed_reactions
 from fusdb.registry import load_allowed_species
 from fusdb.relations.reactivities.tabulated_reactivities import load_table
 from fusdb.relations.reactivities.tabulated_reactivities import prepare_table
@@ -16,6 +18,20 @@ from fusdb.relations.reactivities.tabulated_reactivities import reactivity_from_
 
 
 TABLES_DIR = ROOT / "src" / "fusdb" / "relations" / "reactivities" / "reactivity_tables"
+
+
+def test_allowed_reactions_registry_exposes_metadata_and_default_methods():
+    """Expected: the reaction registry centralizes reactants and default reactivity methods."""
+    reactions = load_allowed_reactions()
+
+    assert reactions["DT"]["reactants"] == ["D", "T"]
+    assert reactions["DT"]["products"] == ["n", "He4"]
+    assert reactions["DT"]["sigmav_variable"] == "sigmav_DT"
+    assert reactions["DT"]["default_method"] == "BoschHale"
+    assert reactions["THe3_np"]["reactants"] == ["T", "He3"]
+    assert REACTIVITY_DEFAULT_METHODS["sigmav_DT"] == "DT reactivity BoschHale"
+    assert REACTIVITY_DEFAULT_METHODS["sigmav_THe3_D"] == "THe3_D reactivity CF88"
+    assert REACTIVITY_DEFAULT_METHODS["sigmav_THe3_np"] == "THe3_np reactivity CF88"
 
 
 def test_all_yaml_tables_use_yaml_metadata_and_parse_as_numeric_columns():

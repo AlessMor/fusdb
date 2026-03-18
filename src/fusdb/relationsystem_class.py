@@ -18,10 +18,6 @@ from .registry import (
 )
 from .variable_class import Variable
 from .variable_util import make_variable
-from .logging_util import (
-    make_logger,
-    log_message,
-)
 from .utils import (
     as_profile_array,
     compare_plasma_volume_with_integrated_dv,
@@ -33,6 +29,23 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def make_logger(
+    module_logger: logging.Logger,
+    owner: str,
+    *,
+    verbose: bool,
+) -> logging.Logger:
+    """Return a child logger configured for the requested verbosity."""
+    log = module_logger.getChild(owner)
+    log.setLevel(logging.INFO if verbose else logging.WARNING)
+    return log
+
+
+def log_message(log: logging.Logger, level: int, msg: str, *args: object) -> None:
+    """Emit one log message preserving the class call-site location."""
+    log.log(level, msg, *args, stacklevel=2)
 
 @dataclass
 class RelationSystem:

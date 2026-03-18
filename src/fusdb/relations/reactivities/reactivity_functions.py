@@ -598,6 +598,24 @@ def sigmav_THe3_D_ENDFB_VIII1(
     """T + He3 -> alpha + D branch reactivity from ENDF/B-VIII.1 tabulated cross sections."""
     return reactivity_from_xsection_table("THe3D_xsection_ENDFB-VIII1.yaml", T_i)
 
+@relation(
+    name="THe3_D reactivity NRL",
+    output="sigmav_THe3_D",
+    inputs=("T_i",),
+    tags=("fusion_power",),
+)
+def sigmav_THe3_D_NRL(
+    T_i: float64 | NDArray[np.float64] | sp.Expr,
+    *,
+    interpolation_kind: str = "pchip",
+) -> float64 | NDArray[np.float64] | sp.Expr:
+    """T + He3 -> alpha + D branch reactivity from NRL Plasma Formulary tabulated rates."""
+    return reactivity_from_reactivity_table(
+        "THe3_total_reactivity_NRL.yaml",
+        T_i,
+        interpolation_kind=interpolation_kind,
+    )*0.43
+
 
 @relation(
     name="THe3_np reactivity CF88",
@@ -639,6 +657,23 @@ def sigmav_THe3_np_ENDFB_VIII1(
     """T + He3 -> alpha + n + p branch reactivity from ENDF/B-VIII.1 tabulated cross sections."""
     return reactivity_from_xsection_table("THe3n_xsection_ENDFB-VIII1.yaml", T_i)
 
+@relation(
+    name="THe3_np reactivity NRL",
+    output="sigmav_THe3_np",
+    inputs=("T_i",),
+    tags=("fusion_power",),
+)
+def sigmav_THe3_np_NRL(
+    T_i: float64 | NDArray[np.float64] | sp.Expr,
+    *,
+    interpolation_kind: str = "pchip",
+) -> float64 | NDArray[np.float64] | sp.Expr:
+    """T + He3 -> alpha + n + p branch reactivity from NRL Plasma Formulary tabulated rates."""
+    return reactivity_from_reactivity_table(
+        "THe3_total_reactivity_NRL.yaml",
+        T_i,
+        interpolation_kind=interpolation_kind,
+    ) * 0.51
 
 @relation(
     name="THe3 reactivity CF88",

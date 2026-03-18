@@ -9,7 +9,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from fusdb.relations.reactivities.reactivity_functions import sigmav_DT_BoschHale
+from fusdb.relations.reactivities.reactivity_functions import sigmav_THe3_D_CF88
+from fusdb.relations.reactivities.reactivity_functions import sigmav_THe3_np_CF88
 from fusdb.relations.power_balance.fusion_power.reaction_rate import reaction_rate_dt
+from fusdb.relations.power_balance.fusion_power.reaction_rate import reaction_rate_the3
+from fusdb.relations.power_balance.fusion_power.reaction_rate import reaction_rate_the3_d
+from fusdb.relations.power_balance.fusion_power.reaction_rate import reaction_rate_the3_np
 from fusdb.relations.plasma_pressure.plasma_pressure import thermal_pressure
 from fusdb.relations.plasma_composition import plasma_composition as composition_relations
 from fusdb.relationsystem_class import RelationSystem
@@ -54,6 +59,38 @@ def test_reaction_rate_total_from_profile_pipeline_matches_expected():
     assert rr is not None
     assert expected is not None
     assert math.isclose(float(rr), float(expected), rel_tol=1e-12, abs_tol=0.0)
+
+
+def test_the3_reaction_rate_pipeline_sums_branch_rates():
+    """Expected: T-He3 total reaction rate is assembled from the two branch-rate relations."""
+    n_i_profile = np.full(31, 2.0e19, dtype=float)
+    t_i_profile = np.full(31, 20.0, dtype=float)
+    f_t = 0.4
+    f_he3 = 0.1
+    v_p = 50.0
+
+    variables = [
+        _make_var("f_T", f_t, ndim=0),
+        _make_var("f_He3", f_he3, ndim=0),
+        _make_var("n_i", n_i_profile, ndim=1),
+        _make_var("T_i", t_i_profile, ndim=1),
+        _make_var("V_p", v_p, ndim=0),
+    ]
+    system = RelationSystem(
+        [sigmav_THe3_D_CF88, sigmav_THe3_np_CF88, reaction_rate_the3_d, reaction_rate_the3_np, reaction_rate_the3],
+        variables,
+        mode="overwrite",
+    )
+    system.solve()
+
+    rr_d = system.variables_dict["Rr_THe3_D"].current_value
+    rr_np = system.variables_dict["Rr_THe3_np"].current_value
+    rr_total = system.variables_dict["Rr_THe3"].current_value
+
+    assert rr_d is not None
+    assert rr_np is not None
+    assert rr_total is not None
+    assert math.isclose(float(rr_total), float(rr_d) + float(rr_np), rel_tol=1e-12, abs_tol=0.0)
 
 
 def test_scalar_output_relation_returning_profile_is_not_auto_integrated():
