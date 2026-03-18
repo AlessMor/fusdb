@@ -31,6 +31,7 @@
 .home-hero {
   --hero-opacity: 1;
   --hero-shift: 0px;
+  --hero-blur: 0px;
   position: relative;
   margin: -1rem calc(50% - 50vw) 2.75rem;
   min-height: clamp(28rem, 70vh, 46rem);
@@ -47,21 +48,23 @@
 
 .home-hero__media {
   background-image:
-    url("../assets/images/fusdb-home-hero.svg");
-  background-position: center center;
+    url("../assets/images/ChatGPT Image Mar 18, 2026, 02_49_41 PM.png");
+  background-position: center 48%;
   background-repeat: no-repeat;
   background-size: cover;
   opacity: var(--hero-opacity);
   transform: translateY(var(--hero-shift)) scale(1.03);
+  filter: blur(var(--hero-blur));
   transform-origin: center center;
-  will-change: opacity, transform;
+  will-change: opacity, transform, filter;
 }
 
 .home-hero__veil {
   background:
-    linear-gradient(180deg, rgba(7, 17, 23, 0.10) 0%, rgba(7, 17, 23, 0.42) 52%, rgba(7, 17, 23, 0.92) 100%),
-    linear-gradient(90deg, rgba(7, 17, 23, 0.86) 0%, rgba(7, 17, 23, 0.42) 46%, rgba(7, 17, 23, 0.70) 100%);
-  opacity: calc(0.78 + (1 - var(--hero-opacity)) * 0.16);
+    radial-gradient(circle at 50% 54%, rgba(255, 74, 154, 0.18) 0%, rgba(255, 74, 154, 0.03) 30%, rgba(7, 17, 23, 0.00) 55%),
+    linear-gradient(180deg, rgba(7, 17, 23, 0.16) 0%, rgba(7, 17, 23, 0.52) 54%, rgba(7, 17, 23, 0.96) 100%),
+    linear-gradient(90deg, rgba(7, 17, 23, 0.90) 0%, rgba(7, 17, 23, 0.46) 44%, rgba(7, 17, 23, 0.78) 100%);
+  opacity: calc(0.74 + (1 - var(--hero-opacity)) * 0.22);
 }
 
 .home-hero__content {

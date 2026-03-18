@@ -170,7 +170,17 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
     raw_vars = variables or {}
     fractions = raw_vars.get("fractions") if isinstance(raw_vars, dict) else None
     if isinstance(fractions, dict):
-        base = {k: v for k, v in raw_vars.items() if not str(k).startswith("f_") and k != "fractions"}
+        species_fraction_names = {
+            canonical_variable_name(f"f_{species}")
+            for species in fractions
+        }
+        base: dict[str, Any] = {}
+        for raw_name, entry in raw_vars.items():
+            if raw_name == "fractions":
+                continue
+            if canonical_variable_name(str(raw_name)) in species_fraction_names:
+                continue
+            base[raw_name] = entry
         for species, frac in fractions.items():
             name = canonical_variable_name(f"f_{species}")
             base[name] = {"value": frac}

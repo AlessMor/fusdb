@@ -48,7 +48,9 @@ variables:
     unit: keV
   n_avg: 1.3e20
   n0: 1.8e20
-  f_GW: 0.67
+  f_GW: 
+    value: 0.67
+    fixed: true
   TBR: 1.1
   tau_E: 0.64
   tau_p: 1.0
