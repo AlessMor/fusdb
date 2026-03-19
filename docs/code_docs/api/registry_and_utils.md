@@ -24,10 +24,6 @@ status: Online
 
 ::: fusdb.reactor_util
 
-## `fusdb.logging_util`
-
-::: fusdb.logging_util
-
 ## `fusdb.utils`
 
 ::: fusdb.utils

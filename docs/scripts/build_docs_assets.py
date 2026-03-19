@@ -11,6 +11,7 @@ import mkdocs_gen_files
 ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = str(ROOT / "src")
 README_PATH = ROOT / "README.md"
+EXAMPLES_DIR = ROOT / "examples"
 
 if SRC_ROOT not in sys.path:
     sys.path.insert(0, SRC_ROOT)
@@ -40,14 +41,30 @@ def render_getting_started_markdown() -> str:
         + "- [Reactors](code_docs/reactors.md)\n"
         + "- [Reactivities](code_docs/reactivities.md)\n"
         + "- [Reactivity plotter](code_docs/reactivity_plotter.md)\n"
-        + "- [Reactor browser notebook](code_docs/reactor_browser.ipynb)\n"
-        + "- [Reactor playground notebook](code_docs/reactor_playground.ipynb)\n"
+        + "- [Reactor browser notebook](examples/reactor_browser.ipynb)\n"
         + "\n"
     )
 
 
+def copy_example_notebooks() -> None:
+    """Mirror repository notebooks into the MkDocs file tree."""
+    if not EXAMPLES_DIR.is_dir():
+        return
+
+    for source_path in sorted(EXAMPLES_DIR.glob("*.ipynb")):
+        target_path = f"examples/{source_path.name}"
+        with mkdocs_gen_files.open(target_path, "w") as generated_page:
+            generated_page.write(source_path.read_text(encoding="utf-8"))
+        try:
+            mkdocs_gen_files.set_edit_path(target_path, source_path.relative_to(ROOT))
+        except Exception:
+            pass
+
+
 with mkdocs_gen_files.open("getting_started.md", "w") as generated_page:
     generated_page.write(render_getting_started_markdown())
+
+copy_example_notebooks()
 
 with mkdocs_gen_files.open("code_docs/reactivity_plotter.html", "w") as generated_page:
     generated_page.write(

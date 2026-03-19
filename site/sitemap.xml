@@ -49,15 +49,7 @@
          <lastmod>2026-03-18</lastmod>
     </url>
     <url>
-         <loc>https://alessmor.github.io/fusdb/code_docs/reactor_browser/</loc>
-         <lastmod>2026-03-18</lastmod>
-    </url>
-    <url>
          <loc>https://alessmor.github.io/fusdb/code_docs/reactor_class/</loc>
-         <lastmod>2026-03-18</lastmod>
-    </url>
-    <url>
-         <loc>https://alessmor.github.io/fusdb/code_docs/reactor_playground/</loc>
          <lastmod>2026-03-18</lastmod>
     </url>
     <url>
@@ -69,19 +61,11 @@
          <lastmod>2026-03-18</lastmod>
     </url>
     <url>
-         <loc>https://alessmor.github.io/fusdb/code_docs/relation_graph_generator/</loc>
-         <lastmod>2026-03-18</lastmod>
-    </url>
-    <url>
          <loc>https://alessmor.github.io/fusdb/code_docs/relations_variables/</loc>
          <lastmod>2026-03-18</lastmod>
     </url>
     <url>
          <loc>https://alessmor.github.io/fusdb/code_docs/relationsystem_class/</loc>
-         <lastmod>2026-03-18</lastmod>
-    </url>
-    <url>
-         <loc>https://alessmor.github.io/fusdb/code_docs/tau_E_solver/</loc>
          <lastmod>2026-03-18</lastmod>
     </url>
     <url>
@@ -102,6 +86,26 @@
     </url>
     <url>
          <loc>https://alessmor.github.io/fusdb/code_docs/api/relations/</loc>
+         <lastmod>2026-03-18</lastmod>
+    </url>
+    <url>
+         <loc>https://alessmor.github.io/fusdb/examples/reactivity_plots/</loc>
+         <lastmod>2026-03-18</lastmod>
+    </url>
+    <url>
+         <loc>https://alessmor.github.io/fusdb/examples/reactor_browser/</loc>
+         <lastmod>2026-03-18</lastmod>
+    </url>
+    <url>
+         <loc>https://alessmor.github.io/fusdb/examples/read_ENDF6-format/</loc>
+         <lastmod>2026-03-18</lastmod>
+    </url>
+    <url>
+         <loc>https://alessmor.github.io/fusdb/examples/relation_graph_generator/</loc>
+         <lastmod>2026-03-18</lastmod>
+    </url>
+    <url>
+         <loc>https://alessmor.github.io/fusdb/examples/tau_E_solver/</loc>
          <lastmod>2026-03-18</lastmod>
     </url>
     <url>

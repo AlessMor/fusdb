@@ -42,12 +42,12 @@ extra_javascript:
 
 plugins:
   - search
-  - mkdocs-jupyter:
-      execute: false
-      include_source: true
   - gen-files:
       scripts:
         - scripts/build_docs_assets.py
+  - mkdocs-jupyter:
+      execute: false
+      include_source: true
   - mkdocstrings:
       handlers:
         python:
@@ -95,9 +95,8 @@ nav:
       - Reactors: code_docs/reactors.md
       - Reactivities: code_docs/reactivities.md
       - Reactivity Plotter: code_docs/reactivity_plotter.md
-      - Reactor Browser: code_docs/reactor_browser.ipynb
-      - Reactor Playground: code_docs/reactor_playground.ipynb
-      - Tau_E Solver: code_docs/tau_E_solver.ipynb
+      - Reactor Browser: examples/reactor_browser.ipynb
+      - Tau_E Solver: examples/tau_E_solver.ipynb
   - Knowledge Base:
       - Knowledge Base: knowledgebase/index.md
       - Physics Domains: physics_domains.md
@@ -115,7 +114,7 @@ nav:
       - RelationSystem: code_docs/relationsystem_class.md
       - Relations and Variables: code_docs/relations_variables.md
       - Profile Integration: code_docs/profile_integration.md
-      - Relation Graph Generator: code_docs/relation_graph_generator.ipynb
+      - Relation Graph Generator: examples/relation_graph_generator.ipynb
   - References:
       - Bibliography: bibliography.md
       - License Notes: LicenseNotes.md

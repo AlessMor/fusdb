@@ -537,7 +537,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reactor_browser/" class="md-nav__link">
+      <a href="../../../examples/reactor_browser/" class="md-nav__link">
         
   
   
@@ -565,35 +565,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reactor_playground/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reactor Playground
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../tau_E_solver/" class="md-nav__link">
+      <a href="../../../examples/tau_E_solver/" class="md-nav__link">
         
   
   
@@ -1156,6 +1128,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fusdb.registry.load_allowed_reactions_document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_allowed_reactions_document
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.registry.load_allowed_reactions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_allowed_reactions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#fusdb.registry.load_reactivity_table_config" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1408,61 +1402,6 @@
     <span class="md-ellipsis">
       
         reactor_from_yaml
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusdblogging_util" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        fusdb.logging_util
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusdb.logging_util" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        logging_util
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusdb.logging_util.make_logger" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        make_logger
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusdb.logging_util.set_log_verbosity" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        set_log_verbosity
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusdb.logging_util.log_message" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        log_message
       
     </span>
   </a>
@@ -1827,7 +1766,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../relation_graph_generator/" class="md-nav__link">
+      <a href="../../../examples/relation_graph_generator/" class="md-nav__link">
         
   
   
@@ -2069,6 +2008,28 @@
     <span class="md-ellipsis">
       
         load_allowed_species
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.registry.load_allowed_reactions_document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_allowed_reactions_document
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.registry.load_allowed_reactions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_allowed_reactions
       
     </span>
   </a>
@@ -2328,61 +2289,6 @@
     <span class="md-ellipsis">
       
         reactor_from_yaml
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusdblogging_util" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        fusdb.logging_util
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusdb.logging_util" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        logging_util
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusdb.logging_util.make_logger" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        make_logger
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusdb.logging_util.set_log_verbosity" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        set_log_verbosity
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusdb.logging_util.log_message" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        log_message
       
     </span>
   </a>
@@ -2879,6 +2785,46 @@ normalize_country("Unknown")
 <div class="doc doc-object doc-function">
 
 
+<h2 id="fusdb.registry.load_allowed_reactions_document" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">load_allowed_reactions_document</span>
+
+
+<a href="#fusdb.registry.load_allowed_reactions_document" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">load_allowed_reactions_document</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Load the raw reaction registry YAML document.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="fusdb.registry.load_allowed_reactions" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">load_allowed_reactions</span>
+
+
+<a href="#fusdb.registry.load_allowed_reactions" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">load_allowed_reactions</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Load allowed reaction metadata from YAML.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h2 id="fusdb.registry.load_reactivity_table_config" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">load_reactivity_table_config</span>
 
@@ -2889,7 +2835,7 @@ normalize_country("Unknown")
 
     <div class="doc doc-contents ">
 
-        <p>Load shared reactivity-table settings from YAML.</p>
+        <p>Load shared reactivity-table settings from the reaction registry.</p>
 
 
     </div>
@@ -3716,104 +3662,6 @@ modules so the registry is populated; it does not require a Reactor object.</p>
           </tr>
       </tbody>
     </table>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><h2 id="fusdblogging_util"><code>fusdb.logging_util</code><a class="headerlink" href="#fusdblogging_util" title="Permanent link">&para;</a></h2>
-
-
-<div class="doc doc-object doc-module">
-
-
-
-<a id="fusdb.logging_util"></a>
-    <div class="doc doc-contents first">
-
-        <p>Central logging helpers shared across fusdb classes.</p>
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="fusdb.logging_util.make_logger" class="doc doc-heading">
-            <span class="doc doc-object-name doc-function-name">make_logger</span>
-
-
-<a href="#fusdb.logging_util.make_logger" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">make_logger</span><span class="p">(</span><span class="n">module_logger</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span> <span class="n">owner</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">logging</span><span class="o">.</span><span class="n">Logger</span>
-</code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Return child logger configured for the requested verbosity.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="fusdb.logging_util.set_log_verbosity" class="doc doc-heading">
-            <span class="doc doc-object-name doc-function-name">set_log_verbosity</span>
-
-
-<a href="#fusdb.logging_util.set_log_verbosity" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">set_log_verbosity</span><span class="p">(</span><span class="n">log</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
-</code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Set logger level from boolean verbosity.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="fusdb.logging_util.log_message" class="doc doc-heading">
-            <span class="doc doc-object-name doc-function-name">log_message</span>
-
-
-<a href="#fusdb.logging_util.log_message" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">log_message</span><span class="p">(</span><span class="n">log</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span> <span class="n">level</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
-</code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Emit one log message preserving the class call-site location.</p>
 
 
     </div>

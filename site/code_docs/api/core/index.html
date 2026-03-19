@@ -537,7 +537,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reactor_browser/" class="md-nav__link">
+      <a href="../../../examples/reactor_browser/" class="md-nav__link">
         
   
   
@@ -565,35 +565,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reactor_playground/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reactor Playground
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../tau_E_solver/" class="md-nav__link">
+      <a href="../../../examples/tau_E_solver/" class="md-nav__link">
         
   
   
@@ -1612,6 +1584,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fusdb.reactor_class.make_logger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make_logger
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.reactor_class.set_log_verbosity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        set_log_verbosity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.reactor_class.log_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        log_message
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#fusdbrelation_class" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1840,6 +1845,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.relationsystem_class.make_logger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make_logger
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.relationsystem_class.log_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        log_message
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2267,7 +2294,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../relation_graph_generator/" class="md-nav__link">
+      <a href="../../../examples/relation_graph_generator/" class="md-nav__link">
         
   
   
@@ -3042,6 +3069,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fusdb.reactor_class.make_logger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make_logger
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.reactor_class.set_log_verbosity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        set_log_verbosity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.reactor_class.log_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        log_message
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#fusdbrelation_class" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3270,6 +3330,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.relationsystem_class.make_logger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make_logger
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusdb.relationsystem_class.log_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        log_message
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4637,234 +4719,6 @@ print(f"Violated: {len(diag['violated_relations'])} relations")</p>
         <p>Plot POPCON results with masked fill and contour overlays.</p>
 
 
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>result</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="object">object</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Output from Reactor.popcon.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>x</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Name of x-axis scan variable.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>y</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Name of y-axis scan variable.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>fill</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Name of output variable for filled colormap.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>contours</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="str">str</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Additional output variables to contour.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>contour_levels</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="list">list</span>[<span title="float">float</span>]] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional mapping of contour variable -&gt; list of levels.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>contour_counts</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="int">int</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional mapping of contour variable -&gt; number of contour lines.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>constraint_contours</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If True, plot margin==0 constraint contours.</p>
-              </div>
-            </td>
-            <td>
-                  <code>True</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>slice</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="int">int</span> | <span title="float">float</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Mapping of remaining axes to fixed index or value.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>reduce</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>{"metric": name, "mode": "max"|"min"} to reduce remaining dims.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>best</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>{"metric": name, "mode": "max"|"min"} for annotating best point.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>ax</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional matplotlib Axes to plot on.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Matplotlib Axes.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
     </div>
 
 </div>
@@ -4904,7 +4758,6 @@ print(f"Violated: {len(diag['violated_relations'])} relations")</p>
     <div class="doc doc-contents ">
 
         <p>Plot plasma cross-section using 95% flux surface geometry.</p>
-<p>Args: ax (matplotlib Axes), label (str). Returns: matplotlib Axes.</p>
 
 
     </div>
@@ -6750,234 +6603,6 @@ print(f"Violated: {len(diag['violated_relations'])} relations")</p>
         <p>Plot POPCON results with masked fill and contour overlays.</p>
 
 
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>result</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="object">object</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Output from Reactor.popcon.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>x</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Name of x-axis scan variable.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>y</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Name of y-axis scan variable.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>fill</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Name of output variable for filled colormap.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>contours</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="str">str</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Additional output variables to contour.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>contour_levels</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="list">list</span>[<span title="float">float</span>]] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional mapping of contour variable -&gt; list of levels.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>contour_counts</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="int">int</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional mapping of contour variable -&gt; number of contour lines.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>constraint_contours</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If True, plot margin==0 constraint contours.</p>
-              </div>
-            </td>
-            <td>
-                  <code>True</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>slice</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="int">int</span> | <span title="float">float</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Mapping of remaining axes to fixed index or value.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>reduce</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>{"metric": name, "mode": "max"|"min"} to reduce remaining dims.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>best</code>
-            </td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>{"metric": name, "mode": "max"|"min"} for annotating best point.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>ax</code>
-            </td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional matplotlib Axes to plot on.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Matplotlib Axes.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
     </div>
 
 </div>
@@ -7017,7 +6642,6 @@ print(f"Violated: {len(diag['violated_relations'])} relations")</p>
     <div class="doc doc-contents ">
 
         <p>Plot plasma cross-section using 95% flux surface geometry.</p>
-<p>Args: ax (matplotlib Axes), label (str). Returns: matplotlib Axes.</p>
 
 
     </div>
@@ -7032,6 +6656,66 @@ print(f"Violated: {len(diag['violated_relations'])} relations")</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="fusdb.reactor_class.make_logger" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">make_logger</span>
+
+
+<a href="#fusdb.reactor_class.make_logger" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">make_logger</span><span class="p">(</span><span class="n">module_logger</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span> <span class="n">owner</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">logging</span><span class="o">.</span><span class="n">Logger</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return a child logger configured for the requested verbosity.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="fusdb.reactor_class.set_log_verbosity" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">set_log_verbosity</span>
+
+
+<a href="#fusdb.reactor_class.set_log_verbosity" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">set_log_verbosity</span><span class="p">(</span><span class="n">log</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Set logger level from boolean verbosity.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="fusdb.reactor_class.log_message" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">log_message</span>
+
+
+<a href="#fusdb.reactor_class.log_message" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">log_message</span><span class="p">(</span><span class="n">log</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span> <span class="n">level</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Emit one log message preserving the class call-site location.</p>
+
+
+    </div>
+
+</div>
 
 
 
@@ -7570,6 +7254,46 @@ print(f"Violated: {len(diag['violated_relations'])} relations")</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="fusdb.relationsystem_class.make_logger" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">make_logger</span>
+
+
+<a href="#fusdb.relationsystem_class.make_logger" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">make_logger</span><span class="p">(</span><span class="n">module_logger</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span> <span class="n">owner</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">logging</span><span class="o">.</span><span class="n">Logger</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return a child logger configured for the requested verbosity.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="fusdb.relationsystem_class.log_message" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">log_message</span>
+
+
+<a href="#fusdb.relationsystem_class.log_message" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">log_message</span><span class="p">(</span><span class="n">log</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span> <span class="n">level</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Emit one log message preserving the class call-site location.</p>
+
+
+    </div>
+
+</div>
 
 
 

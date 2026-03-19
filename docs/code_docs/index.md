@@ -35,7 +35,6 @@ interfaces, notebooks, or module-level APIs.
 ## Interactive Tools
 
 - [Reactivity Plotter](reactivity_plotter.md): embedded Bokeh widget for source-to-source reactivity comparison.
-- [Reactor Playground](reactor_playground.ipynb): minimal load-and-solve notebook rendered directly in the docs site.
 
 ## Shared References
 
