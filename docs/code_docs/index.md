@@ -1,41 +1,38 @@
----
-
-status: Online
-
----
-
-# Code Docs
+# Source Documentation
 
 This section contains the code-specific documentation for `fusdb`.
-Use it when you are working with scenario loading, solver behavior, class
-interfaces, notebooks, or module-level APIs.
+Use it when you need code structure, solver behavior, class interfaces,
+developer workflows, or module-level APIs.
 
-## User Guide
+## General Overview
 
-- [Reactors](reactors.md): scenario layout, YAML loading, and solve entrypoints.
-- [Reactivities](reactivities.md): source-specific fusion reactivity relations and the interactive plotter entrypoint.
-- [Reactor Class](reactor_class.md): class fields, methods, and examples.
+- [Physics Domains](physics_domains.md): how relations are grouped across the codebase.
+- [Relation Interactions](relation_interactions.md): how coupled equations interact during a solve.
+- [Workflow Playbooks](workflows.md): practical extension and validation tasks.
 - [Relations and Variables](relations_variables.md): core concepts and graph view.
+- [Profile Integration](profile_integration.md): profile-aware relation conventions.
+
+## Class and System Reference
+
+- [Reactor Class](reactor_class.md): class fields, methods, and examples.
 - [Relation Class](relation_class.md): relation definition and solver-facing behavior.
 - [Variable Class](variable_class.md): scalar/profile container behavior and tolerances.
 - [RelationSystem](relationsystem_class.md): coupled solve orchestration and diagnostics.
-- [Profile Integration](profile_integration.md): profile-aware relation conventions.
 
 ## API Reference
 
-- [API Overview](api/index.md)
-- [Core Modules](api/core.md)
-- [Relation Modules](api/relations.md)
-- [Registry and Utilities](api/registry_and_utils.md)
+- [API Overview](api/index.md): generated module reference mirroring `src/fusdb`.
+- [fusdb Package Tree](api/fusdb/index.md): root package and subpackages.
+- [Relations Package](api/fusdb/relations/index.md): relation domains and modules.
+- [Registry Package](api/fusdb/registry/index.md): registry loaders and defaults.
+- [Utilities Module](api/fusdb/utils.md): shared helper functions.
 
-## Notebooks
+## Example Notebooks
 
-- [Notebook Index](notebooks.md): exploratory workflows and generated artifacts.
+- [Relation Graph Generator](examples/relation_graph_generator.ipynb): generate graph visualizations for relations and variables.
+- [Read ENDF-6 Format](examples/read_ENDF6-format.ipynb): inspect MF=3 sections and export annotated YAML tables.
 
-## Interactive Tools
+## Related Sections
 
-- [Reactivity Plotter](reactivity_plotter.md): embedded Bokeh widget for source-to-source reactivity comparison.
-
-## Shared References
-
-- [Bibliography](../bibliography.md): shared BibTeX database rendered through `mkdocs-bibtex` and cited with the standard MkDocs BibTeX syntax.
+- [Getting Started](../getting_started/index.md): installation, usage guides, and user-facing notebooks.
+- [Knowledge Base](../knowledge_base/index.md): physics notes and shared bibliography.

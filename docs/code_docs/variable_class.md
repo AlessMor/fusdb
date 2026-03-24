@@ -1,9 +1,3 @@
----
-
-status: Online
-
----
-
 # Variable Class
 
 The variable system provides typed containers for scalar and profile values used by

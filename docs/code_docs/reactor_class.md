@@ -1,9 +1,3 @@
----
-
-status: Online
-
----
-
 # Reactor
 
 Reactor loads a `reactor.yaml` specification and orchestrates solving.

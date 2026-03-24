@@ -45,6 +45,7 @@ plugins:
   - gen-files:
       scripts:
         - scripts/build_docs_assets.py
+  - awesome-pages
   - mkdocs-jupyter:
       execute: false
       include_source: true
@@ -68,9 +69,8 @@ hooks:
 
 not_in_nav: |
   /index.md
-  /code_docs/index.md
-  /code_docs/notebooks.md
-  /knowledgebase/_templates/**
+  /getting_started/examples/reactivity_plots.ipynb
+  /knowledge_base/_templates/**
 
 markdown_extensions:
   - admonition
@@ -88,33 +88,3 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
-
-nav:
-  - Getting Started:
-      - Installation and Usage: getting_started.md
-      - Reactors: code_docs/reactors.md
-      - Reactivities: code_docs/reactivities.md
-      - Reactivity Plotter: code_docs/reactivity_plotter.md
-      - Reactor Browser: examples/reactor_browser.ipynb
-      - Tau_E Solver: examples/tau_E_solver.ipynb
-  - Knowledge Base:
-      - Knowledge Base: knowledgebase/index.md
-      - Physics Domains: physics_domains.md
-      - Relation Interactions: relation_interactions.md
-      - Workflow Playbooks: workflows.md
-      - Cross Sections and Reactivities: knowledgebase/plasma_physics/cross_sections_reactivities.md
-  - Source Documentation:
-      - Overview: code_docs/api/index.md
-      - Core Modules: code_docs/api/core.md
-      - Relation Modules: code_docs/api/relations.md
-      - Registry and Utilities: code_docs/api/registry_and_utils.md
-      - Reactor Class: code_docs/reactor_class.md
-      - Relation Class: code_docs/relation_class.md
-      - Variable Class: code_docs/variable_class.md
-      - RelationSystem: code_docs/relationsystem_class.md
-      - Relations and Variables: code_docs/relations_variables.md
-      - Profile Integration: code_docs/profile_integration.md
-      - Relation Graph Generator: examples/relation_graph_generator.ipynb
-  - References:
-      - Bibliography: bibliography.md
-      - License Notes: LicenseNotes.md

@@ -1,7 +1,3 @@
----
-status: Online
----
-
 <section class="home-hero" data-home-hero>
   <div class="home-hero__media" aria-hidden="true"></div>
   <div class="home-hero__veil"></div>
@@ -14,8 +10,9 @@ status: Online
     </p>
     <div class="home-hero__actions">
       <a class="md-button md-button--primary" href="getting_started/">Getting Started</a>
-      <a class="md-button" href="knowledgebase/">Knowledge Base</a>
-      <a class="md-button" href="code_docs/api/">Source Documentation</a>
+      <a class="md-button" href="knowledge_base/">Knowledge Base</a>
+      <a class="md-button" href="developers_guide/">Developer's Guide</a>
+      <a class="md-button" href="code_docs/">Source Documentation</a>
     </div>
   </div>
 </section>
@@ -27,29 +24,30 @@ status: Online
     <span>Includes the usage guide, reactor browser notebook, and reactivity plotter.</span>
   </a>
 
-  <a class="home-card" href="knowledgebase/">
+  <a class="home-card" href="knowledge_base/">
     <span class="home-card__label">Knowledge Base</span>
     <strong>Physics notes, definitions, and modelling context.</strong>
     <span>Published topic pages plus cross-sections and reactivity notes.</span>
   </a>
 
-  <a class="home-card" href="code_docs/api/">
-    <span class="home-card__label">Source Documentation</span>
-    <strong>Module, class, and function-level API reference.</strong>
-    <span>Generated from the source and linked to the higher-level guides.</span>
+  <a class="home-card" href="developers_guide/">
+    <span class="home-card__label">Developer's Guide</span>
+    <strong>Contribution and extension guidance for the project.</strong>
+    <span>Main entry page for now, with the section structure ready for future content.</span>
   </a>
 
-  <a class="home-card" href="bibliography/">
-    <span class="home-card__label">References</span>
-    <strong>Central bibliography and supporting notes.</strong>
-    <span>Shared citations for code docs and knowledge-base pages.</span>
+  <a class="home-card" href="code_docs/">
+    <span class="home-card__label">Source Documentation</span>
+    <strong>Code overview pages plus generated API reference.</strong>
+    <span>Architecture notes, class docs, and module-level pages built from the source.</span>
   </a>
 </div>
 
 ## Quick Paths
 
-- [Installation and usage guide](getting_started.md)
-- [Reactivity plotter](code_docs/reactivity_plotter.md)
-- [Cross sections and reactivities](knowledgebase/plasma_physics/cross_sections_reactivities.md)
-- [API overview](code_docs/api/index.md)
-- [Bibliography](bibliography.md)
+- [Installation and usage guide](getting_started/index.md)
+- [Reactor browser notebook](getting_started/examples/reactor_browser.ipynb)
+- [Cross sections and reactivities](knowledge_base/plasma_physics/0-fusion_plasmas/cross_sections_reactivities.md)
+- [Developer's Guide](developers_guide/index.md)
+- [Source documentation overview](code_docs/index.md)
+- [Bibliography](knowledge_base/bibliography.md)

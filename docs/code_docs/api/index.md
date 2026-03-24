@@ -1,17 +1,15 @@
----
+# API Documentation
 
-status: Online
+These pages are generated from the Python source under `src/fusdb` and mirror
+that package tree.
 
----
+Use the folder structure under `api/fusdb/` to navigate the same modules and
+subpackages that exist in the source code.
 
-# Source Documentation
+## Quick Paths
 
-These pages are generated from the Python source under `src/fusdb` with
-`mkdocstrings`.
-
-Use them for code-level details on modules, classes, functions, and registered
-relations.
-
-- [Core Modules](core.md)
-- [Relation Modules](relations.md)
-- [Registry and Utilities](registry_and_utils.md)
+- [Package Root](fusdb/index.md)
+- [Relations](fusdb/relations/index.md)
+- [Registry](fusdb/registry/index.md)
+- [Utilities](fusdb/utils.md)
+- [Reactivity Functions](fusdb/relations/reactivities/reactivity_functions.md)

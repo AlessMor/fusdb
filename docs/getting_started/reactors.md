@@ -1,9 +1,3 @@
----
-
-status: Online
-
----
-
 # Reactors
 
 A `Reactor` loads a scenario from `reactor.yaml`, applies defaults, filters relations by tags, and solves for unknown variables.
@@ -33,4 +27,5 @@ reactor.solve()
 
 ## Detailed Reactor Class Reference
 
-See [Reactor Class](reactor_class.md) for the complete field and method description, including YAML examples.
+See [Reactor Class](../code_docs/reactor_class.md) for the complete field and
+method description, including YAML examples.
