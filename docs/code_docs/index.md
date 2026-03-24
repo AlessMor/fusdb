@@ -24,7 +24,7 @@ developer workflows, or module-level APIs.
 - [API Overview](api/index.md): generated module reference mirroring `src/fusdb`.
 - [fusdb Package Tree](api/fusdb/index.md): root package and subpackages.
 - [Relations Package](api/fusdb/relations/index.md): relation domains and modules.
-- [Registry Package](api/fusdb/registry/index.md): registry loaders and defaults.
+- [Registry Package](api/fusdb/registry/index.md): registry loaders, defaults, and YAML reference pages.
 - [Utilities Module](api/fusdb/utils.md): shared helper functions.
 
 ## Example Notebooks

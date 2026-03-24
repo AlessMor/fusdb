@@ -6,11 +6,13 @@ from pathlib import Path
 import sys
 
 import mkdocs_gen_files
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = str(ROOT / "src")
 PYTHON_SOURCE_ROOT = ROOT / "src" / "fusdb"
+REGISTRY_SOURCE_ROOT = PYTHON_SOURCE_ROOT / "registry"
 README_PATH = ROOT / "README.md"
 EXAMPLES_DIR = ROOT / "examples"
 NOTEBOOK_TARGETS = {
@@ -130,6 +132,7 @@ def render_api_index_markdown(
     *,
     child_dirs: list[Path],
     child_modules: list[Path],
+    extra_pages: list[tuple[str, str]],
 ) -> str:
     """Render one generated folder landing page for the API tree.
 
@@ -137,6 +140,7 @@ def render_api_index_markdown(
         source_dir: Source directory mirrored into the docs tree.
         child_dirs: Immediate child directories exposed as subpages.
         child_modules: Immediate child Python modules excluding ``__init__.py``.
+        extra_pages: Generated non-Python reference pages shown in the folder index.
 
     Returns:
         Markdown content for the generated landing page.
@@ -146,12 +150,14 @@ def render_api_index_markdown(
     init_path = source_dir / "__init__.py"
     lines = [f"# `{title}`", "", f"`{import_path}`", ""]
 
-    if child_dirs or child_modules:
+    if child_dirs or child_modules or extra_pages:
         lines.extend(["## Contents", ""])
         for child_dir in child_dirs:
             lines.append(f"- [`{child_dir.name}`]({child_dir.name}/index.md)")
         for child_module in child_modules:
             lines.append(f"- [`{child_module.stem}`]({child_module.stem}.md)")
+        for title, href in extra_pages:
+            lines.append(f"- [{title}]({href})")
         lines.append("")
 
     if init_path.exists():
@@ -164,6 +170,377 @@ def render_api_index_markdown(
             ]
         )
 
+    return "\n".join(lines)
+
+
+def registry_yaml_doc_path(source_path: Path) -> Path:
+    """Return the generated doc path for one registry YAML file.
+
+    Args:
+        source_path: YAML file under ``src/fusdb/registry``.
+
+    Returns:
+        MkDocs-relative doc path for the generated registry page.
+    """
+    return Path("code_docs/api/fusdb/registry") / f"{source_path.stem}_registry.md"
+
+
+def escape_markdown_cell(value: object) -> str:
+    """Return one value formatted for a Markdown table cell.
+
+    Args:
+        value: Scalar or simple collection to format.
+
+    Returns:
+        Markdown-safe inline text.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "`true`" if value else "`false`"
+    if isinstance(value, (int, float)):
+        return f"`{value}`"
+    text = str(value).replace("|", r"\|").replace("\n", "<br>")
+    return text
+
+
+def code_list(values: object) -> str:
+    """Return one list of values formatted as inline code entries.
+
+    Args:
+        values: Candidate iterable of scalars.
+
+    Returns:
+        Markdown-safe inline list string.
+    """
+    if not isinstance(values, list) or not values:
+        return ""
+    return "<br>".join(f"`{escape_markdown_cell(value).strip('`')}`" for value in values)
+
+
+def text_list(values: object) -> str:
+    """Return one list of values formatted as plain inline text.
+
+    Args:
+        values: Candidate iterable of scalars.
+
+    Returns:
+        Markdown-safe inline list string.
+    """
+    if not isinstance(values, list) or not values:
+        return ""
+    return "<br>".join(escape_markdown_cell(value) for value in values)
+
+
+def render_allowed_variables_summary(document: dict[str, object]) -> list[str]:
+    """Render the summary table for ``allowed_variables.yaml``.
+
+    Args:
+        document: Parsed YAML document.
+
+    Returns:
+        Markdown lines describing the variable registry.
+    """
+    lines = [
+        "## Summary",
+        "",
+        f"{len(document)} variables are registered in this file.",
+        "",
+        "| Variable | Default unit | ndim | Aliases | Constraints | Description |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for name, spec in document.items():
+        if not isinstance(spec, dict):
+            continue
+        lines.append(
+            "| "
+            f"`{name}` | "
+            f"{escape_markdown_cell(spec.get('default_unit'))} | "
+            f"{escape_markdown_cell(spec.get('ndim', 0))} | "
+            f"{code_list(spec.get('aliases'))} | "
+            f"{code_list(spec.get('constraints'))} | "
+            f"{text_list(spec.get('description'))} |"
+        )
+    lines.append("")
+    return lines
+
+
+def render_allowed_species_summary(document: dict[str, object]) -> list[str]:
+    """Render the summary table for ``allowed_species.yaml``.
+
+    Args:
+        document: Parsed YAML document.
+
+    Returns:
+        Markdown lines describing the species registry.
+    """
+    lines = [
+        "## Summary",
+        "",
+        f"{len(document)} species are registered in this file.",
+        "",
+        "| Species | Full name | Atomic symbol | Z | A | Isotopic mass (u) |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for name, spec in document.items():
+        if not isinstance(spec, dict):
+            continue
+        lines.append(
+            "| "
+            f"`{name}` | "
+            f"{escape_markdown_cell(spec.get('full_name'))} | "
+            f"`{escape_markdown_cell(spec.get('atomic_symbol')).strip('`')}` | "
+            f"{escape_markdown_cell(spec.get('atomic_number'))} | "
+            f"{escape_markdown_cell(spec.get('atomic_mass'))} | "
+            f"{escape_markdown_cell(spec.get('isotopic_mass_u'))} |"
+        )
+    lines.append("")
+    return lines
+
+
+def render_allowed_tags_summary(document: dict[str, object]) -> list[str]:
+    """Render the summary sections for ``allowed_tags.yaml``.
+
+    Args:
+        document: Parsed YAML document.
+
+    Returns:
+        Markdown lines describing the tag registry.
+    """
+    lines = [
+        "## Summary",
+        "",
+        "| Group | Values |",
+        "| --- | --- |",
+        f"| Reactor families | {code_list(document.get('reactor_families'))} |",
+        f"| Reactor configurations | {code_list(document.get('reactor_configurations'))} |",
+        f"| Confinement modes | {code_list(document.get('confinement_modes'))} |",
+        "",
+        "## Solving Order",
+        "",
+        "| Tag | Priority |",
+        "| --- | --- |",
+    ]
+    solving_order = document.get("solving_order")
+    if isinstance(solving_order, dict):
+        for tag, priority in solving_order.items():
+            lines.append(f"| `{tag}` | {escape_markdown_cell(priority)} |")
+    lines.extend(
+        [
+            "",
+            "## Metadata Fields",
+            "",
+            "| Required fields | Optional fields |",
+            "| --- | --- |",
+            f"| {code_list(document.get('required_metadata_fields'))} | {code_list(document.get('optional_metadata_fields'))} |",
+            "",
+        ]
+    )
+    return lines
+
+
+def render_allowed_reactions_summary(document: dict[str, object]) -> list[str]:
+    """Render the summary sections for ``allowed_reactions.yaml``.
+
+    Args:
+        document: Parsed YAML document.
+
+    Returns:
+        Markdown lines describing the reaction registry.
+    """
+    settings = document.get("settings")
+    reaction_specs = {
+        name: spec
+        for name, spec in document.items()
+        if isinstance(name, str) and name != "settings" and isinstance(spec, dict)
+    }
+    lines = [
+        "## Summary",
+        "",
+        f"{len(reaction_specs)} reactions are registered in this file.",
+        "",
+    ]
+    if isinstance(settings, dict):
+        lines.extend(
+            [
+                "## Settings",
+                "",
+                "| Key | Value |",
+                "| --- | --- |",
+            ]
+        )
+        for key, value in settings.items():
+            if isinstance(value, dict):
+                nested = "<br>".join(
+                    f"`{nested_key}`: {escape_markdown_cell(nested_value)}"
+                    for nested_key, nested_value in value.items()
+                )
+                lines.append(f"| `{key}` | {nested} |")
+            elif isinstance(value, list):
+                lines.append(f"| `{key}` | {code_list(value)} |")
+            else:
+                lines.append(f"| `{key}` | {escape_markdown_cell(value)} |")
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Reactions",
+            "",
+            "| Reaction | Reactants | Products | sigmav variable | Default method |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    for name, spec in reaction_specs.items():
+        lines.append(
+            "| "
+            f"`{name}` | "
+            f"{code_list(spec.get('reactants'))} | "
+            f"{code_list(spec.get('products'))} | "
+            f"`{escape_markdown_cell(spec.get('sigmav_variable')).strip('`')}` | "
+            f"`{escape_markdown_cell(spec.get('default_method')).strip('`')}` |"
+        )
+    lines.append("")
+    return lines
+
+
+def render_constants_summary(document: dict[str, object]) -> list[str]:
+    """Render the summary table for ``constants.yaml``.
+
+    Args:
+        document: Parsed YAML document.
+
+    Returns:
+        Markdown lines describing the constants registry.
+    """
+    lines = [
+        "## Summary",
+        "",
+        f"{len(document)} constants are registered in this file.",
+        "",
+        "| Constant | Value |",
+        "| --- | --- |",
+    ]
+    for name, value in document.items():
+        lines.append(f"| `{name}` | {escape_markdown_cell(value)} |")
+    lines.append("")
+    return lines
+
+
+def render_solver_defaults_summary(document: dict[str, object]) -> list[str]:
+    """Render the summary sections for ``solver_defaults.yaml``.
+
+    Args:
+        document: Parsed YAML document.
+
+    Returns:
+        Markdown lines describing the solver defaults.
+    """
+    lines = [
+        "## Summary",
+        "",
+        "| Key | Value |",
+        "| --- | --- |",
+    ]
+    for key, value in document.items():
+        if isinstance(value, dict):
+            continue
+        if isinstance(value, list):
+            lines.append(f"| `{key}` | {code_list(value)} |")
+        else:
+            lines.append(f"| `{key}` | {escape_markdown_cell(value)} |")
+
+    lsq = document.get("lsq")
+    if isinstance(lsq, dict):
+        lines.extend(
+            [
+                "",
+                "## Least-Squares Settings",
+                "",
+                "| Key | Value |",
+                "| --- | --- |",
+            ]
+        )
+        for key, value in lsq.items():
+            if isinstance(value, list):
+                lines.append(f"| `{key}` | {code_list(value)} |")
+            else:
+                lines.append(f"| `{key}` | {escape_markdown_cell(value)} |")
+        lines.append("")
+
+    return lines
+
+
+def render_generic_registry_summary(document: object) -> list[str]:
+    """Render a generic summary for one unrecognized registry YAML document.
+
+    Args:
+        document: Parsed YAML document.
+
+    Returns:
+        Markdown lines describing the generic document shape.
+    """
+    lines = ["## Summary", ""]
+    if isinstance(document, dict):
+        lines.extend(
+            [
+                f"This file contains {len(document)} top-level entries.",
+                "",
+                "| Key | Value type |",
+                "| --- | --- |",
+            ]
+        )
+        for key, value in document.items():
+            lines.append(f"| `{key}` | `{type(value).__name__}` |")
+        lines.append("")
+    else:
+        lines.extend(
+            [
+                f"This file contains one top-level `{type(document).__name__}` document.",
+                "",
+            ]
+        )
+    return lines
+
+
+def render_registry_yaml_markdown(source_path: Path) -> str:
+    """Render one generated reference page for a registry YAML file.
+
+    Args:
+        source_path: YAML file under ``src/fusdb/registry``.
+
+    Returns:
+        Markdown content for the generated registry page.
+    """
+    raw_text = source_path.read_text(encoding="utf-8").strip()
+    document = yaml.safe_load(raw_text) or {}
+    title = f"{source_path.name} Registry"
+    lines = [
+        "---",
+        f"title: {title}",
+        "---",
+        "",
+        f"# `{source_path.name}`",
+        "",
+        f"Source: `src/fusdb/registry/{source_path.name}`",
+        "",
+    ]
+
+    if source_path.stem == "allowed_variables":
+        lines.extend(render_allowed_variables_summary(document))
+    elif source_path.stem == "allowed_species":
+        lines.extend(render_allowed_species_summary(document))
+    elif source_path.stem == "allowed_tags":
+        lines.extend(render_allowed_tags_summary(document))
+    elif source_path.stem == "allowed_reactions":
+        lines.extend(render_allowed_reactions_summary(document))
+    elif source_path.stem == "constants":
+        lines.extend(render_constants_summary(document))
+    elif source_path.stem == "solver_defaults":
+        lines.extend(render_solver_defaults_summary(document))
+    else:
+        lines.extend(render_generic_registry_summary(document))
+
+    lines.extend(["## Raw YAML", "", "```yaml", raw_text, "```", ""])
     return "\n".join(lines)
 
 
@@ -198,6 +575,7 @@ def generate_api_reference_tree() -> None:
     source_files = sorted(
         path for path in PYTHON_SOURCE_ROOT.rglob("*.py") if "__pycache__" not in path.parts
     )
+    registry_yaml_files = sorted(REGISTRY_SOURCE_ROOT.glob("*.yaml"))
     source_dirs: set[Path] = set()
     for source_file in source_files:
         current_dir = source_file.parent
@@ -214,6 +592,12 @@ def generate_api_reference_tree() -> None:
             for source_file in source_files
             if source_file.parent == source_dir and source_file.name != "__init__.py"
         )
+        extra_pages: list[tuple[str, str]] = []
+        if source_dir == REGISTRY_SOURCE_ROOT:
+            extra_pages = [
+                (source_path.name, registry_yaml_doc_path(source_path).name)
+                for source_path in registry_yaml_files
+            ]
         target_path = api_index_path(source_dir)
         with mkdocs_gen_files.open(target_path, "w") as generated_page:
             generated_page.write(
@@ -221,6 +605,7 @@ def generate_api_reference_tree() -> None:
                     source_dir,
                     child_dirs=child_dirs,
                     child_modules=child_modules,
+                    extra_pages=extra_pages,
                 )
             )
 
@@ -240,6 +625,15 @@ def generate_api_reference_tree() -> None:
         target_path = api_doc_path(source_path)
         with mkdocs_gen_files.open(target_path, "w") as generated_page:
             generated_page.write(render_api_module_markdown(source_path))
+        try:
+            mkdocs_gen_files.set_edit_path(target_path, source_path.relative_to(ROOT))
+        except Exception:
+            pass
+
+    for source_path in registry_yaml_files:
+        target_path = registry_yaml_doc_path(source_path)
+        with mkdocs_gen_files.open(target_path, "w") as generated_page:
+            generated_page.write(render_registry_yaml_markdown(source_path))
         try:
             mkdocs_gen_files.set_edit_path(target_path, source_path.relative_to(ROOT))
         except Exception:
