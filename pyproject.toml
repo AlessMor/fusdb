@@ -15,7 +15,7 @@ docs = [
     "mkdocs-awesome-pages-plugin>=2.10",
     "mkdocs-bibtex>=4.4",
     "mkdocs-gen-files>=0.5",
-    "mkdocs-jupyter>=0.25",
+    "mkdocs-jupyter==0.25.1",
     "mkdocs==1.6.1",
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.26",
