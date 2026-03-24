@@ -148,6 +148,37 @@ def integrate_profile_over_volume(
     return float(V_scalar * _trapz(arr * 2.0 * rho_arr, rho_arr))
 
 
+def integrate_profile(
+    profile: object,
+    V_p: object = 1.0,
+    *,
+    error_label: str = "profile",
+) -> object:
+    """Return a volume-integrated profile with symbolic fallback.
+
+    Args:
+        profile: Local quantity profile, scalar value, or symbolic expression.
+        V_p: Total plasma volume used for the integration. Defaults to unit volume.
+        error_label: Quantity label used in the integration error message.
+
+    Returns:
+        Volume-integrated scalar result, or a symbolic expression when symbolic
+        placeholders are passed in.
+
+    Raises:
+        ValueError: If numeric inputs cannot be integrated.
+    """
+    # Keep symbolic model builds algebraic instead of forcing numeric integration.
+    if getattr(profile, "free_symbols", None) is not None or getattr(V_p, "free_symbols", None) is not None:
+        return profile if safe_float(V_p) == 1.0 else profile * V_p
+
+    # Delegate numeric scalars and 1D profiles to the shared volume integrator.
+    total = integrate_profile_over_volume(profile, V_p)
+    if total is None:
+        raise ValueError(f"Cannot integrate {error_label} profile over volume.")
+    return total
+
+
 def compare_plasma_volume_with_integrated_dv(
     *,
     V_p: object,

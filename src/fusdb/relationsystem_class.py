@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections import deque
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping
 import itertools
 import json
 import logging
@@ -16,6 +16,7 @@ from .registry import (
     allowed_variable_soft_constraints,
     allowed_variable_ndim,
 )
+from .relation_util import relation_input_names
 from .variable_class import Variable
 from .variable_util import make_variable
 from .utils import (
@@ -165,7 +166,7 @@ class RelationSystem:
             else:
                 seen_names.add(rel_name)
 
-            vars_for_rel = tuple(v for v in getattr(rel, "variables", {}) if v is not None)
+            vars_for_rel = tuple(v for v in rel.symbols if v is not None)
             self._graph["rels_to_vars"][rel] = vars_for_rel
             for name in vars_for_rel:
                 self._graph["vars_to_rels"].setdefault(name, set()).add(rel)
@@ -261,9 +262,14 @@ class RelationSystem:
         self._state["enforced_var_names"] = set(enforce_names)
         if enforce_tags or enforce_names:
             for rel in rel_nodes:
-                target_name = rel.preferred_target
+                outputs = tuple(rel.outputs)
+                target_name = rel.outputs[0]
                 rel_name = getattr(rel, "name", target_name)
-                if rel_name in enforce_names or (target_name is not None and target_name in enforce_names):
+                if (
+                    rel_name in enforce_names
+                    or (target_name is not None and target_name in enforce_names)
+                    or any(name in enforce_names for name in outputs)
+                ):
                     self._state["enforced_relations"].add(rel)
                     continue
                 if enforce_tags and any(tag in enforce_tags for tag in (getattr(rel, "tags", ()) or ())):
@@ -362,9 +368,11 @@ class RelationSystem:
         self._state["eval_var_index"] = {name: idx for idx, name in enumerate(scalar_names)}
         self._state["eval_plan"] = []
         for rel in self.relations:
-            target_name = rel.preferred_target
-            input_names = tuple(rel.required_inputs(target_name))
-            output_idx = self._state["eval_var_index"].get(target_name) if target_name is not None else None
+            if rel.is_multi_output:
+                continue
+            target_name = rel.outputs[0]
+            input_names = tuple(relation_input_names(rel, target_name))
+            output_idx = self._state["eval_var_index"].get(target_name)
             input_idx = tuple(self._state["eval_var_index"].get(name) for name in input_names)
             self._state["eval_plan"].append((rel, output_idx, input_names, input_idx))
 
@@ -388,6 +396,23 @@ class RelationSystem:
             else:
                 values_scalar[name] = value
         return values_scalar
+
+    def _normalize_runtime_value(self, name: str, value: object) -> object:
+        """Validate one runtime value against the profile-array contract."""
+        if value is None or self._var_ndim(name) != 1:
+            return value
+        if not isinstance(value, np.ndarray):
+            raise TypeError(f"Profile variable '{name}' must already be provided as a numpy.ndarray.")
+        if value.ndim != 1:
+            raise ValueError(f"Profile variable '{name}' must be provided as a 1D numpy.ndarray.")
+        return value
+
+    def _normalize_runtime_values(self, values: Mapping[str, object]) -> dict[str, object]:
+        """Return a mapping where every ndim=1 value satisfies the profile-array contract."""
+        return {
+            name: self._normalize_runtime_value(name, value)
+            for name, value in values.items()
+        }
 
     @property
     def variables_dict(self) -> dict[str, Variable]:
@@ -597,6 +622,7 @@ class RelationSystem:
                     return False
 
         accepted: dict[str, object] = {}
+        relation_obj = rels[0] if len(rels) == 1 else None
         for name, value in solved.items():
             var = self._graph["vars"].get(name)
             if var is not None and var.fixed:
@@ -613,8 +639,16 @@ class RelationSystem:
 
             cur_value = base_values.get(name)
             cur_scalar = safe_float(cur_value) if cur_value is not None else None
-            rel_tol = var.rel_tol if var and var.rel_tol is not None else self.default_rel_tol
-            abs_tol = var.abs_tol if var and var.abs_tol is not None else 0.0
+            rel_tol = (
+                relation_obj.rel_tol_default
+                if relation_obj is not None and relation_obj.rel_tol_default is not None
+                else (var.rel_tol if var and var.rel_tol is not None else self.default_rel_tol)
+            )
+            abs_tol = (
+                relation_obj.abs_tol_default
+                if relation_obj is not None and relation_obj.abs_tol_default is not None
+                else (var.abs_tol if var and var.abs_tol is not None else 0.0)
+            )
 
             if warn_input and cur_scalar is not None:
                 input_value = var.input_value if var is not None else None
@@ -669,6 +703,8 @@ class RelationSystem:
                 value,
                 reason=reason,
                 relation=relation,
+                source_rels=rels,
+                force=True,
             )
         return True
 
@@ -680,6 +716,7 @@ class RelationSystem:
         *,
         reason: str | None = None,
         relation: str | list[str] | None = None,
+        source_rels: Iterable[object] | None = None,
         force: bool = False,
     ) -> None:
         """Store a solved value in values map and update caches/pending relations."""
@@ -712,6 +749,8 @@ class RelationSystem:
             log_message(self._log, logging.DEBUG, f"  No change for {name}")
             return
         rels: set[object] = set(self._graph["vars_to_rels"].get(name, ()))
+        if source_rels:
+            rels.difference_update(source_rels)
         if rels:
             log_message(self._log, logging.DEBUG, f"  {name} updated, adding {len(rels)} relations to pending")
             self._state["pending_rels"].update(rels)
@@ -725,9 +764,7 @@ class RelationSystem:
         expected_scalar = safe_float(expected)
         if expected_scalar is None:
             return None
-        target_name = rel.preferred_target
-        if target_name is None:
-            return None
+        target_name = rel.outputs[0]
         actual_scalar = safe_float(values_scalar.get(target_name))
         if actual_scalar is None:
             return None
@@ -746,7 +783,7 @@ class RelationSystem:
         current: float | None = None,
     ) -> float | None:
         values_scalar = self._to_scalar_values(values)
-        if name == rel.preferred_target:
+        if name == rel.outputs[0]:
             return 1.0
         if self._var_ndim(name) == 1:
             return None
@@ -824,7 +861,7 @@ class RelationSystem:
             rel_name = getattr(
                 rel,
                 "name",
-                rel.preferred_target,
+                rel.outputs[0],
             )
             cons = self._constraints["rel_soft"].get(rel, ())
             for constraint in self._constraint_violations(cons, values_scalar):
@@ -917,9 +954,7 @@ class RelationSystem:
         """Solve one scalar unknown by root-finding relation residual."""
         if self._var_ndim(unknown) == 1:
             return None
-        target_name = rel.preferred_target
-        if target_name is None:
-            return None
+        target_name = rel.outputs[0]
         if unknown == target_name:
             return None
         if target_name not in values_map:
@@ -928,7 +963,7 @@ class RelationSystem:
         target = safe_float(values_map.get(target_name))
         if target is None:
             return None
-        input_names = rel.required_inputs(target_name)
+        input_names = relation_input_names(rel, target_name)
         if any(name != unknown and values_map.get(name) is None for name in input_names):
             return None
 
@@ -1093,8 +1128,8 @@ class RelationSystem:
         *,
         prefer_eval_output: bool = False,
     ) -> object | None:
-        target_name = rel.preferred_target
-        input_names = rel.required_inputs(target_name)
+        target_name = rel.outputs[0]
+        input_names = relation_input_names(rel, target_name)
         if (
             prefer_eval_output
             and target_name is not None
@@ -1276,7 +1311,7 @@ class RelationSystem:
             return None
 
         for rel in relations:
-            rel_vars = set(rel.variables)
+            rel_vars = set(rel.symbols)
             if rel_vars.issubset(set(unknowns)):
                 return None
 
@@ -1546,9 +1581,7 @@ class RelationSystem:
         # Group violated relations by preferred target variable.
         by_output: dict[str, list[object]] = {}
         for rel in violated:
-            target_name = rel.preferred_target
-            if target_name is None:
-                continue
+            target_name = rel.outputs[0]
             by_output.setdefault(target_name, []).append(rel)
 
         for output, rels in by_output.items():
@@ -1560,7 +1593,7 @@ class RelationSystem:
             unknowns = [output]
             candidates: dict[str, int] = {}
             for rel in rels:
-                for var_name in rel.required_inputs(output):
+                for var_name in relation_input_names(rel, output):
                     if var_name == output:
                         continue
                     var = self._graph["vars"].get(var_name)
@@ -1683,8 +1716,63 @@ class RelationSystem:
                 missing_variables = [name for name in rels_to_vars.get(rel, ()) if rel_values.get(name) is None]
 
                 # Step 2.1.c: apply relation forward/backward depending on missing variable count.
-                target_name = rel.preferred_target
+                target_name = rel.outputs[0]
+                output_names = tuple(rel.outputs)
                 relation_applied = False
+                if rel.is_multi_output:
+                    input_names = tuple(rel.inputs)
+                    self_updates_outputs = bool(set(output_names).intersection(input_names))
+                    missing_inputs = [name for name in input_names if rel_values.get(name) is None]
+                    if missing_inputs:
+                        log_message(
+                            self._log,
+                            logging.DEBUG,
+                            "  Relation '%s': %s missing forward inputs %s",
+                            rel.name,
+                            len(missing_inputs),
+                            missing_inputs,
+                        )
+                    else:
+                        try:
+                            solved_bundle = rel.apply(rel_values)
+                            log_message(
+                                self._log,
+                                logging.DEBUG,
+                                "  Relation '%s': evaluated bundle outputs %s",
+                                rel.name,
+                                sorted(solved_bundle),
+                            )
+                        except Exception as e:
+                            log_message(self._log, logging.DEBUG, "  Relation '%s': bundle evaluation failed: %s", rel.name, e)
+                            solved_bundle = None
+
+                        if solved_bundle:
+                            relation_applied = self._accept_candidate_values(
+                                {
+                                    name: solved_bundle[name]
+                                    for name in output_names
+                                    if name in solved_bundle
+                                },
+                                rels=[rel],
+                                reason="relation",
+                                relation=rel.name,
+                                protect_explicit=not self_updates_outputs,
+                                warn_input=not self_updates_outputs,
+                                check_violation_increase=False,
+                            )
+                            if not relation_applied:
+                                log_message(self._log, logging.DEBUG, "  Relation '%s': bundle candidate rejected", rel.name)
+
+                    if relation_applied:
+                        applied += 1
+                    if not pending:
+                        if not self._state["pending_rels"]:
+                            break
+                        pending = deque(sorted(self._state["pending_rels"], key=rel_index.get))
+                        self._state["pending_rels"].clear()
+                        iterations += 1
+                    continue
+
                 if missing_variables:
                     log_message(self._log, logging.DEBUG, 
                         "  Relation '%s': %s missing variables %s",
@@ -2073,7 +2161,7 @@ class RelationSystem:
         eval_plan = self._state["eval_plan"]
 
         # Step 0: copy caller payload and check geometry-volume consistency once.
-        evaluated = dict(values)
+        evaluated = self._normalize_runtime_values(dict(values))
         self._state["volume_consistency_warned"].clear()
         self._warn_if_volume_integral_mismatch(evaluated)
         scalar_names = list(self._state["eval_scalar_order"])
@@ -2145,14 +2233,124 @@ class RelationSystem:
         for _ in range(max_iter):
             progress = False
 
+            # 4.0) Resolve multi-output forward-only relations.
+            bundle_progress = False
+            for rel in self.relations:
+                if not rel.is_multi_output:
+                    continue
+
+                input_values: dict[str, object] = {}
+                valid = True
+                for in_name in rel.inputs:
+                    value = evaluated.get(in_name)
+                    if value is None:
+                        idx = var_index.get(in_name)
+                        if idx is None:
+                            valid = False
+                            break
+                        if n_points == 1:
+                            if known[0, idx]:
+                                value = float(state[0, idx])
+                            else:
+                                valid = False
+                                break
+                        else:
+                            if np.all(known[:, idx]):
+                                value = state[:, idx].copy()
+                            else:
+                                valid = False
+                                break
+                    input_values[in_name] = value
+                if not valid:
+                    continue
+
+                output_names = tuple(rel.outputs)
+                if n_points == 1:
+                    try:
+                        result = rel.apply(input_values)
+                    except Exception:
+                        result = None
+                    if not result:
+                        continue
+                    wrote_any = False
+                    for out_name in output_names:
+                        if out_name not in result:
+                            continue
+                        value = result[out_name]
+                        if self._var_ndim(out_name) == 1:
+                            evaluated[out_name] = self._normalize_runtime_value(out_name, value)
+                            wrote_any = True
+                            continue
+                        scalar = _profile_to_scalar(value)
+                        if scalar is None or not np.isfinite(scalar):
+                            continue
+                        out_idx = var_index.get(out_name)
+                        if out_idx is None:
+                            evaluated[out_name] = scalar
+                        else:
+                            state[0, out_idx] = scalar
+                            known[0, out_idx] = True
+                        wrote_any = True
+                    if wrote_any:
+                        bundle_progress = True
+                    continue
+
+                out_buffers = {
+                    out_name: np.full(n_points, np.nan, dtype=float)
+                    for out_name in output_names
+                }
+                for row in range(n_points):
+                    kwargs_row: dict[str, object] = {}
+                    for in_name, value in input_values.items():
+                        if isinstance(value, np.ndarray):
+                            arr = np.asarray(value)
+                            if arr.shape == (n_points,):
+                                kwargs_row[in_name] = float(arr[row])
+                            elif arr.shape == target_shape:
+                                kwargs_row[in_name] = float(arr.reshape(-1)[row])
+                            else:
+                                kwargs_row[in_name] = arr
+                        else:
+                            kwargs_row[in_name] = value
+                    try:
+                        result = rel.apply(kwargs_row)
+                    except Exception:
+                        result = None
+                    if not result:
+                        continue
+                    for out_name in output_names:
+                        if out_name not in result:
+                            continue
+                        scalar = _profile_to_scalar(result[out_name])
+                        if scalar is not None and np.isfinite(scalar):
+                            out_buffers[out_name][row] = scalar
+
+                for out_name, out in out_buffers.items():
+                    finite = np.isfinite(out)
+                    if not np.any(finite):
+                        continue
+                    if self._var_ndim(out_name) == 1:
+                        evaluated[out_name] = self._normalize_runtime_value(out_name, out)
+                    else:
+                        out_idx = var_index.get(out_name)
+                        if out_idx is None:
+                            evaluated[out_name] = out
+                        else:
+                            state[finite, out_idx] = out[finite]
+                            known[finite, out_idx] = True
+                    bundle_progress = True
+
+            if bundle_progress:
+                progress = True
+
             # 4.1) Resolve profile-target relations first.
             # In scan mode, profile outputs are reduced to one scalar per point
             # (profile mean) so scalar downstream relations can consume them.
             profile_progress = False
             for rel in self.relations:
-                target_name = rel.preferred_target
-                if target_name is None:
+                if rel.is_multi_output:
                     continue
+                target_name = rel.outputs[0]
                 if self._var_ndim(target_name) != 1:
                     continue
                 if evaluated.get(target_name) is not None:
@@ -2160,7 +2358,7 @@ class RelationSystem:
 
                 input_values: dict[str, object] = {}
                 valid = True
-                for in_name in rel.required_inputs(target_name):
+                for in_name in relation_input_names(rel, target_name):
                     value = evaluated.get(in_name)
                     if value is None:
                         idx = var_index.get(in_name)
@@ -2190,7 +2388,7 @@ class RelationSystem:
                         result = None
                     if result is None:
                         continue
-                    evaluated[target_name] = result
+                    evaluated[target_name] = self._normalize_runtime_value(target_name, result)
                     profile_progress = True
                     continue
 
@@ -2216,7 +2414,7 @@ class RelationSystem:
                     if scalar is not None and np.isfinite(scalar):
                         out[row] = scalar
                 if np.any(np.isfinite(out)):
-                    evaluated[target_name] = out
+                    evaluated[target_name] = self._normalize_runtime_value(target_name, out)
                     profile_progress = True
 
             if profile_progress:
@@ -2224,9 +2422,7 @@ class RelationSystem:
             # 4.2) Resolve scalar-target relations using vectorized path first,
             # then row-wise fallback when needed.
             for rel, output_idx0, input_names, input_idx0 in eval_plan:
-                target_name = rel.preferred_target
-                if target_name is None:
-                    continue
+                target_name = rel.outputs[0]
                 out_idx = var_index.get(target_name)
                 if out_idx is None:
                     continue
@@ -2359,9 +2555,7 @@ class RelationSystem:
             expected_scalar = None
         if expected_scalar is None:
             return ("UNDECIDABLE", None)
-        target_name = rel.preferred_target
-        if target_name is None:
-            return ("UNDECIDABLE", None)
+        target_name = rel.outputs[0]
         actual_scalar = safe_float(values_scalar.get(target_name))
         if actual_scalar is None:
             return ("UNDECIDABLE", None)
@@ -2405,9 +2599,7 @@ class RelationSystem:
             exp_scalar = None
         if exp_scalar is None:
             return None
-        target_name = rel.preferred_target
-        if target_name is None:
-            return None
+        target_name = rel.outputs[0]
         act_scalar = safe_float(values.get(target_name))
         if act_scalar is None:
             return None
@@ -2447,7 +2639,7 @@ class RelationSystem:
             target_scalar = None
             if name == target_name:
                 target_scalar = exp_scalar
-            elif name in rel.required_inputs():
+            elif name in rel.inputs:
                 dres = self._residual_derivative(rel, name, values, current=current)
                 if dres is None:
                     continue
@@ -2502,7 +2694,7 @@ class RelationSystem:
             rel_name = getattr(
                 rel,
                 "name",
-                rel.preferred_target,
+                rel.outputs[0],
             )
             status, residual = self._relation_status(rel, values)
             relation_results.append((rel_name, status, residual))
@@ -2552,7 +2744,7 @@ class RelationSystem:
             rel_name = getattr(
                 rel,
                 "name",
-                rel.preferred_target,
+                rel.outputs[0],
             )
             cons = self._constraints["rel_soft"].get(rel, ())
             for constraint in self._constraint_violations(cons, values_scalar):
@@ -2578,7 +2770,7 @@ class RelationSystem:
                 seen.add(name)
                 var_names.append(name)
         for rel in self.relations:
-            for name in getattr(rel, "variables", {}):
+            for name in rel.symbols:
                 if name is None or name in seen:
                     continue
                 seen.add(name)
@@ -2614,23 +2806,21 @@ class RelationSystem:
         edges = []
         for idx, rel in enumerate(self.relations):
             color = palette[idx % len(palette)]
-            output = rel.preferred_target
-            if output is None:
-                continue
-            for name in rel.required_inputs(output):
-                if name is None:
-                    continue
-                edges.append(
-                    {
-                        "from": name,
-                        "to": output,
-                        "label": getattr(rel, "name", ""),
-                        "title": getattr(rel, "name", ""),
-                        "relation": getattr(rel, "name", ""),
-                        "arrows": "to",
-                        "color": color,
-                    }
-                )
+            for output in rel.outputs:
+                for name in relation_input_names(rel, output):
+                    if name is None:
+                        continue
+                    edges.append(
+                        {
+                            "from": name,
+                            "to": output,
+                            "label": getattr(rel, "name", ""),
+                            "title": getattr(rel, "name", ""),
+                            "relation": getattr(rel, "name", ""),
+                            "arrows": "to",
+                            "color": color,
+                        }
+                    )
 
         html = f"""<!DOCTYPE html>
 <html>

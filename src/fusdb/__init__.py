@@ -13,19 +13,16 @@ from .utils import integrate_profile_over_volume, compare_plasma_volume_with_int
 from .registry import (
     KEV_TO_J,
     MU0,
-    ALLOWED_CONFINEMENT_MODES,
-    ALLOWED_REACTOR_FAMILIES,
-    ALLOWED_REACTOR_CONFIGURATIONS,
-    ALLOWED_SOLVING_ORDER,
-    ALLOWED_VARIABLES,
-    OPTIONAL_METADATA_FIELDS,
-    REQUIRED_FIELDS,
     RESERVED_KEYS,
+    load_allowed_reactions,
+    load_allowed_species,
+    load_allowed_tags,
+    load_allowed_variables,
 )
 
 
 def _export_relations_at_package_level() -> tuple[str, ...]:
-    """Expose relation objects and public functions as ``fusdb.<name>``."""
+    """Expose registered relation objects as ``fusdb.<name>``."""
     from . import relations
 
     relations.import_relations()
@@ -40,13 +37,7 @@ def _export_relations_at_package_level() -> tuple[str, ...]:
         for attr_name, attr_value in vars(module).items():
             if attr_name.startswith("_"):
                 continue
-            is_relation = isinstance(attr_value, Relation)
-            is_own_callable = (
-                callable(attr_value)
-                and not is_relation
-                and getattr(attr_value, "__module__", None) == module_name
-            )
-            if not is_relation and not is_own_callable:
+            if not isinstance(attr_value, Relation):
                 continue
             if attr_name in package_globals and package_globals[attr_name] is not attr_value:
                 continue
@@ -73,13 +64,10 @@ __all__ = [
     "compare_plasma_volume_with_integrated_dv",
     "KEV_TO_J",
     "MU0",
-    "ALLOWED_CONFINEMENT_MODES",
-    "ALLOWED_REACTOR_FAMILIES",
-    "ALLOWED_REACTOR_CONFIGURATIONS",
-    "ALLOWED_SOLVING_ORDER",
-    "ALLOWED_VARIABLES",
-    "OPTIONAL_METADATA_FIELDS",
-    "REQUIRED_FIELDS",
     "RESERVED_KEYS",
+    "load_allowed_reactions",
+    "load_allowed_species",
+    "load_allowed_tags",
+    "load_allowed_variables",
     *_EXPORTED_RELATIONS,
 ]

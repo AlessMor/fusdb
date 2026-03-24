@@ -345,34 +345,62 @@ Z_eff:
   description:
     - Effective charge.
 ################ ION COMPOSITION ################
+n_D:
+  ndim: 1
+  default_unit: 1/m^3
+  constraints:
+    - n_D >= 0
+  description:
+    - Deuterium ion density profile.
+n_T:
+  ndim: 1
+  default_unit: 1/m^3
+  constraints:
+    - n_T >= 0
+  description:
+    - Tritium ion density profile.
+n_He3:
+  ndim: 1
+  default_unit: 1/m^3
+  constraints:
+    - n_He3 >= 0
+  description:
+    - Helium-3 ion density profile.
+n_He4:
+  ndim: 1
+  default_unit: 1/m^3
+  constraints:
+    - n_He4 >= 0
+  description:
+    - Helium-4 ion density profile.
 f_D:
   default_unit: dimensionless
   constraints:
     - f_D >= 0
     - f_D <= 1
   description:
-    - Deuterium ion fraction (n_D / n_i).
+    - Volume-integrated deuterium ion fraction.
 f_T:
   default_unit: dimensionless
   constraints:
     - f_T >= 0
     - f_T <= 1
   description:
-    - Tritium ion fraction (n_T / n_i).
+    - Volume-integrated tritium ion fraction.
 f_He3:
   default_unit: dimensionless
   constraints:
     - f_He3 >= 0
     - f_He3 <= 1
   description:
-    - Helium-3 ion fraction (n_He3 / n_i).
+    - Volume-integrated helium-3 ion fraction.
 f_He4:
   default_unit: dimensionless
   constraints:
     - f_He4 >= 0
     - f_He4 <= 1
   description:
-    - Helium-4 ion fraction (n_He4 / n_i).
+    - Volume-integrated helium-4 ion fraction.
 ################ CONFINEMENT & PERFORMANCE ################
 TBR:
   default_unit: dimensionless

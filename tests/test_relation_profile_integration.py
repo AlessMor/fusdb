@@ -17,8 +17,10 @@ from fusdb.relations.power_balance.fusion_power.reaction_rate import reaction_ra
 from fusdb.relations.power_balance.fusion_power.reaction_rate import reaction_rate_the3_np
 from fusdb.relations.plasma_pressure.plasma_pressure import thermal_pressure
 from fusdb.relations.plasma_composition import plasma_composition as composition_relations
+from fusdb.relation_class import Relation
 from fusdb.relationsystem_class import RelationSystem
 from fusdb.relation_util import _RELATION_REGISTRY, relation
+from fusdb.registry import load_allowed_species, load_allowed_variables
 from fusdb.utils import compare_plasma_volume_with_integrated_dv, integrate_profile_over_volume
 from fusdb.variable_util import make_variable
 
@@ -34,14 +36,13 @@ def test_reaction_rate_total_from_profile_pipeline_matches_expected():
     """Expected: profile-based reaction-rate pipeline integrates to the same total as direct manual integration."""
     n_i_profile = np.full(51, 1.0e20, dtype=float)
     t_i_profile = np.full(51, 10.0, dtype=float)
-    f_d = 0.5
-    f_t = 0.5
+    n_d = 0.5 * n_i_profile
+    n_t = 0.5 * n_i_profile
     v_p = 100.0
 
     variables = [
-        _make_var("f_D", f_d, ndim=0),
-        _make_var("f_T", f_t, ndim=0),
-        _make_var("n_i", n_i_profile, ndim=1),
+        _make_var("n_D", n_d, ndim=1),
+        _make_var("n_T", n_t, ndim=1),
         _make_var("T_i", t_i_profile, ndim=1),
         _make_var("V_p", v_p, ndim=0),
     ]
@@ -51,7 +52,7 @@ def test_reaction_rate_total_from_profile_pipeline_matches_expected():
     sigmav_profile = system.variables_dict["sigmav_DT"].current_value
     rr = system.variables_dict["Rr_DT"].current_value
 
-    expected_integrand = f_d * f_t * (n_i_profile ** 2) * np.asarray(sigmav_DT_BoschHale(t_i_profile), dtype=float)
+    expected_integrand = n_d * n_t * np.asarray(sigmav_DT_BoschHale(t_i_profile), dtype=float)
     expected = integrate_profile_over_volume(expected_integrand, v_p)
 
     assert sigmav_profile is not None
@@ -63,16 +64,14 @@ def test_reaction_rate_total_from_profile_pipeline_matches_expected():
 
 def test_the3_reaction_rate_pipeline_sums_branch_rates():
     """Expected: T-He3 total reaction rate is assembled from the two branch-rate relations."""
-    n_i_profile = np.full(31, 2.0e19, dtype=float)
+    n_t_profile = np.full(31, 8.0e18, dtype=float)
+    n_he3_profile = np.full(31, 2.0e18, dtype=float)
     t_i_profile = np.full(31, 20.0, dtype=float)
-    f_t = 0.4
-    f_he3 = 0.1
     v_p = 50.0
 
     variables = [
-        _make_var("f_T", f_t, ndim=0),
-        _make_var("f_He3", f_he3, ndim=0),
-        _make_var("n_i", n_i_profile, ndim=1),
+        _make_var("n_T", n_t_profile, ndim=1),
+        _make_var("n_He3", n_he3_profile, ndim=1),
         _make_var("T_i", t_i_profile, ndim=1),
         _make_var("V_p", v_p, ndim=0),
     ]
@@ -222,12 +221,18 @@ def test_thermal_pressure_symbolic_model_is_available():
 
 
 def test_fraction_equilibrium_symbolic_models_are_available():
-    """Expected: all fraction-equilibrium relations built on FRACTIONS inputs expose symbolic expressions."""
-    fractions = tuple(composition_relations.FRACTIONS)
+    """Expected: integrated fraction relations built on tracked densities expose symbolic expressions."""
+    allowed_variables, _, _ = load_allowed_variables()
+    fractions = tuple(
+        f"f_{species}"
+        for species in load_allowed_species()
+        if f"n_{species}" in allowed_variables and f"f_{species}" in allowed_variables
+    )
     rels = [
         rel
-        for rel in composition_relations._relations
-        if tuple(rel.required_inputs()) == fractions
+        for rel in vars(composition_relations).values()
+        if isinstance(rel, Relation)
+        if rel.outputs[0] in fractions and not rel.is_multi_output
     ]
     assert rels
     assert all(rel.sympy_expression is not None for rel in rels)

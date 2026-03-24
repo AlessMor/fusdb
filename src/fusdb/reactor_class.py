@@ -12,10 +12,9 @@ import logging
 import warnings
 from .relation_class import Relation
 from .relationsystem_class import RelationSystem
-from .relation_util import get_filtered_relations
-from .utils import as_profile_array, normalize_tag, normalize_tags_to_tuple, safe_float, within_tolerance
+from .relation_util import get_filtered_relations, relation_input_names
+from .utils import normalize_tag, normalize_tags_to_tuple
 from .variable_class import Variable
-from .variable_util import make_variable
 
 logger = logging.getLogger(__name__)
 
@@ -138,9 +137,12 @@ class Reactor:
 
         # No order specified - return all applicable relations (domain-prioritized)
         if not self.solving_order:
-            from .registry import ALLOWED_SOLVING_ORDER
+            from .registry import load_allowed_tags
 
-            domain_order = {normalize_tag(name): idx for idx, name in enumerate(ALLOWED_SOLVING_ORDER)}
+            domain_order = {
+                normalize_tag(name): idx
+                for idx, name in enumerate((load_allowed_tags().get("solving_order", {}) or {}).keys())
+            }
             if domain_order:
                 indexed = list(enumerate(base_relations))
                 indexed.sort(
@@ -183,97 +185,6 @@ class Reactor:
                 seen.append(rel)
                 yield rel
 
-    def _fraction_seed_from_inputs(self) -> dict[str, float] | None:
-        """Return explicit ion-fraction inputs used as the initial composition seed."""
-        seed: dict[str, float] = {}
-        has_explicit_fraction = False
-        for name in ("f_D", "f_T", "f_He3", "f_He4"):
-            var = self.variables_dict.get(name)
-            if var is None or var.input_value is None:
-                continue
-            scalar = safe_float(var.input_value)
-            if scalar is None:
-                continue
-            seed[name] = scalar
-            if var.input_source == "explicit":
-                has_explicit_fraction = True
-        if not has_explicit_fraction:
-            return None
-        return seed
-
-    def _scalar_value(self, name: str) -> float | None:
-        """Return a scalar value for a reactor variable, averaging profiles when needed."""
-        var = self.variables_dict.get(name)
-        if var is None:
-            return None
-        for candidate in (var.current_value, var.input_value):
-            scalar = safe_float(candidate)
-            if scalar is not None:
-                return scalar
-            arr = as_profile_array(candidate)
-            if arr is not None:
-                return float(arr.mean())
-        return None
-
-    def _steady_state_composition_inputs(self) -> tuple[float, float, dict[str, float], dict[str, float]] | None:
-        """Gather the scalar inputs required by the steady-state composition solver."""
-        seed = self._fraction_seed_from_inputs()
-        if not seed:
-            return None
-
-        n_i = self._scalar_value("n_i")
-        t_avg = self._scalar_value("T_avg")
-
-        if n_i is None or t_avg is None:
-            return None
-
-        tau_p: dict[str, float] = {}
-        for species in ("D", "T", "He3", "He4"):
-            name = f"tau_p_{species}"
-            tau_value = self._scalar_value(name)
-            if tau_value is None:
-                return None
-            tau_p[name] = tau_value
-
-        return n_i, t_avg, seed, tau_p
-
-    def _apply_steady_state_composition(self) -> bool:
-        """Overwrite current ion fractions with the steady-state composition from the explicit seed mix."""
-        inputs = self._steady_state_composition_inputs()
-        if inputs is None:
-            return False
-
-        from .relations.plasma_composition.composition_solver import solve_steady_state_composition
-
-        n_i, t_avg, seed, tau_p = inputs
-        solved = solve_steady_state_composition(
-            n_i=n_i,
-            T_avg=t_avg,
-            fractions=seed,
-            tau_p=tau_p,
-        )
-
-        changed = False
-        for name, value in solved.items():
-            var = self.variables_dict.get(name)
-            current = None if var is None else safe_float(var.current_value)
-            if current is not None and within_tolerance(current, value, rel_tol=1e-8, abs_tol=1e-10):
-                continue
-            if var is None:
-                var = make_variable(name=name, ndim=0)
-                self.variables_dict[name] = var
-            if var.add_value(value, reason="steady_state_composition", as_input=False):
-                changed = True
-
-        if changed:
-            log_message(
-                self._log,
-                logging.INFO,
-                "Applied steady-state composition from explicit fraction seed: %s",
-                {key: f"{value:.6g}" for key, value in solved.items()},
-            )
-        return changed
-
     def _solve_once(
         self,
         *,
@@ -307,23 +218,18 @@ class Reactor:
             for item in self.solving_order:
                 if item in rel_by_name:
                     rels = [rel_by_name[item]]
-                    target = (
-                        rels[0]._preferred_target
-                        if rels[0]._preferred_target is not None
-                        else next(iter(rels[0].numeric_functions), None)
-                    )
-                    outputs = {target} if target is not None else set(rels[0].variables)
+                    outputs = set(rels[0].outputs)
                 else:
                     domain_tags = (*self.tags, normalize_tag(item))
                     outputs = {
-                        target
+                        output
                         for rel in get_filtered_relations(
                             domain_tags,
                             variable_names,
                             variable_methods,
                             extra_relations=self.default_relations,
                         )
-                        if (target := (rel._preferred_target if rel._preferred_target is not None else next(iter(rel.numeric_functions), None))) is not None
+                        for output in rel.outputs
                     }
                 for other, other_outputs in seen.items():
                     if overlap := outputs & other_outputs:
@@ -401,15 +307,6 @@ class Reactor:
             enforce_constraint_tags=constraint_tags_tuple,
             enforce_constraint_names=constraint_names_tuple,
         )
-        for _ in range(2):
-            if not self._apply_steady_state_composition():
-                break
-            self._solve_once(
-                solver_mode=solver_mode,
-                verbosity=verbosity,
-                enforce_constraint_tags=constraint_tags_tuple,
-                enforce_constraint_names=constraint_names_tuple,
-            )
 
     def diagnose(self) -> dict[str, object]:
         """Run comprehensive diagnostics on reactor consistency.
@@ -520,11 +417,7 @@ class Reactor:
                 rel
                 for rel in self.relations
                 if rel.name in wanted
-                or (
-                    (target := (rel._preferred_target if rel._preferred_target is not None else next(iter(rel.numeric_functions), None)))
-                    is not None
-                    and target in wanted
-                )
+                or any(target in wanted for target in rel.outputs)
             ]
         else:
             tag_set = set(normalize_tags_to_tuple(constraint_tags or ()))
@@ -537,20 +430,13 @@ class Reactor:
                 rel
                 for rel in constraint_rels
                 if rel.name not in exclude
-                and (
-                    (target := (rel._preferred_target if rel._preferred_target is not None else next(iter(rel.numeric_functions), None)))
-                    is None
-                    or target not in exclude
-                )
+                and not set(rel.outputs).intersection(exclude)
             ]
 
         outputs_by_input: dict[str, set[str]] = {}
         for rel in self.relations:
-            target = (rel._preferred_target if rel._preferred_target is not None else next(iter(rel.numeric_functions), None))
-            if target is None:
-                continue
-            for inp in rel.required_inputs():
-                outputs_by_input.setdefault(inp, set()).add(target)
+            for inp in relation_input_names(rel):
+                outputs_by_input.setdefault(inp, set()).update(rel.outputs)
         dependent: set[str] = set(axis_order)
         queue = list(axis_order)
         while queue:
@@ -565,7 +451,11 @@ class Reactor:
             output_names = sorted(
                 {
                     *base_values.keys(),
-                    *[target for rel in self.relations if (target := (rel._preferred_target if rel._preferred_target is not None else next(iter(rel.numeric_functions), None))) is not None],
+                    *[
+                        output
+                        for rel in self.relations
+                        for output in rel.outputs
+                    ],
                 }
             )
         else:
@@ -579,9 +469,9 @@ class Reactor:
             if name in dependent or var is None or var.input_source is None:
                 base_values[name] = None
         for rel in constraint_rels:
-            target = (rel._preferred_target if rel._preferred_target is not None else next(iter(rel.numeric_functions), None))
-            if target is not None and target not in axis_set:
-                base_values[target] = None
+            for target in rel.outputs:
+                if target not in axis_set:
+                    base_values[target] = None
         if where:
             for name in where:
                 if name in axis_set:
@@ -601,7 +491,8 @@ class Reactor:
         margins_map = {
             target: values_out.get(target)
             for rel in constraint_rels
-            if (target := (rel._preferred_target if rel._preferred_target is not None else next(iter(rel.numeric_functions), None))) is not None and target in values_out
+            for target in rel.outputs
+            if target in values_out
         }
 
         allowed = np.ones(grid_shape, dtype=bool)

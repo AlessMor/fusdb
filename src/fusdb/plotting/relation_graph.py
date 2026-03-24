@@ -10,7 +10,7 @@ import html
 import networkx as nx
 
 from fusdb import relations
-from fusdb.relation_util import _RELATION_REGISTRY
+from fusdb.relation_util import _RELATION_REGISTRY, relation_input_names
 from fusdb.registry import load_allowed_variables
 
 
@@ -114,18 +114,19 @@ def _var_detail_html(name: str, spec: dict[str, object]) -> str:
 
 
 def _relation_detail_html(relation) -> str:
-    output = relation.preferred_target
-    inputs = list(relation.required_inputs(output))
+    outputs = list(relation.outputs)
+    output = relation.outputs[0]
+    inputs = list(relation_input_names(relation, output))
     relation_items = [
         ("name", relation.name),
-        ("output", output),
+        ("outputs", outputs),
         ("inputs", inputs),
-        ("variables", list(relation.variables)),
+        ("variables", list(relation.symbols)),
         ("tags", list(relation.tags or ())),
         ("constraints", list(relation.constraints or ())),
         ("rel_tol_default", relation.rel_tol_default),
         ("abs_tol_default", relation.abs_tol_default),
-        ("numeric_targets", list(relation.numeric_functions)),
+        ("numeric_targets", [*relation.outputs, *[name for name in relation.solvers if name not in relation.outputs]]),
         ("inverse_targets", list(relation.inverse_functions)),
         (
             "sympy_expression",
@@ -141,31 +142,32 @@ def _relation_records() -> list[RelationGraphRelation]:
 
     records: list[RelationGraphRelation] = []
     for index, relation in enumerate(relation_list):
-        output = relation.preferred_target
-        if output is None:
+        outputs = tuple(relation.outputs)
+        if not outputs:
             continue
-        inputs = tuple(relation.required_inputs(output))
         detail_html = _relation_detail_html(relation)
-        search_blob = " ".join(
-            [
-                relation.name,
-                output,
-                *inputs,
-                *list(relation.tags or ()),
-                *[str(item) for item in (relation.constraints or ())],
-            ]
-        ).lower()
-        records.append(
-            RelationGraphRelation(
-                uid=f"relation::{index}",
-                name=relation.name,
-                output=output,
-                inputs=inputs,
-                color=_color_for(relation.name),
-                detail_html=detail_html,
-                search_blob=search_blob,
+        for out_index, output in enumerate(outputs):
+            inputs = tuple(relation_input_names(relation, output))
+            search_blob = " ".join(
+                [
+                    relation.name,
+                    output,
+                    *inputs,
+                    *list(relation.tags or ()),
+                    *[str(item) for item in (relation.constraints or ())],
+                ]
+            ).lower()
+            records.append(
+                RelationGraphRelation(
+                    uid=f"relation::{index}::{out_index}",
+                    name=relation.name,
+                    output=output,
+                    inputs=inputs,
+                    color=_color_for(relation.name),
+                    detail_html=detail_html,
+                    search_blob=search_blob,
+                )
             )
-        )
     return records
 
 
@@ -853,14 +855,3 @@ def render_relation_graph_html(*, width: int = 980, height: int = 860) -> str:
         CDN,
         "fusdb Relation Graph",
     )
-
-
-__all__ = (
-    "RelationGraphEdge",
-    "RelationGraphNode",
-    "RelationGraphRelation",
-    "relation_graph_data",
-    "relation_graph_plotter",
-    "render_relation_graph_html",
-    "save_relation_graph_html",
-)

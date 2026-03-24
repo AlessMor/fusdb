@@ -13,16 +13,20 @@ import numpy as np
 from fusdb.utils import as_profile_array, normalize_tags_to_tuple, within_tolerance
 from fusdb.variable_class import Variable
 from fusdb.variable_util import make_variable
-from fusdb.registry import REACTIVITY_DEFAULT_METHODS, allowed_variable_ndim, canonical_variable_name
+from fusdb.registry import (
+    allowed_variable_ndim,
+    canonical_variable_name,
+    load_allowed_reactions,
+)
 
 
-_FRACTION_DEFAULTS: dict[str, float] = {
-    "f_D": 0.5,
-    "f_T": 0.5,
-    "f_He3": 0.0,
-    "f_He4": 0.0,
+_SPECIES_DENSITY_DEFAULTS: dict[str, float] = {
+    "n_D": 0.5,
+    "n_T": 0.5,
+    "n_He3": 0.0,
+    "n_He4": 0.0,
 }
-_FRACTION_KEYS = tuple(_FRACTION_DEFAULTS.keys())
+_SPECIES_DENSITY_KEYS = tuple(_SPECIES_DENSITY_DEFAULTS.keys())
 def _build_relation(name: str, output: str, func, *, tags: tuple[str, ...] = ("plasma",)) -> Relation:
     """Build a Relation without registering it globally."""
     # NOTE: This intentionally keeps all signature parameter names, including *args/**kwargs names;
@@ -93,7 +97,11 @@ def apply_reactor_defaults(
         variables.update(normalized_variables)
 
     default_relations: list[Relation] = []
-    seen_keys = {(rel.name, (rel._preferred_target if rel._preferred_target is not None else next(iter(rel.numeric_functions), None))) for rel in (relations or ())}
+    seen_keys = {
+        (rel.name, output)
+        for rel in (relations or ())
+        for output in rel.outputs
+    }
 
     def _ensure_variable_exists(name: str) -> None:
         """Ensure a variable object exists for relation-only defaults."""
@@ -114,11 +122,9 @@ def apply_reactor_defaults(
         seen_keys.add(key)
 
     # Gather input values for variables that already exist in the dictionary.
-    input_values = {name: var.input_value for name, var in variables.items()}
-    
     def has_input(name: str) -> bool:
-        check = input_values.get(name) is not None
-        return check
+        var = variables.get(name)
+        return bool(var is not None and var.input_value is not None)
 
     def _profile_or_value(value: object) -> object:
         arr = as_profile_array(value)
@@ -251,37 +257,49 @@ def apply_reactor_defaults(
 
     ####################### REACTIVITY METHOD DEFAULTS #######################################
 
-    for name, method in REACTIVITY_DEFAULT_METHODS.items():
-        _set_default_method(variables, name, method)
+    for reaction, spec in load_allowed_reactions().items():
+        sigmav_variable = spec.get("sigmav_variable")
+        default_method = spec.get("default_method")
+        if isinstance(sigmav_variable, str) and isinstance(default_method, str):
+            _set_default_method(variables, sigmav_variable, f"{reaction} reactivity {default_method}")
 
     ####################### PLASMA COMPOSITION DEFAULTS #######################################
     
     # Default species particle confinement times to generic tau_p if provided.
     if has_input("tau_p"):
-        tau_p = input_values.get("tau_p")
+        tau_p = variables["tau_p"].input_value
         for species in ("D", "T", "He3", "He4"):
             name = f"tau_p_{species}"
             var = variables.get(name)
             if var is None or var.input_value is None:
                 _set_default_input(variables, name, float(tau_p))
-                
-    # If no fractions are explicit, set D/T defaults (and others to 0).
-    fraction_inputs = {key: input_values.get(key) for key in _FRACTION_KEYS}
-    has_explicit_fraction = False
-    for key, value in fraction_inputs.items():
-        var = variables.get(key)
-        if var is not None and value is not None and var.input_source == "explicit":
-            has_explicit_fraction = True
-            break
-    
-    if not has_explicit_fraction:
-        for name, value in _FRACTION_DEFAULTS.items():
-            _set_default_input(variables, name, value)
-        return default_relations
 
-    # If any fractions are explicit, default missing ones to 0.0.
-    for name in _FRACTION_KEYS:
+    density_inputs = {key: variables.get(key) for key in _SPECIES_DENSITY_KEYS}
+    has_explicit_density = any(
+        var is not None and var.input_value is not None and var.input_source == "explicit"
+        for var in density_inputs.values()
+    )
+
+    for name, fraction in _SPECIES_DENSITY_DEFAULTS.items():
         var = variables.get(name)
-        if var is None or fraction_inputs.get(name) is None:
+        if var is not None and var.input_value is not None:
+            continue
+        if has_explicit_density:
             _set_default_input(variables, name, 0.0)
+            continue
+        if has_input("n_i"):
+            _add_default_relation(
+                f"Default: {name} = {fraction:.6g} * n_i",
+                name,
+                lambda n_i, _fraction=fraction: _fraction * n_i,
+            )
+            continue
+        if has_input("n_avg"):
+            _add_default_relation(
+                f"Default: {name} = {fraction:.6g} * n_avg",
+                name,
+                lambda n_avg, _fraction=fraction: _fraction * n_avg,
+            )
+            continue
+        _set_default_input(variables, name, fraction)
     return default_relations

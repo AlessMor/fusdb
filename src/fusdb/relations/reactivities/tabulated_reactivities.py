@@ -16,9 +16,8 @@ import yaml
 from fusdb.registry import (
     ATOMIC_MASS_UNIT_KG,
     KEV_TO_J,
-    REACTIVITY_ALLOWED_INTERPOLATION_KINDS,
-    REACTIVITY_ENERGY_GRID_KEV,
-    REACTIVITY_TABLES_DIR,
+    REGISTRY_PATH,
+    load_reactivity_table_config,
     load_allowed_species,
 )
 
@@ -108,7 +107,7 @@ def get_table_path(table_ref: str | Path) -> Path:
     if direct_path.is_absolute() or direct_path.is_file():
         return direct_path
 
-    candidate = REACTIVITY_TABLES_DIR / direct_path
+    candidate = (REGISTRY_PATH / str(load_reactivity_table_config().get("table_dir", "")) / direct_path).resolve()
     if candidate.is_file():
         return candidate
 
@@ -342,8 +341,15 @@ def reactivity_from_xsection_table(
         energy_cm_keV = incident_energy_keV * m_target / (m_projectile + m_target)
     else:
         energy_cm_keV = incident_energy_keV
+    energy_grid = load_reactivity_table_config().get("energy_grid", {}) or {}
+    energy_grid_kev = np.logspace(
+        float(energy_grid.get("start_log10_kev", 0.0)),
+        float(energy_grid.get("stop_log10_kev", 5.0)),
+        int(energy_grid.get("num_points", 1000)),
+        dtype=float,
+    )
     cross_section_grid_m2 = np.interp(
-        REACTIVITY_ENERGY_GRID_KEV,
+        energy_grid_kev,
         energy_cm_keV,
         cross_section_m2,
         left=0.0,
@@ -359,7 +365,7 @@ def reactivity_from_xsection_table(
     positive = flat_temperatures > 0.0
     if np.any(positive):
         kT = flat_temperatures[positive] * KEV_TO_J
-        energy_joule = REACTIVITY_ENERGY_GRID_KEV * KEV_TO_J
+        energy_joule = energy_grid_kev * KEV_TO_J
         prefactor = np.sqrt(8.0 / (np.pi * reduced_mass_kg)) / (kT**1.5)
         integrand = (
             cross_section_grid_m2[None, :]
@@ -382,8 +388,9 @@ def reactivity_from_reactivity_table(
 ) -> float64 | NDArray[np.float64] | sp.Expr:
     """Return reactivity from one direct table file or absolute path."""
     interpolation_kind = interpolation_kind.strip().lower()
-    if interpolation_kind not in REACTIVITY_ALLOWED_INTERPOLATION_KINDS:
-        allowed = ", ".join(REACTIVITY_ALLOWED_INTERPOLATION_KINDS)
+    allowed_interpolation_kinds = tuple(load_reactivity_table_config().get("allowed_interpolation_kinds", ()) or ())
+    if interpolation_kind not in allowed_interpolation_kinds:
+        allowed = ", ".join(allowed_interpolation_kinds)
         raise ValueError(
             f"Unsupported interpolation_kind '{interpolation_kind}'. "
             f"Choose one of: {allowed}."

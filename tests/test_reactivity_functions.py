@@ -364,8 +364,8 @@ def test_reactivity_relations_have_method_specific_names():
 
 def test_the3_branch_reactivity_outputs_are_registered():
     """Expected: branch-level T-He3 reactivities are exposed as selectable relation outputs."""
-    assert sigmav_THe3_D_CF88.preferred_target == "sigmav_THe3_D"
-    assert sigmav_THe3_np_CF88.preferred_target == "sigmav_THe3_np"
+    assert sigmav_THe3_D_CF88.outputs == ("sigmav_THe3_D",)
+    assert sigmav_THe3_np_CF88.outputs == ("sigmav_THe3_np",)
     assert allowed_variable_ndim("sigmav_THe3_D") == 1
     assert allowed_variable_ndim("sigmav_THe3_np") == 1
 
@@ -413,7 +413,7 @@ def test_method_override_filters_reactivity_relations_by_name():
     names = {
         rel.name
         for rel in rels
-        if rel.preferred_target == "sigmav_TT"
+        if rel.outputs == ("sigmav_TT",)
     }
     assert "TT reactivity ENDFB-VIII0" in names
     assert "TT reactivity" not in names

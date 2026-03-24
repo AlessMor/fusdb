@@ -1,154 +1,227 @@
-"""Ion composition relations generalized by allowed species."""
+"""Density-based plasma composition relations."""
+
 from __future__ import annotations
-from inspect import Signature, Parameter
 
+from fusdb.registry import load_allowed_species, load_allowed_variables
 from fusdb.relation_util import relation
-from fusdb.registry import load_allowed_species
+from fusdb.utils import integrate_profile
 
-_SPECIES_DATA = load_allowed_species()
-SPECIES = tuple(_SPECIES_DATA.keys())
-FRACTIONS = [f"f_{s}" for s in SPECIES]
-DENSITIES = {s: f"n_{s}" for s in SPECIES}
-CHARGE = [(_SPECIES_DATA.get(s, {}) or {}).get("atomic_number", 1) for s in SPECIES]
-MASS = [(_SPECIES_DATA.get(s, {}) or {}).get("atomic_mass", 1) for s in SPECIES]
-
-
-def _relation(name: str, output: str, inputs: list[str], func, constraints=None, rel_tol=None):
-    """Create a Relation with standard plasma tags. Args: name, output, inputs, func. Returns: Relation."""
-    func.__signature__ = Signature([Parameter(n, Parameter.POSITIONAL_OR_KEYWORD) for n in inputs])
-    return relation(name=name, output=output, tags=("plasma",), constraints=constraints, rel_tol_default=rel_tol)(func)
+allowed_variables, _, _ = load_allowed_variables()
+TRACKED_SPECIES = tuple(
+    species
+    for species in load_allowed_species()
+    if f"n_{species}" in allowed_variables and f"f_{species}" in allowed_variables
+)
 
 
-def _fraction_sum_expr() -> str:
-    """Build sum(f_i) constraint string. Args: none. Returns: str."""
-    return " + ".join(FRACTIONS) if FRACTIONS else "0"
+@relation(
+    name="Ion density from tracked species densities",
+    output="n_i",
+    tags=("plasma",),
+)
+def ion_density_from_tracked_species_densities(
+    n_D: float,
+    n_T: float,
+    n_He3: float,
+    n_He4: float,
+) -> float:
+    """Return the total tracked ion density profile."""
+    return n_D + n_T + n_He3 + n_He4
 
 
-def _charge_sum_expr() -> str:
-    """Build sum(Z_i * f_i) constraint string. Args: none. Returns: str."""
-    terms = [f"{z}*{f}" if z != 1 else f for z, f in zip(CHARGE, FRACTIONS)]
-    return " + ".join(terms) if terms else "0"
+@relation(
+    name="Electron density from tracked species densities",
+    output="n_e",
+    tags=("plasma",),
+)
+def electron_density_from_tracked_species_densities(
+    n_D: float,
+    n_T: float,
+    n_He3: float,
+    n_He4: float,
+) -> float:
+    """Return the electron density profile from tracked ion densities."""
+    return n_D + n_T + 2.0 * n_He3 + 2.0 * n_He4
 
 
-# Dynamic fraction relations.
-_relations = []
+@relation(
+    name="D density from tracked ion balance",
+    output="n_D",
+    tags=("plasma",),
+)
+def deuterium_density_from_tracked_ion_balance(
+    n_i: float,
+    n_T: float,
+    n_He3: float,
+    n_He4: float,
+) -> float:
+    """Return the deuterium density profile from the tracked ion balance."""
+    return n_i - n_T - n_He3 - n_He4
 
-if FRACTIONS:
-    sum_expr = _fraction_sum_expr()
-    charge_expr = _charge_sum_expr()
 
-    def _is_symbolic(value: object) -> bool:
-        return bool(getattr(value, "free_symbols", None) is not None)
+@relation(
+    name="T density from tracked ion balance",
+    output="n_T",
+    tags=("plasma",),
+)
+def tritium_density_from_tracked_ion_balance(
+    n_i: float,
+    n_D: float,
+    n_He3: float,
+    n_He4: float,
+) -> float:
+    """Return the tritium density profile from the tracked ion balance."""
+    return n_i - n_D - n_He3 - n_He4
 
-    def _ion_density(*args):
-        n_e = args[0]
-        denom = sum(val * w for val, w in zip(args[1:], CHARGE))
-        return n_e / denom
 
-    _relations.append(
-        _relation(
-            "Ion density from electron density and fractions",
-            "n_i",
-            ["n_e", *FRACTIONS],
-            _ion_density,
-            constraints=(f"{charge_expr} != 0",),
-        )
-    )
+@relation(
+    name="He3 density from tracked ion balance",
+    output="n_He3",
+    tags=("plasma",),
+)
+def helium3_density_from_tracked_ion_balance(
+    n_i: float,
+    n_D: float,
+    n_T: float,
+    n_He4: float,
+) -> float:
+    """Return the helium-3 density profile from the tracked ion balance."""
+    return n_i - n_D - n_T - n_He4
 
-    def _electron_density(*args):
-        n_i = args[0]
-        denom = sum(val * w for val, w in zip(args[1:], CHARGE))
-        return n_i * denom
 
-    _relations.append(
-        _relation(
-            "Electron density from ion fractions",
-            "n_e",
-            ["n_i", *FRACTIONS],
-            _electron_density,
-        )
-    )
+@relation(
+    name="He4 density from tracked ion balance",
+    output="n_He4",
+    tags=("plasma",),
+)
+def helium4_density_from_tracked_ion_balance(
+    n_i: float,
+    n_D: float,
+    n_T: float,
+    n_He3: float,
+) -> float:
+    """Return the helium-4 density profile from the tracked ion balance."""
+    return n_i - n_D - n_T - n_He3
 
-    def _fraction_check(*args):
-        return args[0]
 
-    _relations.append(
-        _relation(
-            "Fuel fraction sum",
-            FRACTIONS[0],
-            FRACTIONS,
-            _fraction_check,
-            constraints=(f"Abs({sum_expr} - 1) <= 1e-6",),
-            rel_tol=1e-6,
-        )
-    )
+@relation(
+    name="Integrated D fraction from density profiles",
+    output="f_D",
+    tags=("plasma",),
+    rel_tol_default=1e-12,
+    abs_tol_default=1e-12,
+)
+def integrated_deuterium_fraction_from_density_profiles(
+    n_D: float,
+    n_i: float,
+) -> float:
+    """Return the integrated deuterium fraction from the tracked density profiles."""
+    numerator_total = integrate_profile(n_D, error_label="density")
+    denominator_total = integrate_profile(n_i, error_label="density")
+    if getattr(denominator_total, "free_symbols", None) is None and denominator_total <= 0.0:
+        raise ValueError("Tracked ion inventory must be positive")
+    return numerator_total / denominator_total
 
-    for idx, frac in enumerate(FRACTIONS):
-        def _fraction_norm(*args, _i=idx):
-            total = sum(args)
-            if _is_symbolic(total):
-                return args[_i] / total
-            if total <= 0:
-                return 1.0 / len(args)
-            return args[_i] / total
-        _relations.append(
-            _relation(
-                f"Fuel fraction equilibrium {SPECIES[idx]}",
-                frac,
-                FRACTIONS,
-                _fraction_norm,
-                constraints=(f"Abs({sum_expr} - 1) <= 1e-6",),
-                rel_tol=1e-6,
-            )
-        )
 
-    for idx, species in enumerate(SPECIES):
-        f_var = FRACTIONS[idx]
-        n_var = DENSITIES[species]
+@relation(
+    name="Integrated T fraction from density profiles",
+    output="f_T",
+    tags=("plasma",),
+    rel_tol_default=1e-12,
+    abs_tol_default=1e-12,
+)
+def integrated_tritium_fraction_from_density_profiles(
+    n_T: float,
+    n_i: float,
+) -> float:
+    """Return the integrated tritium fraction from the tracked density profiles."""
+    numerator_total = integrate_profile(n_T, error_label="density")
+    denominator_total = integrate_profile(n_i, error_label="density")
+    if getattr(denominator_total, "free_symbols", None) is None and denominator_total <= 0.0:
+        raise ValueError("Tracked ion inventory must be positive")
+    return numerator_total / denominator_total
 
-        def _dens(*args):
-            return args[0] * args[1]
-        _relations.append(
-            _relation(
-                f"{species} density from fraction",
-                n_var,
-                [f_var, "n_i"],
-                _dens,
-            )
-        )
 
-        def _frac(*args):
-            return args[0] / args[1]
-        _relations.append(
-            _relation(
-                f"{species} fraction from density",
-                f_var,
-                [n_var, "n_i"],
-                _frac,
-                constraints=("n_i > 0",),
-            )
-        )
+@relation(
+    name="Integrated He3 fraction from density profiles",
+    output="f_He3",
+    tags=("plasma",),
+    rel_tol_default=1e-12,
+    abs_tol_default=1e-12,
+)
+def integrated_helium3_fraction_from_density_profiles(
+    n_He3: float,
+    n_i: float,
+) -> float:
+    """Return the integrated helium-3 fraction from the tracked density profiles."""
+    numerator_total = integrate_profile(n_He3, error_label="density")
+    denominator_total = integrate_profile(n_i, error_label="density")
+    if getattr(denominator_total, "free_symbols", None) is None and denominator_total <= 0.0:
+        raise ValueError("Tracked ion inventory must be positive")
+    return numerator_total / denominator_total
 
-        if len(FRACTIONS) > 1:
-            others = [f for f in FRACTIONS if f != f_var]
-            def _norm_other(*args):
-                return 1.0 - sum(args)
-            _relations.append(
-                _relation(
-                    f"Ion fraction normalization (solve {f_var})",
-                    f_var,
-                    others,
-                    _norm_other,
-                )
-            )
 
-    def _afuel(*args):
-        return sum(val * w for val, w in zip(args, MASS))
-    _relations.append(
-        _relation(
-            "Average fuel mass number",
-            "afuel",
-            FRACTIONS,
-            _afuel,
-        )
+@relation(
+    name="Integrated He4 fraction from density profiles",
+    output="f_He4",
+    tags=("plasma",),
+    rel_tol_default=1e-12,
+    abs_tol_default=1e-12,
+)
+def integrated_helium4_fraction_from_density_profiles(
+    n_He4: float,
+    n_i: float,
+) -> float:
+    """Return the integrated helium-4 fraction from the tracked density profiles."""
+    numerator_total = integrate_profile(n_He4, error_label="density")
+    denominator_total = integrate_profile(n_i, error_label="density")
+    if getattr(denominator_total, "free_symbols", None) is None and denominator_total <= 0.0:
+        raise ValueError("Tracked ion inventory must be positive")
+    return numerator_total / denominator_total
+
+
+@relation(
+    name="Integrated tracked fractions",
+    outputs=tuple(f"f_{species}" for species in TRACKED_SPECIES),
+    tags=("plasma",),
+    rel_tol_default=1e-12,
+    abs_tol_default=1e-12,
+)
+def integrated_tracked_fractions(
+    n_D: float,
+    n_T: float,
+    n_He3: float,
+    n_He4: float,
+    n_i: float,
+) -> dict[str, float]:
+    """Return the full integrated tracked-fraction bundle from density profiles."""
+    denominator = integrate_profile(n_i, error_label="density")
+    if getattr(denominator, "free_symbols", None) is None and denominator <= 0.0:
+        raise ValueError("Tracked ion inventory must be positive")
+    return {
+        "f_D": integrate_profile(n_D, error_label="density") / denominator,
+        "f_T": integrate_profile(n_T, error_label="density") / denominator,
+        "f_He3": integrate_profile(n_He3, error_label="density") / denominator,
+        "f_He4": integrate_profile(n_He4, error_label="density") / denominator,
+    }
+
+
+@relation(
+    name="Average fuel mass number",
+    output="afuel",
+    tags=("plasma",),
+)
+def average_fuel_mass_number(
+    f_D: float,
+    f_T: float,
+    f_He3: float,
+    f_He4: float,
+) -> float:
+    """Return the integrated average ion mass number."""
+    species_data = load_allowed_species()
+    return (
+        f_D * float(species_data["D"]["atomic_mass"])
+        + f_T * float(species_data["T"]["atomic_mass"])
+        + f_He3 * float(species_data["He3"]["atomic_mass"])
+        + f_He4 * float(species_data["He4"]["atomic_mass"])
     )

@@ -8,7 +8,7 @@ import warnings
 import numpy as np
 import yaml
 from ..utils import within_tolerance, normalize_tag, normalize_tags_to_tuple, normalize_country
-from ..variable_class import Variable, Variable1D
+from ..variable_class import Variable
 from ..variable_util import make_variable
 
 # Registry paths
@@ -129,7 +129,7 @@ def allowed_variable_ndim(name: str) -> int:
         return 0
 
 
-def _load_allowed_tags() -> dict[str, Any]:
+def load_allowed_tags() -> dict[str, Any]:
     """Load allowed tags metadata. Args: none. Returns: dict."""
     global _ALLOWED_TAGS
     if _ALLOWED_TAGS is None:
@@ -143,46 +143,12 @@ def _load_allowed_tags() -> dict[str, Any]:
         _ALLOWED_TAGS = tags
     return _ALLOWED_TAGS
 
-
-# Public constants loaded from tags
-ALLOWED_VARIABLES = tuple(load_allowed_variables()[0].keys())
-ALLOWED_SOLVING_ORDER = tuple(_load_allowed_tags().get("solving_order", {}).keys())
-ALLOWED_CONFINEMENT_MODES = tuple(_load_allowed_tags().get("confinement_modes", []))
-ALLOWED_REACTOR_FAMILIES = tuple(_load_allowed_tags().get("reactor_families", []))
-ALLOWED_REACTOR_CONFIGURATIONS = tuple(_load_allowed_tags().get("reactor_configurations", []))
-OPTIONAL_METADATA_FIELDS = tuple(_load_allowed_tags().get("optional_metadata_fields", []))
-REQUIRED_FIELDS = tuple(_load_allowed_tags().get("required_metadata_fields", []))
 RESERVED_KEYS = ("metadata", "tags", "solver_tags", "variables")
 
 # Load constants as module-level attributes
 _constants_dict = load_constants()
 for _const_name, _const_value in _constants_dict.items():
     globals()[_const_name] = _const_value
-
-_allowed_reactions = load_allowed_reactions()
-_reactivity_config = load_reactivity_table_config()
-_reactivity_energy_grid = _reactivity_config.get("energy_grid", {}) or {}
-REACTIVITY_TABLES_DIR = (REGISTRY_PATH / _reactivity_config.get("table_dir", "")).resolve()
-REACTIVITY_ALLOWED_INTERPOLATION_KINDS = tuple(
-    _reactivity_config.get("allowed_interpolation_kinds", ()) or ()
-)
-REACTIVITY_CROSS_SECTION_REACTANTS = {
-    name: tuple(spec.get("reactants", ()) or ())
-    for name, spec in _allowed_reactions.items()
-    if isinstance(spec.get("reactants"), list)
-}
-REACTIVITY_ENERGY_GRID_KEV = np.logspace(
-    float(_reactivity_energy_grid.get("start_log10_kev", 0.0)),
-    float(_reactivity_energy_grid.get("stop_log10_kev", 5.0)),
-    int(_reactivity_energy_grid.get("num_points", 1000)),
-    dtype=float,
-)
-REACTIVITY_DEFAULT_METHODS = {
-    str(spec["sigmav_variable"]): f"{reaction} reactivity {spec['default_method']}"
-    for reaction, spec in _allowed_reactions.items()
-    if isinstance(spec.get("sigmav_variable"), str) and isinstance(spec.get("default_method"), str)
-}
-
 
 def canonical_variable_name(name: str) -> str:
     """Return canonical variable name (resolve aliases). Args: name. Returns: canonical name."""
@@ -193,23 +159,64 @@ def canonical_variable_name(name: str) -> str:
 
 def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
     """Parse variables from YAML. Args: variables. Returns: variables dict."""
-    _, _alias_map, default_units = load_allowed_variables()
+    _, _, default_units = load_allowed_variables()
     parsed: dict[str, Variable] = {}
     raw_vars = variables or {}
     fractions = raw_vars.get("fractions") if isinstance(raw_vars, dict) else None
     if isinstance(fractions, dict):
-        species_fraction_names = {
+        explicit_fraction_names = {
             canonical_variable_name(f"f_{species}")
             for species in fractions
+        }
+        explicit_density_names = {
+            canonical_variable_name(str(raw_name))
+            for raw_name in raw_vars
+            if raw_name != "fractions"
+            and canonical_variable_name(str(raw_name)).startswith("n_")
         }
         base: dict[str, Any] = {}
         for raw_name, entry in raw_vars.items():
             if raw_name == "fractions":
                 continue
-            if canonical_variable_name(str(raw_name)) in species_fraction_names:
+            canonical_name = canonical_variable_name(str(raw_name))
+            if canonical_name in explicit_fraction_names:
                 continue
             base[raw_name] = entry
+
+        reference_name = None
+        for candidate in ("n_i", "n_avg"):
+            if candidate in base:
+                reference_name = candidate
+                break
+        reference_entry = None if reference_name is None else base.get(reference_name)
+
+        def _scaled_fraction_entry(entry: object, fraction: object) -> object:
+            try:
+                scale = float(fraction)
+            except Exception as exc:
+                raise ValueError(f"Fraction for species seed must be numeric: {fraction!r}") from exc
+            if isinstance(entry, dict):
+                raw_value = entry.get("value")
+                if raw_value is None:
+                    raise ValueError(
+                        "fractions block requires a numeric 'n_i' or 'n_avg' value to seed species densities"
+                    )
+                return {
+                    "value": np.asarray(raw_value, dtype=float) * scale,
+                    "unit": entry.get("unit"),
+                    "method": None,
+                    "rel_tol": None,
+                    "abs_tol": None,
+                    "fixed": False,
+                    "coord": entry.get("coord"),
+                }
+            return np.asarray(entry, dtype=float) * scale
+
         for species, frac in fractions.items():
+            density_name = canonical_variable_name(f"n_{species}")
+            if reference_entry is not None and density_name not in explicit_density_names:
+                base[density_name] = _scaled_fraction_entry(reference_entry, frac)
+                continue
             name = canonical_variable_name(f"f_{species}")
             base[name] = {"value": frac}
         raw_vars = base
@@ -266,7 +273,6 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
             if lv:
                 return True
             try:
-                import numpy as np
                 left_arr = np.asarray(left, dtype=float)
                 right_arr = np.asarray(right, dtype=float)
                 return bool(left_arr.shape == right_arr.shape and np.array_equal(left_arr, right_arr))
@@ -334,7 +340,6 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
         is_profile = ndim == 1 and value is not None
         if ndim == 1 and isinstance(value, list):
             try:
-                import numpy as np
                 value = np.asarray(value, dtype=float)
             except Exception:
                 pass
@@ -440,6 +445,7 @@ __all__ = [
     "load_constants",
     "load_allowed_species",
     "load_allowed_variables",
+    "load_allowed_tags",
     "load_allowed_reactions_document",
     "load_allowed_reactions",
     "load_reactivity_table_config",
@@ -453,20 +459,7 @@ __all__ = [
     "normalize_country",
     "parse_variables",
     "validate_solver_tags",
-    # Constants from tags
-    "ALLOWED_VARIABLES",
-    "ALLOWED_SOLVING_ORDER",
-    "ALLOWED_CONFINEMENT_MODES",
-    "ALLOWED_REACTOR_FAMILIES",
-    "ALLOWED_REACTOR_CONFIGURATIONS",
-    "OPTIONAL_METADATA_FIELDS",
-    "REQUIRED_FIELDS",
     "RESERVED_KEYS",
-    "REACTIVITY_DEFAULT_METHODS",
-    "REACTIVITY_TABLES_DIR",
-    "REACTIVITY_ALLOWED_INTERPOLATION_KINDS",
-    "REACTIVITY_CROSS_SECTION_REACTANTS",
-    "REACTIVITY_ENERGY_GRID_KEV",
     # Physical constants (dynamically loaded from constants.yaml)
     "ATOMIC_MASS_UNIT_KG",
     "MEV_TO_J",

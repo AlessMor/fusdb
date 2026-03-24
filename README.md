@@ -28,5 +28,5 @@ pip install -e .
 ## Where To Look Next
 
 - Documentation site: [https://alessmor.github.io/fusdb/](https://alessmor.github.io/fusdb/)
-- Code documentation: [https://alessmor.github.io/fusdb/code_docs/](https://alessmor.github.io/fusdb/code_docs/)
-- Explore reactors: [https://alessmor.github.io/fusdb/code_docs/reactor_browser/](https://alessmor.github.io/fusdb/code_docs/reactor_browser/)
+- Source documentation: [https://alessmor.github.io/fusdb/code_docs/](https://alessmor.github.io/fusdb/code_docs/)
+- Explore reactors: [https://alessmor.github.io/fusdb/getting_started/examples/reactor_browser/](https://alessmor.github.io/fusdb/getting_started/examples/reactor_browser/)

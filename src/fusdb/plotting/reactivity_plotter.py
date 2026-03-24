@@ -360,14 +360,3 @@ def render_reactivity_plotter_html(
         CDN,
         "Fusion Reactivity Plotter",
     )
-
-
-__all__ = (
-    "ReactivitySeries",
-    "catalog_by_reaction",
-    "catalog_by_source",
-    "discover_reactivity_series",
-    "reactivity_plotter",
-    "render_reactivity_plotter_html",
-    "save_reactivity_plotter_html",
-)

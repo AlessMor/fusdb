@@ -3,19 +3,14 @@ from __future__ import annotations
 
 from fusdb.registry import KEV_TO_J
 from fusdb.relation_util import relation
-from fusdb.utils import integrate_profile_over_volume, safe_float
-
-
-def _is_symbolic(value: object) -> bool:
-    """Return True for sympy-like symbolic values."""
-    return bool(getattr(value, "free_symbols", None) is not None)
+from fusdb.utils import integrate_profile, safe_float
 
 
 @relation(name="Thermal pressure", output="p_th", tags=("plasma",))
 def thermal_pressure(n_e: float, T_e: float, n_i: float, T_i: float, V_p: float) -> float:
     """Return volume-averaged thermal pressure from profile/local quantities."""
     integrand = n_e * T_e + n_i * T_i
-    if _is_symbolic(integrand) or _is_symbolic(V_p):
+    if getattr(integrand, "free_symbols", None) is not None or getattr(V_p, "free_symbols", None) is not None:
         # For scalar symbolic placeholders the profile-average pressure reduces
         # to the local expression independent of V_p.
         return KEV_TO_J * integrand
@@ -24,9 +19,7 @@ def thermal_pressure(n_e: float, T_e: float, n_i: float, T_i: float, V_p: float)
     if v_scalar is None or v_scalar <= 0.0:
         raise ValueError("V_p must be a positive scalar for thermal pressure integration.")
 
-    integrated = integrate_profile_over_volume(integrand, v_scalar)
-    if integrated is None:
-        raise ValueError("Cannot integrate thermal-pressure profile over volume.")
+    integrated = integrate_profile(integrand, v_scalar, error_label="thermal-pressure")
     return KEV_TO_J * integrated / v_scalar
 
 
