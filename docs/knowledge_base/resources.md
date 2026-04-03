@@ -8,8 +8,8 @@ Curated set of online resources for plasma physics and fusion energy.
 
 ## Wikis and Notes
 
-- [FusionWiki (CIEMAT)](https://wiki.fusion.ciemat.es/wiki/Main_Page) [@fusionwiki_ciemat]
-- [Plasma Physics online notes (R. Fitzpatrick)](https://farside.ph.utexas.edu/teaching/plasma/Plasma/Plasmahtml.html) [@fitzpatrick_plasma_notes]
+- [FusionWiki (CIEMAT)](https://wiki.fusion.ciemat.es/wiki/Main_Page)
+- [Plasma Physics online notes (R. Fitzpatrick)](https://farside.ph.utexas.edu/teaching/plasma/Plasma/Plasmahtml.html) 
 
 ## Databases
 

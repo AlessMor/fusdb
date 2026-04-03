@@ -1,38 +1,28 @@
 # Source Documentation
 
-This section contains the code-specific documentation for `fusdb`.
-Use it when you need code structure, solver behavior, class interfaces,
-developer workflows, or module-level APIs.
+This section contains the code documentation for `fusdb`.
 
-## General Overview
+The main objects used in `fusdb` are:
+- [Reactor](reactor_class.md)
+- [Variable](variable_class.md)
+- [Relation](relation_class.md)
+- [RelationSystem](relationsystem_class.md)
 
-- [Physics Domains](physics_domains.md): how relations are grouped across the codebase.
-- [Relation Interactions](relation_interactions.md): how coupled equations interact during a solve.
-- [Workflow Playbooks](workflows.md): practical extension and validation tasks.
-- [Relations and Variables](relations_variables.md): core concepts and graph view.
-- [Profile Integration](profile_integration.md): profile-aware relation conventions.
+## Reactors
 
-## Class and System Reference
+A [Reactor](reactor_class.md) is an object containing all the information pertaining to a specific fusion reactor configuration. It stores metadata such as its name, configuration, year and DOI of publication of its design, solver-specific settings, and available data taken from the cited reference.
 
-- [Reactor Class](reactor_class.md): class fields, methods, and examples.
-- [Relation Class](relation_class.md): relation definition and solver-facing behavior.
-- [Variable Class](variable_class.md): scalar/profile container behavior and tolerances.
-- [RelationSystem](relationsystem_class.md): coupled solve orchestration and diagnostics.
+Reactor can be defined directly as an object or as yaml files. Reactor YAML inputs are summarized in the [Reactor YAML Reference](reactors/index.md). The full reactor library is available in the [`reactors/` folder](https://github.com/AlessMor/fusdb/tree/main/reactors).
 
-## API Reference
+## Relations, Variables and RelationSystem
 
-- [API Overview](api/index.md): generated module reference mirroring `src/fusdb`.
-- [fusdb Package Tree](api/fusdb/index.md): root package and subpackages.
-- [Relations Package](api/fusdb/relations/index.md): relation domains and modules.
-- [Registry Package](api/fusdb/registry/index.md): registry loaders, defaults, and YAML reference pages.
-- [Utilities Module](api/fusdb/utils.md): shared helper functions.
+Each reactor data is classified as a [Variable](variable_class.md). Since the main scope of `fusdb` is to infer missing data from a reactor and find inconsistencies, the variables are considered as "suggestions" rather than being fixed (unless specified in the reactor file).
 
-## Example Notebooks
+A [Relation](relation_class.md) on the other hand is always considered true, as it represents a physical relation between a number of variables.
 
-- [Relation Graph Generator](examples/relation_graph_generator.ipynb): generate graph visualizations for relations and variables.
-- [Read ENDF-6 Format](examples/read_ENDF6-format.ipynb): inspect MF=3 sections and export annotated YAML tables.
+A set of relations and variables can be used to create a [RelationSystem](relationsystem_class.md), that handles the connections between relations and variables and hosts the solver. 
 
-## Related Sections
-
-- [Getting Started](../getting_started/index.md): installation, usage guides, and user-facing notebooks.
-- [Knowledge Base](../knowledge_base/index.md): physics notes and shared bibliography.
+The full set of relations and variables is represented by the following graph:
+<div style="width: 100%; height: 900px; border: 1px solid #e1e4e5;">
+  <iframe src="../relations_variables_graph.html" style="width: 100%; height: 100%; border: 0;" loading="lazy"></iframe>
+</div>

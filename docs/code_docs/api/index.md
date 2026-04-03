@@ -11,6 +11,4 @@ subpackages that exist in the source code.
 - [Package Root](fusdb/index.md)
 - [Relations](fusdb/relations/index.md)
 - [Registry](fusdb/registry/index.md)
-- [Registry Data Files](fusdb/registry/index.md)
-- [Utilities](fusdb/utils.md)
-- [Reactivity Functions](fusdb/relations/reactivities/reactivity_functions.md)
+- [Reactor YAML References](../reactors/index.md) (data files, not Python API modules)

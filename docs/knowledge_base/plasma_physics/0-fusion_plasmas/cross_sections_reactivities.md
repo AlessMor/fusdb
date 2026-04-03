@@ -45,10 +45,8 @@ Often the particles move with a distribution of relative velocities, $f(v)$
   ></iframe>
 </div>
 
-The implemented `fusdb` relations can be browsed in the
-[reactivity API reference](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions)
-and compared in the
-[interactive reactivity plotter](../../../getting_started/reactivity_plotter.md).
+The implemented reactivity functions relations can be browsed in the
+[API reference](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions)
 
 ### Bosch and Hale, 1992
 
@@ -97,13 +95,14 @@ and
 [THe3_np](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_np_ENDFB_VIII1).
 
 ### Other fits:
-[@caughlan_fowler_1988], [@hively_1977]
 
-In `fusdb`, this currently includes
+In `fusdb`, this currently includes Hively (1977) reactivities:
 [DT Hively](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DT_Hively),
 [DD Hively](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DD_Hively) and its two channels
 [DDn Hively](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DDn_Hively),
 [DDp Hively](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DDp_Hively),
+[@hively_1977]
+as well as Caughlan and Fowler (1988) reactivities:[@caughlan_fowler_1988]
 [TT CF88](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_TT_CF88),
 [He3He3 CF88](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_He3He3_CF88),
 and
@@ -117,9 +116,9 @@ and
 
 - [SciPython: Nuclear fusion cross-sections](https://scipython.com/blog/nuclear-fusion-cross-sections/)
 
-- A comprehensive discussion on the reaction rate is done on [@freidberg_2007]
+- A comprehensive discussion on the reaction rate is done by Freidberg (2007) [@freidberg_2007]
 
-- ENDF website: [https://www.nndc.bnl.gov/endf/](https://www.nndc.bnl.gov/endf/)
+- ENDF website: [@ENDF]  [https://www.nndc.bnl.gov/endf/](https://www.nndc.bnl.gov/endf/)
 
 ### Bibliography:
 \bibliography
