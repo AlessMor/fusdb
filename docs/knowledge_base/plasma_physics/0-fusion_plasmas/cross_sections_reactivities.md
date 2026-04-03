@@ -39,7 +39,7 @@ Often the particles move with a distribution of relative velocities, $f(v)$
 
 <div style="width: 100%; height: 760px; border: 1px solid #e1e4e5;">
   <iframe
-    src="../../../code_docs/reactivity_plotter.html"
+    src="../../../../code_docs/reactivity_plotter.html"
     style="width: 100%; height: 100%; border: 0;"
     loading="lazy"
   ></iframe>
