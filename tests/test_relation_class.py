@@ -21,6 +21,10 @@ def _bundle_relation(a: float) -> dict[str, float]:
     return {"b": a + 1.0, "c": 2.0 * a}
 
 
+def _weighted_relation(a: float, b: float) -> float:
+    return 10.0 * a + b
+
+
 def test_relation_evaluate_and_variables():
     """Expected: canonical variables/aliases are exposed and evaluation works for default and explicit targets."""
     rel = Relation.from_callable(
@@ -39,9 +43,12 @@ def test_relation_evaluate_and_variables():
 
 def test_relation_canonicalizes_variable_names():
     """Expected: variable names are canonicalized and the preferred target resolves to canonical output."""
+    def _canonical_sum(R: float, a: float) -> float:
+        return R + a
+
     rel = Relation.from_callable(
         name="sum",
-        func=_sum_relation,
+        func=_canonical_sum,
         target="aspect_ratio",
         inputs=("major_radius", "minor_radius"),
         symbols=("major_radius", "minor_radius", "aspect_ratio"),
@@ -49,6 +56,28 @@ def test_relation_canonicalizes_variable_names():
     assert tuple(rel.symbols) == ("R", "a", "A")
     assert relation_input_names(rel) == ("R", "a")
     assert rel.outputs == ("A",)
+
+
+def test_relation_uses_named_inputs_not_declared_order():
+    """Expected: explicit input ordering no longer rewires named function parameters."""
+    rel = Relation.from_callable(
+        name="weighted",
+        func=_weighted_relation,
+        target="c",
+        inputs=("b", "a"),
+    )
+    assert rel.evaluate({"a": 2.0, "b": 3.0}) == pytest.approx(23.0)
+
+
+def test_relation_rejects_inputs_not_accepted_by_callable_name():
+    """Expected: declared inputs must be accepted by the forward callable as named parameters."""
+    with pytest.raises(TypeError, match="cannot accept declared inputs by name"):
+        Relation.from_callable(
+            name="bad_named_inputs",
+            func=_sum_relation,
+            target="c",
+            inputs=("x", "y"),
+        )
 
 
 def test_relation_solve_for_value_uses_inverse_function_override():
@@ -197,8 +226,8 @@ def test_relationsystem_evaluate_handles_multi_output_relation():
 
 def test_symbolic_proxy_preserves_keyword_only_defaults():
     """Expected: symbolic model construction handles keyword-only defaults and yields a symbolic expression."""
-    def _kw_pick(*args, _i=1) -> object:
-        return np.sqrt(args[_i] ** 2)
+    def _kw_pick(a: float, b: float, *, _i=1) -> object:
+        return np.sqrt((a, b)[_i] ** 2)
 
     rel = Relation.from_callable(
         name="kw_proxy",

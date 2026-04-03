@@ -7,7 +7,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from fusdb.relations.plasma_composition.composition_solver import steady_state_plasma_composition
+from fusdb.relations.plasma_composition.plasma_composition import (
+    plasma_balance_ode,
+    steady_state_plasma_composition,
+)
 from fusdb.relations.reactivities.reactivity_functions import sigmav_DT_BoschHale
 from fusdb.relationsystem_class import RelationSystem
 from fusdb.variable_util import make_variable
@@ -102,6 +105,47 @@ def test_burning_solution_has_positive_ash_and_preserves_total_density() -> None
         rtol=1e-12,
         atol=0.0,
     )
+
+
+def test_burning_solution_enforces_he4_balance_with_dt_feed() -> None:
+    """Expected: DT-only feed keeps the helium balance at steady state instead of absorbing it into density closure."""
+    tau_inputs = _equal_tau_inputs()
+    reactivity = float(sigmav_DT_BoschHale(14.0))
+    solved = steady_state_plasma_composition(
+        **_uniform_density_inputs(6.5e19, 6.5e19, 0.0, 0.0, n=1),
+        **_uniform_reactivity_inputs(sigmav_DT=reactivity, n=1),
+        **tau_inputs,
+    )
+
+    derivatives = np.asarray(
+        plasma_balance_ode(
+            n_D=float(solved["n_D"][0]),
+            n_T=float(solved["n_T"][0]),
+            n_He3=float(solved["n_He3"][0]),
+            n_He4=float(solved["n_He4"][0]),
+            sigmav_DT=reactivity,
+            sigmav_DDn=0.0,
+            sigmav_DDp=0.0,
+            sigmav_DHe3=0.0,
+            sigmav_TT=0.0,
+            sigmav_He3He3=0.0,
+            sigmav_THe3_D=0.0,
+            sigmav_THe3_np=0.0,
+            injection_fractions=(0.5, 0.5, 0.0, 0.0),
+            **tau_inputs,
+        ),
+        dtype=float,
+    )
+
+    total_density = float(
+        solved["n_D"][0] + solved["n_T"][0] + solved["n_He3"][0] + solved["n_He4"][0]
+    )
+    scaled = derivatives / total_density
+
+    assert scaled[0] == pytest.approx(0.0, abs=1e-10)
+    assert scaled[1] == pytest.approx(0.0, abs=1e-10)
+    assert scaled[2] == pytest.approx(0.0, abs=1e-10)
+    assert scaled[3] == pytest.approx(0.0, abs=1e-10)
 
 
 def test_composition_relation_updates_density_bundle() -> None:

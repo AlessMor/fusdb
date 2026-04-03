@@ -158,10 +158,23 @@ def canonical_variable_name(name: str) -> str:
 
 
 def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
-    """Parse variables from YAML. Args: variables. Returns: variables dict."""
+    """Parse raw YAML variables into canonical `Variable` objects.
+
+    Args:
+        variables: Raw mapping loaded from a reactor YAML file.
+
+    Returns:
+        Parsed variables keyed by canonical variable name.
+
+    Raises:
+        ValueError: If entries conflict or use unsupported value payloads.
+    """
     _, _, default_units = load_allowed_variables()
     parsed: dict[str, Variable] = {}
     raw_vars = variables or {}
+
+    # Expand the `fractions` block before the main parsing pass so the rest of
+    # the function only has to deal with one normalized variable mapping.
     fractions = raw_vars.get("fractions") if isinstance(raw_vars, dict) else None
     if isinstance(fractions, dict):
         explicit_fraction_names = {
@@ -190,68 +203,48 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                 break
         reference_entry = None if reference_name is None else base.get(reference_name)
 
-        def _scaled_fraction_entry(entry: object, fraction: object) -> object:
-            try:
-                scale = float(fraction)
-            except Exception as exc:
-                raise ValueError(f"Fraction for species seed must be numeric: {fraction!r}") from exc
-            if isinstance(entry, dict):
-                raw_value = entry.get("value")
-                if raw_value is None:
-                    raise ValueError(
-                        "fractions block requires a numeric 'n_i' or 'n_avg' value to seed species densities"
-                    )
-                return {
-                    "value": np.asarray(raw_value, dtype=float) * scale,
-                    "unit": entry.get("unit"),
-                    "method": None,
-                    "rel_tol": None,
-                    "abs_tol": None,
-                    "fixed": False,
-                    "coord": entry.get("coord"),
-                }
-            return np.asarray(entry, dtype=float) * scale
-
         for species, frac in fractions.items():
-            density_name = canonical_variable_name(f"n_{species}")
+            density_key = "n_imp" if str(species) == "Imp" else f"n_{species}"
+            density_name = canonical_variable_name(density_key)
             if reference_entry is not None and density_name not in explicit_density_names:
-                base[density_name] = _scaled_fraction_entry(reference_entry, frac)
+                try:
+                    scale = float(frac)
+                except Exception as exc:
+                    raise ValueError(
+                        f"Fraction for species seed must be numeric: {frac!r}"
+                    ) from exc
+                if isinstance(reference_entry, dict):
+                    raw_value = reference_entry.get("value")
+                    if raw_value is None:
+                        raise ValueError(
+                            "fractions block requires a numeric 'n_i' or 'n_avg' value to seed species densities"
+                        )
+                    base[density_name] = {
+                        "value": np.asarray(raw_value, dtype=float) * scale,
+                        "unit": reference_entry.get("unit"),
+                        "method": None,
+                        "rel_tol": None,
+                        "abs_tol": None,
+                        "fixed": False,
+                        "coord": reference_entry.get("coord"),
+                    }
+                else:
+                    base[density_name] = np.asarray(reference_entry, dtype=float) * scale
                 continue
-            name = canonical_variable_name(f"f_{species}")
-            base[name] = {"value": frac}
+            base[canonical_variable_name(f"f_{species}")] = {"value": frac}
         raw_vars = base
-    def _normalize_entry(entry: object) -> dict[str, object]:
-        if isinstance(entry, dict):
-            raw_value = entry.get("value")
-            if isinstance(raw_value, dict):
-                raise ValueError(
-                    "Profile dict payloads are no longer supported. "
-                    "Use a numeric scalar or 1D numeric array for 'value'."
-                )
-            return {
-                "value": raw_value,
-                "unit": entry.get("unit"),
-                "method": entry.get("method"),
-                "rel_tol": entry.get("rel_tol"),
-                "abs_tol": entry.get("abs_tol"),
-                "fixed": bool(entry.get("fixed", False)),
-                "coord": canonical_variable_name(str(entry.get("coord"))) if entry.get("coord") else None,
-            }
-        return {
-            "value": entry,
-            "unit": None,
-            "method": None,
-            "rel_tol": None,
-            "abs_tol": None,
-            "fixed": False,
-            "coord": None,
-        }
+
+    # Group aliases first so the merge logic only has to reason about canonical names.
     grouped: dict[str, list[tuple[str, object]]] = {}
     if isinstance(raw_vars, dict):
         for raw_name, entry in raw_vars.items():
             if raw_name == "fractions":
                 continue
-            grouped.setdefault(canonical_variable_name(raw_name), []).append((raw_name, entry))
+            canonical_name = canonical_variable_name(str(raw_name))
+            grouped.setdefault(canonical_name, []).append((str(raw_name), entry))
+
+    # Merge all aliases for one canonical variable and then create/update the
+    # corresponding `Variable` object once.
     for name, entries in grouped.items():
         merged: dict[str, object] = {
             "value": None,
@@ -266,55 +259,78 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
         coord_source = None
         conflicts: list[str] = []
 
-        def _values_same(left: object, right: object) -> bool:
-            if left is right:
-                return True
-            lv = within_tolerance(left, right)
-            if lv:
-                return True
-            try:
-                left_arr = np.asarray(left, dtype=float)
-                right_arr = np.asarray(right, dtype=float)
-                return bool(left_arr.shape == right_arr.shape and np.array_equal(left_arr, right_arr))
-            except Exception:
-                pass
-            try:
-                return bool(left == right)
-            except Exception:
-                return False
-
         for raw_name, entry in entries:
-            item = _normalize_entry(entry)
-            value = item.get("value")
+            if isinstance(entry, dict):
+                value = entry.get("value")
+                if isinstance(value, dict):
+                    raise ValueError(
+                        "Profile dict payloads are no longer supported. "
+                        "Use a numeric scalar or 1D numeric array for 'value'."
+                    )
+                unit = entry.get("unit")
+                method = entry.get("method")
+                rel_tol = entry.get("rel_tol")
+                abs_tol = entry.get("abs_tol")
+                fixed = bool(entry.get("fixed", False))
+                coord = (
+                    canonical_variable_name(str(entry.get("coord")))
+                    if entry.get("coord")
+                    else None
+                )
+            else:
+                value = entry
+                unit = None
+                method = None
+                rel_tol = None
+                abs_tol = None
+                fixed = False
+                coord = None
+
             if value is not None:
                 if merged["value"] is None:
                     merged["value"] = value
                     value_source = raw_name
-                elif not _values_same(merged["value"], value):
-                    conflicts.append(f"value {raw_name}={value} conflicts with {value_source}={merged['value']}")
-            unit = item.get("unit")
+                else:
+                    values_same = merged["value"] is value
+                    if not values_same:
+                        values_same = within_tolerance(merged["value"], value)
+                    if not values_same:
+                        try:
+                            left_arr = np.asarray(merged["value"], dtype=float)
+                            right_arr = np.asarray(value, dtype=float)
+                            values_same = bool(
+                                left_arr.shape == right_arr.shape
+                                and np.array_equal(left_arr, right_arr)
+                            )
+                        except Exception:
+                            values_same = False
+                    if not values_same:
+                        try:
+                            values_same = bool(merged["value"] == value)
+                        except Exception:
+                            values_same = False
+                    if not values_same:
+                        conflicts.append(
+                            f"value {raw_name}={value} conflicts with {value_source}={merged['value']}"
+                        )
             if unit:
                 if merged["unit"] is None:
                     merged["unit"] = unit
                     unit_source = raw_name
                 elif merged["unit"] != unit:
                     conflicts.append(f"unit {raw_name}={unit} conflicts with {unit_source}={merged['unit']}")
-            method = item.get("method")
             if method:
                 if merged["method"] is None:
                     merged["method"] = method
                     method_source = raw_name
                 elif merged["method"] != method:
                     conflicts.append(f"method {raw_name}={method} conflicts with {method_source}={merged['method']}")
-            rel_tol = item.get("rel_tol")
             if rel_tol is not None:
                 merged["rel_tol"] = rel_tol if merged["rel_tol"] is None else min(merged["rel_tol"], rel_tol)
-            abs_tol = item.get("abs_tol")
             if abs_tol is not None:
                 merged["abs_tol"] = abs_tol if merged["abs_tol"] is None else min(merged["abs_tol"], abs_tol)
-            if item.get("fixed"):
+            if fixed:
                 merged["fixed"] = True
-            coord = item.get("coord")
             if coord:
                 if merged["coord"] is None:
                     merged["coord"] = coord
@@ -405,74 +421,46 @@ def validate_solver_tags(solver_tags: dict[str, Any] | None, *, log: logging.Log
         return
     allowed = load_solver_defaults() or {}
     allowed_keys = set(allowed.keys())
-    def _warn(msg: str) -> None:
+
+    # Keep validation explicit so every branch emits the exact warning message
+    # without routing through a local wrapper.
+    for key in solver_tags:
+        if key not in allowed_keys:
+            msg = f"Unknown solver tag '{key}'. Allowed: {sorted(allowed_keys)}"
+            if log:
+                log.warning(msg)
+            else:
+                warnings.warn(msg, UserWarning)
+    mode = solver_tags.get("mode")
+    if mode is not None:
+        if mode not in ("overwrite", "check"):
+            msg = f"Invalid solver mode '{mode}'. Allowed: ['overwrite', 'check']"
+            if log:
+                log.warning(msg)
+            else:
+                warnings.warn(msg, UserWarning)
+    solver = solver_tags.get("solver")
+    if solver is not None:
+        if solver not in ("lsq_compact",):
+            msg = f"Invalid solver '{solver}'. Allowed: ['lsq_compact']"
+            if log:
+                log.warning(msg)
+            else:
+                warnings.warn(msg, UserWarning)
+    lsq = solver_tags.get("lsq")
+    if lsq is not None and not isinstance(lsq, dict):
+        msg = "solver_tags.lsq must be a mapping"
         if log:
             log.warning(msg)
         else:
             warnings.warn(msg, UserWarning)
-    for key in solver_tags:
-        if key not in allowed_keys:
-            _warn(f"Unknown solver tag '{key}'. Allowed: {sorted(allowed_keys)}")
-    mode = solver_tags.get("mode")
-    if mode is not None:
-        if mode not in ("overwrite", "check"):
-            _warn(f"Invalid solver mode '{mode}'. Allowed: ['overwrite', 'check']")
-    solver = solver_tags.get("solver")
-    if solver is not None:
-        if solver not in ("lsq_compact",):
-            _warn(f"Invalid solver '{solver}'. Allowed: ['lsq_compact']")
-    lsq = solver_tags.get("lsq")
-    if lsq is not None and not isinstance(lsq, dict):
-        _warn("solver_tags.lsq must be a mapping")
     elif isinstance(lsq, dict):
         allowed_lsq = allowed.get("lsq", {})
         allowed_lsq_keys = set(allowed_lsq.keys()) if isinstance(allowed_lsq, dict) else set()
         for key in lsq:
             if key not in allowed_lsq_keys:
-                _warn(f"Unknown lsq setting '{key}'. Allowed: {sorted(allowed_lsq_keys)}")
-
-
-# Define what's exported when using "from fusdb.registry import *"
-__all__ = [
-    # Paths
-    "REGISTRY_PATH",
-    "TAGS_PATH",
-    "VARIABLES_PATH",
-    "SPECIES_PATH",
-    "SOLVER_DEFAULTS_PATH",
-    "ALLOWED_REACTIONS_PATH",
-    # Functions
-    "load_constants",
-    "load_allowed_species",
-    "load_allowed_variables",
-    "load_allowed_tags",
-    "load_allowed_reactions_document",
-    "load_allowed_reactions",
-    "load_reactivity_table_config",
-    "load_solver_defaults",
-    "allowed_variable_constraints",
-    "allowed_variable_soft_constraints",
-    "allowed_variable_ndim",
-    "normalize_tag",
-    "normalize_tags_to_tuple",
-    "canonical_variable_name",
-    "normalize_country",
-    "parse_variables",
-    "validate_solver_tags",
-    "RESERVED_KEYS",
-    # Physical constants (dynamically loaded from constants.yaml)
-    "ATOMIC_MASS_UNIT_KG",
-    "MEV_TO_J",
-    "KEV_TO_J",
-    "MU0",
-    "DT_REACTION_ENERGY_J",
-    "DT_ALPHA_ENERGY_J",
-    "DT_N_ENERGY_J",
-    "DD_T_ENERGY_J",
-    "DD_HE3_ENERGY_J",
-    "DD_P_ENERGY_J",
-    "DD_N_ENERGY_J",
-    "DHE3_ALPHA_ENERGY_J",
-    "DHE3_P_ENERGY_J",
-    "TT_REACTION_ENERGY_J",
-]
+                msg = f"Unknown lsq setting '{key}'. Allowed: {sorted(allowed_lsq_keys)}"
+                if log:
+                    log.warning(msg)
+                else:
+                    warnings.warn(msg, UserWarning)

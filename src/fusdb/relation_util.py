@@ -51,10 +51,11 @@ def build_symbolic_model(
 
     arg_tuple = tuple(arg_names)
     symbols = {name: sp.Symbol(name, real=True) for name in (*arg_tuple, preferred_target)}
+    symbol_inputs = {name: symbols[name] for name in arg_tuple}
 
     direct_exc: Exception | None = None
     try:
-        expr = func(*[symbols[name] for name in arg_tuple])
+        expr = func(**symbol_inputs)
         return symbols[preferred_target] - expr, symbols
     except Exception as exc:
         direct_exc = exc
@@ -113,9 +114,8 @@ def build_symbolic_model(
             func.__defaults__,
             func.__closure__,
         )
-        # Preserve keyword-only defaults for callables that use ``def f(*args, key=...)``.
         patched_func.__kwdefaults__ = getattr(func, "__kwdefaults__", None)
-        expr = patched_func(*[symbols[name] for name in arg_tuple])
+        expr = patched_func(**symbol_inputs)
         return symbols[preferred_target] - expr, symbols
     except Exception as exc:
         proxy_exc = exc
@@ -247,11 +247,21 @@ def build_relation_from_callable(
     from .relation_class import Relation
 
     relation_name = name
-    if inputs is None:
-        input_tuple = tuple(inspect.signature(func).parameters)
-    else:
-        input_tuple = tuple(inputs)
+    signature = inspect.signature(func)
+    input_tuple = tuple(signature.parameters) if inputs is None else tuple(inputs)
     input_tuple = tuple(canonical_variable_name(str(name)) for name in input_tuple)
+    params = signature.parameters
+    if not any(param.kind == inspect.Parameter.VAR_KEYWORD for param in params.values()):
+        invalid = [
+            name
+            for name in input_tuple
+            if name not in params
+            or params[name].kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.VAR_POSITIONAL)
+        ]
+        if invalid:
+            raise TypeError(
+                f"Relation '{relation_name}' forward callable cannot accept declared inputs by name: {invalid!r}"
+            )
 
     if outputs is None:
         output_tuple = () if target is None else (target,)
@@ -355,32 +365,9 @@ def _call_relation_solver(relation: "Relation", target: str, values: Mapping[str
     return fn(*(values[name] for name in ordered))
 
 
-def _call_relation_forward(relation: "Relation", values: Mapping[str, object]) -> object:
-    """Evaluate the forward callable on canonical ordered inputs."""
-    return relation.forward(*(values[name] for name in relation.inputs))
-
-
 def apply_relation(relation: "Relation", values: Mapping[str, object]) -> dict[str, object]:
     """Evaluate the forward mapping and return output assignments."""
-    result = _call_relation_forward(relation, values)
-    if relation.is_multi_output:
-        if not isinstance(result, Mapping):
-            raise TypeError(
-                f"Relation '{relation.name}' with multiple outputs must return a mapping"
-            )
-        from .registry import canonical_variable_name
-
-        canonical_result = {
-            canonical_variable_name(str(name)): value
-            for name, value in result.items()
-        }
-        missing = [name for name in relation.outputs if name not in canonical_result]
-        if missing:
-            raise KeyError(
-                f"Relation '{relation.name}' did not return outputs {missing}"
-            )
-        return {name: canonical_result[name] for name in relation.outputs}
-
+    result = relation.forward(**{name: values[name] for name in relation.inputs})
     target = relation.outputs[0]
     if isinstance(result, Mapping):
         from .registry import canonical_variable_name
@@ -389,11 +376,22 @@ def apply_relation(relation: "Relation", values: Mapping[str, object]) -> dict[s
             canonical_variable_name(str(name)): value
             for name, value in result.items()
         }
+        if relation.is_multi_output:
+            missing = [name for name in relation.outputs if name not in canonical_result]
+            if missing:
+                raise KeyError(
+                    f"Relation '{relation.name}' did not return outputs {missing}"
+                )
+            return {name: canonical_result[name] for name in relation.outputs}
         if target not in canonical_result:
             raise KeyError(
                 f"Relation '{relation.name}' did not return output '{target}'"
             )
         return {target: canonical_result[target]}
+    if relation.is_multi_output:
+        raise TypeError(
+            f"Relation '{relation.name}' with multiple outputs must return a mapping"
+        )
     return {target: result}
 
 
@@ -506,7 +504,7 @@ def solve_relation_for_value(
 def relation(
     *,
     name: str | None = None,
-    output: str | None = None,
+    output: str | None = None, # NOTE: for legacy support; use outputs= for new relations
     outputs: Iterable[str] | None = None,
     inputs: Iterable[str] | None = None,
     tags: Iterable[str] | str | None = None,

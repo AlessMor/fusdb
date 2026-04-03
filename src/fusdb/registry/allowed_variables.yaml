@@ -373,6 +373,13 @@ n_He4:
     - n_He4 >= 0
   description:
     - Helium-4 ion density profile.
+n_imp:
+  ndim: 1
+  default_unit: 1/m^3
+  constraints:
+    - n_imp >= 0
+  description:
+    - Generic impurity ion density profile.
 f_D:
   default_unit: dimensionless
   constraints:
@@ -401,6 +408,13 @@ f_He4:
     - f_He4 <= 1
   description:
     - Volume-integrated helium-4 ion fraction.
+f_Imp:
+  default_unit: dimensionless
+  constraints:
+    - f_Imp >= 0
+    - f_Imp <= 1
+  description:
+    - Volume-integrated generic impurity ion fraction.
 ################ CONFINEMENT & PERFORMANCE ################
 TBR:
   default_unit: dimensionless
@@ -443,6 +457,12 @@ tau_p_He4:
     - tau_p_He4 > 0
   description:
     - Helium-4 particle confinement time.
+tau_p_Imp:
+  default_unit: s
+  constraints:
+    - tau_p_Imp > 0
+  description:
+    - Generic impurity particle confinement time.
 tau_pulse:
   default_unit: s
   constraints:
@@ -859,7 +879,7 @@ kappa_ipb:
 afuel:
   default_unit: amu
   description:
-    - Average fuel mass number.
+    - Average fuel mass number (D/T/He3 only).
 
 
 # TODO(low): check currently allowed variables units and descriptions, then add aliases if needed

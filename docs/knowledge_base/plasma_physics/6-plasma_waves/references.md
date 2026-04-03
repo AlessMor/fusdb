@@ -1,5 +1,5 @@
 ---
-status: darft
+status: draft
 ---
 Chen (2016): Ch. 4
 Miyamoto (2016): Ch. 9–10

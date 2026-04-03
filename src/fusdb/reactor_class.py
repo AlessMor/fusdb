@@ -18,28 +18,6 @@ from .variable_class import Variable
 
 logger = logging.getLogger(__name__)
 
-
-def make_logger(
-    module_logger: logging.Logger,
-    owner: str,
-    *,
-    verbose: bool,
-) -> logging.Logger:
-    """Return a child logger configured for the requested verbosity."""
-    log = module_logger.getChild(owner)
-    log.setLevel(logging.INFO if verbose else logging.WARNING)
-    return log
-
-
-def set_log_verbosity(log: logging.Logger, *, verbose: bool) -> None:
-    """Set logger level from boolean verbosity."""
-    log.setLevel(logging.INFO if verbose else logging.WARNING)
-
-
-def log_message(log: logging.Logger, level: int, msg: str, *args: object) -> None:
-    """Emit one log message preserving the class call-site location."""
-    log.log(level, msg, *args, stacklevel=2)
-
 @dataclass
 class Reactor:
     """Container for fusion reactor specifications, variables, and solving logic.
@@ -84,11 +62,8 @@ class Reactor:
 
     def __post_init__(self) -> None:
         """Initialize per-instance logger with context."""
-        self._log = make_logger(
-            logger,
-            self.__class__.__name__,
-            verbose=self.verbose,
-        )
+        self._log = logger.getChild(self.__class__.__name__)
+        self._log.setLevel(logging.INFO if self.verbose else logging.WARNING)
 
     @classmethod # can call Reactor.from_yaml() directly, without an instance
     def from_yaml(cls, path_like: str | Path) -> "Reactor":
@@ -113,18 +88,14 @@ class Reactor:
         return reactor_from_yaml(path_like, cls=cls)
 
     def _ordered_relations(self) -> Iterable[Relation]:
-        """Generate relations in the order they should be solved.
-        
-        If solving_order is specified, relations are yielded domain by domain
-        in the specified order. Otherwise, all applicable relations are yielded
-        based on reactor tags and available variables.
-        
+        """Yield applicable relations in the order the solver should consume them.
+
         Yields:
-            Relation objects in solve order (no duplicates).
+            Relation objects in solve order without duplicates.
         """
+        # Start from the relations that match this reactor state.
         variable_names = self.variables_dict.keys()
         variable_methods = [var.method for var in self.variables_dict.values() if var.method]
-
         base_relations = list(
             get_filtered_relations(
                 self.tags,
@@ -135,7 +106,7 @@ class Reactor:
         )
         rel_by_name = {rel.name: rel for rel in base_relations}
 
-        # No order specified - return all applicable relations (domain-prioritized)
+        # Without an explicit domain order, prefer the registry solving order.
         if not self.solving_order:
             from .registry import load_allowed_tags
 
@@ -163,14 +134,15 @@ class Reactor:
 
             yield from base_relations
             return
-        
-        # Domains specified - yield relations domain by domain in order
-        seen: list[Relation] = []
+
+        # With an explicit domain order, walk the order top-to-bottom and
+        # deduplicate relation objects as they are emitted.
+        seen: set[Relation] = set()
         for item in self.solving_order:
             if item in rel_by_name:
                 rel = rel_by_name[item]
                 if rel not in seen:
-                    seen.append(rel)
+                    seen.add(rel)
                     yield rel
                 continue
             domain_tags = (*self.tags, normalize_tag(item))
@@ -182,85 +154,8 @@ class Reactor:
             ):
                 if rel in seen:
                     continue
-                seen.append(rel)
+                seen.add(rel)
                 yield rel
-
-    def _solve_once(
-        self,
-        *,
-        solver_mode: str,
-        verbosity: bool,
-        enforce_constraint_tags: tuple[str, ...],
-        enforce_constraint_names: tuple[str, ...],
-    ) -> None:
-        """Run one full relation solve with the current reactor variables."""
-        if not self.solving_order:
-            rels = list(self.relations)
-            log_message(self._log, logging.INFO, "Solving %d relations (no domains)", len(rels))
-            system = RelationSystem(
-                rels,
-                list(self.variables_dict.values()),
-                mode=solver_mode,
-                verbose=verbosity,
-                enforce_constraint_tags=enforce_constraint_tags,
-                enforce_constraint_names=enforce_constraint_names,
-            )
-            system.solve()
-            self.variables_dict.update(system.variables_dict)
-            return
-
-        variable_names = self.variables_dict.keys()
-        variable_methods = [var.method for var in self.variables_dict.values() if var.method]
-        rel_by_name = {rel.name: rel for rel in self._ordered_relations()}
-
-        if len(self.solving_order) > 1:
-            seen: dict[str, set[str]] = {}
-            for item in self.solving_order:
-                if item in rel_by_name:
-                    rels = [rel_by_name[item]]
-                    outputs = set(rels[0].outputs)
-                else:
-                    domain_tags = (*self.tags, normalize_tag(item))
-                    outputs = {
-                        output
-                        for rel in get_filtered_relations(
-                            domain_tags,
-                            variable_names,
-                            variable_methods,
-                            extra_relations=self.default_relations,
-                        )
-                        for output in rel.outputs
-                    }
-                for other, other_outputs in seen.items():
-                    if overlap := outputs & other_outputs:
-                        warnings.warn(
-                            f"Relation domains '{other}' and '{item}' both solve {sorted(overlap)}",
-                            UserWarning,
-                        )
-                seen[item] = outputs
-
-        for item in self.solving_order:
-            if item in rel_by_name:
-                rels = [rel_by_name[item]]
-            else:
-                domain_tags = (*self.tags, normalize_tag(item))
-                rels = get_filtered_relations(
-                    domain_tags,
-                    variable_names,
-                    variable_methods,
-                    extra_relations=self.default_relations,
-                )
-            log_message(self._log, logging.INFO, "Solving domain %s with %d relations", item, len(rels))
-            system = RelationSystem(
-                rels,
-                list(self.variables_dict.values()),
-                mode=solver_mode,
-                verbose=verbosity,
-                enforce_constraint_tags=enforce_constraint_tags,
-                enforce_constraint_names=enforce_constraint_names,
-            )
-            system.solve()
-            self.variables_dict.update(system.variables_dict)
 
     def solve(
         self,
@@ -285,28 +180,105 @@ class Reactor:
             >>> reactor = Reactor.from_yaml('reactors/ARC_2015/reactor.yaml')
             >>> reactor.solve(verbose=True)  # Show detailed solving progress
         """
-        # Use provided mode/verbosity or fall back to instance defaults
+        # Resolve runtime solver settings first so the rest of the method reads
+        # from one normalized set of values.
         solver_mode = mode or self.solver_mode
         verbosity = self.verbose if verbose is None else verbose
-        set_log_verbosity(self._log, verbose=verbosity)
-        log_message(
-            self._log,
+        self._log.setLevel(logging.INFO if verbosity else logging.WARNING)
+        self._log.log(
             logging.INFO,
             "Solving reactor %s (%s) with mode=%s",
             self.id or "unknown",
             self.name or "unknown",
             solver_mode,
+            stacklevel=2,
         )
-
         constraint_tags_tuple = tuple(enforce_constraint_tags or ())
         constraint_names_tuple = tuple(enforce_constraint_names or ())
 
-        self._solve_once(
-            solver_mode=solver_mode,
-            verbosity=verbosity,
-            enforce_constraint_tags=constraint_tags_tuple,
-            enforce_constraint_names=constraint_names_tuple,
-        )
+        # Solve everything in one shot when no domain ordering is requested.
+        if not self.solving_order:
+            rels = list(self.relations)
+            self._log.log(
+                logging.INFO,
+                "Solving %d relations (no domains)",
+                len(rels),
+                stacklevel=2,
+            )
+            system = RelationSystem(
+                rels,
+                list(self.variables_dict.values()),
+                mode=solver_mode,
+                verbose=verbosity,
+                enforce_constraint_tags=constraint_tags_tuple,
+                enforce_constraint_names=constraint_names_tuple,
+            )
+            system.solve()
+            self.variables_dict.update(system.variables_dict)
+            return
+
+        # Reuse the current reactor state to resolve each requested domain in order.
+        variable_names = self.variables_dict.keys()
+        variable_methods = [var.method for var in self.variables_dict.values() if var.method]
+        rel_by_name = {rel.name: rel for rel in self._ordered_relations()}
+
+        # Warn early when two requested domains are both able to drive the same output.
+        if len(self.solving_order) > 1:
+            seen_outputs: dict[str, set[str]] = {}
+            for item in self.solving_order:
+                if item in rel_by_name:
+                    outputs = set(rel_by_name[item].outputs)
+                else:
+                    domain_tags = (*self.tags, normalize_tag(item))
+                    outputs = {
+                        output
+                        for rel in get_filtered_relations(
+                            domain_tags,
+                            variable_names,
+                            variable_methods,
+                            extra_relations=self.default_relations,
+                        )
+                        for output in rel.outputs
+                    }
+                for other_name, other_outputs in seen_outputs.items():
+                    overlap = outputs & other_outputs
+                    if overlap:
+                        warnings.warn(
+                            f"Relation domains '{other_name}' and '{item}' both solve {sorted(overlap)}",
+                            UserWarning,
+                        )
+                seen_outputs[item] = outputs
+
+        # Solve each requested domain against the latest variable values.
+        for item in self.solving_order:
+            if item in rel_by_name:
+                rels = [rel_by_name[item]]
+            else:
+                rels = list(
+                    get_filtered_relations(
+                        (*self.tags, normalize_tag(item)),
+                        variable_names,
+                        variable_methods,
+                        extra_relations=self.default_relations,
+                    )
+                )
+            self._log.log(
+                logging.INFO,
+                "Solving domain %s with %d relations",
+                item,
+                len(rels),
+                stacklevel=2,
+            )
+            system = RelationSystem(
+                rels,
+                list(self.variables_dict.values()),
+                mode=solver_mode,
+                verbose=verbosity,
+                enforce_constraint_tags=constraint_tags_tuple,
+                enforce_constraint_names=constraint_names_tuple,
+            )
+            system.solve()
+            self.variables_dict.update(system.variables_dict)
 
     def diagnose(self) -> dict[str, object]:
         """Run comprehensive diagnostics on reactor consistency.

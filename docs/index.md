@@ -50,4 +50,4 @@
 - [Cross sections and reactivities](knowledge_base/plasma_physics/0-fusion_plasmas/cross_sections_reactivities.md)
 - [Developer's Guide](developers_guide/index.md)
 - [Source documentation overview](code_docs/index.md)
-- [Bibliography](knowledge_base/bibliography.md)
+- [Bibliography](bibliography/index.md)

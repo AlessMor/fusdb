@@ -25,6 +25,7 @@ _SPECIES_DENSITY_DEFAULTS: dict[str, float] = {
     "n_T": 0.5,
     "n_He3": 0.0,
     "n_He4": 0.0,
+    "n_imp": 0.0,
 }
 _SPECIES_DENSITY_KEYS = tuple(_SPECIES_DENSITY_DEFAULTS.keys())
 def _build_relation(name: str, output: str, func, *, tags: tuple[str, ...] = ("plasma",)) -> Relation:
@@ -268,7 +269,7 @@ def apply_reactor_defaults(
     # Default species particle confinement times to generic tau_p if provided.
     if has_input("tau_p"):
         tau_p = variables["tau_p"].input_value
-        for species in ("D", "T", "He3", "He4"):
+        for species in ("D", "T", "He3", "He4", "Imp"):
             name = f"tau_p_{species}"
             var = variables.get(name)
             if var is None or var.input_value is None:

@@ -14,9 +14,9 @@ from fusdb.relation_util import relation
     constraints=("P_rad >= 0",),
 )
 def total_radiated_power(
-    P_rad_bremsstrahlung: float,
-    P_rad_line: float,
-    P_rad_synchrotron: float,
+    P_brem: float,
+    P_line: float,
+    P_sync: float,
 ) -> float:
     """Return total radiated power from bremsstrahlung, line, and synchrotron radiation."""
-    return P_rad_bremsstrahlung + P_rad_line + P_rad_synchrotron
+    return P_brem + P_line + P_sync

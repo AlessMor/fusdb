@@ -60,7 +60,7 @@ plugins:
             separate_signature: true
             members_order: source
   - bibtex:
-      bib_file: bibliography.bib
+      bib_file: bibliography/bibliography.bib
       bib_by_default: false
       enable_inline_citations: false
 

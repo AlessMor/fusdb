@@ -29,5 +29,11 @@ He4:
   atomic_number: 2
   atomic_mass: 4
   isotopic_mass_u: 4.003
+Imp:
+  full_name: generic impurity (currently assumed to be carbon-12)
+  atomic_symbol: "Imp"
+  atomic_number: 6
+  atomic_mass: 12
+  isotopic_mass_u: 12.0
 
 # TODO(low): add specific data for each species (radas data as in cfspopcon?)

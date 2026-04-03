@@ -1,5 +1,5 @@
 ---
-status: darft
+status: draft
 ---
 Freidberg (2007): Ch. 10–11
 Zohm (2015): Ch. 1–2
