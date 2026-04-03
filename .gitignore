@@ -82,9 +82,11 @@ Thumbs.db
 # IDE temp files
 .*.swp
 .*.swo
+.codex
 
 # Docs builds
 _build/
+site/
 
 # Data files (if tracking output)
 *.pkl
