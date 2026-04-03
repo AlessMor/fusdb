@@ -33,18 +33,6 @@ Set at construction:
 - `inverse_solver(unknown)` -> callable or `None`
 - `solve_for_value(unknown, values)` -> solved value or `None`
 
-## Profile Integration Convention
-
-For scalar outputs that depend on profile inputs:
-
-- integrate explicitly inside the relation function (for example using
-  `fusdb.utils.integrate_profile_over_volume`);
-- keep profile dependencies explicit in variable naming (for example
-  `sigmav_DT_profile`);
-- do not rely on `RelationSystem` to auto-integrate profile-valued inputs.
-
-See [Profile Integration](profile_integration.md).
-
 ## Creating Relations
 
 ### Direct Construction

@@ -3,6 +3,7 @@
 This section contains the code documentation for `fusdb`.
 
 The main objects used in `fusdb` are:
+
 - [Reactor](reactor_class.md)
 - [Variable](variable_class.md)
 - [Relation](relation_class.md)
@@ -24,5 +25,5 @@ A set of relations and variables can be used to create a [RelationSystem](relati
 
 The full set of relations and variables is represented by the following graph:
 <div style="width: 100%; height: 900px; border: 1px solid #e1e4e5;">
-  <iframe src="../relations_variables_graph.html" style="width: 100%; height: 100%; border: 0;" loading="lazy"></iframe>
+  <iframe src="relations_variables_graph.html" style="width: 100%; height: 100%; border: 0;" loading="lazy"></iframe>
 </div>

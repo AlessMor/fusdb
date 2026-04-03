@@ -30,6 +30,17 @@ if SRC_ROOT not in sys.path:
 
 from fusdb.plotting.reactivity_plotter import render_reactivity_plotter_html
 from fusdb.plotting.relation_graph import render_relation_graph_html
+from fusdb.registry import load_allowed_reactions, load_allowed_variables
+
+_, _ALIAS_TO_VARIABLE, _DEFAULT_UNITS = load_allowed_variables()
+_DEFAULT_METHODS: dict[str, str] = {}
+for _reaction_name, _reaction_spec in load_allowed_reactions().items():
+    if not isinstance(_reaction_spec, dict):
+        continue
+    _sigmav_variable = _reaction_spec.get("sigmav_variable")
+    _default_method = _reaction_spec.get("default_method")
+    if isinstance(_sigmav_variable, str) and isinstance(_default_method, str):
+        _DEFAULT_METHODS[_sigmav_variable] = f"{_reaction_name} reactivity {_default_method}"
 
 
 def render_getting_started_markdown() -> str:
@@ -535,6 +546,42 @@ def summarize_yaml_value(value: object) -> str:
     return escape_markdown_cell(value)
 
 
+def canonical_variable_name(name: str) -> str:
+    """Return one canonical variable name using the registry alias map.
+
+    Args:
+        name: Variable name as declared in reactor YAML.
+
+    Returns:
+        Canonical variable name when an alias is known, else the original name.
+    """
+    return _ALIAS_TO_VARIABLE.get(name, name)
+
+
+def default_unit_for_variable(name: str) -> str:
+    """Return one default unit for a variable, if available in the registry.
+
+    Args:
+        name: Variable name as declared in reactor YAML.
+
+    Returns:
+        Default unit string or an empty string when unavailable.
+    """
+    return str(_DEFAULT_UNITS.get(canonical_variable_name(name)) or "")
+
+
+def default_method_for_variable(name: str) -> str:
+    """Return one default method for a variable, if available in the registry.
+
+    Args:
+        name: Variable name as declared in reactor YAML.
+
+    Returns:
+        Default method string or an empty string when unavailable.
+    """
+    return _DEFAULT_METHODS.get(canonical_variable_name(name), "")
+
+
 def render_reactor_yaml_markdown(source_path: Path) -> str:
     """Render one generated reference page for a reactor YAML file.
 
@@ -607,19 +654,31 @@ def render_reactor_yaml_markdown(source_path: Path) -> str:
 
     variable_rows: list[list[str]] = []
     for name, spec in variables_dict.items():
+        fallback_unit = default_unit_for_variable(name)
+        fallback_method = default_method_for_variable(name)
         value_cell = ""
-        unit_cell = ""
+        unit_cell = escape_markdown_cell(fallback_unit)
         fixed_cell = ""
-        method_cell = ""
+        method_cell = escape_markdown_cell(fallback_method)
         notes_cell = ""
         if isinstance(spec, dict):
             explicit_fields = ("value", "unit", "fixed", "method")
             has_explicit_fields = any(field in spec for field in explicit_fields)
             if has_explicit_fields:
                 value_cell = summarize_yaml_value(spec.get("value"))
-                unit_cell = escape_markdown_cell(spec.get("unit"))
+                explicit_unit = spec.get("unit")
+                unit_cell = (
+                    escape_markdown_cell(explicit_unit)
+                    if explicit_unit not in (None, "")
+                    else escape_markdown_cell(fallback_unit)
+                )
                 fixed_cell = escape_markdown_cell(spec.get("fixed"))
-                method_cell = escape_markdown_cell(spec.get("method"))
+                explicit_method = spec.get("method")
+                method_cell = (
+                    escape_markdown_cell(explicit_method)
+                    if explicit_method not in (None, "")
+                    else escape_markdown_cell(fallback_method)
+                )
                 extra_fields = {key: value for key, value in spec.items() if key not in explicit_fields}
                 notes_cell = summarize_yaml_value(extra_fields)
             else:
