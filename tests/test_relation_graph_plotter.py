@@ -11,92 +11,125 @@ pytest.importorskip("bokeh")
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from bokeh.models import ColumnDataSource, Div, GlyphRenderer, LayoutDOM
+from bokeh.models import AutocompleteInput, Div, GraphRenderer, LayoutDOM, Plot
 
 from fusdb.plotting.relation_graph import relation_graph_data, relation_graph_plotter, save_relation_graph_html
 
 
-def test_relation_graph_data_is_not_empty():
-    """Expected: the relation graph helper discovers variables and relation edges."""
+def _graph_renderer(layout: LayoutDOM) -> GraphRenderer:
+    """Return the graph renderer inside one relation-graph layout.
+
+    Args:
+        layout: Layout returned by ``relation_graph_plotter``.
+
+    Returns:
+        Embedded graph renderer.
+    """
+    return next(ref for ref in layout.references() if isinstance(ref, GraphRenderer))
+
+
+def test_relation_graph_data_is_not_empty() -> None:
+    """Expected: relation graph data extraction discovers nodes and edges."""
     nodes, edges = relation_graph_data()
     assert len(nodes) > 0
     assert len(edges) > 0
 
 
-def test_relation_graph_plotter_returns_bokeh_layout():
-    """Expected: the public relation graph API returns a vertical layout with plot, controls, details, and uniform variable circles."""
+def test_relation_graph_plotter_returns_layout_with_details_panel() -> None:
+    """Expected: plotter returns graph plus search/details panels below it."""
     layout = relation_graph_plotter()
     assert isinstance(layout, LayoutDOM)
     assert hasattr(layout, "children")
-    assert len(layout.children) == 3
-    assert isinstance(layout.children[-1], Div)
-    plot = layout.children[0]
-    invisible_node_hits = [
-        renderer
-        for renderer in getattr(plot, "renderers", [])
-        if isinstance(renderer, GlyphRenderer)
-        and getattr(renderer.glyph, "fill_alpha", None) == 0.0
-        and getattr(renderer.glyph, "line_alpha", None) == 0.0
-    ]
-    assert invisible_node_hits
-    variable_sources = [
-        source
-        for source in layout.references()
-        if isinstance(source, ColumnDataSource) and "name" in source.data and "size" in source.data
-    ]
-    assert len(variable_sources) == 1
-    assert len(set(variable_sources[0].data["size"])) == 1
+    assert len(layout.children) == 2
+    assert isinstance(layout.children[0], Plot)
+    assert hasattr(layout.children[1], "children")
+    assert len(layout.children[1].children) == 2
+
+    renderer = _graph_renderer(layout)
+    node_data = renderer.node_renderer.data_source.data
+    edge_data = renderer.edge_renderer.data_source.data
+
+    assert len(node_data["index"]) > 0
+    assert len(edge_data["start"]) > 0
+    assert "detail_html" in node_data
+    assert "adjacent_html" in node_data
+    assert "search_blob" in node_data
+    assert "relation" in edge_data
+
+    search_inputs = [ref for ref in layout.references() if isinstance(ref, AutocompleteInput)]
+    assert len(search_inputs) == 1
+    assert search_inputs[0].search_strategy == "includes"
+    assert len(search_inputs[0].completions) > 0
+    completion_set = {item.lower() for item in search_inputs[0].completions}
+    assert "major_radius" in completion_set
+    assert any("major radius" in item for item in completion_set)
 
 
-def test_relation_graph_edge_selection_expands_to_same_relation_name():
-    """Expected: clicking one relation edge expands selection to every edge with the same relation name."""
+def test_relation_graph_uses_variable_and_relation_node_markers() -> None:
+    """Expected: variables render as circles and relations as boxes."""
     layout = relation_graph_plotter()
-    edge_sources = [
-        source
-        for source in layout.references()
-        if isinstance(source, ColumnDataSource) and "relation" in source.data
-    ]
-    assert len(edge_sources) == 1
-    callbacks = edge_sources[0].selected.js_property_callbacks.get("change:indices", [])
+    renderer = _graph_renderer(layout)
+    marker_set = set(renderer.node_renderer.data_source.data["marker"])
+
+    assert "circle" in marker_set
+    assert "square" in marker_set
+
+
+def test_relation_graph_node_selection_callback_highlights_one_hop_neighbors() -> None:
+    """Expected: node callback computes one-hop node/edge highlights and updates details."""
+    layout = relation_graph_plotter()
+    renderer = _graph_renderer(layout)
+    node_source = renderer.node_renderer.data_source
+
+    callbacks = node_source.selected.js_property_callbacks.get("change:indices", [])
     assert callbacks
-    assert "relationName" in callbacks[0].code
-    assert "edgeSource.selected.indices = matches" in callbacks[0].code
+    callback_code = callbacks[0].code
+
+    assert "activeNodeIds" in callback_code
+    assert "activeEdgeIndices" in callback_code
+    assert "edgeSource.selected.indices = activeEdgeIndices" in callback_code
+    assert "Adjacent Nodes" in callback_code
 
 
-def test_relation_graph_layout_is_deterministic():
-    """Expected: repeated renders keep the same node coordinates."""
+def test_relation_graph_layout_is_deterministic() -> None:
+    """Expected: repeated renders keep stable node coordinates."""
     first_layout = relation_graph_plotter()
     second_layout = relation_graph_plotter()
 
-    def sources(layout: LayoutDOM) -> tuple[ColumnDataSource, ColumnDataSource]:
-        variable_source = next(
-            source
-            for source in layout.references()
-            if isinstance(source, ColumnDataSource) and "name" in source.data and "size" in source.data
+    first_renderer = _graph_renderer(first_layout)
+    second_renderer = _graph_renderer(second_layout)
+
+    first_data = first_renderer.node_renderer.data_source.data
+    second_data = second_renderer.node_renderer.data_source.data
+
+    first_coords = {
+        str(node_id): (float(x_coord), float(y_coord))
+        for node_id, x_coord, y_coord in zip(
+            first_data["index"],
+            first_data["x"],
+            first_data["y"],
+            strict=True,
         )
-        relation_source = next(
-            source
-            for source in layout.references()
-            if isinstance(source, ColumnDataSource)
-            and "relation_name" in source.data
-            and "width" in source.data
+    }
+    second_coords = {
+        str(node_id): (float(x_coord), float(y_coord))
+        for node_id, x_coord, y_coord in zip(
+            second_data["index"],
+            second_data["x"],
+            second_data["y"],
+            strict=True,
         )
-        return variable_source, relation_source
+    }
 
-    first_variable_source, first_relation_source = sources(first_layout)
-    second_variable_source, second_relation_source = sources(second_layout)
-
-    assert first_variable_source.data["x"] == second_variable_source.data["x"]
-    assert first_variable_source.data["y"] == second_variable_source.data["y"]
-    assert first_relation_source.data["x"] == second_relation_source.data["x"]
-    assert first_relation_source.data["y"] == second_relation_source.data["y"]
+    assert first_coords == second_coords
 
 
-def test_save_relation_graph_html_writes_standalone_document(tmp_path: Path):
-    """Expected: the docs helper writes an HTML file with Bokeh content."""
+def test_save_relation_graph_html_writes_standalone_document(tmp_path: Path) -> None:
+    """Expected: save helper writes standalone HTML output."""
     output_path = tmp_path / "relations_variables_graph.html"
     saved = save_relation_graph_html(output_path)
     assert saved == output_path
+
     html = output_path.read_text(encoding="utf-8")
     assert "fusdb Relation Graph" in html
     assert "Bokeh" in html

@@ -24,6 +24,9 @@ A [Relation](relation_class.md) on the other hand is always considered true, as 
 A set of relations and variables can be used to create a [RelationSystem](relationsystem_class.md), that handles the connections between relations and variables and hosts the solver. 
 
 The full set of relations and variables is represented by the following graph:
-<div style="width: 100%; height: 900px; border: 1px solid #e1e4e5;">
+Open it in a dedicated tab for easier navigation:
+<a href="relations_variables_graph.html" target="_blank" rel="noopener">Relations and Variables Graph</a>.
+
+<div style="width: 100%; height: 1200px; border: 1px solid #e1e4e5;">
   <iframe src="relations_variables_graph.html" style="width: 100%; height: 100%; border: 0;" loading="lazy"></iframe>
 </div>

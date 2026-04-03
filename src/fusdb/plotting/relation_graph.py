@@ -1,63 +1,67 @@
-"""Standalone Bokeh relation graph viewer."""
+"""Render the internal RelationSystem graph as an interactive Bokeh network."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 import hashlib
 import html
+import math
+from pathlib import Path
+import textwrap
 
 import networkx as nx
 
 from fusdb import relations
+from fusdb.relationsystem_class import RelationSystem
 from fusdb.relation_util import _RELATION_REGISTRY, relation_input_names
 from fusdb.registry import load_allowed_variables
+from fusdb.variable_util import make_variable
 
 
 DEFAULT_DETAILS_HTML = (
-    "<span style='color:#666'>Select a variable circle, relation box, or connection to see its description and metadata.</span>"
+    "<span style='color:#666'>Select one node to inspect its properties and immediate neighbors.</span>"
 )
-VARIABLE_FILL_COLOR = "#f3fbf9"
+VARIABLE_FILL_COLOR = "#e9f6f3"
 VARIABLE_LINE_COLOR = "#2b7a78"
 VARIABLE_TEXT_COLOR = "#173f3b"
-VARIABLE_MUTED_FILL_COLOR = "#eef2f3"
-VARIABLE_MUTED_LINE_COLOR = "#c9d4d8"
-VARIABLE_MUTED_TEXT_COLOR = "#8b9a9f"
-RELATION_MUTED_COLOR = "#d0d7de"
-EDGE_MUTED_COLOR = "#d0d7de"
-VARIABLE_MARKER_SIZE = 44
-VARIABLE_HIT_SIZE = 58
-LAYOUT_COMPONENT_SPAN = 3
-LAYOUT_COLUMN_GAP = 1.3
-LAYOUT_ROW_GAP = 0.82
-LAYOUT_ORDER_SWEEPS = 6
-RELATION_BASE_WIDTH = 0.34
-RELATION_WIDTH_PER_CHAR = 0.008
-RELATION_MAX_WIDTH = 0.52
-RELATION_BASE_HEIGHT = 0.16
-RELATION_CONNECTOR_GAP = 0.11
+RELATION_FILL_COLOR = "#fff3df"
+RELATION_LINE_COLOR = "#9a6500"
+RELATION_TEXT_COLOR = "#2f2f2f"
+EDGE_BASE_COLOR = "#c9ced6"
+NODE_HIGHLIGHT_COLOR = "#ffb84d"
+EDGE_HIGHLIGHT_COLOR = "#ff9f1c"
+RELATION_LABEL_WIDTH = 16
+RELATION_LABEL_MAX_LINES = 3
 
 
 @dataclass(frozen=True, slots=True)
 class RelationGraphNode:
-    name: str
-    detail_html: str
-    search_blob: str
+    """Variable node summary returned by ``relation_graph_data``.
 
+    Attributes:
+        name: Variable name.
+        detail_html: HTML details for docs/tests.
+        search_blob: Lower-cased searchable text.
+    """
 
-@dataclass(frozen=True, slots=True)
-class RelationGraphRelation:
-    uid: str
     name: str
-    output: str
-    inputs: tuple[str, ...]
-    color: str
     detail_html: str
     search_blob: str
 
 
 @dataclass(frozen=True, slots=True)
 class RelationGraphEdge:
+    """Variable-to-variable edge summary returned by ``relation_graph_data``.
+
+    Attributes:
+        source: Input variable name.
+        target: Output variable name.
+        relation: Relation name that defines the mapping.
+        color: Deterministic relation color.
+        detail_html: HTML relation details for docs/tests.
+        search_blob: Lower-cased searchable text.
+    """
+
     source: str
     target: str
     relation: str
@@ -67,11 +71,27 @@ class RelationGraphEdge:
 
 
 def _color_for(name: str) -> str:
+    """Return one deterministic color from a relation name.
+
+    Args:
+        name: Relation name.
+
+    Returns:
+        Hex color string.
+    """
     digest = hashlib.md5(name.encode("utf-8")).hexdigest()
     return f"#{digest[:6]}"
 
 
 def _format_value(value: object) -> str:
+    """Convert metadata values to readable text.
+
+    Args:
+        value: Metadata value.
+
+    Returns:
+        Plain-text representation.
+    """
     if value is None:
         return "None"
     if isinstance(value, dict):
@@ -88,24 +108,101 @@ def _format_value(value: object) -> str:
 
 
 def _html_section(title: str, items: list[tuple[str, object]]) -> str:
+    """Build one compact HTML section.
+
+    Args:
+        title: Section title.
+        items: Key/value rows.
+
+    Returns:
+        HTML fragment.
+    """
     lines = [f"<b>{html.escape(title)}</b>"]
     for key, value in items:
         lines.append(f"<b>{html.escape(str(key))}</b>: {html.escape(_format_value(value))}")
     return "<br>".join(lines)
 
 
-def _var_detail_html(name: str, spec: dict[str, object]) -> str:
+def _relation_label(name: str) -> str:
+    """Return a wrapped relation label suitable for node text.
+
+    Args:
+        name: Relation name.
+
+    Returns:
+        Label with newline breaks.
+    """
+    normalized = " ".join(name.replace("_", " ").split())
+    lines = textwrap.wrap(
+        normalized,
+        width=RELATION_LABEL_WIDTH,
+        break_long_words=True,
+        break_on_hyphens=True,
+    )
+    if not lines:
+        return normalized
+    if len(lines) <= RELATION_LABEL_MAX_LINES:
+        return "\n".join(lines)
+
+    leading = lines[: RELATION_LABEL_MAX_LINES - 1]
+    trailing = " ".join(lines[RELATION_LABEL_MAX_LINES - 1 :])
+    trailing = textwrap.shorten(trailing, width=RELATION_LABEL_WIDTH, placeholder="...")
+    return "\n".join([*leading, trailing])
+
+
+def _relation_signature(relation) -> str:
+    """Return a compact signature string for one relation.
+
+    Args:
+        relation: Relation object.
+
+    Returns:
+        Signature text.
+    """
+    inputs = ", ".join(relation.inputs)
+    outputs = ", ".join(relation.outputs)
+    return f"{relation.name}({inputs}) -> {outputs}"
+
+
+def _variable_detail_html(name: str, spec: dict[str, object], variable) -> str:
+    """Build HTML details for one variable node.
+
+    Args:
+        name: Variable name.
+        spec: Registry metadata for the variable.
+        variable: ``Variable`` object from the relation system.
+
+    Returns:
+        HTML details block.
+    """
+    # Include identity and runtime defaults first.
     variable_items = [("name", name)]
-    if "default_unit" in spec:
-        variable_items.append(("unit", spec.get("default_unit")))
-    if "ndim" in spec:
-        variable_items.append(("ndim", spec.get("ndim")))
+    if variable is not None:
+        variable_items.extend(
+            [
+                ("ndim", variable.ndim),
+                ("unit", variable.unit),
+                ("method", variable.method),
+                ("rel_tol", variable.rel_tol),
+                ("abs_tol", variable.abs_tol),
+                ("fixed", variable.fixed),
+            ]
+        )
+    else:
+        variable_items.extend(
+            [
+                ("ndim", spec.get("ndim")),
+                ("unit", spec.get("default_unit")),
+                ("method", spec.get("method")),
+            ]
+        )
 
     detail = _html_section("Variable", variable_items)
 
+    # Add registry text fields when present.
     registry_items = [
         (key, spec.get(key))
-        for key in ("aliases", "constraints", "description")
+        for key in ("aliases", "constraints", "soft_constraints", "description")
         if key in spec
     ]
     if registry_items:
@@ -114,728 +211,654 @@ def _var_detail_html(name: str, spec: dict[str, object]) -> str:
 
 
 def _relation_detail_html(relation) -> str:
-    outputs = list(relation.outputs)
-    output = relation.outputs[0]
-    inputs = list(relation_input_names(relation, output))
+    """Build HTML details for one relation node.
+
+    Args:
+        relation: Relation object.
+
+    Returns:
+        HTML details block.
+    """
+    # Summarize signature and solver defaults.
     relation_items = [
         ("name", relation.name),
-        ("outputs", outputs),
-        ("inputs", inputs),
-        ("variables", list(relation.symbols)),
-        ("tags", list(relation.tags or ())),
-        ("constraints", list(relation.constraints or ())),
+        ("signature", _relation_signature(relation)),
+        ("inputs", list(relation.inputs)),
+        ("outputs", list(relation.outputs)),
         ("rel_tol_default", relation.rel_tol_default),
         ("abs_tol_default", relation.abs_tol_default),
-        ("numeric_targets", [*relation.outputs, *[name for name in relation.solvers if name not in relation.outputs]]),
-        ("inverse_targets", list(relation.inverse_functions)),
-        (
-            "sympy_expression",
-            str(relation.sympy_expression) if relation.sympy_expression is not None else None,
-        ),
+        ("tags", list(relation.tags or ())),
+        ("constraints", list(relation.constraints or ())),
+        ("soft_constraints", list(relation.soft_constraints or ())),
+        ("inverse_targets", sorted(list(relation.inverse_functions))),
     ]
     return _html_section("Relation", relation_items)
 
 
-def _relation_records() -> list[RelationGraphRelation]:
+def _variable_aliases(spec: dict[str, object]) -> list[str]:
+    """Extract variable aliases from one registry specification.
+
+    Args:
+        spec: Variable registry entry.
+
+    Returns:
+        Flat list of alias strings.
+    """
+    # Read the aliases field and normalize all supported container types.
+    raw_aliases = (spec or {}).get("aliases")
+    if raw_aliases is None:
+        return []
+
+    alias_values: list[object]
+    if isinstance(raw_aliases, dict):
+        alias_values = [*raw_aliases.keys(), *raw_aliases.values()]
+    elif isinstance(raw_aliases, (list, tuple, set)):
+        alias_values = list(raw_aliases)
+    else:
+        alias_values = [raw_aliases]
+
+    # Keep insertion order while filtering out empty values.
+    aliases: list[str] = []
+    seen: set[str] = set()
+    for value in alias_values:
+        alias = str(value).strip()
+        normalized = alias.lower()
+        if not alias or normalized in seen:
+            continue
+        aliases.append(alias)
+        seen.add(normalized)
+    return aliases
+
+
+def _variable_descriptions(spec: dict[str, object]) -> list[str]:
+    """Extract variable descriptions from one registry specification.
+
+    Args:
+        spec: Variable registry entry.
+
+    Returns:
+        Flat list of description strings.
+    """
+    # Read the description field and normalize all supported container types.
+    raw_descriptions = (spec or {}).get("description")
+    if raw_descriptions is None:
+        return []
+
+    description_values: list[object]
+    if isinstance(raw_descriptions, dict):
+        description_values = [*raw_descriptions.keys(), *raw_descriptions.values()]
+    elif isinstance(raw_descriptions, (list, tuple, set)):
+        description_values = list(raw_descriptions)
+    else:
+        description_values = [raw_descriptions]
+
+    # Keep insertion order while filtering out empty values.
+    descriptions: list[str] = []
+    seen: set[str] = set()
+    for value in description_values:
+        description = str(value).strip()
+        normalized = description.lower()
+        if not description or normalized in seen:
+            continue
+        descriptions.append(description)
+        seen.add(normalized)
+    return descriptions
+
+
+def _build_relationsystem() -> RelationSystem:
+    """Build a RelationSystem instance from registered relations and variable registry.
+
+    Returns:
+        Ready-to-use relation system with internal graph metadata.
+    """
+    # Ensure relation modules are imported before reading the registry list.
     relations.import_relations()
     relation_list = list(_RELATION_REGISTRY)
 
-    records: list[RelationGraphRelation] = []
-    for index, relation in enumerate(relation_list):
-        outputs = tuple(relation.outputs)
-        if not outputs:
-            continue
-        detail_html = _relation_detail_html(relation)
-        for out_index, output in enumerate(outputs):
-            inputs = tuple(relation_input_names(relation, output))
-            search_blob = " ".join(
-                [
-                    relation.name,
-                    output,
-                    *inputs,
-                    *list(relation.tags or ()),
-                    *[str(item) for item in (relation.constraints or ())],
-                ]
-            ).lower()
-            records.append(
-                RelationGraphRelation(
-                    uid=f"relation::{index}::{out_index}",
-                    name=relation.name,
-                    output=output,
-                    inputs=inputs,
-                    color=_color_for(relation.name),
-                    detail_html=detail_html,
-                    search_blob=search_blob,
-                )
-            )
-    return records
-
-
-def relation_graph_data() -> tuple[list[RelationGraphNode], list[RelationGraphEdge]]:
-    """Return variable nodes and conceptual variable-to-variable relation edges."""
+    # Build variable objects from the allowed-variable registry entries.
     allowed_vars, _, _ = load_allowed_variables()
-    relation_records = _relation_records()
-
-    variable_names = list(allowed_vars.keys())
-    seen = set(variable_names)
-    for record in relation_records:
-        for variable_name in (*record.inputs, record.output):
-            if variable_name not in seen:
-                seen.add(variable_name)
-                variable_names.append(variable_name)
-
-    nodes: list[RelationGraphNode] = []
-    for name in variable_names:
-        spec = allowed_vars.get(name, {}) or {}
-        detail_html = _var_detail_html(name, spec)
-        search_parts = [name]
-        for value in spec.values():
-            search_parts.append(str(value))
-        nodes.append(
-            RelationGraphNode(
+    variables = []
+    for name, spec in allowed_vars.items():
+        ndim = int((spec or {}).get("ndim", 0))
+        variables.append(
+            make_variable(
                 name=name,
-                detail_html=detail_html,
-                search_blob=" ".join(search_parts).lower(),
+                ndim=ndim,
+                unit=(spec or {}).get("default_unit"),
+                method=(spec or {}).get("method"),
+                rel_tol=(spec or {}).get("rel_tol"),
+                abs_tol=(spec or {}).get("abs_tol"),
+                fixed=bool((spec or {}).get("fixed", False)),
             )
         )
 
+    # Use check mode because plotting only needs topology/metadata.
+    return RelationSystem(relations=relation_list, variables=variables, mode="check", verbose=False)
+
+
+def relation_graph_data() -> tuple[list[RelationGraphNode], list[RelationGraphEdge]]:
+    """Return variable nodes and conceptual variable-to-variable relation edges.
+
+    Returns:
+        Tuple of variable-node and edge summaries.
+    """
+    relation_system = _build_relationsystem()
+    allowed_vars, _, _ = load_allowed_variables()
+
+    # Build variable summaries from the relation-system variable order.
+    nodes: list[RelationGraphNode] = []
+    for name in relation_system._graph["var_order"]:
+        spec = allowed_vars.get(name, {}) or {}
+        variable = relation_system._graph["vars"].get(name)
+        detail_html = _variable_detail_html(name, spec, variable)
+        search_blob = " ".join([name, *[str(value) for value in spec.values()]]).lower()
+        nodes.append(RelationGraphNode(name=name, detail_html=detail_html, search_blob=search_blob))
+
+    # Build conceptual edges from relation input/output signatures.
     edges: list[RelationGraphEdge] = []
-    for record in relation_records:
-        for source in record.inputs:
-            edges.append(
-                RelationGraphEdge(
-                    source=source,
-                    target=record.output,
-                    relation=record.name,
-                    color=record.color,
-                    detail_html=record.detail_html,
-                    search_blob=record.search_blob,
+    for relation in relation_system.relations:
+        for output in relation.outputs:
+            inputs = relation_input_names(relation, output)
+            for source in inputs:
+                search_blob = " ".join(
+                    [
+                        relation.name,
+                        output,
+                        *inputs,
+                        *list(relation.tags or ()),
+                        *[str(item) for item in (relation.constraints or ())],
+                    ]
+                ).lower()
+                edges.append(
+                    RelationGraphEdge(
+                        source=source,
+                        target=output,
+                        relation=relation.name,
+                        color=_color_for(relation.name),
+                        detail_html=_relation_detail_html(relation),
+                        search_blob=search_blob,
+                    )
                 )
-            )
 
     return nodes, edges
 
 
-def _connector_offsets(count: int, gap: float) -> list[float]:
-    if count <= 1:
-        return [0.0]
-    span = gap * (count - 1)
-    start = -0.5 * span
-    return [start + gap * index for index in range(count)]
+def relation_graph_plotter(*, width: int = 1200, height: int = 950):
+    """Render the RelationSystem internal graph with search and details panels.
 
+    Args:
+        width: Plot width in pixels.
+        height: Plot height in pixels.
 
-def _build_relation_digraph(
-    variable_nodes: list[RelationGraphNode],
-    relation_records: list[RelationGraphRelation],
-) -> nx.DiGraph:
-    graph = nx.DiGraph()
-    for node in variable_nodes:
-        graph.add_node(node.name, kind="variable", label=node.name)
-    for record in relation_records:
-        graph.add_node(record.uid, kind="relation", label=record.name)
-        for input_name in record.inputs:
-            graph.add_edge(input_name, record.uid)
-        graph.add_edge(record.uid, record.output)
-    return graph
-
-
-def _component_layers(graph: nx.DiGraph) -> tuple[dict[str, int], dict[int, int]]:
-    condensation = nx.condensation(graph)
-    component_of: dict[str, int] = condensation.graph["mapping"]
-    component_layer: dict[int, int] = {}
-    for component in nx.topological_sort(condensation):
-        predecessors = list(condensation.predecessors(component))
-        if predecessors:
-            component_layer[component] = max(component_layer[pred] + 1 for pred in predecessors)
-        else:
-            component_layer[component] = 0
-    return component_of, component_layer
-
-
-def _local_column(node_id: str, graph: nx.DiGraph, component_of: dict[str, int]) -> int:
-    if graph.nodes[node_id]["kind"] == "relation":
-        return 1
-
-    same_component = component_of[node_id]
-    has_same_component_relation_in = any(
-        component_of[pred] == same_component and graph.nodes[pred]["kind"] == "relation"
-        for pred in graph.predecessors(node_id)
+    Returns:
+        Bokeh layout containing graph, search, and details panels.
+    """
+    from bokeh.layouts import column, row
+    from bokeh.models import (
+        AutocompleteInput,
+        BoxSelectTool,
+        CustomJS,
+        Div,
+        HoverTool,
+        LabelSet,
+        MultiLine,
+        NodesAndAdjacentNodes,
+        PanTool,
+        Plot,
+        Range1d,
+        ResetTool,
+        SaveTool,
+        Scatter,
+        TapTool,
+        WheelZoomTool,
     )
-    has_same_component_relation_out = any(
-        component_of[succ] == same_component and graph.nodes[succ]["kind"] == "relation"
-        for succ in graph.successors(node_id)
-    )
+    from bokeh.plotting import from_networkx
 
-    if has_same_component_relation_out and not has_same_component_relation_in:
-        return 0
-    if has_same_component_relation_in and not has_same_component_relation_out:
-        return 2
-    if graph.in_degree(node_id) == 0:
-        return 0
-    if graph.out_degree(node_id) == 0:
-        return 2
-    return 0
+    relation_system = _build_relationsystem()
+    allowed_vars, _, _ = load_allowed_variables()
 
+    # Build a bipartite graph directly from RelationSystem internal adjacency maps.
+    graph = nx.Graph()
+    relation_to_node_id: dict[object, str] = {}
+    variable_node_ids: list[str] = []
+    relation_node_ids: list[str] = []
+    search_lookup: dict[str, set[str]] = {}
+    search_labels: dict[str, str] = {}
 
-def _deterministic_positions(
-    variable_nodes: list[RelationGraphNode],
-    relation_records: list[RelationGraphRelation],
-) -> dict[str, tuple[float, float]]:
-    graph = _build_relation_digraph(variable_nodes, relation_records)
-    if graph.number_of_nodes() == 0:
-        return {}
-
-    component_of, component_layer = _component_layers(graph)
-    columns: dict[int, list[str]] = {}
-    column_of: dict[str, int] = {}
-    for node_id in graph.nodes:
-        column = (
-            component_layer[component_of[node_id]] * LAYOUT_COMPONENT_SPAN
-            + _local_column(node_id, graph, component_of)
+    # Add variable nodes first using circle markers.
+    for name in relation_system._graph["var_order"]:
+        variable = relation_system._graph["vars"].get(name)
+        spec = allowed_vars.get(name, {}) or {}
+        aliases = _variable_aliases(spec)
+        descriptions = _variable_descriptions(spec)
+        search_terms = [name, *aliases, *descriptions]
+        search_blob = " ".join(term.lower() for term in search_terms)
+        variable_node_id = f"var::{name}"
+        variable_node_ids.append(variable_node_id)
+        graph.add_node(
+            variable_node_id,
+            node_id=variable_node_id,
+            kind="variable",
+            name=name,
+            label=name,
+            marker="circle",
+            size=min(30, max(20, 16 + len(name))),
+            fill_color=VARIABLE_FILL_COLOR,
+            line_color=VARIABLE_LINE_COLOR,
+            text_color=VARIABLE_TEXT_COLOR,
+            search_blob=search_blob,
+            detail_html=_variable_detail_html(name, spec, variable),
         )
-        column_of[node_id] = column
-        columns.setdefault(column, []).append(node_id)
+        for term in search_terms:
+            normalized = term.lower()
+            search_lookup.setdefault(normalized, set()).add(variable_node_id)
+            search_labels.setdefault(normalized, term)
 
-    def node_sort_key(node_id: str) -> tuple[int, str]:
-        kind_priority = 0 if graph.nodes[node_id]["kind"] == "variable" else 1
-        return (kind_priority, str(graph.nodes[node_id]["label"]).lower())
+    # Add relation nodes and keep an id map for edge creation.
+    for index, relation in enumerate(relation_system.relations):
+        relation_id = f"rel::{index}"
+        relation_to_node_id[relation] = relation_id
+        relation_node_ids.append(relation_id)
+        wrapped_label = _relation_label(relation.name)
+        relation_terms = [relation.name, relation.name.replace("_", " ")]
+        relation_blob = " ".join(term.lower() for term in relation_terms)
+        graph.add_node(
+            relation_id,
+            node_id=relation_id,
+            kind="relation",
+            name=relation.name,
+            label=wrapped_label,
+            marker="square",
+            size=min(54, max(28, 26 + 3 * wrapped_label.count("\n") + len(relation.name) // 8)),
+            fill_color=RELATION_FILL_COLOR,
+            line_color=RELATION_LINE_COLOR,
+            text_color=RELATION_TEXT_COLOR,
+            search_blob=relation_blob,
+            detail_html=_relation_detail_html(relation),
+        )
+        for term in relation_terms:
+            normalized = term.lower()
+            search_lookup.setdefault(normalized, set()).add(relation_id)
+            search_labels.setdefault(normalized, term)
 
-    ordered_columns = {
-        column: sorted(node_ids, key=node_sort_key) for column, node_ids in columns.items()
-    }
-    sorted_columns = sorted(ordered_columns)
-    undirected_graph = graph.to_undirected()
-
-    def row_lookup() -> dict[str, int]:
-        return {
-            node_id: index
-            for column in sorted_columns
-            for index, node_id in enumerate(ordered_columns[column])
-        }
-
-    def reordered_nodes(column: int, neighbor_filter) -> list[str]:
-        current_rows = row_lookup()
-        scored: list[tuple[float, tuple[int, str], str]] = []
-        for index, node_id in enumerate(ordered_columns[column]):
-            neighbor_rows = [
-                current_rows[neighbor]
-                for neighbor in undirected_graph.neighbors(node_id)
-                if neighbor_filter(column_of[neighbor], column)
-            ]
-            barycenter = sum(neighbor_rows) / len(neighbor_rows) if neighbor_rows else float(index)
-            scored.append((barycenter, node_sort_key(node_id), node_id))
-        scored.sort()
-        return [node_id for _, _, node_id in scored]
-
-    for _ in range(LAYOUT_ORDER_SWEEPS):
-        for column in sorted_columns[1:]:
-            ordered_columns[column] = reordered_nodes(column, lambda neighbor_col, own_col: neighbor_col < own_col)
-        for column in reversed(sorted_columns[:-1]):
-            ordered_columns[column] = reordered_nodes(column, lambda neighbor_col, own_col: neighbor_col > own_col)
-
-    positions: dict[str, tuple[float, float]] = {}
-    for column in sorted_columns:
-        node_ids = ordered_columns[column]
-        y_start = 0.5 * (len(node_ids) - 1) * LAYOUT_ROW_GAP
-        for index, node_id in enumerate(node_ids):
-            positions[node_id] = (
-                float(column) * LAYOUT_COLUMN_GAP,
-                y_start - index * LAYOUT_ROW_GAP,
+    # Add relation-defined edges between each relation and its adjacent variables.
+    for relation, relation_node_id in relation_to_node_id.items():
+        adjacent_variables = relation_system._graph["rels_to_vars"].get(relation, ())
+        for variable_name in adjacent_variables:
+            variable_node_id = f"var::{variable_name}"
+            if variable_node_id not in graph:
+                continue
+            graph.add_edge(
+                relation_node_id,
+                variable_node_id,
+                relation=relation.name,
+                source_label=relation.name,
+                target_label=variable_name,
             )
 
-    return positions
+    # Precompute one-hop neighbor lists for the details panel.
+    for node_id in graph.nodes:
+        adjacent_labels = sorted(str(graph.nodes[neighbor]["name"]) for neighbor in graph.neighbors(node_id))
+        if adjacent_labels:
+            adjacent_html = "<br>".join(f"- {html.escape(label)}" for label in adjacent_labels)
+        else:
+            adjacent_html = "<span style='color:#666'>No adjacent nodes.</span>"
+        graph.nodes[node_id]["adjacent_html"] = adjacent_html
 
-
-def relation_graph_plotter(*, width: int = 980, height: int = 860):
-    """Return a standalone Bokeh layout for the relation/variable graph."""
-    from bokeh.layouts import column, row
-    from bokeh.models import Button, ColumnDataSource, CustomJS, Div, TapTool, TextInput
-    from bokeh.plotting import figure
-
-    variable_nodes, _ = relation_graph_data()
-    relation_records = _relation_records()
-
-    positions = _deterministic_positions(variable_nodes, relation_records)
-    relation_gap = RELATION_CONNECTOR_GAP
-
-    variable_source = ColumnDataSource(
-        data=dict(
-            name=[node.name for node in variable_nodes],
-            x=[float(positions[node.name][0]) for node in variable_nodes],
-            y=[float(positions[node.name][1]) for node in variable_nodes],
-            detail_html=[node.detail_html for node in variable_nodes],
-            search_blob=[node.search_blob for node in variable_nodes],
-            fill_color=[VARIABLE_FILL_COLOR for _ in variable_nodes],
-            base_fill_color=[VARIABLE_FILL_COLOR for _ in variable_nodes],
-            muted_fill_color=[VARIABLE_MUTED_FILL_COLOR for _ in variable_nodes],
-            line_color=[VARIABLE_LINE_COLOR for _ in variable_nodes],
-            base_line_color=[VARIABLE_LINE_COLOR for _ in variable_nodes],
-            muted_line_color=[VARIABLE_MUTED_LINE_COLOR for _ in variable_nodes],
-            text_color=[VARIABLE_TEXT_COLOR for _ in variable_nodes],
-            base_text_color=[VARIABLE_TEXT_COLOR for _ in variable_nodes],
-            muted_text_color=[VARIABLE_MUTED_TEXT_COLOR for _ in variable_nodes],
-            fill_alpha=[0.98 for _ in variable_nodes],
-            line_alpha=[1.0 for _ in variable_nodes],
-            text_alpha=[1.0 for _ in variable_nodes],
-            size=[VARIABLE_MARKER_SIZE for _ in variable_nodes],
-            base_size=[VARIABLE_MARKER_SIZE for _ in variable_nodes],
-            hit_size=[VARIABLE_HIT_SIZE for _ in variable_nodes],
+    # Place variables on a large outer circle.
+    graph_layout: dict[str, tuple[float, float]] = {}
+    variable_count = len(variable_node_ids)
+    variable_radius = max(5.0, 0.12 * variable_count) if variable_count else 5.0
+    for index, variable_node_id in enumerate(variable_node_ids):
+        angle = -math.pi / 2.0 + (2.0 * math.pi * index) / max(1, variable_count)
+        graph_layout[variable_node_id] = (
+            variable_radius * math.cos(angle),
+            variable_radius * math.sin(angle),
         )
-    )
 
-    relation_widths: list[float] = []
-    relation_heights: list[float] = []
-    relation_hit_widths: list[float] = []
-    relation_hit_heights: list[float] = []
-    relation_xs: list[float] = []
-    relation_ys: list[float] = []
-    for record in relation_records:
-        relation_xs.append(float(positions[record.uid][0]))
-        relation_ys.append(float(positions[record.uid][1]))
-        width_value = min(
-            RELATION_MAX_WIDTH,
-            RELATION_BASE_WIDTH + RELATION_WIDTH_PER_CHAR * len(record.name),
-        )
-        height_value = max(
-            RELATION_BASE_HEIGHT,
-            RELATION_BASE_HEIGHT + relation_gap * max(0, len(record.inputs) - 1),
-        )
-        relation_widths.append(width_value)
-        relation_heights.append(height_value)
-        relation_hit_widths.append(width_value * 1.18)
-        relation_hit_heights.append(height_value * 1.18)
-
-    relation_source = ColumnDataSource(
-        data=dict(
-            relation_id=[record.uid for record in relation_records],
-            relation_name=[record.name for record in relation_records],
-            output=[record.output for record in relation_records],
-            x=relation_xs,
-            y=relation_ys,
-            width=relation_widths,
-            height=relation_heights,
-            hit_width=relation_hit_widths,
-            hit_height=relation_hit_heights,
-            detail_html=[record.detail_html for record in relation_records],
-            search_blob=[record.search_blob for record in relation_records],
-            fill_color=[record.color for record in relation_records],
-            base_fill_color=[record.color for record in relation_records],
-            muted_fill_color=[RELATION_MUTED_COLOR for _ in relation_records],
-            line_color=[record.color for record in relation_records],
-            base_line_color=[record.color for record in relation_records],
-            muted_line_color=[RELATION_MUTED_COLOR for _ in relation_records],
-            text_color=[record.color for record in relation_records],
-            base_text_color=[record.color for record in relation_records],
-            muted_text_color=[RELATION_MUTED_COLOR for _ in relation_records],
-            fill_alpha=[0.16 for _ in relation_records],
-            line_alpha=[1.0 for _ in relation_records],
-            text_alpha=[0.95 for _ in relation_records],
-            line_width=[2.2 for _ in relation_records],
-            base_line_width=[2.2 for _ in relation_records],
-        )
-    )
-
-    variable_positions = {
-        node.name: (float(positions[node.name][0]), float(positions[node.name][1]))
-        for node in variable_nodes
+    # Compute relation preferred angles from adjacent variable positions.
+    variable_angles = {
+        variable_node_id: math.atan2(graph_layout[variable_node_id][1], graph_layout[variable_node_id][0])
+        for variable_node_id in variable_node_ids
     }
+    relation_count = len(relation_node_ids)
+    relation_entries: list[tuple[str, float, str]] = []
+    for relation, relation_node_id in relation_to_node_id.items():
+        adjacent_variables = relation_system._graph["rels_to_vars"].get(relation, ())
+        adjacent_ids = [f"var::{name}" for name in adjacent_variables if f"var::{name}" in variable_angles]
+        if adjacent_ids:
+            sin_sum = sum(math.sin(variable_angles[node_id]) for node_id in adjacent_ids)
+            cos_sum = sum(math.cos(variable_angles[node_id]) for node_id in adjacent_ids)
+            preferred_angle = math.atan2(sin_sum, cos_sum) if (sin_sum or cos_sum) else 0.0
+        else:
+            preferred_angle = -math.pi / 2.0 + (2.0 * math.pi * len(relation_entries)) / max(1, relation_count)
+        relation_entries.append((relation_node_id, preferred_angle, relation.name))
+    relation_entries.sort(key=lambda item: (item[1], item[2]))
 
-    edge_xs: list[list[float]] = []
-    edge_ys: list[list[float]] = []
-    edge_relations: list[str] = []
-    edge_relation_ids: list[str] = []
-    edge_detail_html: list[str] = []
-    edge_search_blob: list[str] = []
-    edge_colors: list[str] = []
-    for record, relation_x, relation_y, relation_width, relation_height in zip(
-        relation_records,
-        relation_xs,
-        relation_ys,
-        relation_widths,
-        relation_heights,
-        strict=True,
-    ):
-        input_offsets = _connector_offsets(len(record.inputs), relation_gap)
-        for input_name, offset in zip(record.inputs, input_offsets, strict=True):
-            input_x, input_y = variable_positions[input_name]
-            edge_xs.append([input_x, relation_x - relation_width / 2.0])
-            edge_ys.append([input_y, relation_y + offset])
-            edge_relations.append(record.name)
-            edge_relation_ids.append(record.uid)
-            edge_detail_html.append(record.detail_html)
-            edge_search_blob.append(record.search_blob)
-            edge_colors.append(record.color)
+    # Spread relations on inner rings around the center to reduce overlap.
+    ring_capacity = 30
+    ring_count = max(1, math.ceil(relation_count / ring_capacity))
+    if ring_count == 1:
+        relation_radii = [variable_radius * 0.55]
+    else:
+        inner_min = variable_radius * 0.26
+        inner_max = variable_radius * 0.76
+        radius_step = (inner_max - inner_min) / max(1, ring_count - 1)
+        relation_radii = [inner_min + radius_step * ring_index for ring_index in range(ring_count)]
 
-        output_x, output_y = variable_positions[record.output]
-        edge_xs.append([relation_x + relation_width / 2.0, output_x])
-        edge_ys.append([relation_y, output_y])
-        edge_relations.append(record.name)
-        edge_relation_ids.append(record.uid)
-        edge_detail_html.append(record.detail_html)
-        edge_search_blob.append(record.search_blob)
-        edge_colors.append(record.color)
+    base_ring_size = relation_count // ring_count
+    extra_nodes = relation_count % ring_count
+    cursor = 0
+    for ring_index, relation_radius in enumerate(relation_radii):
+        ring_size = base_ring_size + (1 if ring_index < extra_nodes else 0)
+        ring_entries = relation_entries[cursor : cursor + ring_size]
+        cursor += ring_size
+        if not ring_entries:
+            continue
 
-    edge_source = ColumnDataSource(
-        data=dict(
-            xs=edge_xs,
-            ys=edge_ys,
-            relation=edge_relations,
-            relation_id=edge_relation_ids,
-            detail_html=edge_detail_html,
-            search_blob=edge_search_blob,
-            color=edge_colors,
-            base_color=edge_colors,
-            muted_color=[EDGE_MUTED_COLOR for _ in edge_colors],
-            alpha=[0.72 for _ in edge_colors],
-            line_width=[2.0 for _ in edge_colors],
-            base_line_width=[2.0 for _ in edge_colors],
-        )
-    )
+        if ring_size == 1:
+            relation_node_id, preferred_angle, _ = ring_entries[0]
+            graph_layout[relation_node_id] = (
+                relation_radius * math.cos(preferred_angle),
+                relation_radius * math.sin(preferred_angle),
+            )
+            continue
 
-    plot = figure(
+        sin_sum = sum(math.sin(preferred_angle) for _, preferred_angle, _ in ring_entries)
+        cos_sum = sum(math.cos(preferred_angle) for _, preferred_angle, _ in ring_entries)
+        ring_offset = math.atan2(sin_sum, cos_sum) if (sin_sum or cos_sum) else -math.pi / 2.0
+        for ring_pos, (relation_node_id, _, _) in enumerate(ring_entries):
+            angle = ring_offset + (2.0 * math.pi * ring_pos) / ring_size
+            graph_layout[relation_node_id] = (
+                relation_radius * math.cos(angle),
+                relation_radius * math.sin(angle),
+            )
+
+    # Compute plot ranges around the generated coordinates.
+    xs = [xy[0] for xy in graph_layout.values()] if graph_layout else [0.0]
+    ys = [xy[1] for xy in graph_layout.values()] if graph_layout else [0.0]
+    x_span = max(xs) - min(xs)
+    y_span = max(ys) - min(ys)
+    x_pad = max(0.25, x_span * 0.12)
+    y_pad = max(0.25, y_span * 0.12)
+
+    plot = Plot(
         width=width,
         height=height,
-        tools="pan,wheel_zoom,box_zoom,reset,save,tap",
-        active_scroll="wheel_zoom",
-        title="Relations and Variables Graph",
-        sizing_mode="stretch_width",
-        toolbar_location="above",
+        x_range=Range1d(min(xs) - x_pad, max(xs) + x_pad),
+        y_range=Range1d(min(ys) - y_pad, max(ys) + y_pad),
     )
-    plot.xgrid.visible = False
-    plot.ygrid.visible = False
-    plot.axis.visible = False
+    plot.title.text = "RelationSystem Graph"
     plot.outline_line_color = "#d9d9d9"
-    plot.x_range.range_padding = 0.1
-    plot.y_range.range_padding = 0.12
 
-    edge_renderer = plot.multi_line(
-        xs="xs",
-        ys="ys",
-        line_color="color",
-        line_alpha="alpha",
-        line_width="line_width",
-        source=edge_source,
-    )
+    # Build a Bokeh graph renderer from the precomputed networkx graph.
+    graph_renderer = from_networkx(graph, lambda _graph: graph_layout)
+    node_source = graph_renderer.node_renderer.data_source
+    edge_source = graph_renderer.edge_renderer.data_source
+    search_lookup = {key: sorted(value) for key, value in search_lookup.items()}
+    search_completions = [search_labels[key] for key in sorted(search_labels, key=lambda item: search_labels[item].lower())]
 
-    relation_renderer = plot.rect(
-        x="x",
-        y="y",
-        width="width",
-        height="height",
-        fill_color="fill_color",
-        line_color="line_color",
-        fill_alpha="fill_alpha",
-        line_alpha="line_alpha",
-        line_width="line_width",
-        source=relation_source,
-    )
-    relation_hit_renderer = plot.rect(
-        x="x",
-        y="y",
-        width="hit_width",
-        height="hit_height",
-        fill_color="base_fill_color",
-        line_color="base_line_color",
-        fill_alpha=0.0,
-        line_alpha=0.0,
-        source=relation_source,
-    )
+    # Expose x/y columns for label rendering at node centers.
+    node_ids = node_source.data["index"]
+    node_source.data["x"] = [float(graph_layout[node_id][0]) for node_id in node_ids]
+    node_source.data["y"] = [float(graph_layout[node_id][1]) for node_id in node_ids]
 
-    variable_renderer = plot.scatter(
-        x="x",
-        y="y",
+    # Configure node appearance by node type.
+    node_glyph = Scatter(
+        marker="marker",
         size="size",
         fill_color="fill_color",
         line_color="line_color",
-        fill_alpha="fill_alpha",
-        line_alpha="line_alpha",
-        line_width=2.0,
-        source=variable_source,
+        line_width=1.8,
     )
-    variable_hit_renderer = plot.scatter(
-        x="x",
-        y="y",
-        size="hit_size",
-        fill_color="base_fill_color",
-        line_color="base_line_color",
-        fill_alpha=0.0,
-        line_alpha=0.0,
-        source=variable_source,
-    )
+    graph_renderer.node_renderer.glyph = node_glyph
+    graph_renderer.node_renderer.selection_glyph = node_glyph.clone(fill_color=NODE_HIGHLIGHT_COLOR, line_width=2.3)
+    graph_renderer.node_renderer.hover_glyph = node_glyph.clone(line_width=2.3)
 
-    plot.text(
+    # Configure edges to be neutral by default and vivid on highlight.
+    edge_glyph = MultiLine(line_color=EDGE_BASE_COLOR, line_alpha=0.65, line_width=1.8)
+    graph_renderer.edge_renderer.glyph = edge_glyph
+    graph_renderer.edge_renderer.selection_glyph = edge_glyph.clone(
+        line_color=EDGE_HIGHLIGHT_COLOR,
+        line_alpha=1.0,
+        line_width=2.8,
+    )
+    graph_renderer.edge_renderer.hover_glyph = edge_glyph.clone(line_alpha=0.85, line_width=2.2)
+
+    # Keep one-hop inspection behavior for hover interactions.
+    graph_renderer.inspection_policy = NodesAndAdjacentNodes()
+
+    labels = LabelSet(
         x="x",
         y="y",
-        text="name",
+        text="label",
+        source=node_source,
         text_align="center",
         text_baseline="middle",
+        text_font_size="7pt",
         text_color="text_color",
-        text_alpha="text_alpha",
-        text_font_size="8pt",
-        source=variable_source,
     )
-    plot.text(
-        x="x",
-        y="y",
-        text="relation_name",
-        text_align="center",
-        text_baseline="middle",
-        text_color="text_color",
-        text_alpha="text_alpha",
-        text_font_size="8pt",
-        source=relation_source,
-    )
-
-    tap_tool = plot.select_one(TapTool)
-    if tap_tool is not None:
-        tap_tool.renderers = [variable_hit_renderer, relation_hit_renderer, edge_renderer]
 
     details = Div(
         text=DEFAULT_DETAILS_HTML,
-        height=220,
+        height=250,
         sizing_mode="stretch_width",
         styles={
             "overflow": "auto",
-            "border-top": "1px solid #ddd",
-            "padding": "12px 0 0 0",
+            "border-left": "1px solid #ddd",
+            "padding": "0 0 0 14px",
             "font-size": "13px",
+            "line-height": "1.35",
         },
     )
-    search_input = TextInput(title="Search variables or relations", width=340)
-    reset_button = Button(label="Reset view", button_type="default", width=120)
-    hint = Div(
-        text="Search matches variable names, relation names, and registry metadata.",
-        width=420,
-        styles={"padding-top": "6px", "color": "#666"},
+    search_status_default = (
+        "<span style='color:#666'>Type a node name, alias, or description keyword and pick a suggestion to jump to that node.</span>"
+    )
+    search_input = AutocompleteInput(
+        title="Search Nodes",
+        completions=search_completions,
+        case_sensitive=False,
+        search_strategy="includes",
+        min_characters=1,
+        sizing_mode="stretch_width",
+        placeholder="name or alias",
+    )
+    search_status = Div(
+        text=search_status_default,
+        sizing_mode="stretch_width",
+        styles={
+            "font-size": "12px",
+            "line-height": "1.35",
+            "padding": "2px 0 0 0",
+            "color": "#555",
+        },
     )
 
-    search_callback = CustomJS(
-        args=dict(
-            variableSource=variable_source,
-            relationSource=relation_source,
-            edgeSource=edge_source,
-            searchInput=search_input,
-        ),
-        code="""
-const query = searchInput.value.trim().toLowerCase();
-const variableData = variableSource.data;
-const relationData = relationSource.data;
-const edgeData = edgeSource.data;
-
-for (let i = 0; i < variableData.name.length; i++) {
-  const hit = !query || variableData.search_blob[i].includes(query) || variableData.name[i].toLowerCase().includes(query);
-  variableData.fill_color[i] = hit ? variableData.base_fill_color[i] : variableData.muted_fill_color[i];
-  variableData.line_color[i] = hit ? variableData.base_line_color[i] : variableData.muted_line_color[i];
-  variableData.text_color[i] = hit ? variableData.base_text_color[i] : variableData.muted_text_color[i];
-  variableData.fill_alpha[i] = hit ? 0.98 : 0.18;
-  variableData.line_alpha[i] = hit ? 1.0 : 0.24;
-  variableData.text_alpha[i] = hit ? 1.0 : 0.32;
-  variableData.size[i] = hit ? variableData.base_size[i] : Math.max(34, variableData.base_size[i] - 10);
-}
-
-for (let i = 0; i < relationData.relation_name.length; i++) {
-  const hit = !query || relationData.search_blob[i].includes(query) || relationData.relation_name[i].toLowerCase().includes(query);
-  relationData.fill_color[i] = hit ? relationData.base_fill_color[i] : relationData.muted_fill_color[i];
-  relationData.line_color[i] = hit ? relationData.base_line_color[i] : relationData.muted_line_color[i];
-  relationData.text_color[i] = hit ? relationData.base_text_color[i] : relationData.muted_text_color[i];
-  relationData.fill_alpha[i] = hit ? 0.16 : 0.05;
-  relationData.line_alpha[i] = hit ? 1.0 : 0.20;
-  relationData.text_alpha[i] = hit ? 0.95 : 0.28;
-  relationData.line_width[i] = hit ? relationData.base_line_width[i] : 1.2;
-}
-
-for (let i = 0; i < edgeData.relation.length; i++) {
-  const hit = !query || edgeData.search_blob[i].includes(query) || edgeData.relation[i].toLowerCase().includes(query);
-  edgeData.color[i] = hit ? edgeData.base_color[i] : edgeData.muted_color[i];
-  edgeData.alpha[i] = hit ? 0.72 : 0.08;
-  edgeData.line_width[i] = hit ? edgeData.base_line_width[i] : 1.0;
-}
-
-variableSource.change.emit();
-relationSource.change.emit();
-edgeSource.change.emit();
-""",
-    )
-    search_input.js_on_change("value", search_callback)
-
-    variable_source.selected.js_on_change(
+    # On node click: highlight node + incident edges + immediate neighbors, then render details.
+    node_source.selected.js_on_change(
         "indices",
         CustomJS(
             args=dict(
-                details=details,
-                variableSource=variable_source,
-                relationSource=relation_source,
+                nodeSource=node_source,
                 edgeSource=edge_source,
+                details=details,
                 defaultHtml=DEFAULT_DETAILS_HTML,
             ),
             code="""
-if (cb_obj.indices.length) {
-  const index = cb_obj.indices[0];
-  relationSource.selected.indices = [];
-  edgeSource.selected.indices = [];
-  details.text = variableSource.data.detail_html[index];
-} else if (!relationSource.selected.indices.length && !edgeSource.selected.indices.length) {
-  details.text = defaultHtml;
+if (window.__fusdbNodeSelectionLock) {
+  return;
 }
-""",
-        ),
-    )
-
-    relation_source.selected.js_on_change(
-        "indices",
-        CustomJS(
-            args=dict(
-                details=details,
-                variableSource=variable_source,
-                relationSource=relation_source,
-                edgeSource=edge_source,
-                defaultHtml=DEFAULT_DETAILS_HTML,
-            ),
-            code="""
-if (cb_obj.indices.length) {
-  const index = cb_obj.indices[0];
-  const relationName = relationSource.data.relation_name[index];
-  const relationMatches = [];
-  for (let i = 0; i < relationSource.data.relation_name.length; i++) {
-    if (relationSource.data.relation_name[i] === relationName) {
-      relationMatches.push(i);
-    }
-  }
-  const edgeMatches = [];
-  for (let i = 0; i < edgeSource.data.relation.length; i++) {
-    if (edgeSource.data.relation[i] === relationName) {
-      edgeMatches.push(i);
-    }
-  }
-  const sameRelationSelection =
-    cb_obj.indices.length === relationMatches.length &&
-    cb_obj.indices.every((value, idx) => value === relationMatches[idx]);
-  const sameEdgeSelection =
-    edgeSource.selected.indices.length === edgeMatches.length &&
-    edgeSource.selected.indices.every((value, idx) => value === edgeMatches[idx]);
-  if (!sameRelationSelection || !sameEdgeSelection) {
-    variableSource.selected.indices = [];
-    relationSource.selected.indices = relationMatches;
-    edgeSource.selected.indices = edgeMatches;
+window.__fusdbNodeSelectionLock = true;
+try {
+  if (!cb_obj.indices.length) {
+    edgeSource.selected.indices = [];
+    details.text = defaultHtml;
     return;
   }
-  variableSource.selected.indices = [];
-  details.text = relationSource.data.detail_html[index];
-} else if (!variableSource.selected.indices.length && !edgeSource.selected.indices.length) {
-  details.text = defaultHtml;
+
+  const rootIndex = cb_obj.indices[0];
+  const rootNodeId = nodeSource.data.node_id[rootIndex];
+
+  const activeNodeIds = new Set([rootNodeId]);
+  const activeEdgeIndices = [];
+
+  for (let i = 0; i < edgeSource.data.start.length; i++) {
+    const start = edgeSource.data.start[i];
+    const end = edgeSource.data.end[i];
+    if (start !== rootNodeId && end !== rootNodeId) {
+      continue;
+    }
+    activeEdgeIndices.push(i);
+    activeNodeIds.add(start);
+    activeNodeIds.add(end);
+  }
+
+  const activeNodeIndices = [];
+  for (let i = 0; i < nodeSource.data.node_id.length; i++) {
+    if (activeNodeIds.has(nodeSource.data.node_id[i])) {
+      activeNodeIndices.push(i);
+    }
+  }
+
+  nodeSource.selected.indices = activeNodeIndices;
+  edgeSource.selected.indices = activeEdgeIndices;
+
+  const detailHtml = nodeSource.data.detail_html[rootIndex] || defaultHtml;
+  const adjacentHtml = nodeSource.data.adjacent_html[rootIndex] || "<span style='color:#666'>No adjacent nodes.</span>";
+  details.text = `${detailHtml}<br><br><b>Adjacent Nodes</b><br>${adjacentHtml}`;
+} finally {
+  window.setTimeout(() => {
+    window.__fusdbNodeSelectionLock = false;
+  }, 0);
 }
+	""",
+        ),
+    )
+    # On search submit: locate one node by exact/partial name or alias and trigger selection.
+    search_input.js_on_change(
+        "value",
+        CustomJS(
+            args=dict(
+                nodeSource=node_source,
+                searchLookup=search_lookup,
+                searchStatus=search_status,
+                searchStatusDefault=search_status_default,
+            ),
+            code="""
+const query = (cb_obj.value || "").trim().toLowerCase();
+if (!query) {
+  searchStatus.text = searchStatusDefault;
+  nodeSource.selected.indices = [];
+  return;
+}
+
+const exactNodeIds = searchLookup[query] || [];
+let candidateNodeIds = [...exactNodeIds];
+if (!candidateNodeIds.length) {
+  const matches = new Set();
+  for (const [term, nodeIds] of Object.entries(searchLookup)) {
+    if (!term.includes(query)) {
+      continue;
+    }
+    for (const nodeId of nodeIds) {
+      matches.add(nodeId);
+    }
+  }
+  candidateNodeIds = Array.from(matches);
+}
+
+if (!candidateNodeIds.length) {
+  const searchBlobs = nodeSource.data.search_blob || [];
+  for (let i = 0; i < searchBlobs.length; i++) {
+    const blob = String(searchBlobs[i] || "").toLowerCase();
+    if (!blob.includes(query)) {
+      continue;
+    }
+    candidateNodeIds = [nodeSource.data.node_id[i]];
+    break;
+  }
+}
+
+if (!candidateNodeIds.length) {
+  searchStatus.text = "<span style='color:#a33'>No matching node found.</span>";
+  nodeSource.selected.indices = [];
+  return;
+}
+
+if (candidateNodeIds.length > 1 && !exactNodeIds.length) {
+  searchStatus.text = `<span style='color:#666'>${candidateNodeIds.length} matches found. Choose a more specific suggestion.</span>`;
+  return;
+}
+
+const targetNodeId = candidateNodeIds[0];
+let targetIndex = -1;
+for (let i = 0; i < nodeSource.data.node_id.length; i++) {
+  if (nodeSource.data.node_id[i] === targetNodeId) {
+    targetIndex = i;
+    break;
+  }
+}
+if (targetIndex < 0) {
+  searchStatus.text = "<span style='color:#a33'>Match exists but node is unavailable.</span>";
+  return;
+}
+
+searchStatus.text = `<span style='color:#2f5d50'>Selected: <b>${nodeSource.data.name[targetIndex]}</b></span>`;
+nodeSource.selected.indices = [targetIndex];
 """,
         ),
     )
 
-    edge_source.selected.js_on_change(
-        "indices",
-        CustomJS(
-            args=dict(
-                details=details,
-                variableSource=variable_source,
-                relationSource=relation_source,
-                edgeSource=edge_source,
-                defaultHtml=DEFAULT_DETAILS_HTML,
-            ),
-            code="""
-if (cb_obj.indices.length) {
-  const index = cb_obj.indices[0];
-  const relationName = edgeSource.data.relation[index];
-  const matches = [];
-  for (let i = 0; i < edgeSource.data.relation.length; i++) {
-    if (edgeSource.data.relation[i] === relationName) {
-      matches.push(i);
-    }
-  }
-  const relationMatches = [];
-  for (let i = 0; i < relationSource.data.relation_name.length; i++) {
-    if (relationSource.data.relation_name[i] === relationName) {
-      relationMatches.push(i);
-    }
-  }
-  const sameEdgeSelection =
-    cb_obj.indices.length === matches.length &&
-    cb_obj.indices.every((value, idx) => value === matches[idx]);
-  const sameRelationSelection =
-    relationSource.selected.indices.length === relationMatches.length &&
-    relationSource.selected.indices.every((value, idx) => value === relationMatches[idx]);
-  if (!sameEdgeSelection || !sameRelationSelection) {
-    variableSource.selected.indices = [];
-    relationSource.selected.indices = relationMatches;
-    edgeSource.selected.indices = matches;
-    return;
-  }
-  variableSource.selected.indices = [];
-  details.text = edgeSource.data.detail_html[index];
-} else if (!variableSource.selected.indices.length && !relationSource.selected.indices.length) {
-  details.text = defaultHtml;
-}
-""",
-        ),
+    # Add core interaction tools for pan/zoom/select workflows.
+    node_hover = HoverTool(
+        renderers=[graph_renderer.node_renderer],
+        tooltips=[("Node", "@name"), ("Type", "@kind")],
     )
-
-    reset_button.js_on_click(
-        CustomJS(
-            args=dict(
-                plot=plot,
-                variableSource=variable_source,
-                relationSource=relation_source,
-                edgeSource=edge_source,
-                details=details,
-                searchInput=search_input,
-                defaultHtml=DEFAULT_DETAILS_HTML,
-            ),
-            code="""
-searchInput.value = "";
-const variableData = variableSource.data;
-const relationData = relationSource.data;
-const edgeData = edgeSource.data;
-
-for (let i = 0; i < variableData.name.length; i++) {
-  variableData.fill_color[i] = variableData.base_fill_color[i];
-  variableData.line_color[i] = variableData.base_line_color[i];
-  variableData.text_color[i] = variableData.base_text_color[i];
-  variableData.fill_alpha[i] = 0.98;
-  variableData.line_alpha[i] = 1.0;
-  variableData.text_alpha[i] = 1.0;
-  variableData.size[i] = variableData.base_size[i];
-}
-
-for (let i = 0; i < relationData.relation_name.length; i++) {
-  relationData.fill_color[i] = relationData.base_fill_color[i];
-  relationData.line_color[i] = relationData.base_line_color[i];
-  relationData.text_color[i] = relationData.base_text_color[i];
-  relationData.fill_alpha[i] = 0.16;
-  relationData.line_alpha[i] = 1.0;
-  relationData.text_alpha[i] = 0.95;
-  relationData.line_width[i] = relationData.base_line_width[i];
-}
-
-for (let i = 0; i < edgeData.relation.length; i++) {
-  edgeData.color[i] = edgeData.base_color[i];
-  edgeData.alpha[i] = 0.72;
-  edgeData.line_width[i] = edgeData.base_line_width[i];
-}
-
-variableSource.selected.indices = [];
-relationSource.selected.indices = [];
-edgeSource.selected.indices = [];
-variableSource.change.emit();
-relationSource.change.emit();
-edgeSource.change.emit();
-details.text = defaultHtml;
-plot.reset.emit();
-""",
-        )
+    edge_hover = HoverTool(
+        renderers=[graph_renderer.edge_renderer],
+        tooltips=[("Relation", "@relation"), ("From", "@source_label"), ("To", "@target_label")],
     )
+    tap_tool = TapTool(renderers=[graph_renderer.node_renderer])
+    box_tool = BoxSelectTool(renderers=[graph_renderer.node_renderer])
+    pan_tool = PanTool()
+    zoom_tool = WheelZoomTool()
 
-    controls = row(search_input, reset_button, hint, sizing_mode="stretch_width")
-    return column(plot, controls, details, sizing_mode="stretch_width")
+    plot.add_tools(node_hover, edge_hover, tap_tool, box_tool, pan_tool, zoom_tool, ResetTool(), SaveTool())
+    plot.toolbar.active_scroll = zoom_tool
+    plot.renderers.extend([graph_renderer, labels])
+    search_panel = column(search_input, search_status, width=340)
+    inspect_panel = row(search_panel, details, sizing_mode="stretch_width")
+    return column(plot, inspect_panel, sizing_mode="stretch_width")
 
 
-def save_relation_graph_html(path: str | Path, *, width: int = 980, height: int = 860) -> Path:
-    """Write the standalone relation graph HTML file and return its path."""
+def render_relation_graph_html(*, width: int = 1200, height: int = 950) -> str:
+    """Return standalone HTML for the RelationSystem graph layout.
+
+    Args:
+        width: Plot width in pixels.
+        height: Plot height in pixels.
+
+    Returns:
+        Standalone HTML document as text.
+    """
+    from bokeh.embed import file_html
+    from bokeh.resources import CDN
+
+    layout = relation_graph_plotter(width=width, height=height)
+    return file_html(layout, CDN, "fusdb Relation Graph")
+
+
+def save_relation_graph_html(path: str | Path, *, width: int = 1200, height: int = 950) -> Path:
+    """Write standalone relation-graph HTML to disk.
+
+    Args:
+        path: Destination file path.
+        width: Plot width in pixels.
+        height: Plot height in pixels.
+
+    Returns:
+        Path to the written HTML file.
+    """
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
@@ -843,15 +866,3 @@ def save_relation_graph_html(path: str | Path, *, width: int = 980, height: int 
         encoding="utf-8",
     )
     return output_path
-
-
-def render_relation_graph_html(*, width: int = 980, height: int = 860) -> str:
-    """Return the standalone relation graph HTML document."""
-    from bokeh.embed import file_html
-    from bokeh.resources import CDN
-
-    return file_html(
-        relation_graph_plotter(width=width, height=height),
-        CDN,
-        "fusdb Relation Graph",
-    )
