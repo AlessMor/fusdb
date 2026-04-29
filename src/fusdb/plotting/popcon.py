@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 def plot_popcon(
-    result: dict[str, object],
+    result: dict[str, object] | object,
     *,
     x: str,
     y: str,
@@ -21,6 +21,9 @@ def plot_popcon(
     """Plot POPCON results with masked fill and contour overlays."""
     import matplotlib.pyplot as plt
     import numpy as np
+
+    if hasattr(result, "to_result") and callable(getattr(result, "to_result")):
+        result = result.to_result()
 
     axes = result.get("axes", {})
     axis_order = result.get("axis_order", list(axes.keys()))

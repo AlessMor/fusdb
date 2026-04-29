@@ -7,7 +7,7 @@ metadata:
 tags:
 - stellarator
 solver_tags:
-  mode: default
+  mode: overwrite
   verbosity: false
 variables:
   R:

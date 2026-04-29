@@ -1,10 +1,11 @@
-"""Render the internal RelationSystem graph as an interactive Bokeh network."""
+"""Render relation-variable topology as an interactive Bokeh network."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
 import html
+import json
 import math
 from pathlib import Path
 import textwrap
@@ -12,10 +13,8 @@ import textwrap
 import networkx as nx
 
 from fusdb import relations
-from fusdb.relationsystem_class import RelationSystem
-from fusdb.relation_util import _RELATION_REGISTRY, relation_input_names
+from fusdb.relation_class import _RELATION_REGISTRY
 from fusdb.registry import load_allowed_variables
-from fusdb.variable_util import make_variable
 
 
 DEFAULT_DETAILS_HTML = (
@@ -184,7 +183,6 @@ def _variable_detail_html(name: str, spec: dict[str, object], variable) -> str:
                 ("unit", variable.unit),
                 ("method", variable.method),
                 ("rel_tol", variable.rel_tol),
-                ("abs_tol", variable.abs_tol),
                 ("fixed", variable.fixed),
             ]
         )
@@ -202,7 +200,7 @@ def _variable_detail_html(name: str, spec: dict[str, object], variable) -> str:
     # Add registry text fields when present.
     registry_items = [
         (key, spec.get(key))
-        for key in ("aliases", "constraints", "soft_constraints", "description")
+        for key in ("aliases", "constraints", "description")
         if key in spec
     ]
     if registry_items:
@@ -225,12 +223,9 @@ def _relation_detail_html(relation) -> str:
         ("signature", _relation_signature(relation)),
         ("inputs", list(relation.inputs)),
         ("outputs", list(relation.outputs)),
-        ("rel_tol_default", relation.rel_tol_default),
-        ("abs_tol_default", relation.abs_tol_default),
         ("tags", list(relation.tags or ())),
         ("constraints", list(relation.constraints or ())),
-        ("soft_constraints", list(relation.soft_constraints or ())),
-        ("inverse_targets", sorted(list(relation.inverse_functions))),
+        ("solve_for_targets", sorted(list(relation.solve_for))),
     ]
     return _html_section("Relation", relation_items)
 
@@ -305,35 +300,35 @@ def _variable_descriptions(spec: dict[str, object]) -> list[str]:
     return descriptions
 
 
-def _build_relationsystem() -> RelationSystem:
-    """Build a RelationSystem instance from registered relations and variable registry.
+def _load_relation_graph_context() -> tuple[list[object], list[str], dict[str, dict[str, object]], dict[object, tuple[str, ...]]]:
+    """Load relation and variable topology context for plotting.
 
     Returns:
-        Ready-to-use relation system with internal graph metadata.
+        Tuple containing:
+            - relation list
+            - variable order
+            - allowed variable metadata mapping
+            - relation-to-variable adjacency mapping
     """
-    # Ensure relation modules are imported before reading the registry list.
+    # Ensure relation modules are imported before reading registry content.
     relations.import_relations()
     relation_list = list(_RELATION_REGISTRY)
-
-    # Build variable objects from the allowed-variable registry entries.
     allowed_vars, _, _ = load_allowed_variables()
-    variables = []
-    for name, spec in allowed_vars.items():
-        ndim = int((spec or {}).get("ndim", 0))
-        variables.append(
-            make_variable(
-                name=name,
-                ndim=ndim,
-                unit=(spec or {}).get("default_unit"),
-                method=(spec or {}).get("method"),
-                rel_tol=(spec or {}).get("rel_tol"),
-                abs_tol=(spec or {}).get("abs_tol"),
-                fixed=bool((spec or {}).get("fixed", False)),
-            )
-        )
 
-    # Use check mode because plotting only needs topology/metadata.
-    return RelationSystem(relations=relation_list, variables=variables, mode="check", verbose=False)
+    # Build deterministic variable order from registry first, then relation symbols.
+    var_order = list(allowed_vars.keys())
+    seen = set(var_order)
+    rels_to_vars: dict[object, tuple[str, ...]] = {}
+    for relation in relation_list:
+        rel_vars = tuple(name for name in relation.symbols if name is not None)
+        rels_to_vars[relation] = rel_vars
+        for name in rel_vars:
+            if name in seen:
+                continue
+            seen.add(name)
+            var_order.append(name)
+
+    return relation_list, var_order, allowed_vars, rels_to_vars
 
 
 def relation_graph_data() -> tuple[list[RelationGraphNode], list[RelationGraphEdge]]:
@@ -342,23 +337,21 @@ def relation_graph_data() -> tuple[list[RelationGraphNode], list[RelationGraphEd
     Returns:
         Tuple of variable-node and edge summaries.
     """
-    relation_system = _build_relationsystem()
-    allowed_vars, _, _ = load_allowed_variables()
+    relations_list, var_order, allowed_vars, _ = _load_relation_graph_context()
 
     # Build variable summaries from the relation-system variable order.
     nodes: list[RelationGraphNode] = []
-    for name in relation_system._graph["var_order"]:
+    for name in var_order:
         spec = allowed_vars.get(name, {}) or {}
-        variable = relation_system._graph["vars"].get(name)
-        detail_html = _variable_detail_html(name, spec, variable)
+        detail_html = _variable_detail_html(name, spec, None)
         search_blob = " ".join([name, *[str(value) for value in spec.values()]]).lower()
         nodes.append(RelationGraphNode(name=name, detail_html=detail_html, search_blob=search_blob))
 
     # Build conceptual edges from relation input/output signatures.
     edges: list[RelationGraphEdge] = []
-    for relation in relation_system.relations:
+    for relation in relations_list:
         for output in relation.outputs:
-            inputs = relation_input_names(relation, output)
+            inputs = relation.input_names(output)
             for source in inputs:
                 search_blob = " ".join(
                     [
@@ -383,8 +376,145 @@ def relation_graph_data() -> tuple[list[RelationGraphNode], list[RelationGraphEd
     return nodes, edges
 
 
+def export_relation_graph(system, path: str | Path = "relation_graph.html") -> Path:
+    """Write a lightweight HTML graph for one relation system.
+
+    Args:
+        system: RelationSystem-like object with relations, variables, and relation-variable topology.
+        path: Destination HTML file path.
+
+    Returns:
+        Path to the written HTML file.
+    """
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Read topology from SystemGraph when available; otherwise use relation metadata.
+    graph = getattr(system, "graph", None)
+    if graph is not None:
+        variables = graph.variables_dict()
+        relations_list = list(graph.relations)
+        variable_names = graph.variable_names()
+    else:
+        variables = getattr(system, "variables", {}) or {}
+        relations_list = list(getattr(system, "relations", ()) or ())
+        variable_names = list(variables.keys()) if hasattr(variables, "keys") else []
+        seen_names = set(variable_names)
+        for relation in relations_list:
+            for name in tuple(getattr(relation, "symbols", {}) or ()):
+                if name in seen_names:
+                    continue
+                seen_names.add(name)
+                variable_names.append(name)
+
+    order = {name: idx for idx, name in enumerate(variable_names)}
+    variable_names = sorted(variable_names, key=lambda name: (order.get(name, 10**9), str(name)))
+
+    # Attach current/input values to node hover text without reaching into solver internals.
+    values = {}
+    for name in variable_names:
+        variable = variables.get(name) if hasattr(variables, "get") else None
+        if variable is None:
+            continue
+        current_value = getattr(variable, "current_value", None)
+        value = current_value if current_value is not None else getattr(variable, "input_value", None)
+        if value is not None:
+            values[name] = value
+
+    nodes = []
+    for name in variable_names:
+        title = name if name not in values else f"{name}<br>value={values[name]}"
+        nodes.append(
+            {
+                "id": name,
+                "label": name,
+                "title": title,
+                "shape": "dot",
+                "color": "#97c2fc",
+            }
+        )
+
+    # Render conceptual input-to-output edges for every relation in the system.
+    palette = [
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
+    ]
+    edges = []
+    for idx, relation in enumerate(relations_list):
+        color = palette[idx % len(palette)]
+        relation_name = str(getattr(relation, "name", ""))
+        outputs = tuple(getattr(relation, "outputs", ()) or ())
+        rel_vars = (
+            graph.relation_variable_names(relation)
+            if graph is not None
+            else tuple(getattr(relation, "symbols", ()) or ())
+        )
+        for output in outputs:
+            try:
+                input_names = tuple(relation.input_names(output))
+            except Exception:
+                input_names = tuple(name for name in rel_vars if name not in outputs)
+            for input_name in input_names:
+                edges.append(
+                    {
+                        "from": input_name,
+                        "to": output,
+                        "label": relation_name,
+                        "title": relation_name,
+                        "relation": relation_name,
+                        "arrows": "to",
+                        "color": color,
+                    }
+                )
+
+    html_doc = f"""<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Relation graph</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+      #mynetwork {{
+        width: 100%;
+        height: 800px;
+        border: 1px solid #ddd;
+        background: #fff;
+      }}
+    </style>
+  </head>
+  <body>
+    <div id="mynetwork"></div>
+    <script>
+      const nodes = new vis.DataSet({json.dumps(nodes)});
+      const edges = new vis.DataSet({json.dumps(edges)});
+      const data = {{ nodes, edges }};
+      const options = {{
+        nodes: {{ shape: "dot", size: 18, font: {{ size: 16, face: "monospace" }} }},
+        edges: {{ arrows: {{ to: {{ enabled: true }} }}, font: {{ size: 12, align: "middle" }} }},
+        interaction: {{ hover: true }},
+        physics: {{ barnesHut: {{ springLength: 140, springConstant: 0.03 }} }}
+      }};
+      const container = document.getElementById("mynetwork");
+      new vis.Network(container, data, options);
+    </script>
+  </body>
+</html>
+"""
+    output_path.write_text(html_doc, encoding="utf-8")
+    return output_path
+
+
 def relation_graph_plotter(*, width: int = 1200, height: int = 950):
-    """Render the RelationSystem internal graph with search and details panels.
+    """Render the relation graph with search and details panels.
 
     Args:
         width: Plot width in pixels.
@@ -414,10 +544,9 @@ def relation_graph_plotter(*, width: int = 1200, height: int = 950):
     )
     from bokeh.plotting import from_networkx
 
-    relation_system = _build_relationsystem()
-    allowed_vars, _, _ = load_allowed_variables()
+    relations_list, var_order, allowed_vars, rels_to_vars = _load_relation_graph_context()
 
-    # Build a bipartite graph directly from RelationSystem internal adjacency maps.
+    # Build a bipartite graph from relation/variable adjacency data.
     graph = nx.Graph()
     relation_to_node_id: dict[object, str] = {}
     variable_node_ids: list[str] = []
@@ -426,8 +555,7 @@ def relation_graph_plotter(*, width: int = 1200, height: int = 950):
     search_labels: dict[str, str] = {}
 
     # Add variable nodes first using circle markers.
-    for name in relation_system._graph["var_order"]:
-        variable = relation_system._graph["vars"].get(name)
+    for name in var_order:
         spec = allowed_vars.get(name, {}) or {}
         aliases = _variable_aliases(spec)
         descriptions = _variable_descriptions(spec)
@@ -447,7 +575,7 @@ def relation_graph_plotter(*, width: int = 1200, height: int = 950):
             line_color=VARIABLE_LINE_COLOR,
             text_color=VARIABLE_TEXT_COLOR,
             search_blob=search_blob,
-            detail_html=_variable_detail_html(name, spec, variable),
+            detail_html=_variable_detail_html(name, spec, None),
         )
         for term in search_terms:
             normalized = term.lower()
@@ -455,7 +583,7 @@ def relation_graph_plotter(*, width: int = 1200, height: int = 950):
             search_labels.setdefault(normalized, term)
 
     # Add relation nodes and keep an id map for edge creation.
-    for index, relation in enumerate(relation_system.relations):
+    for index, relation in enumerate(relations_list):
         relation_id = f"rel::{index}"
         relation_to_node_id[relation] = relation_id
         relation_node_ids.append(relation_id)
@@ -483,7 +611,7 @@ def relation_graph_plotter(*, width: int = 1200, height: int = 950):
 
     # Add relation-defined edges between each relation and its adjacent variables.
     for relation, relation_node_id in relation_to_node_id.items():
-        adjacent_variables = relation_system._graph["rels_to_vars"].get(relation, ())
+        adjacent_variables = rels_to_vars.get(relation, ())
         for variable_name in adjacent_variables:
             variable_node_id = f"var::{variable_name}"
             if variable_node_id not in graph:
@@ -524,7 +652,7 @@ def relation_graph_plotter(*, width: int = 1200, height: int = 950):
     relation_count = len(relation_node_ids)
     relation_entries: list[tuple[str, float, str]] = []
     for relation, relation_node_id in relation_to_node_id.items():
-        adjacent_variables = relation_system._graph["rels_to_vars"].get(relation, ())
+        adjacent_variables = rels_to_vars.get(relation, ())
         adjacent_ids = [f"var::{name}" for name in adjacent_variables if f"var::{name}" in variable_angles]
         if adjacent_ids:
             sin_sum = sum(math.sin(variable_angles[node_id]) for node_id in adjacent_ids)
@@ -588,7 +716,7 @@ def relation_graph_plotter(*, width: int = 1200, height: int = 950):
         x_range=Range1d(min(xs) - x_pad, max(xs) + x_pad),
         y_range=Range1d(min(ys) - y_pad, max(ys) + y_pad),
     )
-    plot.title.text = "RelationSystem Graph"
+    plot.title.text = "Relation Graph"
     plot.outline_line_color = "#d9d9d9"
 
     # Build a Bokeh graph renderer from the precomputed networkx graph.
@@ -832,7 +960,7 @@ nodeSource.selected.indices = [targetIndex];
 
 
 def render_relation_graph_html(*, width: int = 1200, height: int = 950) -> str:
-    """Return standalone HTML for the RelationSystem graph layout.
+    """Return standalone HTML for the relation graph layout.
 
     Args:
         width: Plot width in pixels.

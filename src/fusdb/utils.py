@@ -7,8 +7,8 @@ This module provides common utility functions for:
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 import math
-import warnings
 import pycountry
 import numpy as np
 
@@ -18,20 +18,16 @@ def within_tolerance(
     b: object,
     *,
     rel_tol: float = 0.0,
-    abs_tol: float = 0.0,
 ) -> bool:
-    """Check if two values are equal within specified tolerances.
-    
-    Compares two values using both absolute and relative tolerance.
-    The comparison is: ``|a - b| <= max(abs_tol, rel_tol * scale)``
-    where scale is max(abs(a), abs(b), 1.0).
+    """Check if two values are equal within a relative tolerance.
+
+    The comparison is: ``|a - b| <= rel_tol * scale``
+    where scale is ``max(abs(a), abs(b), 1.0)``.
     
     Args:
         a (object): First value (must be convertible to float).
         b (object): Second value (must be convertible to float).
         rel_tol (float): Relative tolerance (fraction of larger value).
-        abs_tol (float): Absolute tolerance (in same units as values).
-    
     Returns:
         bool: True if values are within tolerance, False otherwise.
               Returns False if either value is None, non-numeric, or infinite/NaN.
@@ -39,8 +35,6 @@ def within_tolerance(
     Example:
         >>> within_tolerance(1.0, 1.001, rel_tol=0.01)
         True
-        >>> within_tolerance(1.0, 1.001, abs_tol=0.0001)
-        False
     """
     # Can't compare None or non-numeric values
     if a is None or b is None:
@@ -59,7 +53,161 @@ def within_tolerance(
     
     # Use relative tolerance scaled by larger value
     scale = max(abs(av), abs(bv), 1.0)
-    return abs(av - bv) <= max(abs_tol, rel_tol * scale)
+    return abs(av - bv) <= rel_tol * scale
+
+
+def all_tolerances(
+    left: object,
+    right: object,
+    *,
+    rel_tol: float,
+) -> bool:
+    """Return whether array-like values satisfy relative tolerance checks.
+
+    Args:
+        left: First scalar or array-like value.
+        right: Second scalar or array-like value.
+        rel_tol: Relative tolerance used elementwise.
+
+    Returns:
+        ``True`` when shapes match and every element is within tolerance.
+    """
+    # Convert both payloads through NumPy so scalars and arrays share one path.
+    try:
+        left_arr = np.asarray(left, dtype=float)
+        right_arr = np.asarray(right, dtype=float)
+    except Exception:
+        return False
+
+    # Shape mismatch means the values cannot represent the same runtime state.
+    if left_arr.shape != right_arr.shape:
+        return False
+
+    # Check exact equality when no relative tolerance is available.
+    diff = np.abs(left_arr - right_arr)
+    if rel_tol <= 0.0:
+        return bool(np.all(diff == 0.0))
+
+    # Scale relative tolerance elementwise by the larger local magnitude.
+    scale = np.maximum(np.maximum(np.abs(left_arr), np.abs(right_arr)), 1.0)
+    return bool(np.all(diff <= rel_tol * scale))
+
+
+def relative_change(current: float, target: float) -> float:
+    """Return a movement score that penalizes order-of-magnitude drifts.
+
+    Args:
+        current: Baseline scalar value.
+        target: Candidate scalar value.
+
+    Returns:
+        Dimensionless movement score for ranking/guarding candidate updates.
+    """
+    # Compute linear and symmetric relative movement terms.
+    linear = abs(target - current) / max(abs(current), 1.0)
+    denom = abs(current) + abs(target)
+    symmetric = 0.0 if denom == 0.0 else (2.0 * abs(target - current) / denom)
+
+    # Add an order-of-magnitude term when values keep the same sign.
+    order = 0.0
+    if current != 0.0 and target != 0.0 and (current * target) > 0.0:
+        try:
+            order = abs(math.log10(abs(target)) - math.log10(abs(current)))
+        except Exception:
+            order = 0.0
+
+    # Return the strictest movement signal among the three.
+    return max(linear, symmetric, order)
+
+
+def brent_root(
+    f,
+    a: float,
+    b: float,
+    fa: float,
+    fb: float,
+    *,
+    rel_tol: float,
+    max_iter: int,
+) -> float | None:
+    """Return root in ``[a, b]`` using a Brent-style method.
+
+    Args:
+        f: Callable returning residual values.
+        a: Lower bracket point.
+        b: Upper bracket point.
+        fa: Residual at ``a``.
+        fb: Residual at ``b``.
+        rel_tol: Relative convergence tolerance.
+        max_iter: Maximum iteration count.
+
+    Returns:
+        Root value, or ``None`` when the bracket/iteration is invalid.
+    """
+    # Validate finite bracket endpoints and sign change.
+    if not (math.isfinite(a) and math.isfinite(b) and math.isfinite(fa) and math.isfinite(fb)):
+        return None
+    if fa == 0.0:
+        return a
+    if fb == 0.0:
+        return b
+    if fa * fb > 0.0:
+        return None
+
+    # Track the current bracket and interpolation step history.
+    c, fc = a, fa
+    d = e = b - a
+
+    for _ in range(max_iter):
+        if fb * fc > 0.0:
+            c, fc = a, fa
+            d = e = b - a
+
+        if abs(fc) < abs(fb):
+            a, b, c = b, c, b
+            fa, fb, fc = fb, fc, fb
+
+        tol = max(rel_tol * max(abs(b), 1.0), 1e-12)
+        m = 0.5 * (c - b)
+        if abs(m) <= tol or fb == 0.0:
+            return b
+
+        # Prefer inverse interpolation when stable, otherwise bisect.
+        if abs(e) >= tol and abs(fa) > abs(fb):
+            s = fb / fa
+            if a == c:
+                p = 2.0 * m * s
+                q = 1.0 - s
+            else:
+                q = fa / fc
+                r = fb / fc
+                p = s * (2.0 * m * q * (q - r) - (b - a) * (r - 1.0))
+                q = (q - 1.0) * (r - 1.0) * (s - 1.0)
+            if p > 0.0:
+                q = -q
+            p = abs(p)
+            if q != 0.0 and 2.0 * p < min(3.0 * m * q - abs(tol * q), abs(e * q)):
+                e = d
+                d = p / q
+            else:
+                d = m
+                e = m
+        else:
+            d = m
+            e = m
+
+        # Advance the current estimate by the chosen interpolation/bisection step.
+        a, fa = b, fb
+        if abs(d) > tol:
+            b += d
+        else:
+            b += tol if m > 0.0 else -tol
+
+        fb = f(b)
+        if fb is None or not math.isfinite(fb):
+            return None
+
+    return None
 
 
 def safe_float(value: object) -> float | None:
@@ -97,11 +245,72 @@ def as_profile_array(value: object) -> np.ndarray | None:
         pass
     return None
 
-def _trapz(y: object, x: object) -> float:
-    """Integrate using numpy trapezoid API with backward-compatible fallback."""
-    if hasattr(np, "trapezoid"):
-        return float(np.trapezoid(y, x))
-    return float(np.trapz(y, x))
+
+def mean_profile(value: object) -> float | None:
+    """Return the arithmetic mean of a profile payload.
+
+    Args:
+        value: Candidate scalar/array payload.
+
+    Returns:
+        Profile mean when ``value`` is a finite 1D array, else ``None``.
+    """
+    # Parse profile payload and return None when payload is not profile-like.
+    arr = as_profile_array(value)
+    if arr is None:
+        return None
+    # Compute one explicit mean scalar used by scalar-first paths.
+    return float(np.mean(arr))
+
+
+def scalarize_value(value: object) -> object | None:
+    """Convert one value to scalar semantics for scalar-first solving.
+
+    Args:
+        value: Candidate runtime payload.
+
+    Returns:
+        Profile mean for profiles, finite float for scalar-like payloads,
+        original value when no safe scalar conversion exists, or ``None``.
+    """
+    # Reduce profile payloads explicitly by their mean.
+    profile_mean = mean_profile(value)
+    if profile_mean is not None:
+        return profile_mean
+
+    # Convert scalar-like payloads to finite float when possible.
+    scalar = safe_float(value)
+    if scalar is not None:
+        return scalar
+
+    # Keep non-scalar payloads untouched to avoid silent coercion.
+    return value
+
+
+def scalarize_mapping(
+    values: Mapping[str, object],
+    *,
+    ndim_lookup: Callable[[str], int],
+) -> dict[str, object]:
+    """Return a mapping where profile payloads are explicitly scalarized.
+
+    Args:
+        values: Input mapping of variable names to runtime payloads.
+        ndim_lookup: Callable returning variable dimensionality by name.
+
+    Returns:
+        Dictionary with profile variables reduced to means and scalars preserved.
+    """
+    out: dict[str, object] = {}
+
+    # Walk every value and apply explicit ndim-aware reduction.
+    for name, value in values.items():
+        if ndim_lookup(name) == 1:
+            out[name] = scalarize_value(value)
+            continue
+        out[name] = value
+
+    return out
 
 
 def integrate_profile_over_volume(
@@ -145,7 +354,7 @@ def integrate_profile_over_volume(
         rho_arr = rho_arr[order]
         arr = arr[order]
 
-    return float(V_scalar * _trapz(arr * 2.0 * rho_arr, rho_arr))
+    return float(V_scalar * np.trapezoid(arr * 2.0 * rho_arr, rho_arr))
 
 
 def integrate_profile(
@@ -177,80 +386,6 @@ def integrate_profile(
     if total is None:
         raise ValueError(f"Cannot integrate {error_label} profile over volume.")
     return total
-
-
-def compare_plasma_volume_with_integrated_dv(
-    *,
-    V_p: object,
-    rho: object | None = None,
-    dV_drho: object | None = None,
-    R: object | None = None,
-    a: object | None = None,
-    kappa: object | None = None,
-    rel_tol: float = 0.01,
-    abs_tol: float = 0.0,
-    warn: bool = False,
-) -> tuple[bool, float | None, float | None]:
-    """Compare ``V_p`` with a volume reconstructed from ``dV`` integration.
-
-    Priority for reconstructed volume:
-    1. ``∫ dV_drho drho`` if ``dV_drho`` is provided.
-    2. ``2*pi^2*R*kappa*a^2`` if ``R``, ``a``, and ``kappa`` are provided.
-    3. ``V_p*∫2*rho drho`` (cfspopcon Jacobian sanity check).
-
-    Args:
-        V_p: Reference plasma volume.
-        rho: Optional normalized radial grid.
-        dV_drho: Optional Jacobian profile ``dV/drho``.
-        R: Major radius for geometric estimate.
-        a: Minor radius for geometric estimate.
-        kappa: Elongation for geometric estimate.
-        rel_tol: Relative tolerance for consistency.
-        abs_tol: Absolute tolerance for consistency.
-        warn: Emit ``UserWarning`` if mismatch exceeds tolerance.
-
-    Returns:
-        ``(ok, integrated_volume, reference_volume)``.
-    """
-    V_ref = safe_float(V_p)
-    if V_ref is None:
-        return True, None, None
-
-    V_int: float | None = None
-    rho_arr = as_profile_array(rho) if rho is not None else None
-    jac_arr = as_profile_array(dV_drho) if dV_drho is not None else None
-    if jac_arr is not None:
-        if rho_arr is None:
-            rho_arr = np.linspace(0.0, 1.0, jac_arr.size, dtype=float)
-        elif rho_arr.size != jac_arr.size:
-            x_old = np.linspace(0.0, 1.0, jac_arr.size, dtype=float)
-            x_new = np.linspace(0.0, 1.0, rho_arr.size, dtype=float)
-            jac_arr = np.interp(x_new, x_old, jac_arr)
-        V_int = _trapz(jac_arr, rho_arr)
-    else:
-        Rv = safe_float(R)
-        av = safe_float(a)
-        kv = safe_float(kappa)
-        if Rv is not None and av is not None and kv is not None:
-            V_int = float(2.0 * math.pi ** 2 * Rv * kv * av ** 2)
-        else:
-            if rho_arr is None:
-                rho_arr = np.linspace(0.0, 1.0, 101, dtype=float)
-            V_int = float(V_ref * _trapz(2.0 * rho_arr, rho_arr))
-
-    ok = within_tolerance(V_int, V_ref, rel_tol=rel_tol, abs_tol=abs_tol)
-    if warn and not ok:
-        delta = abs(V_int - V_ref) / max(abs(V_ref), 1.0)
-        warnings.warn(
-            (
-                "Plasma volume mismatch: V_p="
-                f"{V_ref:.6g}, integral(dV)={V_int:.6g}, rel_delta={delta:.3%} "
-                f"(tol={rel_tol:.3%})."
-            ),
-            UserWarning,
-            stacklevel=2,
-        )
-    return ok, V_int, V_ref
 
 
 def normalize_tag(tag: str | None) -> str:
@@ -336,38 +471,3 @@ def normalize_country(country: str | None) -> str | None:
     except Exception:
         # Not found - return original string
         return country
-
-
-def normalize_solver_mode(mode: str | None) -> str:
-    """Normalize solver mode values to canonical form.
-    
-    Args:
-        mode (str | None): Solver mode string.
-        
-    Returns:
-        str: Canonical mode string ("overwrite" for override/default/None).
-    """
-    if mode in ("override", "default", None):
-        return "overwrite"
-    return str(mode)
-
-
-def ensure_list(value: object | None, *, name: str, item_desc: str) -> list:
-    """Ensure a value is a list (or empty), raising a descriptive error otherwise.
-    
-    Args:
-        value (object | None): Value to check.
-        name (str): Parameter name for error messages.
-        item_desc (str): Description of items for error messages.
-        
-    Returns:
-        list: The value as a list, or empty list if None.
-        
-    Raises:
-        TypeError: If value is not a list or None.
-    """
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise TypeError(f"{name} must be a list of {item_desc}")
-    return value

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fusdb.registry import MU0
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 #TODO(low): once profiles are implemented, add a beta_avg 
 @relation(
     name="Toroidal beta",

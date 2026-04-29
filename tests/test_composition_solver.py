@@ -13,7 +13,7 @@ from fusdb.relations.plasma_composition.plasma_composition import (
 )
 from fusdb.relations.reactivities.reactivity_functions import sigmav_DT_BoschHale
 from fusdb.relationsystem_class import RelationSystem
-from fusdb.variable_util import make_variable
+from fusdb.variable_class import Variable
 
 
 _DENSITY_INPUTS = tuple(name for name in steady_state_plasma_composition.inputs if name.startswith("n_"))
@@ -161,7 +161,7 @@ def test_composition_relation_updates_density_bundle() -> None:
         **_equal_tau_inputs(),
     }
     for name, value in inputs.items():
-        var = make_variable(name=name, ndim=1 if name in _DENSITY_INPUTS or name in _REACTIVITY_INPUTS else 0)
+        var = Variable.make(name=name, ndim=1 if name in _DENSITY_INPUTS or name in _REACTIVITY_INPUTS else 0)
         var.add_value(value, as_input=True)
         variables.append(var)
 
@@ -193,7 +193,7 @@ def test_composition_relation_preserves_profile_shape() -> None:
 
     variables = []
     for name, value in profile_inputs.items():
-        var = make_variable(name=name, ndim=1 if name in _DENSITY_INPUTS or name in _REACTIVITY_INPUTS else 0)
+        var = Variable.make(name=name, ndim=1 if name in _DENSITY_INPUTS or name in _REACTIVITY_INPUTS else 0)
         var.add_value(value, as_input=True)
         variables.append(var)
 
@@ -211,32 +211,36 @@ def test_composition_relation_preserves_profile_shape() -> None:
     assert np.allclose(solved_total, np.full_like(n_d, 1.3e20), rtol=1e-12, atol=0.0)
 
 
-def test_relationsystem_evaluate_rejects_non_array_profile_inputs() -> None:
-    """Expected: evaluate() rejects scalar stand-ins for ndim=1 profile inputs."""
+def test_relationsystem_evaluate_accepts_scalar_profile_convenience_inputs() -> None:
+    """Expected: evaluate() accepts scalar stand-ins and expands them to profile arrays immediately."""
     variables = []
     seen = set()
     for name in steady_state_plasma_composition.inputs:
-        var = make_variable(name=name, ndim=1 if name in _DENSITY_INPUTS or name in _REACTIVITY_INPUTS else 0)
+        var = Variable.make(name=name, ndim=1 if name in _DENSITY_INPUTS or name in _REACTIVITY_INPUTS else 0)
         variables.append(var)
         seen.add(var.name)
     for name in steady_state_plasma_composition.outputs:
         if name not in seen:
-            variables.append(make_variable(name=name, ndim=1))
+            variables.append(Variable.make(name=name, ndim=1))
             seen.add(name)
 
     system = RelationSystem([steady_state_plasma_composition], variables, mode="overwrite")
-    with pytest.raises(TypeError, match="must already be provided as a numpy.ndarray"):
-        system.evaluate(
-            {
-                "n_D": 6.5e19,
-                "n_T": 6.5e19,
-                "n_He3": 0.0,
-                "n_He4": 0.0,
-                "sigmav_DT": float(sigmav_DT_BoschHale(14.0)),
-                **{name: 0.0 for name in _REACTIVITY_INPUTS if name != "sigmav_DT"},
-                **_equal_tau_inputs(),
-            }
-        )
+    values = system.evaluate(
+        {
+            "n_D": 6.5e19,
+            "n_T": 6.5e19,
+            "n_He3": 0.0,
+            "n_He4": 0.0,
+            "sigmav_DT": float(sigmav_DT_BoschHale(14.0)),
+            **{name: 0.0 for name in _REACTIVITY_INPUTS if name != "sigmav_DT"},
+            **_equal_tau_inputs(),
+        }
+    )
+
+    for name in _DENSITY_INPUTS:
+        arr = np.asarray(values[name], dtype=float)
+        assert arr.ndim == 1
+        assert arr.size >= 1
 
 
 def test_relationsystem_evaluate_accepts_profile_arrays() -> None:
@@ -244,12 +248,12 @@ def test_relationsystem_evaluate_accepts_profile_arrays() -> None:
     variables = []
     seen = set()
     for name in steady_state_plasma_composition.inputs:
-        var = make_variable(name=name, ndim=1 if name in _DENSITY_INPUTS or name in _REACTIVITY_INPUTS else 0)
+        var = Variable.make(name=name, ndim=1 if name in _DENSITY_INPUTS or name in _REACTIVITY_INPUTS else 0)
         variables.append(var)
         seen.add(var.name)
     for name in steady_state_plasma_composition.outputs:
         if name not in seen:
-            variables.append(make_variable(name=name, ndim=1))
+            variables.append(Variable.make(name=name, ndim=1))
             seen.add(name)
 
     system = RelationSystem([steady_state_plasma_composition], variables, mode="overwrite")

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 @relation(
     name="Troyon beta limit",
     output="beta_limit",
@@ -20,7 +20,6 @@ def troyon_beta_limit(a: float, B0: float, I_p: float) -> float:
     name="Troyon margin",
     output="troyon_margin",
     tags=("plasma", "tokamak", "constraint"),
-    soft_constraints=("troyon_margin <= 0",),
 )
 def troyon_margin(beta_T: float, beta_limit: float) -> float:
     """Return Troyon margin (<=0 satisfied)."""

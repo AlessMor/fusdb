@@ -2,12 +2,14 @@
 
 # Mode can be "overwrite" or "check".
 mode: overwrite
-# Max block size for nxn solving (1..n_max).
-n_max: 4
-# Cap on overwrite passes.
-max_passes: 100
+# Max adjustable variables per connected component solve.
+n_max: 8
+# Cap on reconciliation attempts.
+max_passes: 8
 # Fallback tolerance for variables without per-variable rel_tol.
 default_rel_tol: 0.001
+# Optional reactor-wide computation tolerance override.
+rel_tol:
 # Block solver name (only one implemented at the moment).
 solver: lsq_compact
 # Enable verbose solver/runtime logging when true.

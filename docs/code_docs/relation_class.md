@@ -4,32 +4,28 @@
 one output computed from explicit inputs.
 
 Relations are usually declared with the `@relation` decorator in
-`fusdb.relation_util`.
+`fusdb.relation_class`.
 
 ## Core Fields
 
 Set at construction:
 
 - `name`: human-readable relation name (defaults to function name when using decorator)
-- `output`: canonical output variable name
-- `func`: callable accepting ordered inputs
-- `inputs`: ordered tuple/list of input variable names
+- `inputs`: canonical input variable names
+- `outputs`: canonical output variable names
+- `forward`: callable accepting named inputs
 - `tags`: classification tags, for example `("geometry", "plasma")`
-- `rel_tol_default`, `abs_tol_default`: default tolerances for consistency checks
-- `constraints`: hard constraints, for example `("R > 0", "a < R")`
-- `soft_constraints`: warning-only constraints
+- `constraints`: validation constraints, for example `("R > 0", "a < R")`
 - `initial_guesses`: optional variable-to-callable map for numeric solver initial values
-- `inverse_functions`: optional variable-to-callable map for explicit inverse solvers
-- `sympy_expr`: optional symbolic form used for automatic inversion
+- `solve_for`: optional target metadata for explicit inverse solvers
+- `sympy_expression`: optional symbolic form used for automatic inversion
 
 ## Key Property and Methods
 
-- `variables` -> tuple of `(input_1, ..., input_n, output)`
+- `symbols` -> symbolic variables keyed by canonical name
 - `evaluate(values)` -> computed output value
-- `constraint_violations(values)` -> violated hard constraints
-- `soft_constraint_violations(values)` -> violated soft constraints
-- `check_satisfied(values, rel_tol=None, abs_tol=None, check_constraints=True)` -> `(satisfied, status, residual)`
-- `get_residual(values)` -> `actual - expected`
+- `apply(values)` -> output assignments as a mapping
+- `input_names(output=None)` -> ordered input names for a target
 - `inverse_solver(unknown)` -> callable or `None`
 - `solve_for_value(unknown, values)` -> solved value or `None`
 
@@ -42,11 +38,10 @@ from fusdb.relation_class import Relation
 
 rel = Relation(
     name="Aspect ratio",
-    output="A",
-    func=lambda R, a: R / a,
-    inputs=["R", "a"],
+    inputs=("R", "a"),
+    outputs=("A",),
+    forward=lambda R, a: R / a,
     tags=("geometry",),
-    rel_tol_default=0.01,
     constraints=("R > 0", "a > 0", "a < R"),
 )
 ```
@@ -54,17 +49,15 @@ rel = Relation(
 ### Decorator (Recommended)
 
 ```python
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 
 @relation(
     name="Aspect ratio",
     output="A",
     tags=("geometry",),
-    rel_tol_default=0.01,
     constraints=("R > 0", "a > 0", "a < R"),
-    soft_constraints=("A > 2",),
     initial_guesses={"a": lambda values: 0.3 * values.get("R", 1.0)},
-    inverse_functions={"a": lambda values: values["R"] / values["A"]},
+    solve_for={"a": lambda values: values["R"] / values["A"]},
 )
 def aspect_ratio(R: float, a: float) -> float:
     return R / a
@@ -75,11 +68,9 @@ Decorator parameters:
 - `name`: relation display name
 - `output`: output variable name
 - `tags`: classification tags
-- `rel_tol_default`, `abs_tol_default`: default tolerances
-- `constraints`: hard constraints
-- `soft_constraints`: warning-only constraints
+- `constraints`: validation constraints
 - `initial_guesses`: initial guesses for numeric solvers
-- `inverse_functions`: explicit inverse solvers
+- `solve_for`: explicit inverse solver metadata
 
 !!! note
     For symbolic inversion to work, keep relation functions SymPy-friendly:
@@ -89,8 +80,8 @@ Decorator parameters:
 
 ```python
 from fusdb.relationsystem_class import RelationSystem
-from fusdb.variable_util import make_variable
-from fusdb.relation_util import relation
+from fusdb.variable_class import Variable
+from fusdb.relation_class import relation
 
 @relation(
     name="Aspect ratio",
@@ -101,9 +92,9 @@ from fusdb.relation_util import relation
 def aspect_ratio(R: float, a: float) -> float:
     return R / a
 
-R = make_variable(name="R", ndim=0, unit="m")
-a = make_variable(name="a", ndim=0, unit="m")
-A = make_variable(name="A", ndim=0, unit="1")
+R = Variable.make(name="R", ndim=0, unit="m")
+a = Variable.make(name="a", ndim=0, unit="m")
+A = Variable.make(name="A", ndim=0, unit="1")
 
 R.add_value(3.0, as_input=True)
 a.add_value(1.0, as_input=True)

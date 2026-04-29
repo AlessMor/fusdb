@@ -1,48 +1,48 @@
-"""Reactor class for loading and solving fusion reactor design specifications.
+"""User-facing reactor container and thin orchestration wrappers."""
 
-This module provides the Reactor class which loads reactor specifications from
-YAML files, manages variables, filters applicable relations, and orchestrates
-the solving process.
-"""
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Sequence
 import logging
-import warnings
+
+import yaml
+
+from .registry import parse_variables, validate_solver_tags
 from .relation_class import Relation
+from .popcon_class import Popcon
 from .relationsystem_class import RelationSystem
-from .relation_util import get_filtered_relations, relation_input_names
-from .utils import normalize_tag, normalize_tags_to_tuple
+from .utils import normalize_country, normalize_tags_to_tuple
 from .variable_class import Variable
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class Reactor:
-    """Container for fusion reactor specifications, variables, and solving logic.
-    
-    A Reactor represents a fusion reactor design with its parameters (geometry, plasma properties, etc.) and the physics relations that govern it. 
-    The class can load a configuration (currently from YAML), filter applicable relations based on tags, and solve for unknown variables.
-    
+    """Container for reactor metadata, variables, and applicable relations.
+
     Attributes:
-        path: Path to the source reactor file.
-        id: Unique reactor identifier (e.g., "ARC_2015", "DEMO_2022").
-        name: Reactor name.
-        organization: Organization (industrial or academic) developing the reactor.
-        country: Country where reactor is being developed/built.
-        year: Design year.
-        doi: DOI reference to published design.
-        notes: Additional notes.
-        tags: Classification tags (e.g., "tokamak", "hmode",...). Used for relations filtering.
-        solving_order: Ordered domains/relations to solve (e.g., ["geometry", "fusion_power"]).
-        solver_mode: How to handle computed vs input values:
-            - "overwrite": Replace input values with computed (default)
-            - "check": Only check consistency, don't modify
-        verbose: Enable detailed solver logging.
-        relations: Filtered list of applicable relations for this reactor.
-        variables_dict: Dictionary of Variable objects keyed by name.
+        path: Path to source reactor YAML file.
+        id: Reactor identifier.
+        name: Human-readable reactor name.
+        organization: Reactor organization metadata.
+        country: Reactor country metadata.
+        year: Reactor design/publication year.
+        doi: Reactor DOI reference.
+        notes: Optional free-text notes.
+        tags: Reactor tags used for relation filtering.
+        solving_order: Optional ordered domain/relation solve list copied from YAML.
+        solver_mode: Solver mode (``"overwrite"`` or ``"check"``).
+        verbose: Runtime verbosity flag.
+        relations: Optional caller-provided relation list.
+        default_relations: Default/assumption relations generated at load.
+        variables_dict: Reactor variables keyed by name.
+        last_solve_stop_reason: Last RelationSystem stop reason from ``solve()``.
+        last_solve_final_check: Last RelationSystem terminal final-check summary.
     """
+
     path: Path | None = None
     id: str | None = None
     name: str | None = None
@@ -58,268 +58,270 @@ class Reactor:
     relations: list[Relation] = field(default_factory=list)
     default_relations: list[Relation] = field(default_factory=list)
     variables_dict: dict[str, Variable] = field(default_factory=dict)
+    last_solve_stop_reason: str | None = None
+    last_solve_final_check: dict[str, object] = field(default_factory=dict)
     _log: logging.Logger = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Initialize per-instance logger with context."""
+        """Initialize per-instance logger.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        # Build one child logger and align level with verbose flag.
         self._log = logger.getChild(self.__class__.__name__)
         self._log.setLevel(logging.INFO if self.verbose else logging.WARNING)
 
-    @classmethod # can call Reactor.from_yaml() directly, without an instance
+    @classmethod
     def from_yaml(cls, path_like: str | Path) -> "Reactor":
-        """Create a Reactor object from a YAML file.
-        
-        Parses the YAML file containing reactor metadata, tags, variables, and
-        solver settings. Automatically filters relations based on tags and
-        creates a fully initialized Reactor object ready for solving.
-        
+        """Create one reactor object from YAML.
+
         Args:
-            path_like: Path to reactor.yaml file or directory containing it.
-        
+            path_like: Reactor YAML path, directory, or reactor-like path.
+
         Returns:
-            Reactor object with variables and relations loaded.
-            
-        Example:
-            >>> reactor = Reactor.from_yaml('reactors/ARC_2015/reactor.yaml')
-            >>> reactor.solve()
+            Initialized Reactor object.
         """
-        from .reactor_util import reactor_from_yaml
+        # Resolve one concrete reactor.yaml path from flexible user input.
+        path = Path(path_like).expanduser()
+        if not path.is_file():
+            if path.is_dir() and (path / "reactor.yaml").is_file():
+                path = path / "reactor.yaml"
+            else:
+                start = Path.cwd()
+                root = start
+                for parent in (start, *start.parents):
+                    if (parent / "reactors").is_dir() and (parent / "src" / "fusdb").is_dir():
+                        root = parent
+                        break
+                candidate = root / path
+                if candidate.is_file():
+                    path = candidate
+                elif candidate.is_dir() and (candidate / "reactor.yaml").is_file():
+                    path = candidate / "reactor.yaml"
+                elif (root / "reactors" / path).is_dir():
+                    path = root / "reactors" / path / "reactor.yaml"
+                elif (root / "reactors" / f"{path}.yaml").is_file():
+                    path = root / "reactors" / f"{path}.yaml"
 
-        return reactor_from_yaml(path_like, cls=cls)
+        # Load one YAML document and parse metadata/solver settings.
+        with path.open("r", encoding="utf-8") as handle:
+            raw = yaml.safe_load(handle) or {}
 
-    def _ordered_relations(self) -> Iterable[Relation]:
-        """Yield applicable relations in the order the solver should consume them.
+        metadata = raw.get("metadata", {}) or {}
+        reactor_id = metadata.get("id") or path.parent.name
+        reactor_name = metadata.get("name") or reactor_id
 
-        Yields:
-            Relation objects in solve order without duplicates.
-        """
-        # Start from the relations that match this reactor state.
-        variable_names = self.variables_dict.keys()
-        variable_methods = [var.method for var in self.variables_dict.values() if var.method]
-        base_relations = list(
-            get_filtered_relations(
-                self.tags,
-                variable_names,
-                variable_methods,
-                extra_relations=self.default_relations,
-            )
+        tags = normalize_tags_to_tuple(raw.get("tags", []) or ())
+        solver_tags = raw.get("solver_tags", {}) or {}
+        if "abs_tol" in solver_tags:
+            raise ValueError("solver_tags.abs_tol is unsupported. Use only rel_tol.")
+        # Use the registry's canonical solver mode names directly.
+        raw_solver_mode = solver_tags.get("mode", "overwrite")
+        solver_mode = "overwrite" if raw_solver_mode is None else str(raw_solver_mode)
+        default_rel_tol = solver_tags.get("rel_tol")
+        solver_tags_for_validation = dict(solver_tags)
+        if "mode" in solver_tags_for_validation:
+            solver_tags_for_validation["mode"] = solver_mode
+        validate_solver_tags(solver_tags_for_validation, log=logger)
+        verbose = bool(solver_tags.get("verbosity", False))
+        solving_order = list(solver_tags.get("solving_order", []) or ())
+
+        # Build variable objects and apply solver-level tolerance defaults.
+        variables_dict = parse_variables(raw.get("variables", {}))
+        for var in variables_dict.values():
+            if default_rel_tol is not None and var.rel_tol is None:
+                var.rel_tol = float(default_rel_tol)
+
+        # Attach default/fallback relations; defaults errors are fatal by design.
+        from .registry.reactor_defaults import apply_reactor_defaults
+
+        default_relations: list[Relation] = apply_reactor_defaults(variables_dict)
+
+        # Build one Reactor object; relation filtering/ordering belongs to RelationSystem.
+        return cls(
+            path=path,
+            id=reactor_id,
+            name=reactor_name,
+            organization=metadata.get("organization"),
+            country=normalize_country(metadata.get("country")),
+            year=metadata.get("year"),
+            doi=metadata.get("doi"),
+            notes=metadata.get("notes"),
+            tags=tags,
+            solving_order=solving_order,
+            solver_mode=solver_mode,
+            verbose=verbose,
+            variables_dict=variables_dict,
+            default_relations=default_relations,
         )
-        rel_by_name = {rel.name: rel for rel in base_relations}
 
-        # Without an explicit domain order, prefer the registry solving order.
-        if not self.solving_order:
-            from .registry import load_allowed_tags
+    def make_relationsystem(
+        self,
+        *,
+        mode: str | None = None,
+        verbose: bool | None = None,
+    ) -> RelationSystem:
+        """Build one runtime relation system bound to this reactor values.
 
-            domain_order = {
-                normalize_tag(name): idx
-                for idx, name in enumerate((load_allowed_tags().get("solving_order", {}) or {}).keys())
-            }
-            if domain_order:
-                indexed = list(enumerate(base_relations))
-                indexed.sort(
-                    key=lambda item: (
-                        min(
-                            (
-                                domain_order[normalize_tag(tag)]
-                                for tag in (getattr(item[1], "tags", ()) or ())
-                                if normalize_tag(tag) in domain_order
-                            ),
-                            default=len(domain_order),
-                        ),
-                        item[0],
-                    )
-                )
-                yield from [rel for _, rel in indexed]
-                return
+        Args:
+            mode: Optional solver mode override.
+            verbose: Optional verbosity override.
 
-            yield from base_relations
-            return
-
-        # With an explicit domain order, walk the order top-to-bottom and
-        # deduplicate relation objects as they are emitted.
-        seen: set[Relation] = set()
-        for item in self.solving_order:
-            if item in rel_by_name:
-                rel = rel_by_name[item]
-                if rel not in seen:
-                    seen.add(rel)
-                    yield rel
-                continue
-            domain_tags = (*self.tags, normalize_tag(item))
-            for rel in get_filtered_relations(
-                domain_tags,
-                variable_names,
-                variable_methods,
-                extra_relations=self.default_relations,
-            ):
-                if rel in seen:
-                    continue
-                seen.add(rel)
-                yield rel
+        Returns:
+            Reactor-bound RelationSystem instance.
+        """
+        # Pass raw reactor settings through; RelationSystem builds the ordered graph.
+        variable_methods = [var.method for var in self.variables_dict.values() if var.method]
+        return RelationSystem(
+            relations=list(self.relations),
+            variables=list(self.variables_dict.values()),
+            mode=mode or self.solver_mode,
+            verbose=self.verbose if verbose is None else bool(verbose),
+            reactor_tags=tuple(self.tags),
+            solving_order=tuple(self.solving_order),
+            variable_methods=tuple(variable_methods),
+            default_relations=list(self.default_relations),
+        )
 
     def solve(
         self,
         mode: str | None = None,
         *,
         verbose: bool | None = None,
-        enforce_constraint_tags: Iterable[str] | None = None,
-        enforce_constraint_names: Iterable[str] | None = None,
     ) -> None:
-        """Solve for unknown reactor variables using physics relations.
-        
-        Executes the iterative solver to compute unknown variables from known ones.
-        If solving_order is specified, solves each domain in sequence.
-        
+        """Solve for unknown reactor values in-place.
+
         Args:
-            mode: Override solver mode ("overwrite" or "check").
-                 If None, uses self.solver_mode.
-            verbose: Override verbosity setting. If None, uses self.verbose.
-            enforce_constraint_tags: Relation tags whose soft constraints should be enforced.
-            enforce_constraint_names: Relation names/outputs or variable names whose soft constraints should be enforced.
-        Example:
-            >>> reactor = Reactor.from_yaml('reactors/ARC_2015/reactor.yaml')
-            >>> reactor.solve(verbose=True)  # Show detailed solving progress
+            mode: Optional solver mode override.
+            verbose: Optional verbosity override.
+
+        Returns:
+            None.
         """
-        # Resolve runtime solver settings first so the rest of the method reads
-        # from one normalized set of values.
-        solver_mode = mode or self.solver_mode
-        verbosity = self.verbose if verbose is None else verbose
-        self._log.setLevel(logging.INFO if verbosity else logging.WARNING)
-        self._log.log(
-            logging.INFO,
-            "Solving reactor %s (%s) with mode=%s",
-            self.id or "unknown",
-            self.name or "unknown",
-            solver_mode,
-            stacklevel=2,
+        # Solve through one runtime RelationSystem and copy values back.
+        system = self.make_relationsystem(
+            mode=mode,
+            verbose=verbose,
         )
-        constraint_tags_tuple = tuple(enforce_constraint_tags or ())
-        constraint_names_tuple = tuple(enforce_constraint_names or ())
+        system.solve()
+        self.variables_dict.update(system.variables_dict)
+        stop_reason = system.last_result.get("stop_reason")
+        self.last_solve_stop_reason = None if stop_reason is None else str(stop_reason)
+        self.last_solve_final_check = dict(system.last_result.get("final_check") or {})
 
-        # Solve everything in one shot when no domain ordering is requested.
-        if not self.solving_order:
-            rels = list(self.relations)
-            self._log.log(
-                logging.INFO,
-                "Solving %d relations (no domains)",
-                len(rels),
-                stacklevel=2,
-            )
-            system = RelationSystem(
-                rels,
-                list(self.variables_dict.values()),
-                mode=solver_mode,
-                verbose=verbosity,
-                enforce_constraint_tags=constraint_tags_tuple,
-                enforce_constraint_names=constraint_names_tuple,
-            )
-            system.solve()
-            self.variables_dict.update(system.variables_dict)
-            return
+    @property
+    def solve_status(self) -> str:
+        """Return one compact status string for the latest ``solve()`` run.
 
-        # Reuse the current reactor state to resolve each requested domain in order.
-        variable_names = self.variables_dict.keys()
-        variable_methods = [var.method for var in self.variables_dict.values() if var.method]
-        rel_by_name = {rel.name: rel for rel in self._ordered_relations()}
+        Args:
+            None.
 
-        # Warn early when two requested domains are both able to drive the same output.
-        if len(self.solving_order) > 1:
-            seen_outputs: dict[str, set[str]] = {}
-            for item in self.solving_order:
-                if item in rel_by_name:
-                    outputs = set(rel_by_name[item].outputs)
-                else:
-                    domain_tags = (*self.tags, normalize_tag(item))
-                    outputs = {
-                        output
-                        for rel in get_filtered_relations(
-                            domain_tags,
-                            variable_names,
-                            variable_methods,
-                            extra_relations=self.default_relations,
-                        )
-                        for output in rel.outputs
-                    }
-                for other_name, other_outputs in seen_outputs.items():
-                    overlap = outputs & other_outputs
-                    if overlap:
-                        warnings.warn(
-                            f"Relation domains '{other_name}' and '{item}' both solve {sorted(overlap)}",
-                            UserWarning,
-                        )
-                seen_outputs[item] = outputs
+        Returns:
+            Readable status combining stop reason and final-check summary.
+        """
+        # Report unsolved reactors explicitly for table views.
+        if self.last_solve_stop_reason is None:
+            return "not_solved"
 
-        # Solve each requested domain against the latest variable values.
-        for item in self.solving_order:
-            if item in rel_by_name:
-                rels = [rel_by_name[item]]
-            else:
-                rels = list(
-                    get_filtered_relations(
-                        (*self.tags, normalize_tag(item)),
-                        variable_names,
-                        variable_methods,
-                        extra_relations=self.default_relations,
-                    )
-                )
-            self._log.log(
-                logging.INFO,
-                "Solving domain %s with %d relations",
-                item,
-                len(rels),
-                stacklevel=2,
+        # Keep one compact summary that includes terminal final-check counts.
+        final_check = self.last_solve_final_check or {}
+        violated_count = int(final_check.get("violated_count", 0) or 0)
+        undecidable_count = int(final_check.get("undecidable_count", 0) or 0)
+        if bool(final_check.get("all_satisfied", False)):
+            return f"{self.last_solve_stop_reason}; final_check=all_satisfied"
+        if violated_count and undecidable_count:
+            return (
+                f"{self.last_solve_stop_reason}; "
+                f"final_check={violated_count} violated, {undecidable_count} undecidable"
             )
-            system = RelationSystem(
-                rels,
-                list(self.variables_dict.values()),
-                mode=solver_mode,
-                verbose=verbosity,
-                enforce_constraint_tags=constraint_tags_tuple,
-                enforce_constraint_names=constraint_names_tuple,
-            )
-            system.solve()
-            self.variables_dict.update(system.variables_dict)
+        if violated_count:
+            return f"{self.last_solve_stop_reason}; final_check={violated_count} violated"
+        if undecidable_count:
+            return f"{self.last_solve_stop_reason}; final_check={undecidable_count} undecidable"
+        return self.last_solve_stop_reason
 
     def diagnose(self) -> dict[str, object]:
-        """Run comprehensive diagnostics on reactor consistency.
-        
-        Checks all applicable relations to see which are violated and identifies
-        likely culprit variables causing inconsistencies. Useful for debugging
-        reactor specifications.
-        
+        """Return consolidated diagnostics for current reactor values.
+
+        Args:
+            None.
+
         Returns:
-            Dictionary containing:
-            - "violated_relations": List of relation names that are violated
-            - "likely_culprits": Variables most likely causing violations
-            - "variable_issues": Variables with missing or problematic values
-            
-        Example:
-            >>> reactor = Reactor.from_yaml('reactors/ARC_2015/reactor.yaml')
-            >>> diag = reactor.diagnose()
-            >>> print(f"Violated: {len(diag['violated_relations'])} relations")
+            Diagnostics dictionary with violated relations and likely culprits.
         """
-        # Create a RelationSystem in "check" mode (no modifications)
-        variable_names = self.variables_dict.keys()
-        variable_methods = [var.method for var in self.variables_dict.values() if var.method]
-        system = RelationSystem(
-            get_filtered_relations(
-                self.tags,
-                variable_names,
-                variable_methods,
-                extra_relations=self.default_relations,
-            ),
-            list(self.variables_dict.values()),
+        # Diagnose through one check-mode runtime RelationSystem.
+        system = self.make_relationsystem(
             mode="check",
+            verbose=False,
         )
-        
-        # Run diagnostics through one consolidated RelationSystem API.
-        diagnostics = system.diagnose()
+        return system.diagnose()
+
+    def to_table_payload(
+        self,
+        *,
+        reactor_id: str | None = None,
+        metadata_fields: Sequence[str] | None = None,
+        include_diagnostics: bool = True,
+    ) -> dict[str, object]:
+        """Return one normalized payload for multi-reactor table rendering.
+
+        Args:
+            reactor_id: Optional override for the column identifier.
+            metadata_fields: Optional metadata field names to include.
+            include_diagnostics: When ``True``, include ``diagnose()`` status data.
+
+        Returns:
+            Mapping with ``reactor_id``, ``metadata``, ``variables``, and ``diagnostics``.
+        """
+        # Resolve one stable identifier for table columns.
+        rid = reactor_id or self.id or self.name or "reactor"
+        fields = tuple(
+            metadata_fields
+            or (
+                "id",
+                "name",
+                "organization",
+                "country",
+                "tags",
+                "solve_status",
+                "year",
+                "doi",
+                "notes",
+            )
+        )
+
+        # Extract requested metadata values in one compact mapping.
+        metadata = {field: getattr(self, field, None) for field in fields}
+
+        # Optionally compute diagnostics used by table status styling.
+        diagnostics = self.diagnose() if include_diagnostics else {}
+        variable_issue_map: dict[str, tuple[str, int | None]] = {}
+        for name, status, rank in diagnostics.get("variable_issues", ()):
+            variable_issue_map[str(name)] = (str(status), rank)
+        # Build one per-variable payload without mutating reactor state.
+        variables_payload: dict[str, dict[str, Any]] = {}
+        for name, var in self.variables_dict.items():
+            input_value = var.input_value
+            current_value = var.current_value if var.current_value is not None else input_value
+            status, rank = variable_issue_map.get(name, (None, None))
+            variables_payload[name] = {
+                "input_value": input_value,
+                "current_value": current_value,
+                "input_source": var.input_source,
+                "rel_tol": var.rel_tol,
+                "diag_status": status,
+                "diag_rank": rank,
+            }
+
         return {
-            "violated_relations": diagnostics["violated_relations"],
-            "likely_culprits": diagnostics["likely_culprits"],
-            "variable_issues": diagnostics["variable_issues"],
-            "soft_constraint_violations": diagnostics["soft_constraint_violations"],
-            "relation_status": diagnostics["relation_status"],
+            "reactor_id": rid,
+            "metadata": metadata,
+            "variables": variables_payload,
+            "diagnostics": diagnostics,
         }
 
     def popcon(
@@ -328,190 +330,36 @@ class Reactor:
         *,
         outputs: Iterable[str] | None = None,
         constraints: Iterable[str] | None = None,
-        constraint_tags: Iterable[str] | None = ("constraint",),
         exclude_constraints: Iterable[str] | None = None,
         where: dict[str, tuple[float | None, float | None]] | None = None,
         chunk_size: int | None = None,
-    ) -> dict[str, object]:
-        """Evaluate a POPCON-style scan over one or more axes.
-
-        This method always uses the dense matrix path of `RelationSystem.evaluate`.
+    ) -> Popcon:
+        """Run one POPCON scan and return an already-executed Popcon object.
 
         Args:
-            scan_axes: Mapping of variable name -> 1D sequence of scan values.
-            outputs: Optional output variable names to return.
-            constraints: Explicit constraint relation names/outputs.
-            constraint_tags: Relation tags used to auto-select constraints.
-            exclude_constraints: Relation names/outputs to exclude.
-            where: Optional thresholds {name: (min, max)}.
-            chunk_size: Optional row-chunk size passed to `RelationSystem.evaluate`.
+            scan_axes: Scan axis mapping of variable name to 1D values.
+            outputs: Optional outputs to include.
+            constraints: Optional explicit constraint relation/output selectors.
+            exclude_constraints: Optional constraints to exclude.
+            where: Optional numeric thresholds for additional filtering.
+            chunk_size: Optional dense-evaluation chunk size.
 
         Returns:
-            Dict with axes, outputs, margins, allowed mask, and diagnostics.
+            Executed Popcon object including outputs, margins, allowed mask, and diagnostics.
         """
-        try:
-            import numpy as np
-        except Exception as exc:
-            raise ImportError("popcon requires numpy.") from exc
-
-        if not scan_axes:
-            raise ValueError("scan_axes must contain at least one axis.")
-
-        axis_order = list(scan_axes.keys())
-        axes: dict[str, np.ndarray] = {}
-        for name, values in scan_axes.items():
-            arr = np.asarray(values, dtype=float)
-            if arr.ndim != 1 or arr.size < 1:
-                raise ValueError(f"scan_axes[{name}] must be a 1D array with at least one value.")
-            var = self.variables_dict.get(name)
-            if var is not None and var.ndim == 1:
-                raise ValueError(f"scan axis '{name}' cannot be a profile variable.")
-            axes[name] = arr
-
-        grids = np.meshgrid(*[axes[name] for name in axis_order], indexing="ij")
-        grid_shape = grids[0].shape
-
-        base_values = {
-            name: (None if var is None else var.current_value if var.current_value is not None else var.input_value)
-            for name, var in self.variables_dict.items()
-        }
-        for name, var in self.variables_dict.items():
-            if name in axis_order:
-                continue
-            if var.input_source is None:
-                base_values[name] = None
-        for name, grid in zip(axis_order, grids):
-            base_values[name] = grid
-
-        if constraints is not None:
-            wanted = {str(item) for item in constraints}
-            constraint_rels = [
-                rel
-                for rel in self.relations
-                if rel.name in wanted
-                or any(target in wanted for target in rel.outputs)
-            ]
-        else:
-            tag_set = set(normalize_tags_to_tuple(constraint_tags or ()))
-            constraint_rels = [
-                rel for rel in self.relations if tag_set and tag_set.intersection(rel.tags)
-            ]
-        if exclude_constraints:
-            exclude = {str(item) for item in exclude_constraints}
-            constraint_rels = [
-                rel
-                for rel in constraint_rels
-                if rel.name not in exclude
-                and not set(rel.outputs).intersection(exclude)
-            ]
-
-        outputs_by_input: dict[str, set[str]] = {}
-        for rel in self.relations:
-            for inp in relation_input_names(rel):
-                outputs_by_input.setdefault(inp, set()).update(rel.outputs)
-        dependent: set[str] = set(axis_order)
-        queue = list(axis_order)
-        while queue:
-            name = queue.pop()
-            for out in outputs_by_input.get(name, ()):
-                if out in dependent:
-                    continue
-                dependent.add(out)
-                queue.append(out)
-
-        if outputs is None:
-            output_names = sorted(
-                {
-                    *base_values.keys(),
-                    *[
-                        output
-                        for rel in self.relations
-                        for output in rel.outputs
-                    ],
-                }
-            )
-        else:
-            output_names = [str(name) for name in outputs]
-
-        axis_set = set(axis_order)
-        for name in output_names:
-            if name in axis_set:
-                continue
-            var = self.variables_dict.get(name)
-            if name in dependent or var is None or var.input_source is None:
-                base_values[name] = None
-        for rel in constraint_rels:
-            for target in rel.outputs:
-                if target not in axis_set:
-                    base_values[target] = None
-        if where:
-            for name in where:
-                if name in axis_set:
-                    continue
-                if name in dependent:
-                    base_values[name] = None
-
-        system = RelationSystem(
-            list(self.relations),
-            list(self.variables_dict.values()),
-            mode=self.solver_mode,
-            verbose=False,
+        return Popcon(
+            reactor=self,
+            scan_axes=scan_axes,
+            outputs=outputs,
+            constraints=constraints,
+            exclude_constraints=exclude_constraints,
+            where=where,
+            chunk_size=chunk_size,
         )
-        values_out = system.evaluate(base_values, chunk_size=chunk_size)
-
-        outputs_map = {name: values_out.get(name) for name in output_names if name in values_out}
-        margins_map = {
-            target: values_out.get(target)
-            for rel in constraint_rels
-            for target in rel.outputs
-            if target in values_out
-        }
-
-        allowed = np.ones(grid_shape, dtype=bool)
-        for margin in margins_map.values():
-            if margin is None:
-                allowed &= False
-                continue
-            arr = np.asarray(margin)
-            if arr.shape == ():
-                arr = np.broadcast_to(arr, grid_shape)
-            allowed &= arr <= 0
-
-        if where:
-            for name, (lo, hi) in where.items():
-                arr = values_out.get(name)
-                if arr is None:
-                    allowed &= False
-                    continue
-                arr = np.asarray(arr)
-                if arr.shape == ():
-                    arr = np.broadcast_to(arr, grid_shape)
-                if lo is not None:
-                    allowed &= arr >= lo
-                if hi is not None:
-                    allowed &= arr <= hi
-
-        diagnostics = {
-            "fraction_allowed": float(np.mean(allowed)) if allowed.size else 0.0,
-            "violation_counts": {
-                name: int(np.sum(np.asarray(values) > 0))
-                for name, values in margins_map.items()
-                if values is not None
-            },
-        }
-
-        return {
-            "axes": axes,
-            "axis_order": axis_order,
-            "outputs": outputs_map,
-            "margins": margins_map,
-            "allowed": allowed,
-            "diagnostics": diagnostics,
-        }
 
     def plot_popcon(
         self,
-        result: dict[str, object],
+        result: dict[str, object] | Popcon,
         *,
         x: str,
         y: str,
@@ -525,11 +373,31 @@ class Reactor:
         best: dict[str, str] | None = None,
         ax=None,
     ):
-        """Plot POPCON results with masked fill and contour overlays."""
+        """Plot POPCON scan results.
+
+        Args:
+            result: POPCON result mapping or :class:`~fusdb.popcon_class.Popcon`.
+            x: X-axis variable name.
+            y: Y-axis variable name.
+            fill: Fill variable name.
+            contours: Optional additional contour outputs.
+            contour_levels: Optional contour level mapping.
+            contour_counts: Optional contour count mapping.
+            constraint_contours: Include constraint contours when ``True``.
+            slice: Optional axis slicing for >2D results.
+            reduce: Optional reduction config for >2D results.
+            best: Optional best-point marker config.
+            ax: Optional matplotlib axis.
+
+        Returns:
+            Matplotlib axis with rendered POPCON plot.
+        """
         from .plotting.popcon import plot_popcon
 
+        result_payload = result.to_result() if isinstance(result, Popcon) else result
+        # Delegate visualization to plotting helper module.
         return plot_popcon(
-            result,
+            result_payload,
             x=x,
             y=y,
             fill=fill,
@@ -543,11 +411,31 @@ class Reactor:
             ax=ax,
         )
 
-    def __repr__(self) -> str:
-        """Return a string representation of the reactor for display.
-        
-        Shows the reactor name, ID, and key metadata in a readable format.
+    def plot_cross_sections(self, *, ax=None, label: str | None = None):
+        """Plot reactor plasma cross-sections.
+
+        Args:
+            ax: Optional matplotlib axis.
+            label: Optional plot label.
+
+        Returns:
+            Matplotlib axis with rendered cross-section plot.
         """
+        from .plotting.cross_sections import plot_cross_sections
+
+        # Delegate visualization to plotting helper module.
+        return plot_cross_sections(self, ax=ax, label=label)
+
+    def __repr__(self) -> str:
+        """Return a compact reactor representation string.
+
+        Args:
+            None.
+
+        Returns:
+            Printable reactor summary string.
+        """
+        # Build a stable summary of key reactor metadata and model size.
         parts = [f"Reactor(id='{self.id}'"]
         if self.name and self.name != self.id:
             parts.append(f", name='{self.name}'")
@@ -559,9 +447,3 @@ class Reactor:
         parts.append(f", {len(self.relations)} relations")
         parts.append(")")
         return "".join(parts)
-
-    def plot_cross_sections(self, *, ax=None, label: str | None = None):
-        """Plot plasma cross-section using 95% flux surface geometry."""
-        from .plotting.cross_sections import plot_cross_sections
-
-        return plot_cross_sections(self, ax=ax, label=label)

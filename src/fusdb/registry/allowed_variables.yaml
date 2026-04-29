@@ -1,4 +1,5 @@
 # Allowed parameter variables.
+# NOTE: evaluate to change canonical names to more descriptive ones (like 'major_radius')
 ################ GEOMETRIC PARAMETERS ################
 R:
   aliases:
@@ -48,13 +49,6 @@ kappa_95:
   default_unit: dimensionless
   description:
     - Elongation at 95% flux surface.
-delta_95:
-  constraints:
-    - delta_95 >= 0
-    - delta_95 <= 1
-  default_unit: dimensionless
-  description:
-    - Triangularity at 95% flux surface.
 delta:
   default_unit: dimensionless
   aliases:
@@ -64,6 +58,13 @@ delta:
     - delta <= 1
   description:
     - Core triangularity.
+delta_95:
+  constraints:
+    - delta_95 >= 0
+    - delta_95 <= 1
+  default_unit: dimensionless
+  description:
+    - Triangularity at 95% flux surface.
 V_p:
   default_unit: m^3
   constraints:
@@ -102,31 +103,38 @@ squareness:
     - squareness >= -0.5
   description:
     - Squareness (xi).
-R_max:
-  default_unit: m
-  constraints:
-    - R_max > 0
-  description:
-    - Outboard major radius extent from the center of the torus.
 R_min:
   default_unit: m
   constraints:
     - R_min > 0
   description:
     - Inboard major radius extent from the center of the torus.
-Z_max:
+R_max:
   default_unit: m
   constraints:
-    - Z_max > 0
+    - R_max > 0
   description:
-    - Upper vertical extent.
+    - Outboard major radius extent from the center of the torus.
 Z_min:
   default_unit: m
   constraints:
     - Z_min > 0
   description:
     - Lower vertical extent.
+Z_max:
+  default_unit: m
+  constraints:
+    - Z_max > 0
+  description:
+    - Upper vertical extent.
 ################ MAGNETIC FIELD & CURRENT ################
+B:
+  default_unit: T
+  constraints:
+    - B >= 0
+  description:
+    - Magnetic field (profile over radial direction).
+  ndim: 1
 B0:
   default_unit: T
   constraints:
@@ -197,6 +205,12 @@ beta_N:
     - beta_N >= 0
   description:
     - Normalized beta.
+beta:
+  default_unit: dimensionless
+  constraints:
+    - beta >= 0
+  description:
+    - Total beta.
 beta_T:
   default_unit: dimensionless
   constraints:
@@ -209,12 +223,6 @@ beta_p:
     - beta_p >= 0
   description:
     - Poloidal beta.
-beta:
-  default_unit: dimensionless
-  constraints:
-    - beta >= 0
-  description:
-    - Total beta.
 beta_limit:
   default_unit: dimensionless
   constraints:
@@ -272,6 +280,12 @@ T_i:
     - T_i >= 0
   description:
     - Ion temperature.
+T_i_avg:
+  default_unit: keV
+  constraints:
+    - T_i_avg >= 0
+  description:
+    - Volume-averaged ion temperature.
 T_i_peak:
   default_unit: keV
   constraints:
@@ -281,6 +295,7 @@ T_i_peak:
 n_avg:
   aliases:
     - n_e_avg
+    - n_i_avg
   default_unit: 1/m^3
   constraints:
     - n_avg > 0
@@ -334,8 +349,6 @@ f_GW:
   default_unit: dimensionless
   constraints:
     - f_GW >= 0
-  soft_constraints:
-    - f_GW <= 1
   description:
     - Greenwald fraction.
 Z_eff:
@@ -352,6 +365,12 @@ n_D:
     - n_D >= 0
   description:
     - Deuterium ion density profile.
+n_D_avg:
+  default_unit: 1/m^3
+  constraints:
+    - n_D_avg >= 0
+  description:
+    - Volume-averaged deuterium ion density.
 n_T:
   ndim: 1
   default_unit: 1/m^3
@@ -427,6 +446,8 @@ tau_E:
   default_unit: s
   description:
     - Energy confinement time.
+  constraints:
+    - tau_E > 0
 tau_p:
   default_unit: s
   constraints:
@@ -878,6 +899,8 @@ kappa_ipb:
     - IPB-specific elongation at separatrix.
 afuel:
   default_unit: amu
+  constraints:
+    - afuel > 0
   description:
     - Average fuel mass number (D/T/He3 only).
 

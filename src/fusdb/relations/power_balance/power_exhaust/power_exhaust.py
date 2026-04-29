@@ -1,6 +1,6 @@
 """Power exhaust relations defined once."""
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 @relation(
     name="P_sep ratio",
     output="P_sep_over_R",

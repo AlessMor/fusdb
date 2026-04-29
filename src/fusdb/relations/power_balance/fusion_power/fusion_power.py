@@ -17,7 +17,7 @@ other fusion reactions (p-B11,...) are not considered since the focus in on magn
 
 from __future__ import annotations
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 from fusdb.registry import (
     DD_HE3_ENERGY_J,
     DD_N_ENERGY_J,

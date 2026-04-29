@@ -13,7 +13,15 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from bokeh.models import AutocompleteInput, Div, GraphRenderer, LayoutDOM, Plot
 
-from fusdb.plotting.relation_graph import relation_graph_data, relation_graph_plotter, save_relation_graph_html
+from fusdb.plotting.relation_graph import (
+    export_relation_graph,
+    relation_graph_data,
+    relation_graph_plotter,
+    save_relation_graph_html,
+)
+from fusdb.relation_class import Relation
+from fusdb.relationsystem_class import RelationSystem
+from fusdb.variable_class import Variable
 
 
 def _graph_renderer(layout: LayoutDOM) -> GraphRenderer:
@@ -133,3 +141,32 @@ def test_save_relation_graph_html_writes_standalone_document(tmp_path: Path) -> 
     html = output_path.read_text(encoding="utf-8")
     assert "fusdb Relation Graph" in html
     assert "Bokeh" in html
+
+
+def test_export_relation_graph_writes_system_graph(tmp_path: Path) -> None:
+    """Expected: system-specific relation graph export lives in the plotting module."""
+
+    def _sum(a: float, b: float) -> float:
+        return a + b
+
+    relation = Relation.from_callable(
+        name="sum_for_graph",
+        func=_sum,
+        target="c",
+        inputs=("a", "b"),
+    )
+    var_a = Variable.make(name="a")
+    var_b = Variable.make(name="b")
+    var_c = Variable.make(name="c")
+    var_a.add_value(1.0, reason="input", as_input=True)
+    var_b.add_value(2.0, reason="input", as_input=True)
+    system = RelationSystem(relations=[relation], variables=[var_a, var_b, var_c], mode="check")
+
+    output_path = tmp_path / "system_graph.html"
+    saved = export_relation_graph(system, output_path)
+
+    assert saved == output_path
+    html = output_path.read_text(encoding="utf-8")
+    assert "new vis.Network" in html
+    assert "sum_for_graph" in html
+    assert '"from": "a"' in html

@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 from fusdb.registry import load_allowed_species, load_allowed_variables
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 from fusdb.utils import integrate_profile
 
 allowed_species = load_allowed_species()
@@ -78,8 +78,6 @@ def electron_density_from_tracked_species_densities(
     name="Integrated D fraction from density profiles",
     output="f_D",
     tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
 )
 def integrated_deuterium_fraction_from_density_profiles(
     n_D: float,
@@ -109,8 +107,6 @@ def integrated_deuterium_fraction_from_density_profiles(
     name="Integrated T fraction from density profiles",
     output="f_T",
     tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
 )
 def integrated_tritium_fraction_from_density_profiles(
     n_T: float,
@@ -140,8 +136,6 @@ def integrated_tritium_fraction_from_density_profiles(
     name="Integrated He3 fraction from density profiles",
     output="f_He3",
     tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
 )
 def integrated_helium3_fraction_from_density_profiles(
     n_He3: float,
@@ -171,8 +165,6 @@ def integrated_helium3_fraction_from_density_profiles(
     name="Integrated He4 fraction from density profiles",
     output="f_He4",
     tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
 )
 def integrated_helium4_fraction_from_density_profiles(
     n_He4: float,
@@ -202,8 +194,6 @@ def integrated_helium4_fraction_from_density_profiles(
     name="Integrated Imp fraction from density profiles",
     output="f_Imp",
     tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
 )
 def integrated_impurity_fraction_from_density_profiles(
     n_imp: float,
@@ -240,8 +230,6 @@ def integrated_impurity_fraction_from_density_profiles(
         )
     ),
     tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
 )
 def integrated_tracked_fractions(
     n_D: float,
@@ -467,8 +455,6 @@ def plasma_balance_ode(
     ),
     outputs=("n_D", "n_T", "n_He3", "n_He4"),
     tags=("plasma",),
-    rel_tol_default=1e-10,
-    abs_tol_default=1e-12,
 )
 def steady_state_plasma_composition(
     n_D: np.ndarray,

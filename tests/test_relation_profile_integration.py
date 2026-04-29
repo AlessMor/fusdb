@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -19,14 +18,14 @@ from fusdb.relations.plasma_pressure.plasma_pressure import thermal_pressure
 from fusdb.relations.plasma_composition import plasma_composition as composition_relations
 from fusdb.relation_class import Relation
 from fusdb.relationsystem_class import RelationSystem
-from fusdb.relation_util import _RELATION_REGISTRY, relation
+from fusdb.relation_class import _RELATION_REGISTRY, relation
 from fusdb.registry import load_allowed_species, load_allowed_variables
-from fusdb.utils import compare_plasma_volume_with_integrated_dv, integrate_profile_over_volume
-from fusdb.variable_util import make_variable
+from fusdb.utils import integrate_profile_over_volume
+from fusdb.variable_class import Variable
 
 
 def _make_var(name: str, value: object, *, ndim: int) -> object:
-    var = make_variable(name=name, ndim=ndim)
+    var = Variable.make(name=name, ndim=ndim)
     var.add_value(value, as_input=True)
     var.input_source = "explicit"
     return var
@@ -103,7 +102,7 @@ def test_scalar_output_relation_returning_profile_is_not_auto_integrated():
         system = RelationSystem([profile_without_explicit_integral], variables, mode="overwrite", max_passes=0)
         system.solve()
 
-        out = system._graph["vars"].get("Rr_DT")
+        out = system.variables_dict.get("Rr_DT")
         assert out is None or out.current_value is None
     finally:
         if _RELATION_REGISTRY and _RELATION_REGISTRY[-1] is profile_without_explicit_integral:
@@ -124,7 +123,7 @@ def test_numeric_inverse_fallback_solves_single_scalar_unknown():
         v_p = 10.0
         target = 60.0
 
-        k_var = make_variable(name="k", ndim=0)
+        k_var = Variable.make(name="k", ndim=0)
         variables = [
             _make_var("n_i", profile, ndim=1),
             _make_var("V_p", v_p, ndim=0),
@@ -152,7 +151,7 @@ def test_numeric_inverse_fallback_leaves_unsolved_when_unbracketed():
         return total
 
     try:
-        f_d_var = make_variable(name="f_D", ndim=0)
+        f_d_var = Variable.make(name="f_D", ndim=0)
         variables = [
             _make_var("n_i", np.full(21, 1.0, dtype=float), ndim=1),
             _make_var("V_p", 5.0, ndim=0),
@@ -177,7 +176,7 @@ def test_profile_input_inverse_does_not_use_profile_mean_fallback():
         return k * n_i
 
     try:
-        k_var = make_variable(name="k", ndim=0)
+        k_var = Variable.make(name="k", ndim=0)
         variables = [
             _make_var("n_i", np.asarray([1.0, 3.0, 5.0], dtype=float), ndim=1),
             _make_var("Rr_DT", 10.0, ndim=0),
@@ -193,21 +192,6 @@ def test_profile_input_inverse_does_not_use_profile_mean_fallback():
     finally:
         if _RELATION_REGISTRY and _RELATION_REGISTRY[-1] is profile_affine_output:
             _RELATION_REGISTRY.pop()
-
-
-def test_compare_volume_with_integrated_dv_warns_when_geometry_mismatch():
-    """Expected: geometry/volume mismatch triggers a warning and reports non-matching integrated/reference volumes."""
-    with pytest.warns(UserWarning):
-        ok, v_int, v_ref = compare_plasma_volume_with_integrated_dv(
-            V_p=100.0,
-            R=3.0,
-            a=1.0,
-            kappa=2.0,
-            rel_tol=0.01,
-            warn=True,
-        )
-    assert ok is False
-    assert v_int is not None and v_ref is not None
 
 
 def test_reaction_rate_symbolic_model_is_available():
@@ -232,7 +216,7 @@ def test_fraction_equilibrium_symbolic_models_are_available():
         rel
         for rel in vars(composition_relations).values()
         if isinstance(rel, Relation)
-        if rel.outputs[0] in fractions and not rel.is_multi_output
+        if rel.outputs[0] in fractions and len(rel.outputs) == 1
     ]
     assert rels
     assert all(rel.sympy_expression is not None for rel in rels)

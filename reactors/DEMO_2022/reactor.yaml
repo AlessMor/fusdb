@@ -11,7 +11,7 @@ tags:
 - DEMO
 - H-mode
 solver_tags:
-  mode: default
+  mode: overwrite
   verbosity: false
 variables:
   R:

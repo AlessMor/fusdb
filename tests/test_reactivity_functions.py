@@ -7,7 +7,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from fusdb.relation_util import get_filtered_relations
+from fusdb.relation_class import get_filtered_relations
 from fusdb.registry import allowed_variable_ndim
 from fusdb.registry.reactor_defaults import apply_reactor_defaults
 from fusdb.relations.reactivities.reactivity_functions import (
@@ -53,7 +53,7 @@ from fusdb.relations.reactivities.reactivity_functions import (
     sigmav_TT_ENDFB_VIII0,
     sigmav_TT_NRL,
 )
-from fusdb.variable_util import make_variable
+from fusdb.variable_class import Variable
 
 
 def test_cf88_scalar_reactivities_are_positive():
@@ -373,7 +373,7 @@ def test_the3_branch_reactivity_outputs_are_registered():
 def test_reactor_defaults_assign_reactivity_methods_without_overwriting_user_choice():
     """Expected: reactor defaults create reactivity variables with default methods but preserve explicit overrides."""
     variables = {
-        "sigmav_DT": make_variable(
+        "sigmav_DT": Variable.make(
             name="sigmav_DT",
             ndim=1,
             method="custom dt method",
@@ -392,6 +392,34 @@ def test_reactor_defaults_assign_reactivity_methods_without_overwriting_user_cho
     assert variables["sigmav_THe3_np"].method == "THe3_np reactivity CF88"
 
 
+def test_reactor_defaults_create_assumption_relations() -> None:
+    """Expected: generated fallback defaults are marked as assumption relations."""
+    variables = {
+        "n_avg": Variable.make(name="n_avg", ndim=0),
+    }
+    variables["n_avg"].add_value(1.0e20, as_input=True)
+    defaults = apply_reactor_defaults(variables)
+
+    assert defaults
+    assert all("assumption" in set(rel.tags) for rel in defaults)
+
+
+def test_reactor_defaults_seed_dt_split_from_n_i_when_total_density_not_input() -> None:
+    """Expected: defaults add n_D/n_T fallback relations from n_i when n_i/n_avg are not explicit inputs."""
+    variables = {}
+    defaults = apply_reactor_defaults(variables)
+
+    default_names = {rel.name for rel in defaults}
+    assert "Default: n_D = 0.5 * n_i" in default_names
+    assert "Default: n_T = 0.5 * n_i" in default_names
+
+    for name in ("n_He3", "n_He4", "n_imp"):
+        assert name in variables
+        assert variables[name].input_value is not None
+        # Profile defaults are seeded as flat zero profiles.
+        assert float(np.mean(variables[name].input_value)) == 0.0
+
+
 def test_removed_reactivity_profile_variable_aliases_are_not_registered():
     """Expected: legacy reactivity *_profile variables are no longer part of the registry."""
     assert allowed_variable_ndim("sigmav_DT_profile") == 0
@@ -407,7 +435,6 @@ def test_method_override_filters_reactivity_relations_by_name():
     """Expected: method selection keeps the requested reactivity relation and rejects others with the same output."""
     rels = get_filtered_relations(
         ("fusion_power",),
-        ("T_i", "sigmav_TT"),
         ("TT reactivity ENDFB-VIII0",),
     )
     names = {

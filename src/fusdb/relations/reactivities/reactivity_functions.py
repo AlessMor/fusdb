@@ -4,7 +4,7 @@ from numpy import float64
 from numpy.typing import NDArray
 from scipy import constants as scipy_constants
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 from fusdb.relations.reactivities.tabulated_reactivities import reactivity_from_reactivity_table
 from fusdb.relations.reactivities.tabulated_reactivities import reactivity_from_xsection_table
 

@@ -4,7 +4,7 @@ General efficiency metrics"""
 from __future__ import annotations
 import numpy as np
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 @relation(
     name="Fusion triple product",
     output="n_i_tau_E_T_i",
@@ -33,7 +33,7 @@ def fusion_triple_product(
     name="Physics gain factor",
     output="Q_sci",
     tags=("fusion_power",),
-    inverse_functions={
+    solve_for={
         "P_aux": lambda values: (
             None
             if values.get("Q_sci") in (None, 0)

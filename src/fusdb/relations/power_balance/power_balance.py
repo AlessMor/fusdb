@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 # TODO(high): CHECK THE DEFINITIONS FOR P_LOSS AND ADD REFERENCES
 @relation(
     name="Total plasma heating",

@@ -5,10 +5,10 @@ Reactor loads a `reactor.yaml` specification and orchestrates solving.
 **Core fields**
 - `path`, `id`, `name`, `organization`, `country`, `year`, `doi`, `notes`
 - `tags`: list of strings used for relation filtering
-- `solving_order`: optional ordered list of domains/relations to solve in sequence
+- `solving_order`: optional ordered list of domains/relations passed to `RelationSystem`
 - `solver_mode`: `"overwrite"` or `"check"`
 - `verbose`: bool
-- `relations`: list of `Relation`
+- `relations`: optional caller-provided list of `Relation`
 - `default_relations`: list of `Relation` (defaults applied at load)
 - `variables_dict`: dict of `Variable` objects keyed by name
 
@@ -29,12 +29,11 @@ reactor = Reactor(
 
 **Methods**
 - `__post_init__()` initializes the per-instance logger context.
-- `from_yaml(path)` loads YAML, parses variables, applies defaults, filters relations.
-- `_relation_filter_inputs()` returns variable names and method overrides for filtering.
-- `_ordered_relations()` yields relations in solving order (domains or names).
-- `solve(mode=None, verbose=None)` runs one or more `RelationSystem` passes and updates `variables_dict`.
-- `diagnose()` returns `{"violated_relations": [...], "likely_culprits": {...}, "variable_issues": [...]}` using `"check"` mode.
-- `popcon(...)` evaluates POPCON-style scans over one or more axes (grid or point-solve).
+- `from_yaml(path)` loads YAML, parses variables, and applies defaults.
+- `make_relationsystem(mode=None, verbose=None)` builds one runtime `RelationSystem` bound to reactor values.
+- `solve(mode=None, verbose=None)` runs one `RelationSystem` solve and updates `variables_dict`.
+- `diagnose()` runs one `"check"` mode `RelationSystem` and returns diagnostics payload.
+- `popcon(...)` evaluates POPCON-style scans over one or more axes.
 - `plot_popcon(...)` plots masked fills + contour overlays from POPCON results.
 - `__repr__()` returns a compact summary string.
 - `plot_cross_sections()` plots the plasma cross-section using `R`, `a`, `kappa_95`, `delta_95`.
@@ -62,8 +61,9 @@ tags: # used to filter relations.
 
 solver_tags:
   mode: overwrite   # overwrite | check
+  rel_tol: 0.01     # optional default relative tolerance for all variables
   verbosity: false  # optional
-  solving_order: # optional, controls the order of `RelationSystem` runs and may warn on overlapping outputs. Each entry can be a domain tag or an exact `Relation.name`.
+  solving_order: # optional, controls relation order inside RelationSystem.
     - domain_a
     - domain_b
     - "Specific Relation Name"
@@ -74,8 +74,7 @@ variables:
     value: 1.1      # explicit value
     unit: m         # optional unit (converted to registry default using pint)
     method: relation_name # optional, selects a specific relation when multiple are available.
-    rel_tol: 0.02   # optional, tolerance override
-    abs_tol: 0.0    # optional, tolerance override
+    rel_tol: 0.02   # optional per-variable relative tolerance override
     fixed: false    # optional, prevents solver changes (useful for certain values such as geometry)
   n_e:
     value:

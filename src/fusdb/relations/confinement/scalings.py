@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sympy as sp
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 # Only the active default scaling is decorated for relation discovery.
 
 
@@ -119,16 +119,17 @@ def tau_E_itpa20_il_high_z(I_p: float, B0: float, P_loss: float, n_la: float, ai
 
 
 
-def tau_E_loc(dnla20: float, q_star: float, kappa_A: float, eps: float, R: float) -> float:
+def tau_E_loc(n_la: float, q_star: float, kappa_A: float, eps: float, R: float) -> float:
     """
     Linear Ohmic Confinement scaling (LOC) from Rice et al. 2020.
 
     Uses density in 1e20 m^-3, inverse aspect ratio eps=a/R, and areal elongation kappa_A.
     """
+    dnla20 = n_la / 1e20
     return 0.007 * dnla20 * q_star * kappa_A ** 0.5 * eps * R ** 3.0
 
 
-def tau_E_nstx_gyro_bohm(I_p: float, B0: float, P_loss: float, R: float, dnla20: float) -> float:
+def tau_E_nstx_gyro_bohm(I_p: float, B0: float, P_loss: float, R: float, n_la: float) -> float:
     """
         Calculate the NSTX gyro-Bohm confinement time
 
@@ -137,7 +138,7 @@ def tau_E_nstx_gyro_bohm(I_p: float, B0: float, P_loss: float, R: float, dnla20:
             b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
             p_plasma_loss (float): Net Heating power [W]
             rmajor (float): Plasma major radius [m]
-            dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+            n_la (float): Line averaged electron density [m**-3]
 
         Returns:
             float: NSTX gyro-Bohm confinement time [s]
@@ -152,6 +153,7 @@ def tau_E_nstx_gyro_bohm(I_p: float, B0: float, P_loss: float, R: float, dnla20:
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return 0.21 * I_p_MA ** 0.54 * B0 ** 0.91 * P_loss_MW ** (-0.38) * R ** 2.14 * dnla20 ** (-0.05)
 
 
@@ -320,14 +322,14 @@ def tau_E_menard_nstx(
 
 
 
-def tau_E_hubbard_upper(I_p: float, B0: float, dnla20: float, P_loss: float) -> float:
+def tau_E_hubbard_upper(I_p: float, B0: float, n_la: float, P_loss: float) -> float:
     """
         Calculate the Hubbard 2017 I-mode confinement time scaling - upper
 
         Args:
             pcur (float): Plasma current [A]
             b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-            dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+            n_la (float): Line averaged electron density [m**-3]
             p_plasma_loss (float): Net Heating power [W]
 
         Returns:
@@ -342,19 +344,20 @@ def tau_E_hubbard_upper(I_p: float, B0: float, dnla20: float, P_loss: float) -> 
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return 0.014 * I_p_MA ** 0.76 * B0 ** 0.84 * dnla20 ** 0.07 * P_loss_MW ** (-0.25)
 
 
 
 
-def tau_E_hubbard_lower(I_p: float, B0: float, dnla20: float, P_loss: float) -> float:
+def tau_E_hubbard_lower(I_p: float, B0: float, n_la: float, P_loss: float) -> float:
     """
         Calculate the Hubbard 2017 I-mode confinement time scaling - lower
 
         Args:
             pcur (float): Plasma current [A]
             b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-            dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+            n_la (float): Line averaged electron density [m**-3]
             p_plasma_loss (float): Net Heating power [W]
 
         Returns:
@@ -369,6 +372,7 @@ def tau_E_hubbard_lower(I_p: float, B0: float, dnla20: float, P_loss: float) -> 
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return 0.014 * I_p_MA ** 0.60 * B0 ** 0.70 * dnla20 ** (-0.03) * P_loss_MW ** (-0.33)
 
 
@@ -378,15 +382,15 @@ def tau_E_hubbard_lower(I_p: float, B0: float, dnla20: float, P_loss: float) -> 
     output="tau_E",
     tags=("confinement", "tokamak", "imode"),
 )
-def tau_E_hubbard_nominal(I_p: float, B0: float, dnla20: float, P_loss: float) -> float:
+def tau_E_hubbard_nominal(I_p: float, B0: float, n_la: float, P_heating: float) -> float:
     """
         Calculate the Hubbard 2017 I-mode confinement time scaling - nominal
 
         Args:
-            pcur (float): Plasma current [A]
-            b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
-            dnla20 (float): Line averaged electron density in units of 10**20 m**-3
-            p_plasma_loss (float): Net Heating power [W]
+            I_p (float): Plasma current [A]
+            B0 (float): Toroidal magnetic field on axis [T]
+            n_la (float): Line averaged electron density [m**-3]
+            P_heating (float): Net Heating power [W]
 
         Returns:
             float: Hubbard confinement time [s]
@@ -399,8 +403,10 @@ def tau_E_hubbard_nominal(I_p: float, B0: float, dnla20: float, P_loss: float) -
             ‌
     """
     I_p_MA = I_p / 1e6
-    P_loss_MW = P_loss / 1e6
-    return 0.014 * I_p_MA ** 0.68 * B0 ** 0.77 * dnla20 ** 0.02 * P_loss_MW ** (-0.29)
+    P_heating_MW = P_heating / 1e6
+    dnla20 = n_la / 1e20
+    return 0.014 * I_p_MA ** 0.68 * B0 ** 0.77 * dnla20 ** 0.02 * P_heating_MW ** (-0.29)
+
 def tau_E_I_Mode_y2(I_p: float, B0: float, P_loss: float, n_la: float) -> float:
     """
     Calculate the I-Mode confinement time scaling from Walk (equation 5.2).
@@ -792,6 +798,7 @@ def tau_E_iter_ipb98y2(
         Nuclear Fusion, vol. 48, no. 9, pp. 099801-099801, Aug. 2008, doi: https://doi.org/10.1088/0029-5515/48/9/099801.
     """
     return H98_y2 * 0.0562 * (I_p / 1e6) ** 0.93 * B0 ** 0.15 * (n_la/1e19) ** 0.41 * (P_loss/1e6)** (-0.69) * R ** 1.97 * kappa_ipb ** 0.78 * A ** (-0.58) * afuel ** 0.19
+
 def tau_E_iter_ipb98y1(
     I_p: float, B0: float, n_la: float, P_loss: float, R: float, kappa_ipb: float, A: float, afuel: float
 ) -> float:
@@ -1010,11 +1017,12 @@ tau_E_iter_h97p = iter_h97p_confinement_time
 
 
 def iter_93h_confinement_time(
-    I_p: float, B0: float, P_loss: float, afuel: float, R: float, dnla20: float, A: float, kappa: float
+    I_p: float, B0: float, P_loss: float, afuel: float, R: float, n_la: float, A: float, kappa: float
 ) -> float:
     """Return iter 93h confinement time scaling."""
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return (
         0.036
         * I_p_MA ** 1.06
@@ -1031,24 +1039,27 @@ tau_E_iter93h = iter_93h_confinement_time
 
 
 def lackner_gottardi_stellarator_confinement_time(
-    R: float, a: float, dnla20: float, B0: float, P_loss: float, q: float
+    R: float, a: float, n_la: float, B0: float, P_loss: float, q: float
 ) -> float:
     """Return lackner gottardi stellarator confinement time scaling."""
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return 0.17 * R * a**2 * dnla20 ** 0.6 * B0 ** 0.8 * P_loss_MW ** (-0.6) * q ** 0.4
 
 
 
-def gyro_reduced_bohm_confinement_time(B0: float, dnla20: float, P_loss: float, a: float, R: float) -> float:
+def gyro_reduced_bohm_confinement_time(B0: float, n_la: float, P_loss: float, a: float, R: float) -> float:
     """Return gyro reduced bohm confinement time scaling."""
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return 0.25 * B0 ** 0.8 * dnla20 ** 0.6 * P_loss_MW ** (-0.6) * a ** 2.4 * R ** 0.6
 
 
 
-def sudo_et_al_confinement_time(R: float, a: float, dnla20: float, B0: float, P_loss: float) -> float:
+def sudo_et_al_confinement_time(R: float, a: float, n_la: float, B0: float, P_loss: float) -> float:
     """Return sudo et al confinement time scaling."""
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return 0.17 * R ** 0.75 * a**2 * dnla20 ** 0.69 * B0 ** 0.84 * P_loss_MW ** (-0.58)
 
 
@@ -1063,11 +1074,12 @@ tau_E_iter_h90p_amended = iter_h90p_amended_confinement_time
 
 
 def riedel_h_confinement_time(
-    I_p: float, R: float, a: float, kappa_95: float, dnla20: float, B0: float, afuel: float, P_loss: float
+    I_p: float, R: float, a: float, kappa_95: float, n_la: float, B0: float, afuel: float, P_loss: float
 ) -> float:
     """Return riedel h confinement time scaling."""
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return (
         0.1
         * sp.sqrt(afuel)
@@ -1083,11 +1095,12 @@ def riedel_h_confinement_time(
 
 
 def neo_kaye_confinement_time(
-    I_p: float, R: float, a: float, kappa_95: float, dnla20: float, B0: float, P_loss: float
+    I_p: float, R: float, a: float, kappa_95: float, n_la: float, B0: float, P_loss: float
 ) -> float:
     """Return neo kaye confinement time scaling."""
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return (
         0.063
         * I_p_MA ** 1.12
@@ -1102,11 +1115,12 @@ def neo_kaye_confinement_time(
 
 
 def lackner_gottardi_confinement_time(
-    I_p: float, R: float, a: float, kappa_95: float, dnla20: float, B0: float, P_loss: float
+    I_p: float, R: float, a: float, kappa_95: float, n_la: float, B0: float, P_loss: float
 ) -> float:
     """Return lackner gottardi confinement time scaling."""
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     qhat = ((1.0 + kappa_95**2) * a * a * B0) / (0.4 * I_p_MA * R)
     return (
         0.12
@@ -1123,11 +1137,12 @@ def lackner_gottardi_confinement_time(
 
 
 def christiansen_confinement_time(
-    I_p: float, R: float, a: float, kappa_95: float, dnla20: float, B0: float, P_loss: float, afuel: float
+    I_p: float, R: float, a: float, kappa_95: float, n_la: float, B0: float, P_loss: float, afuel: float
 ) -> float:
     """Return christiansen confinement time scaling."""
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return (
         0.24
         * I_p_MA ** 0.79
@@ -1142,11 +1157,12 @@ def christiansen_confinement_time(
 
 
 def riedel_l_confinement_time(
-    I_p: float, R: float, a: float, kappa_95: float, dnla20: float, B0: float, P_loss: float
+    I_p: float, R: float, a: float, kappa_95: float, n_la: float, B0: float, P_loss: float
 ) -> float:
     """Return riedel l confinement time scaling."""
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return (
         0.044
         * I_p_MA ** 0.93
@@ -1161,11 +1177,12 @@ def riedel_l_confinement_time(
 
 
 def iter_h90p_confinement_time(
-    I_p: float, R: float, a: float, kappa: float, dnla20: float, B0: float, afuel: float, P_loss: float
+    I_p: float, R: float, a: float, kappa: float, n_la: float, B0: float, afuel: float, P_loss: float
 ) -> float:
     """Return iter h90p confinement time scaling."""
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return (
         0.064
         * I_p_MA ** 0.87
@@ -1238,7 +1255,7 @@ def jaeri_confinement_time(
 
 
 def t10_confinement_time(
-    dnla20: float,
+    n_la: float,
     R: float,
     q_star: float,
     B0: float,
@@ -1251,6 +1268,7 @@ def t10_confinement_time(
     """Return t10 confinement time scaling."""
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     denfac = dnla20 * R * q_star / (1.3 * B0)
     denfac = min(1.0, denfac)
     return (
@@ -1281,7 +1299,7 @@ def rebut_lallia_confinement_time(
     afuel: float,
     I_p: float,
     Z_eff: float,
-    dnla20: float,
+    n_la: float,
     B0: float,
     P_loss: float,
 ) -> float:
@@ -1295,7 +1313,7 @@ def rebut_lallia_confinement_time(
         afuel (float): Fuel atomic mass number
         pcur (float): Plasma current [A]
         zeff (float): Effective charge
-        dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+        n_la (float): Line averaged electron density [m**-3]
         b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
         p_plasma_loss (float): Net Heating power [W]
 
@@ -1307,6 +1325,7 @@ def rebut_lallia_confinement_time(
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     rll = (a * a * R * kappa) ** (1.0 / 3.0)
     term1 = 1.2e-2 * I_p_MA * rll ** 1.5 / sp.sqrt(Z_eff)
     term2 = 0.146 * dnla20 ** 0.75 * sp.sqrt(I_p_MA) * sp.sqrt(B0) * rll ** 2.75 * Z_eff ** 0.25 / P_loss_MW
@@ -1315,7 +1334,7 @@ def rebut_lallia_confinement_time(
 
 
 def iter_89o_confinement_time(
-    I_p: float, R: float, a: float, kappa: float, dnla20: float, B0: float, afuel: float, P_loss: float
+    I_p: float, R: float, a: float, kappa: float, n_la: float, B0: float, afuel: float, P_loss: float
 ) -> float:
     """
     Calculate the ITER Offset linear scaling - ITER 89-O (L-mode) confinement time
@@ -1325,7 +1344,7 @@ def iter_89o_confinement_time(
         rmajor (float): Plasma major radius [m]
         rminor (float): Plasma minor radius [m]
         kappa (float): Plasma elongation
-        dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+        n_la (float): Line averaged electron density [m**-3]
         b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
         afuel (float): Fuel atomic mass number
         p_plasma_loss (float): Net Heating power [W]
@@ -1338,6 +1357,7 @@ def iter_89o_confinement_time(
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     term1 = 0.04 * I_p_MA ** 0.5 * R ** 0.3 * a ** 0.8 * kappa ** 0.6 * afuel ** 0.5
     term2 = (
         0.064
@@ -1354,7 +1374,7 @@ def iter_89o_confinement_time(
 
 
 
-def iter_89p_confinement_time(I_p: float, R: float, a: float, kappa: float, dnla20: float, B0: float, afuel: float, P_loss: float) -> float:  # noqa: E501
+def iter_89p_confinement_time(I_p: float, R: float, a: float, kappa: float, n_la: float, B0: float, afuel: float, P_loss: float) -> float:  # noqa: E501
     """
     Calculate the ITER Power scaling - ITER 89-P (L-mode) confinement time
 
@@ -1363,7 +1383,7 @@ def iter_89p_confinement_time(I_p: float, R: float, a: float, kappa: float, dnla
         rmajor (float): Plasma major radius [m]
         rminor (float): Plasma minor radius [m]
         kappa (float): Plasma elongation
-        dnla20 (float): Line averaged electron density in units of 10**20 m**-3
+        n_la (float): Line averaged electron density [m**-3]
         b_plasma_toroidal_on_axis (float): Toroidal magnetic field [T]
         afuel (float): Fuel atomic mass number
         p_plasma_loss (float): Net Heating power [W]
@@ -1378,6 +1398,7 @@ def iter_89p_confinement_time(I_p: float, R: float, a: float, kappa: float, dnla
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return (
         0.048
         * I_p_MA ** 0.85
@@ -1392,7 +1413,7 @@ def iter_89p_confinement_time(I_p: float, R: float, a: float, kappa: float, dnla
 
 
 def tau_E_iter89P(
-    I_p: float, R: float, a: float, kappa_sep: float, dnla20: float, B0: float, afuel: float, P_loss: float
+    I_p: float, R: float, a: float, kappa_sep: float, n_la: float, B0: float, afuel: float, P_loss: float
 ) -> float:
     """
     ITER89P scaling using separatrix elongation (kappa) with density in 1e20 m^-3.
@@ -1403,6 +1424,7 @@ def tau_E_iter89P(
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return (
         0.03812775526676551
         * afuel ** 0.5
@@ -1417,7 +1439,7 @@ def tau_E_iter89P(
 
 
 def tau_E_iter89P_ka(
-    I_p: float, R: float, a: float, kappa_A: float, dnla20: float, B0: float, afuel: float, P_loss: float
+    I_p: float, R: float, a: float, kappa_A: float, n_la: float, B0: float, afuel: float, P_loss: float
 ) -> float:
     """
     ITER89P scaling using areal elongation (kappa_A) with density in 1e20 m^-3.
@@ -1428,6 +1450,7 @@ def tau_E_iter89P_ka(
     """
     I_p_MA = I_p / 1e6
     P_loss_MW = P_loss / 1e6
+    dnla20 = n_la / 1e20
     return (
         0.03812775526676551
         * afuel ** 0.5

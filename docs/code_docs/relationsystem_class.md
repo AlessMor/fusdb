@@ -1,140 +1,50 @@
 # RelationSystem
 
-`RelationSystem` orchestrates the solve process across a set of relations and variables, handling inference, constraints, and diagnostics.
+`RelationSystem` orchestrates solving, verification, diagnostics, and dense scan
+evaluation for a set of `Relation` objects and `Variable` objects.
 
-RelationSystem solves a set of `Relation` objects against `Variable` objects using a dict-based bipartite graph.
+The public class set stays small: `Variable`, `Relation`, `Reactor`,
+`RelationSystem`, and `Popcon`. `RelationSystem` keeps an indexed `SystemGraph`,
+warning state, compiled constraint cache, and the latest solve result as durable state.
 
-Profile integration is explicit in relation functions; `RelationSystem` does not
+Profile integration is explicit in relation functions. `RelationSystem` does not
 auto-integrate profile outputs for scalar variables.
 
-**Core inputs (dataclass fields)**
+**Core inputs**
 - `relations`: list of `Relation`
 - `variables`: list of `Variable`
 - `mode`: `"overwrite"` or `"check"`
-- `verbose`: bool
-- `n_max`: max block size (default 4)
-- `max_passes`: max overwrite passes
-- `default_rel_tol`: fallback tolerance for variables without overrides
+- `n_max`: max block size
+- `max_passes`: max reconciliation attempts
+- `default_rel_tol`: fallback relative tolerance
+- `solving_order`: optional ordered relation names or relation-domain tags
 
-**Example**
-```python
-from fusdb import RelationSystem, Variable, Relation
+**Canonical runtime state**
+- `graph`: `SystemGraph` with indexed `Relation` and `Variable` object lists plus adjacency tables
+- `ndim`: variable dimensionality lookup
+- `variable_bounds`: simple scalar bounds inferred from `Variable.constraints`
+- `compiled_constraints`: compiled constraint-expression cache
+- `last_result`: latest `solve()` payload with `stop_reason`, `final_check`, `metrics`, and `violated_relations`
 
-rel = Relation(
-    name="Aspect ratio",
-    output="A",
-    func=lambda R, a: R / a,
-    inputs=["R", "a"],
-    tags=("geometry",),
-)
-system = RelationSystem(
-    relations=[rel],
-    variables=[
-        Variable(name="R", values=[3.0], input_source="explicit"),
-        Variable(name="a", values=[1.0], input_source="explicit"),
-    ],
-    mode="overwrite",
-)
-system.solve()
-```
+**Main methods**
+- `variables_dict`: returns current `{name: Variable}`.
+- `solve()`: fills missing values, reconciles violated relations, commits final state, and updates `last_result`.
+- `evaluate(values, chunk_size=None)`: dense forward evaluation for scalar/grid inputs, used by POPCON.
+- `diagnose(values_override=None)`: relation status, likely culprits, variable issues, and structural summary.
 
-**Internal maps (examples)**
-- `_vars = {"R": Variable(...), "a": Variable(...), "P_fus": None}`
-- `_vars_to_rels = {"R": {relA, relB}, "a": {relC}, ...}`
-- `_rels_to_vars = {relA: ("R", "a", "B0"), ...}`
-- `_var_order = ["R", "a", "B0", ...]`
-- `_var_constraints_map = {"R": ("R > 0",), ...}`
-- `_rel_constraints_map = {relA: ("a > 0",), ...}`
+Plotting helpers live in `fusdb.plotting`; use
+`fusdb.plotting.export_relation_graph(system, path)` for a lightweight HTML
+graph of one relation system.
 
-**Methods (concise, all)**
-- `__post_init__()` builds maps, constraints, logger, and pending relations.
-- `variables_dict` property returns `{name: Variable}`.
-- `_get_value(name)` returns the effective value considering pass/override logic.
-- `_values_dict()` returns the current values dict.
-- `_accept_candidate_values(...)` validates and commits candidate values.
-- `_set_value(...)` writes a value and updates pending relations/metadata.
-- `_expected(rel, values)` computes expected output (or None).
-- `_residual(rel, values, scaled=False)` computes `actual - expected`.
-- `_residual_derivative(rel, name, values, current=None)` finite-difference derivative.
-- `_candidate_better(key, best_key, tol=...)` compares candidate scores.
-- `_constraints_violated(values, rel=None, names=None)` checks constraints.
-- `_solve_for_value(rel, name, values_map, prefer_eval_output=False)` solves a single var.
-- `_apply_relation(rel, rel_values, missing_inputs)` forward/backward apply.
-- `_infer_var_bounds(name)` infers simple numeric bounds from constraints.
-- `_constraint_residuals(constraints, values, penalty)` returns constraint penalties.
-- `_least_squares_block_compact(relations, unknowns, values_map)` nxn LSQ solver.
-- `_solve_block(relations, unknowns, values_map)` picks 1×1 vs nxn path.
-- `_build_unknown_map(rel_nodes, values)` groups relations by unknown set.
-- `_solve_unknown_blocks(unknown_map, values)` solves blocks up to `n_max`.
-- `_enforce_pending_relations(rel_index)` processes the pending queue.
-- `_start_pass()` seeds overrides and resets pending for a new pass.
-- `_select_culprit(rels, values, rel_nodes)` chooses an override candidate.
-- `solve()` runs the main loop.
-- `_violated_relations(values, rels=None)` returns violated relations.
-- `_relation_status(rel, values)` returns (status, residual).
-- `_culprit_for_relation(rel, values)` finds a likely culprit variable.
-- `diagnose(values_override=None)` returns consolidated diagnostics.
-- `export_relation_graph(path="relation_graph.html")` writes an HTML graph.
+**Solve flow**
+1. Seed explicit/default inputs.
+2. Run closure passes to fill directly solvable missing values.
+3. Solve structurally closed scalar blocks up to `n_max`.
+4. Route overconstrained or multi-writer conflicts through reconciliation.
+5. Run a final network verification and store the result in `last_result`.
 
-**Solve flow (detailed)**
-1. If `mode == "check"`, exit early (no mutation).
-2. Seed the pending queue with all relations.
-3. Loop passes:
-4. Enforce pending relations via `_enforce_pending_relations` (forward eval; backward solve if exactly one input is missing).
-5. Update violated relations based on current values.
-6. Build unknown blocks and try to solve 1×1..`n_max` with `_solve_unknown_blocks` (1×1 uses `solve_for_value`; nxn uses compact LSQ with bounds and penalties).
-7. If progress was made, continue; if not and violations exist in overwrite mode, pick a culprit and override, then start a new pass.
-8. Exit when no progress remains (or after `max_passes`).
-
-**Outputs and diagnostics**
-- `variables_dict` → `{name: Variable}` (built from `_vars` + `_var_order`)
-- `diagnose()` → dictionary with:
-  - `relation_status`: list of `(relation, status, residual)`
-  - `violated_relations`: list of relation names
-  - `likely_culprits`: mapping `relation_name -> (variable, rel_change, target_value)`
-  - `variable_issues`: list of `(variable, status, rank)`
-  - `soft_constraint_violations`: list of `(kind, name, constraint)`
-
-## Relation Interactions
-
-This section summarizes how coupled relations interact during `RelationSystem.solve()`.
-
-### Interaction Pattern
-
-At runtime, `RelationSystem` builds a bipartite graph:
-
-- variable nodes (`R`, `a`, `P_fus`, `n_e`, ...)
-- relation nodes (each equation with one output)
-
-Edges connect relation inputs/output names to variables.
-
-### Solve Mechanics
-
-In overwrite mode, the solver iterates by:
-
-1. forward evaluation when all inputs are known;
-2. backward single-unknown solve when one input is missing;
-3. block solve for coupled unknown sets (`1x1` to `n_max x n_max`);
-4. culprit-based override if unresolved violations remain.
-
-In check mode, no variable mutation is performed and only diagnostics are returned.
-
-### Typical Cross-Domain Couplings
-
-- Geometry -> volume/shape -> profile integrals -> fusion and radiation power.
-- Composition -> density partition and species fractions -> reactivity and pressure.
-- Confinement (`tau_E`) <-> power balance (`P_loss`) through implicit loops.
-- Operational limits consume solved state and report feasibility boundaries.
-
-### Constraint Roles
-
-- Hard constraints enforce mathematical/physical admissibility and can block candidate values.
-- Soft constraints are recorded as warnings for design-space awareness.
-
-Both relation-level and variable-level constraints influence candidate ranking.
-
-### Profile-Aware Flows
-
-Profiles are explicit variables and are not automatically integrated for scalar outputs.
-If a scalar quantity depends on a profile, the relation function must integrate it directly.
-This keeps coupling visible in the relation graph and avoids hidden aggregation behavior.
+**Profile-aware behavior**
+Profiles are `Variable(ndim=1)` values. Scalar inputs to a profile variable are
+broadcast to a flat profile. Explicit profile/average fallbacks such as `n_D`
+and `n_D_avg` are handled by name, but scalar profile-dependent physics should
+remain visible in relation functions through explicit integration.

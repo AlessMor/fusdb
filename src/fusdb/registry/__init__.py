@@ -9,7 +9,6 @@ import numpy as np
 import yaml
 from ..utils import within_tolerance, normalize_tag, normalize_tags_to_tuple, normalize_country
 from ..variable_class import Variable
-from ..variable_util import make_variable
 
 # Registry paths
 REGISTRY_PATH = Path(__file__).resolve().parent
@@ -111,13 +110,6 @@ def allowed_variable_constraints(name: str) -> tuple[str, ...]:
     return tuple((data.get(name, {}) or {}).get("constraints") or ())
 
 
-def allowed_variable_soft_constraints(name: str) -> tuple[str, ...]:
-    """Return soft constraints for an allowed variable. Args: name. Returns: tuple[str,...]."""
-    name = canonical_variable_name(name)
-    data, _, _ = load_allowed_variables()
-    return tuple((data.get(name, {}) or {}).get("soft_constraints") or ())
-
-
 def allowed_variable_ndim(name: str) -> int:
     """Return dimensionality for an allowed variable (0 if unspecified)."""
     name = canonical_variable_name(name)
@@ -169,7 +161,7 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
     Raises:
         ValueError: If entries conflict or use unsupported value payloads.
     """
-    _, _, default_units = load_allowed_variables()
+    allowed_variables, _, default_units = load_allowed_variables()
     parsed: dict[str, Variable] = {}
     raw_vars = variables or {}
 
@@ -224,7 +216,6 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                         "unit": reference_entry.get("unit"),
                         "method": None,
                         "rel_tol": None,
-                        "abs_tol": None,
                         "fixed": False,
                         "coord": reference_entry.get("coord"),
                     }
@@ -251,7 +242,6 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
             "unit": None,
             "method": None,
             "rel_tol": None,
-            "abs_tol": None,
             "fixed": False,
             "coord": None,
         }
@@ -271,6 +261,11 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                 method = entry.get("method")
                 rel_tol = entry.get("rel_tol")
                 abs_tol = entry.get("abs_tol")
+                if abs_tol is not None:
+                    raise ValueError(
+                        f"Variable '{name}' uses unsupported key 'abs_tol'. "
+                        "Use only 'rel_tol'."
+                    )
                 fixed = bool(entry.get("fixed", False))
                 coord = (
                     canonical_variable_name(str(entry.get("coord")))
@@ -282,7 +277,6 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                 unit = None
                 method = None
                 rel_tol = None
-                abs_tol = None
                 fixed = False
                 coord = None
 
@@ -327,8 +321,6 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                     conflicts.append(f"method {raw_name}={method} conflicts with {method_source}={merged['method']}")
             if rel_tol is not None:
                 merged["rel_tol"] = rel_tol if merged["rel_tol"] is None else min(merged["rel_tol"], rel_tol)
-            if abs_tol is not None:
-                merged["abs_tol"] = abs_tol if merged["abs_tol"] is None else min(merged["abs_tol"], abs_tol)
             if fixed:
                 merged["fixed"] = True
             if coord:
@@ -348,7 +340,6 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
         unit = merged.get("unit")
         method = merged.get("method")
         rel_tol = merged.get("rel_tol")
-        abs_tol = merged.get("abs_tol")
         fixed = bool(merged.get("fixed", False))
         coord = merged.get("coord")
         input_source = "explicit" if value is not None else None
@@ -361,11 +352,6 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                 pass
         if ndim == 0 and isinstance(value, dict):
             raise ValueError(f"Variable '{name}' does not allow mapping/profile inputs.")
-        if rel_tol is not None and abs_tol is not None:
-            if abs_tol >= rel_tol:
-                rel_tol = None
-            else:
-                abs_tol = None
         if unit is None:
             unit = default_units.get(name)
         if not is_profile and isinstance(value, str):
@@ -389,7 +375,7 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
                 name=name,
                 unit=unit,
                 rel_tol=rel_tol,
-                abs_tol=abs_tol,
+                constraints=tuple((allowed_variables.get(name, {}) or {}).get("constraints") or ()),
                 method=method,
                 input_source=input_source,
                 fixed=fixed,
@@ -397,7 +383,7 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
             )
             if ndim == 1 and coord:
                 kwargs["coord"] = coord
-            var = make_variable(**kwargs)
+            var = Variable.make(**kwargs)
             parsed[name] = var
         if value is not None:
             var.add_value(value, as_input=True)
@@ -408,8 +394,6 @@ def parse_variables(variables: dict[str, Any] | None) -> dict[str, Variable]:
             var.method = method
         if rel_tol is not None:
             var.rel_tol = rel_tol
-        if abs_tol is not None:
-            var.abs_tol = abs_tol
         if unit and not var.unit:
             var.unit = unit
     return parsed

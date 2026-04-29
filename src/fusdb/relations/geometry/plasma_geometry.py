@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import sympy as sp
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 
 ########################################################################################################################
 #                                                                                                 RADII and ASPECT RATIO

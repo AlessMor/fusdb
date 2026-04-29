@@ -13,7 +13,7 @@ tags:
 - H-mode
 - STEP
 solver_tags:
-  mode: default
+  mode: overwrite
   verbosity: false
 variables:
   R:

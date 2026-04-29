@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fusdb.registry import KEV_TO_J
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 from fusdb.utils import integrate_profile, safe_float
 
 

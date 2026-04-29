@@ -19,7 +19,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from fusdb.plotting import plot_cross_sections, plot_popcon
+from fusdb.relation_class import Relation
 from fusdb.reactor_class import Reactor
+from fusdb.variable_class import Variable
 
 
 def test_plot_cross_sections_module_and_reactor_method_return_axes():
@@ -80,4 +82,41 @@ def test_plot_popcon_module_and_reactor_method_return_axes():
     assert out_right is ax_right
     assert ax_left.get_title() == "POPCON: P_fus"
     assert ax_right.get_title() == "POPCON: P_fus"
+    plt.close(fig)
+
+
+def test_plot_popcon_accepts_popcon_object() -> None:
+    """Expected: Reactor.plot_popcon accepts Popcon objects returned by Reactor.popcon."""
+    rel_power = Relation.from_callable(
+        name="test_plot_popcon_power",
+        target="P_fus",
+        inputs=("T_avg", "n_avg"),
+        func=lambda T_avg, n_avg: T_avg * n_avg,
+    )
+    rel_margin = Relation.from_callable(
+        name="test_plot_popcon_margin",
+        target="greenwald_margin",
+        inputs=("n_avg",),
+        tags=("constraint",),
+        func=lambda n_avg: n_avg - 1.0,
+    )
+    reactor = Reactor(
+        relations=[rel_power, rel_margin],
+        variables_dict={
+            "T_avg": Variable.make(name="T_avg", ndim=0),
+            "n_avg": Variable.make(name="n_avg", ndim=0),
+            "P_fus": Variable.make(name="P_fus", ndim=0),
+            "greenwald_margin": Variable.make(name="greenwald_margin", ndim=0),
+        },
+    )
+    pop = reactor.popcon(
+        scan_axes={"T_avg": [8.0, 10.0], "n_avg": [0.8, 1.2]},
+        outputs=("P_fus", "greenwald_margin"),
+    )
+
+    fig, ax = plt.subplots(figsize=(5, 4))
+    out = reactor.plot_popcon(pop, x="T_avg", y="n_avg", fill="P_fus", ax=ax)
+
+    assert out is ax
+    assert ax.get_title() == "POPCON: P_fus"
     plt.close(fig)

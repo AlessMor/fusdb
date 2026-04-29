@@ -8,9 +8,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from fusdb.relation_class import Relation
-from fusdb.relation_util import _RELATION_REGISTRY, relation, relation_input_names, try_sympify_expression
+from fusdb.relation_class import _RELATION_REGISTRY, relation, try_sympify_expression
 from fusdb.relationsystem_class import RelationSystem
-from fusdb.variable_util import make_variable
+from fusdb.variable_class import Variable
 
 
 def _sum_relation(a: float, b: float) -> float:
@@ -32,11 +32,11 @@ def test_relation_evaluate_and_variables():
         target="c",
         func=_sum_relation,
         inputs=("a", "b"),
-        solvers={"a": (("b", "c"), lambda b, c: c - b)},
+        solve_for={"a": {"inputs": ("b", "c"), "fn": lambda b, c: c - b}},
     )
     assert tuple(rel.symbols) == ("a", "b", "c")
     assert rel.outputs == ("c",)
-    assert relation_input_names(rel) == ("a", "b")
+    assert rel.input_names() == ("a", "b")
     assert rel.evaluate({"a": 1.0, "b": 2.0}) == pytest.approx(3.0)
     assert rel.evaluate({"b": 2.0, "c": 5.0}, target="a") == pytest.approx(3.0)
 
@@ -51,10 +51,9 @@ def test_relation_canonicalizes_variable_names():
         func=_canonical_sum,
         target="aspect_ratio",
         inputs=("major_radius", "minor_radius"),
-        symbols=("major_radius", "minor_radius", "aspect_ratio"),
     )
     assert tuple(rel.symbols) == ("R", "a", "A")
-    assert relation_input_names(rel) == ("R", "a")
+    assert rel.input_names() == ("R", "a")
     assert rel.outputs == ("A",)
 
 
@@ -80,15 +79,14 @@ def test_relation_rejects_inputs_not_accepted_by_callable_name():
         )
 
 
-def test_relation_solve_for_value_uses_inverse_function_override():
-    """Expected: solve_for_value uses an explicit inverse override when one is provided."""
+def test_relation_solve_for_value_uses_solve_for_override():
+    """Expected: solve_for_value uses an explicit solve_for override when one is provided."""
     rel = Relation.from_callable(
         name="sum",
         func=_sum_relation,
         target="c",
-        symbols={"a": None, "b": None, "c": None},
         inputs=("a", "b"),
-        inverse_functions={"a": lambda values: values["c"] - values["b"]},
+        solve_for={"a": lambda values: values["c"] - values["b"]},
     )
     assert rel.solve_for_value("a", {"b": 3.0, "c": 8.0}) == pytest.approx(5.0)
 
@@ -135,7 +133,7 @@ def test_try_sympify_expression_warns_on_invalid_string():
     assert parsed is None
 
 
-def test_relation_decorator_in_relation_util_registers_relation():
+def test_relation_decorator_registers_relation():
     """Expected: @relation returns a Relation object and appends it to the global registry."""
     before = len(_RELATION_REGISTRY)
 
@@ -150,8 +148,31 @@ def test_relation_decorator_in_relation_util_registers_relation():
     _RELATION_REGISTRY.pop()
 
 
-def test_multi_output_relation_is_forward_only():
-    """Expected: multi-output relations expose bundle outputs and disable inverse solving."""
+def test_soft_constraint_api_is_removed():
+    """Expected: relation constructors reject the removed soft-constraint API."""
+    rel = Relation.from_callable(
+        name="plain_constraints",
+        func=_sum_relation,
+        target="c",
+        inputs=("a", "b"),
+    )
+    assert not hasattr(rel, "soft_constraints")
+
+    with pytest.raises(TypeError):
+        Relation.from_callable(
+            name="old_soft_constraints",
+            func=_sum_relation,
+            target="c",
+            inputs=("a", "b"),
+            soft_constraints=("c <= 0",),
+        )
+
+    with pytest.raises(TypeError):
+        relation(name="old_soft_decorator", output="c", soft_constraints=("c <= 0",))
+
+
+def test_multi_output_relation_requires_explicit_solve_for_for_inverse():
+    """Expected: multi-output relations expose bundle outputs and only support explicit solve_for directions."""
     rel = Relation.from_callable(
         name="bundle",
         func=_bundle_relation,
@@ -159,9 +180,7 @@ def test_multi_output_relation_is_forward_only():
         inputs=("a",),
     )
     assert rel.outputs == ("b", "c")
-    assert rel.is_multi_output is True
-    assert rel.is_forward_only is True
-    assert relation_input_names(rel) == ("a",)
+    assert rel.input_names() == ("a",)
     applied = rel.apply({"a": 3.0})
     assert applied["b"] == pytest.approx(4.0)
     assert applied["c"] == pytest.approx(6.0)
@@ -172,7 +191,7 @@ def test_multi_output_relation_is_forward_only():
 
 
 def test_relation_decorator_supports_multiple_outputs():
-    """Expected: @relation(outputs=...) registers a forward-only multi-output relation."""
+    """Expected: @relation(outputs=...) registers a multi-output relation without inverse properties."""
     before = len(_RELATION_REGISTRY)
 
     @relation(name="bundle_decorated", outputs=("b", "c"), tags=("test",))
@@ -183,10 +202,22 @@ def test_relation_decorator_supports_multiple_outputs():
     applied = bundle_decorated.apply({"a": 2.0})
     assert applied["b"] == pytest.approx(3.0)
     assert applied["c"] == pytest.approx(4.0)
-    assert bundle_decorated.is_forward_only is True
     assert len(_RELATION_REGISTRY) == before + 1
     assert _RELATION_REGISTRY[-1] is bundle_decorated
     _RELATION_REGISTRY.pop()
+
+
+def test_relation_solve_for_false_disables_direction() -> None:
+    """Expected: solve_for=False disables a direction even when symbolic inversion exists."""
+    rel = Relation.from_callable(
+        name="sum",
+        func=_sum_relation,
+        target="c",
+        inputs=("a", "b"),
+        solve_for={"a": False},
+    )
+    assert rel.solve_for_value("a", {"b": 3.0, "c": 8.0}) is None
+    assert rel.solve_for_value("b", {"a": 3.0, "c": 8.0}) == pytest.approx(5.0)
 
 
 def test_relationsystem_solves_multi_output_relation_atomically():
@@ -197,10 +228,10 @@ def test_relationsystem_solves_multi_output_relation_atomically():
         outputs=("b", "c"),
         inputs=("a",),
     )
-    a = make_variable(name="a", ndim=0)
+    a = Variable.make(name="a", ndim=0)
     a.add_value(3.0, as_input=True)
-    b = make_variable(name="b", ndim=0)
-    c = make_variable(name="c", ndim=0)
+    b = Variable.make(name="b", ndim=0)
+    c = Variable.make(name="c", ndim=0)
     system = RelationSystem([rel], [a, b, c], mode="overwrite")
     system.solve()
     assert system.variables_dict["b"].current_value == pytest.approx(4.0)
@@ -215,9 +246,9 @@ def test_relationsystem_evaluate_handles_multi_output_relation():
         outputs=("b", "c"),
         inputs=("a",),
     )
-    a = make_variable(name="a", ndim=0)
-    b = make_variable(name="b", ndim=0)
-    c = make_variable(name="c", ndim=0)
+    a = Variable.make(name="a", ndim=0)
+    b = Variable.make(name="b", ndim=0)
+    c = Variable.make(name="c", ndim=0)
     system = RelationSystem([rel], [a, b, c], mode="overwrite")
     values = system.evaluate({"a": np.asarray([1.0, 2.0, 3.0])})
     assert np.allclose(values["b"], np.asarray([2.0, 3.0, 4.0]))

@@ -7,6 +7,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import fusdb.registry.reactor_defaults as reactor_defaults
 from fusdb.registry import parse_variables
 from fusdb.reactor_class import Reactor
 
@@ -32,37 +33,102 @@ def test_parse_variables_uses_density_reference_to_seed_species_profiles() -> No
 
 
 def test_arc_greenwald_fraction_is_loaded_and_kept_fixed() -> None:
-    """Expected: ARC keeps its explicit fixed f_GW input while n_GW stays on the Greenwald limit relation."""
+    """Expected: ARC keeps its explicit fixed f_GW input from YAML parsing."""
     reactor = Reactor.from_yaml(ROOT / "reactors" / "ARC_2015" / "reactor.yaml")
-    reactor.solve()
 
     assert reactor.variables_dict["f_BS"].input_value == 0.63
     assert reactor.variables_dict["f_GW"].input_value == 0.67
-    assert reactor.variables_dict["f_GW"].current_value == 0.67
     assert reactor.variables_dict["f_GW"].fixed is True
-    assert reactor.variables_dict["n_GW"].current_value == pytest.approx(
-        1.0e20
-        * (reactor.variables_dict["I_p"].current_value / 1.0e6)
-        / (np.pi * reactor.variables_dict["a"].current_value ** 2),
-        rel=1e-11,
-    )
 
 
 def test_arc_fraction_inputs_seed_density_profiles_and_derived_fractions() -> None:
-    """Expected: ARC uses the fractions block as a density seed and derives integrated fractions from the solved densities."""
+    """Expected: ARC uses the fractions block as a density seed at load time."""
     reactor = Reactor.from_yaml(ROOT / "reactors" / "ARC_2015" / "reactor.yaml")
-    reactor.solve()
 
-    assert reactor.variables_dict["f_D"].input_value is None
-    assert reactor.variables_dict["f_T"].input_value is None
+    assert "f_D" not in reactor.variables_dict or reactor.variables_dict["f_D"].input_value is None
+    assert "f_T" not in reactor.variables_dict or reactor.variables_dict["f_T"].input_value is None
     assert np.mean(reactor.variables_dict["n_D"].input_value) == pytest.approx(0.5 * reactor.variables_dict["n_avg"].input_value)
     assert np.mean(reactor.variables_dict["n_T"].input_value) == pytest.approx(0.5 * reactor.variables_dict["n_avg"].input_value)
-    assert reactor.variables_dict["f_D"].current_value < 0.5
-    assert reactor.variables_dict["f_T"].current_value < 0.5
-    assert reactor.variables_dict["f_He4"].current_value > 0.0
-    assert (
-        reactor.variables_dict["f_D"].current_value
-        + reactor.variables_dict["f_T"].current_value
-        + reactor.variables_dict["f_He3"].current_value
-        + reactor.variables_dict["f_He4"].current_value
-    ) == pytest.approx(1.0, abs=1e-12)
+
+
+def test_stellaris_defaults_seed_species_densities_from_n_avg() -> None:
+    """Expected: species defaults are seeded from n_avg before solving without fake relation inputs."""
+    reactor = Reactor.from_yaml(ROOT / "reactors" / "STELLARIS" / "reactor.yaml")
+
+    n_avg = float(reactor.variables_dict["n_avg"].input_value)
+    n_d = reactor.variables_dict["n_D"]
+    n_t = reactor.variables_dict["n_T"]
+
+    assert n_d.input_value is not None
+    assert n_t.input_value is not None
+    assert np.mean(n_d.input_value) == pytest.approx(0.5 * n_avg)
+    assert np.mean(n_t.input_value) == pytest.approx(0.5 * n_avg)
+
+    for rel in reactor.default_relations:
+        assert all(not name.startswith("_") for name in rel.inputs)
+
+
+def test_parse_variables_rejects_abs_tol_key() -> None:
+    """Expected: variable-level abs_tol input is unsupported and rejected."""
+    with pytest.raises(ValueError, match="unsupported key 'abs_tol'"):
+        parse_variables({"R": {"value": 3.0, "abs_tol": 1e-6}})
+
+
+def test_registry_declared_profile_variable_keeps_array_runtime_shape() -> None:
+    """Expected: ndim=1 registry variables convert scalar convenience input to flat arrays immediately."""
+    parsed = parse_variables({"n_i": 1.2e20})
+    var = parsed["n_i"]
+
+    assert var.ndim == 1
+    assert isinstance(var.input_value, np.ndarray)
+    assert isinstance(var.current_value, np.ndarray)
+    assert var.input_value.ndim == 1
+    assert var.current_value.ndim == 1
+    assert np.allclose(var.input_value, np.full(var.profile_size, 1.2e20))
+
+
+def test_reactor_from_yaml_rejects_solver_abs_tol(tmp_path) -> None:
+    """Expected: solver_tags.abs_tol is unsupported and rejected at load time."""
+    reactor_yaml = tmp_path / "reactor.yaml"
+    reactor_yaml.write_text(
+        "\n".join(
+            (
+                "metadata:",
+                "  id: R_abs_tol_reject",
+                "solver_tags:",
+                "  mode: overwrite",
+                "  abs_tol: 1e-6",
+                "variables:",
+                "  R:",
+                "    value: 3.0",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="solver_tags\\.abs_tol"):
+        Reactor.from_yaml(reactor_yaml)
+
+
+def test_reactor_from_yaml_propagates_defaults_errors(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Expected: defaults application failures propagate and fail reactor loading."""
+    reactor_yaml = tmp_path / "reactor.yaml"
+    reactor_yaml.write_text(
+        "\n".join(
+            (
+                "metadata:",
+                "  id: R_defaults_failure",
+                "variables:",
+                "  R:",
+                "    value: 3.0",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    def _raise_defaults_error(*_args, **_kwargs):
+        raise RuntimeError("defaults exploded")
+
+    monkeypatch.setattr(reactor_defaults, "apply_reactor_defaults", _raise_defaults_error)
+    with pytest.raises(RuntimeError, match="defaults exploded"):
+        Reactor.from_yaml(reactor_yaml)

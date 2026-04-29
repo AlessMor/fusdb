@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sympy as sp
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 @relation(
     name="Greenwald density limit",
     output="n_GW",
@@ -33,7 +33,6 @@ def greenwald_density_fraction(n_GW: float, n_avg: float) -> float:
     name="Greenwald margin",
     output="greenwald_margin",
     tags=("plasma", "tokamak", "constraint"),
-    soft_constraints=("greenwald_margin <= 0",),
 )
 def greenwald_margin(n_avg: float, n_GW: float) -> float:
     """Return Greenwald margin (<=0 satisfied)."""
@@ -57,7 +56,6 @@ def sudo_density_limit(P_loss: float, B0: float, R: float, a: float) -> float:
     name="Sudo margin",
     output="sudo_margin",
     tags=("plasma", "stellarator", "constraint"),
-    soft_constraints=("sudo_margin <= 0",),
 )
 def sudo_margin(n_avg: float, n_SUDO: float) -> float:
     """Return Sudo margin (<=0 satisfied)."""

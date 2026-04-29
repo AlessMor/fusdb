@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 @relation(
     name="Thermal stored energy",
     output="W_th",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fusdb.relation_util import relation
+from fusdb.relation_class import relation
 # NOTE: PROCESS and cfspopcon use radas radiation loss function Lz, that includes all sources of radiation in a formula
 # P_i = n_i * n_e * Lz(Z_i, T_i).
 

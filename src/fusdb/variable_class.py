@@ -1,11 +1,5 @@
-"""Variable containers with scalar/profile semantics.
+"""Variable data container with explicit scalar/profile semantics."""
 
-- `Variable` is an abstract-ish base class with common metadata and value management.
-- `Variable0D` and `Variable1D` are concrete subclasses for scalar and profile variables, respectively.
-"""
-#TODO(low): Add history tracking of values with pass_id and reason for better debugging and analysis.
-#TODO(low): Consider adding validation for unit consistency and method applicability in add_value.
-#TODO(low): Consider storing pint unit instead of string and adding unit conversion utilities.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -18,111 +12,102 @@ from .utils import as_profile_array
 
 @dataclass(slots=True)
 class Variable:
-    """Abstract base variable class with metadata and value management.
+    """Store one variable definition and current/input values.
 
-    Runtime state stores only numeric values:
-    - `ndim=0`: `float`
-    - `ndim=1`: `np.ndarray` profile values
+    Attributes:
+        name: Canonical variable name.
+        unit: Unit label for human inspection.
+        ndim: Variable dimensionality (0 scalar, 1 profile).
+        rel_tol: Relative tolerance used by solver/diagnostics.
+        constraints: Hard validation constraints for this variable.
+        method: Optional method tag associated with the value source.
+        input_source: Optional provenance label for input values.
+        fixed: Whether the solver must treat this value as immutable.
+        coord: Coordinate name for profile variables.
+        profile_size: Broadcast size when a profile receives one scalar input.
+        input_value: First accepted value marked as input baseline.
+        current_value: Latest accepted runtime value.
     """
 
     name: str
     unit: str | None = None
     ndim: int = 0
     rel_tol: float | None = None
-    abs_tol: float | None = None
+    constraints: tuple[str, ...] = field(default_factory=tuple)
     method: str | None = None
     input_source: str | None = None
     fixed: bool = False
+    coord: str = "a"
+    profile_size: int = 51
 
     input_value: Any | None = field(default=None, init=False)
     current_value: Any | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
-        """Validate dimensionality and abstract-ish base instantiation."""
-        from .registry import canonical_variable_name
-
-        if self.__class__ is Variable:
-            raise TypeError(
-                "Variable is abstract. Use Variable0D, Variable1D, or variable_util.make_variable()."
-            )
-        if self.ndim not in (0, 1):
-            raise ValueError("Variable ndim must be 0 or 1.")
-        self.name = canonical_variable_name(self.name)
-
-@dataclass(slots=True)
-class Variable0D(Variable):
-    """Scalar variable type."""
-
-    ndim: int = 0
-
-    def add_value(
-        self,
-        value: float | None,
-        *,
-        pass_id: int | None = None,
-        reason: str | None = None,
-        as_input: bool = False,
-    ) -> bool:
-        """Set scalar current value.
+        """Validate dimensionality and canonicalize variable name.
 
         Args:
-            value: Candidate scalar value.
-            pass_id: Optional solver pass identifier.
-            reason: Optional solver reason label.
-            as_input: When True, also store first accepted value as input.
+            None.
 
         Returns:
-            True when value changed and was stored, else False.
+            None.
 
         Raises:
-            ValueError: If value is invalid for scalar variables.
+            ValueError: If ``ndim`` is not 0 or 1.
         """
-        # NOTE: pass_id/reason could be used for saving history
-        _ = pass_id
-        _ = reason
+        from .registry import allowed_variable_constraints, canonical_variable_name
 
-        if value is None: # early exit for None values
-            return False
+        # Normalize variable identity once so all lookups use canonical names.
+        self.name = canonical_variable_name(self.name)
+
+        # Keep dimensionality strict and explicit.
+        if self.ndim not in (0, 1):
+            raise ValueError("Variable ndim must be 0 or 1.")
+
+        # Attach registry constraints when the caller did not provide explicit ones.
+        if self.constraints:
+            self.constraints = tuple(str(item) for item in self.constraints)
+        else:
+            self.constraints = tuple(allowed_variable_constraints(self.name))
+
+    @classmethod
+    def make(cls, *, ndim: int = 0, **kwargs: object) -> "Variable":
+        """Create one variable instance with normalized dimensionality.
+
+        Args:
+            ndim: Variable dimensionality (0 scalar, 1 profile).
+            **kwargs: Additional Variable dataclass fields.
+
+        Returns:
+            One initialized Variable object.
+
+        Raises:
+            ValueError: If dimensionality is unsupported or inconsistent.
+        """
+        # Normalize explicit ndim first.
         try:
-            new_value = float(value)
-            if not np.isfinite(new_value):
-                raise ValueError
-        except Exception:
-            raise ValueError(f"Scalar variable '{self.name}' requires a finite numeric scalar.")
+            normalized_ndim = int(ndim)
+        except Exception as exc:
+            raise ValueError(
+                f"Unsupported variable ndim={ndim}. Supported values are 0 and 1."
+            ) from exc
 
-        current = self.current_value  # last stored scalar value
-        same = isinstance(current, (int, float, np.floating)) and float(current) == new_value  # skip no-op write
-        if not same:
-            self.current_value = new_value  # commit only when value actually changed
-        if as_input and self.input_value is None and self.current_value is not None:
-            self.input_value = self.current_value  # snapshot first accepted value as input baseline
-        return not same
+        # Resolve possible duplicate ndim passed through kwargs.
+        payload = dict(kwargs)
+        provided_ndim = payload.pop("ndim", normalized_ndim)
+        try:
+            provided_ndim = int(provided_ndim)
+        except Exception as exc:
+            raise ValueError(
+                f"Unsupported variable ndim={provided_ndim}. Supported values are 0 and 1."
+            ) from exc
+        if provided_ndim != normalized_ndim:
+            raise ValueError(
+                f"Conflicting ndim values: ndim={normalized_ndim} but kwargs['ndim']={provided_ndim}."
+            )
 
-
-@dataclass(slots=True)
-class Variable1D(Variable):
-    """Profile variable type storing direct numeric profile arrays.
-
-    The profile x-axis is always normalized to ``[0, 1]`` and interpreted
-    as normalized over ``coord`` (for example ``coord='a'`` means x is over
-    minor radius ``a`` when ``a`` is available in solver values).
-    """
-
-    ndim: int = 1
-    coord: str = "a"  # coordinate name used to de-normalize x in [0, 1]
-    profile_size: int = 51
-
-    @property
-    def current_value_mean(self) -> float | None:
-        """Return mean of current profile value."""
-        arr = as_profile_array(self.current_value)
-        return float(np.mean(arr)) if arr is not None else None
-
-    @property
-    def input_value_mean(self) -> float | None:
-        """Return mean of input profile value."""
-        arr = as_profile_array(self.input_value)
-        return float(np.mean(arr)) if arr is not None else None
+        # Build one unified Variable instance.
+        return cls(**payload, ndim=normalized_ndim)
 
     def add_value(
         self,
@@ -132,58 +117,81 @@ class Variable1D(Variable):
         reason: str | None = None,
         as_input: bool = False,
     ) -> bool:
-        """Set profile current value as a validated numeric array.
+        """Set current value with explicit ndim-aware validation.
 
         Args:
-            value: Candidate scalar mean or 1D NumPy array.
+            value: Candidate scalar or profile payload.
             pass_id: Optional solver pass identifier.
             reason: Optional solver reason label.
-            as_input: When True, also store first accepted value as input.
+            as_input: When ``True``, store first accepted value in ``input_value``.
 
         Returns:
-            True when value changed and was stored, else False.
+            ``True`` when value changed, ``False`` otherwise.
 
         Raises:
-            ValueError: If value is invalid for profile variables.
+            ValueError: If ``value`` cannot be validated for this variable.
         """
-        # NOTE: pass_id/reason could be used for saving history.
+        # Keep solver context arguments available for future history tracking.
         _ = pass_id
         _ = reason
 
-        if value is None: # early exit for None values
+        # Ignore missing writes explicitly.
+        if value is None:
             return False
-        try: 
-        # value can be a scalar mean or a profile array
-            if isinstance(value, np.ndarray):
-            # try to use directly a provided profile array
-                new_value = as_profile_array(value)
-                if new_value is None: # invalid array (non-finite, non-1D, or empty)
-                    raise ValueError
-            else: 
-            # try to broadcast a provided scalar mean to a full profile array
-                if self.profile_size < 1: # sanity check for profile size
-                    raise ValueError
-                scalar = float(value)
-                if not np.isfinite(scalar): # sanity check for scalar value
-                    raise ValueError
-                new_value = np.full(int(self.profile_size), scalar, dtype=float)
-        except Exception:
-            raise ValueError(
-                f"Profile variable '{self.name}' requires a finite float or 1D finite NumPy array."
-            )
 
-        current = self.current_value  # last stored profile value
-        if isinstance(current, np.ndarray):
-            same = current.shape == new_value.shape and np.array_equal(current, new_value)  # fast path for arrays
-        else:
-            current_arr = as_profile_array(current)  # normalize any array-like previous value for comparison
+        # Validate and normalize the incoming payload in one ndim-aware branch.
+        if self.ndim == 0:
+            try:
+                new_value = float(value)
+                if not np.isfinite(new_value):
+                    raise ValueError
+            except Exception as exc:
+                raise ValueError(
+                    f"Scalar variable '{self.name}' requires a finite numeric scalar."
+                ) from exc
+
+            # Detect no-op scalar rewrites before mutating state.
+            current = self.current_value
             same = (
-                current_arr is not None
-                and current_arr.shape == new_value.shape
-                and np.array_equal(current_arr, new_value)
+                isinstance(current, (int, float, np.floating))
+                and float(current) == new_value
             )
+        else:
+            arr = as_profile_array(value)
+            if arr is not None:
+                new_value = arr
+            else:
+                try:
+                    scalar = float(value)
+                    if not np.isfinite(scalar):
+                        raise ValueError
+                    if self.profile_size < 1:
+                        raise ValueError
+                except Exception as exc:
+                    raise ValueError(
+                        f"Profile variable '{self.name}' requires a finite float or 1D finite NumPy array."
+                    ) from exc
+                new_value = np.full(int(self.profile_size), scalar, dtype=float)
+
+            # Compare profiles without implicit reductions before mutating state.
+            current = self.current_value
+            if isinstance(current, np.ndarray):
+                same = current.shape == new_value.shape and np.array_equal(current, new_value)
+            else:
+                current_arr = as_profile_array(current)
+                same = (
+                    current_arr is not None
+                    and current_arr.shape == new_value.shape
+                    and np.array_equal(current_arr, new_value)
+                )
+
+        # Commit only real state changes.
         if not same:
-            self.current_value = new_value  # commit only when profile actually changed
+            self.current_value = new_value
+        changed = not same
+
+        # Snapshot first accepted value as input baseline when requested.
         if as_input and self.input_value is None and self.current_value is not None:
-            self.input_value = self.current_value  # snapshot first accepted profile as input baseline
-        return not same
+            self.input_value = self.current_value
+
+        return changed
