@@ -7,7 +7,7 @@ metadata:
 tags:
 - mirror
 solver_tags:
-  mode: overwrite
+  mode: verify
   verbosity: false
 variables:
   V_p: 46

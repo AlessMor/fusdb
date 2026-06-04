@@ -1,50 +1,53 @@
 # RelationSystem
 
-`RelationSystem` orchestrates solving, verification, diagnostics, and dense scan
-evaluation for a set of `Relation` objects and `Variable` objects.
-
-The public class set stays small: `Variable`, `Relation`, `Reactor`,
-`RelationSystem`, and `Popcon`. `RelationSystem` keeps an indexed `SystemGraph`,
-warning state, compiled constraint cache, and the latest solve result as durable state.
-
-Profile integration is explicit in relation functions. `RelationSystem` does not
-auto-integrate profile outputs for scalar variables.
+`RelationSystem` orchestrates simultaneous numeric evaluation and solving of a
+selected set of `Relation` objects against a set of `Variable` objects. The
+current SciPy-based numeric backend uses `scipy.optimize.least_squares` to run
+reconcile/optimize solves and provides verification and ordered-evaluation
+modes.
 
 **Core inputs**
-- `relations`: list of `Relation`
-- `variables`: list of `Variable`
-- `mode`: `"overwrite"` or `"check"`
-- `n_max`: max block size
-- `max_passes`: max reconciliation attempts
-- `default_rel_tol`: fallback relative tolerance
-- `solving_order`: optional ordered relation names or relation-domain tags
+- `variables`: an iterable of `Variable` instances (the system's variables)
+- `relations`: an iterable of `Relation` instances (selected relations to evaluate)
+- `constraints`: optional extra system-level constraint expressions
+- `name`: optional system name
+- `verbose`: enable additional runtime warnings and prints
+- `variable_registry`: optional `VariableRegistry` used to resolve aliases
 
 **Canonical runtime state**
-- `graph`: `SystemGraph` with indexed `Relation` and `Variable` object lists plus adjacency tables
-- `ndim`: variable dimensionality lookup
-- `variable_bounds`: simple scalar bounds inferred from `Variable.constraints`
-- `compiled_constraints`: compiled constraint-expression cache
-- `last_result`: latest `solve()` payload with `stop_reason`, `final_check`, `metrics`, and `violated_relations`
+- `variables`: list of `Variable` objects
+- `variables_by_name`: mapping `{name: Variable}` used internally and returned in results
+- `relations`: full list of active `Relation` objects (including relation-local guards)
+- `primary_relations`: the relations originally selected for the system
+- `relations_by_name`: mapping `{name: Relation}`
+- `profile_size`: inferred common profile length used for profile variables
+- `_last_vector_spans`, `_last_solver_values`: internal solver bookkeeping
 
 **Main methods**
-- `variables_dict`: returns current `{name: Variable}`.
-- `solve()`: fills missing values, reconciles violated relations, commits final state, and updates `last_result`.
-- `evaluate(values, chunk_size=None)`: dense forward evaluation for scalar/grid inputs, used by POPCON.
-- `diagnose(values_override=None)`: relation status, likely culprits, variable issues, and structural summary.
+- `run(mode='verify', **options)`: dispatch to one of the available modes
+	(`verify`, `reconcile`, `optimize`, `ordered`) and return a result dict.
+- `verify_current()`: evaluate all active relations at the current variable state
+	without changing variables; returns diagnostic result payload.
+- `reconcile(**options)`: run the numeric reconcile solver (uses SciPy least_squares).
+- `optimize(**options)`: run optimization-mode solve (objective-aware least-squares).
+- `ordered(**options)`: run forward ordered evaluation where later relation outputs
+	overwrite earlier values.
+- `solve_mode(mode, **kwargs)`: lower-level entry that implements reconcile/optimize.
+- `ordered_evaluate(order=None, passes=1)`: explicit ordered evaluation helper.
+- `compatibility_report()`: lightweight mapping of active relations to backend labels.
 
-Plotting helpers live in `fusdb.plotting`; use
-`fusdb.plotting.export_relation_graph(system, path)` for a lightweight HTML
-graph of one relation system.
-
-**Solve flow**
-1. Seed explicit/default inputs.
-2. Run closure passes to fill directly solvable missing values.
-3. Solve structurally closed scalar blocks up to `n_max`.
-4. Route overconstrained or multi-writer conflicts through reconciliation.
-5. Run a final network verification and store the result in `last_result`.
+The result dictionaries returned by `run()` and the mode helpers include
+standard keys such as `mode`, `success`, `errors`, `warnings`, `relation_status`,
+`variable_status`, `residuals`, `variables` (a mapping of `Variable` objects),
+and `relations` (the selected `Relation` objects).
 
 **Profile-aware behavior**
-Profiles are `Variable(ndim=1)` values. Scalar inputs to a profile variable are
-broadcast to a flat profile. Explicit profile/average fallbacks such as `n_D`
-and `n_D_avg` are handled by name, but scalar profile-dependent physics should
-remain visible in relation functions through explicit integration.
+Profile variables (shape 1) are handled explicitly: scalar inputs are broadcast
+to profile arrays when required, and the system infers a common `profile_size`
+from supplied profile values when needed. The system also inserts defaulted
+profile variables (for example a normalized `rho` grid) and registry-driven
+uniform-profile fallback relations when appropriate.
+
+Plotting helpers that visualize relation graphs or results live elsewhere in
+the docs and tooling; the `RelationSystem` focuses on numeric evaluation and
+diagnostics.

@@ -1,0 +1,875 @@
+R:
+  aliases:
+  - major_radius
+  default_unit: m
+  description:
+  - Major radius.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+a:
+  aliases:
+  - minor_radius
+  - r_minor
+  default_unit: m
+  description:
+  - Minor radius.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+A:
+  default_unit: dimensionless
+  aliases:
+  - aspect_ratio
+  description:
+  - Aspect ratio (R/a).
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+eps:
+  default_unit: dimensionless
+  aliases:
+  - epsilon
+  - inverse_aspect_ratio
+  description:
+  - Inverse aspect ratio (a/R).
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+kappa:
+  default_unit: dimensionless
+  aliases:
+  - elongation
+  description:
+  - Elongation.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+kappa_95:
+  default_unit: dimensionless
+  description:
+  - Elongation at 95% flux surface.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+delta:
+  default_unit: dimensionless
+  aliases:
+  - triangularity
+  description:
+  - Core triangularity.
+  domain: '[0, 1]'
+delta_95:
+  default_unit: dimensionless
+  description:
+  - Triangularity at 95% flux surface.
+  domain: '[0, 1]'
+V_p:
+  default_unit: m^3
+  description:
+  - Plasma volume.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+A_p:
+  default_unit: m^2
+  aliases:
+  - plasma_surface_area
+  - S_p
+  description:
+  - Surface area around the LCFS in the toroidal and poloidal direction.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+S_phi:
+  default_unit: m^2
+  aliases:
+  - plasma_cross_section
+  - S_cross
+  description:
+  - Surface of the plasma cross-section in the radial and poloidal direction.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+L_p:
+  default_unit: m
+  description:
+  - Poloidal length around the plasma cross-section.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+squareness:
+  default_unit: dimensionless
+  aliases:
+  - xi
+  description:
+  - Squareness (xi).
+  domain: '[-0.5, inf)'
+R_min:
+  default_unit: m
+  description:
+  - Inboard major radius extent from the center of the torus.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+R_max:
+  default_unit: m
+  description:
+  - Outboard major radius extent from the center of the torus.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+Z_min:
+  default_unit: m
+  description:
+  - Lower vertical extent.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+Z_max:
+  default_unit: m
+  description:
+  - Upper vertical extent.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+B:
+  default_unit: T
+  description:
+  - Magnetic field (profile over radial direction).
+  shape: 1
+  domain: '[0, inf)'
+B0:
+  default_unit: T
+  description:
+  - Toroidal field on axis.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+B_max:
+  default_unit: T
+  description:
+  - Peak field on coil.
+B_p:
+  default_unit: T
+  description:
+  - Poloidal field.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+I_p:
+  default_unit: A
+  description:
+  - Plasma current.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+f_BS:
+  default_unit: dimensionless
+  description:
+  - Bootstrap current fraction.
+  domain: '[0, 1]'
+f_NI:
+  default_unit: dimensionless
+  description:
+  - Non-inductive current fraction.
+  domain: '[0, 1]'
+f_CD:
+  default_unit: dimensionless
+  description:
+  - Driven current fraction (excluding bootstrap).
+  domain: '[0, 1]'
+q95:
+  default_unit: dimensionless
+  description:
+  - Safety factor at 95% flux surface.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+q_a:
+  default_unit: dimensionless
+  description:
+  - Edge safety factor.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+q_min:
+  default_unit: dimensionless
+  description:
+  - Minimum safety factor.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+li:
+  default_unit: dimensionless
+  description:
+  - Internal inductance.
+beta_N:
+  default_unit: dimensionless
+  description:
+  - Normalized beta.
+  domain: '[0, inf)'
+beta:
+  default_unit: dimensionless
+  description:
+  - Total beta.
+  domain: '[0, inf)'
+beta_T:
+  default_unit: dimensionless
+  description:
+  - Toroidal beta (fraction).
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+beta_p:
+  default_unit: dimensionless
+  description:
+  - Poloidal beta.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+beta_limit:
+  default_unit: dimensionless
+  description:
+  - Troyon beta limit.
+  domain: '[0, inf)'
+troyon_margin:
+  default_unit: dimensionless
+  description:
+  - Margin to the Troyon beta limit.
+p_th:
+  default_unit: Pa
+  description:
+  - Thermal pressure.
+  aliases:
+  - p_tot_avg
+p_peak:
+  default_unit: Pa
+  description:
+  - Peak pressure.
+W_th:
+  default_unit: J
+  description:
+  - Thermal stored energy.
+  domain: '[0, inf)'
+T_avg:
+  aliases:
+  - T_e_avg
+  default_unit: keV
+  description:
+  - Volume-averaged electron temperature.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+T_e:
+  aliases:
+  - T_e_prof
+  default_unit: keV
+  description:
+  - Electron temperature.
+  shape: 1
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+T0:
+  aliases:
+  - T_e_peak
+  default_unit: keV
+  description:
+  - On-axis/peak electron temperature.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+T_i:
+  aliases:
+  - T_i_prof
+  default_unit: keV
+  description:
+  - Ion temperature.
+  shape: 1
+  average_variable: T_i_avg
+  domain: '[0, inf)'
+T_i_avg:
+  default_unit: keV
+  description:
+  - Volume-averaged ion temperature.
+  domain: '[0, inf)'
+T_i_peak:
+  default_unit: keV
+  description:
+  - On-axis/peak ion temperature.
+  domain: '[0, inf)'
+n_avg:
+  aliases:
+  - n_e_avg
+  - n_i_avg
+  default_unit: 1/m^3
+  description:
+  - Volume-averaged electron density.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+n0:
+  aliases:
+  - n_e_peak
+  default_unit: 1/m^3
+  description:
+  - On-axis electron density.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+n_e:
+  aliases:
+  - n_e_prof
+  default_unit: 1/m^3
+  description:
+  - Electron density.
+  shape: 1
+  domain: '[0, inf)'
+n_i:
+  aliases:
+  - n_i_prof
+  default_unit: 1/m^3
+  description:
+  - Ion density.
+  shape: 1
+  domain: '[0, inf)'
+n_i_peak:
+  default_unit: 1/m^3
+  description:
+  - On-axis/peak ion density.
+  domain: '[0, inf)'
+n_i_tau_E_T_i:
+  default_unit: keV*s/m^3
+  description:
+  - Fusion triple product from peak ion density, temperature, and confinement.
+  domain: '[0, inf)'
+n_GW:
+  default_unit: 1/m^3
+  description:
+  - Greenwald density limit.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+n_SUDO:
+  default_unit: 1/m^3
+  description:
+  - Sudo density limit.
+  domain: '[0, inf)'
+f_GW:
+  default_unit: dimensionless
+  description:
+  - Greenwald fraction.
+  domain: '[0, inf)'
+greenwald_margin:
+  default_unit: 1/m^3
+  description:
+  - Margin to the Greenwald density limit.
+sudo_margin:
+  default_unit: 1/m^3
+  description:
+  - Margin to the Sudo density limit.
+Z_eff:
+  default_unit: dimensionless
+  description:
+  - Effective charge.
+  domain: '[0, inf)'
+n_D:
+  default_unit: 1/m^3
+  description:
+  - Deuterium ion density profile.
+  shape: 1
+  average_variable: n_D_avg
+  domain: '[0, inf)'
+n_D_avg:
+  default_unit: 1/m^3
+  description:
+  - Volume-averaged deuterium ion density.
+  domain: '[0, inf)'
+n_T:
+  default_unit: 1/m^3
+  description:
+  - Tritium ion density profile.
+  shape: 1
+  domain: '[0, inf)'
+n_He3:
+  default_unit: 1/m^3
+  description:
+  - Helium-3 ion density profile.
+  shape: 1
+  domain: '[0, inf)'
+n_He4:
+  default_unit: 1/m^3
+  description:
+  - Helium-4 ion density profile.
+  shape: 1
+  domain: '[0, inf)'
+n_imp:
+  default_unit: 1/m^3
+  description:
+  - Generic impurity ion density profile.
+  shape: 1
+  domain: '[0, inf)'
+f_D:
+  default_unit: dimensionless
+  description:
+  - Core deuterium ion fraction, enforced by n_D = f_D * n_i.
+  domain: '[0, 1]'
+f_T:
+  default_unit: dimensionless
+  description:
+  - Core tritium ion fraction, enforced by n_T = f_T * n_i.
+  domain: '[0, 1]'
+f_He3:
+  default_unit: dimensionless
+  description:
+  - Core helium-3 ion fraction, enforced by n_He3 = f_He3 * n_i.
+  domain: '[0, 1]'
+f_He4:
+  default_unit: dimensionless
+  description:
+  - Core helium-4 ion fraction, enforced by n_He4 = f_He4 * n_i.
+  domain: '[0, 1]'
+f_Imp:
+  default_unit: dimensionless
+  description:
+  - Core generic impurity ion fraction, enforced by n_imp = f_Imp * n_i.
+  domain: '[0, 1]'
+TBR:
+  default_unit: dimensionless
+  description:
+  - Tritium breeding ratio.
+  domain: '[0, inf)'
+tau_E:
+  default_unit: s
+  description:
+  - Energy confinement time.
+  default_relation:
+  - tau_E_iter_ipb98y2
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+tau_p:
+  default_unit: s
+  description:
+  - Particle confinement time (generic).
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+tau_p_D:
+  default_unit: s
+  description:
+  - Deuterium particle confinement time.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+tau_p_T:
+  default_unit: s
+  description:
+  - Tritium particle confinement time.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+tau_p_He3:
+  default_unit: s
+  description:
+  - Helium-3 particle confinement time.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+tau_p_He4:
+  default_unit: s
+  description:
+  - Helium-4 particle confinement time.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+tau_p_Imp:
+  default_unit: s
+  description:
+  - Generic impurity particle confinement time.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+tau_pulse:
+  default_unit: s
+  description:
+  - Pulse length.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+H89:
+  default_unit: dimensionless
+  description:
+  - H89 confinement enhancement factor.
+H98_y2:
+  default_unit: dimensionless
+  description:
+  - H98(y,2) confinement enhancement factor.
+G89:
+  default_unit: dimensionless
+  description:
+  - G89 gain factor.
+P_fus:
+  default_unit: W
+  description:
+  - Fusion power.
+  domain: '[0, inf)'
+Rr_DT:
+  default_unit: 1/s
+  description:
+  - D-T fusion reaction rate (volume-integrated).
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+sigmav_DT:
+  default_unit: m^3/s
+  description:
+  - D-T fusion reactivity.
+  shape: 1
+  default_relation:
+  - DT reactivity BoschHale
+  domain: '[0, inf)'
+Rr_DDn:
+  default_unit: 1/s
+  description:
+  - D-D fusion reaction rate (He3+n branch).
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+sigmav_DDn:
+  default_unit: m^3/s
+  description:
+  - D-D (He3+n) branch reactivity.
+  shape: 1
+  default_relation:
+  - DDn reactivity BoschHale
+  domain: '[0, inf)'
+sigmav_DD:
+  default_unit: m^3/s
+  description:
+  - Total D-D fusion reactivity.
+  shape: 1
+  default_relation:
+  - DD reactivity BoschHale
+  domain: '[0, inf)'
+Rr_DDp:
+  default_unit: 1/s
+  description:
+  - D-D fusion reaction rate (T+p branch).
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+sigmav_DDp:
+  default_unit: m^3/s
+  description:
+  - D-D (T+p) branch reactivity.
+  shape: 1
+  default_relation:
+  - DDp reactivity BoschHale
+  domain: '[0, inf)'
+Rr_DHe3:
+  default_unit: 1/s
+  description:
+  - D-He3 fusion reaction rate.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+sigmav_DHe3:
+  default_unit: m^3/s
+  description:
+  - D-He3 fusion reactivity.
+  shape: 1
+  default_relation:
+  - DHe3 reactivity BoschHale
+  domain: '[0, inf)'
+Rr_TT:
+  default_unit: 1/s
+  description:
+  - T-T fusion reaction rate.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+sigmav_TT:
+  default_unit: m^3/s
+  description:
+  - T-T fusion reactivity.
+  shape: 1
+  default_relation:
+  - TT reactivity CF88
+  domain: '[0, inf)'
+Rr_He3He3:
+  default_unit: 1/s
+  description:
+  - He3-He3 fusion reaction rate.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+sigmav_He3He3:
+  default_unit: m^3/s
+  description:
+  - He3-He3 fusion reactivity.
+  shape: 1
+  default_relation:
+  - He3He3 reactivity CF88
+  domain: '[0, inf)'
+Rr_THe3:
+  default_unit: 1/s
+  description:
+  - T-He3 fusion reaction rate.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+Rr_THe3_D:
+  default_unit: 1/s
+  description:
+  - T-He3 fusion reaction rate for the alpha + D branch.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+Rr_THe3_np:
+  default_unit: 1/s
+  description:
+  - T-He3 fusion reaction rate for the alpha + n + p branch.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+sigmav_THe3:
+  default_unit: m^3/s
+  description:
+  - T-He3 fusion reactivity.
+  shape: 1
+  default_relation:
+  - THe3 reactivity CF88
+  domain: '[0, inf)'
+sigmav_THe3_D:
+  default_unit: m^3/s
+  description:
+  - T-He3 branch reactivity for T + He3 -> alpha + D.
+  shape: 1
+  default_relation:
+  - THe3_D reactivity CF88
+  domain: '[0, inf)'
+sigmav_THe3_np:
+  default_unit: m^3/s
+  description:
+  - T-He3 branch reactivity for T + He3 -> alpha + n + p.
+  shape: 1
+  default_relation:
+  - THe3_np reactivity CF88
+  domain: '[0, inf)'
+P_fus_DT:
+  default_unit: W
+  description:
+  - Total D-T fusion power.
+  domain: '[0, inf)'
+P_fus_DT_alpha:
+  aliases:
+  - P_alpha_DT
+  default_unit: W
+  description:
+  - Alpha power from D-T fusion.
+  domain: '[0, inf)'
+P_fus_DT_n:
+  default_unit: W
+  description:
+  - Neutron power from D-T fusion.
+  domain: '[0, inf)'
+P_fus_DD:
+  default_unit: W
+  description:
+  - Total D-D fusion power.
+  domain: '[0, inf)'
+P_fus_DDn:
+  default_unit: W
+  description:
+  - D-D fusion power from the He3+n branch.
+  domain: '[0, inf)'
+P_fus_DDn_He3:
+  aliases:
+  - P_He3_DD
+  default_unit: W
+  description:
+  - Helium-3 power from D-D fusion (He3+n branch).
+  domain: '[0, inf)'
+P_fus_DDn_n:
+  default_unit: W
+  description:
+  - Neutron power from D-D fusion (He3+n branch).
+  domain: '[0, inf)'
+P_fus_DDp:
+  default_unit: W
+  description:
+  - D-D fusion power from the T+p branch.
+  domain: '[0, inf)'
+P_fus_DDp_T:
+  aliases:
+  - P_T_DD
+  default_unit: W
+  description:
+  - Triton power from D-D fusion (T+p branch).
+  domain: '[0, inf)'
+P_fus_DDp_p:
+  aliases:
+  - P_p_DD
+  default_unit: W
+  description:
+  - Proton power from D-D fusion (T+p branch).
+  domain: '[0, inf)'
+P_fus_DHe3:
+  default_unit: W
+  description:
+  - Total D-He3 fusion power.
+  domain: '[0, inf)'
+P_fus_DHe3_alpha:
+  aliases:
+  - P_alpha_DHe3
+  default_unit: W
+  description:
+  - Alpha power from D-He3 fusion.
+  domain: '[0, inf)'
+P_fus_DHe3_p:
+  aliases:
+  - P_p_DHe3
+  default_unit: W
+  description:
+  - Proton power from D-He3 fusion.
+  domain: '[0, inf)'
+P_fus_TT:
+  default_unit: W
+  description:
+  - Total T-T fusion power.
+  domain: '[0, inf)'
+P_charged:
+  default_unit: W
+  description:
+  - Charged-particle fusion power.
+  domain: '[0, inf)'
+P_neutron:
+  default_unit: W
+  description:
+  - Neutron fusion power.
+  domain: '[0, inf)'
+P_th_tot:
+  default_unit: W
+  description:
+  - Total thermal power.
+  domain: '[0, inf)'
+P_elec_tot:
+  default_unit: W
+  description:
+  - Gross electric power.
+  domain: '[0, inf)'
+P_fus_el:
+  default_unit: W
+  description:
+  - Electric power output.
+  domain: '[0, inf)'
+P_aux:
+  default_unit: W
+  description:
+  - Total auxiliary heating power absorbed by the plasma.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+P_aux_el:
+  default_unit: W
+  description:
+  - Electrical power required by the auxiliary systems.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+P_ohmic:
+  default_unit: W
+  description:
+  - Ohmic heating power.
+  domain: '[0, inf)'
+P_heating:
+  default_unit: W
+  description:
+  - Total plasma heating power (ohmic + charged fusion + auxiliary).
+  domain: '[0, inf)'
+eta_th:
+  default_unit: dimensionless
+  description:
+  - Plant thermal/electric efficiency.
+  domain: '[0, 1]'
+Q_e:
+  default_unit: dimensionless
+  description:
+  - Electric power multiplication.
+  domain: '[0, inf)'
+  solver_domain: '[0, 1e30]'
+P_wall:
+  default_unit: W/m^2
+  description:
+  - Fusion power wall loading.
+  domain: '[0, inf)'
+P_NBI:
+  default_unit: W
+  description:
+  - Neutral beam injected power.
+  domain: '[0, inf)'
+P_LHCD:
+  default_unit: W
+  description:
+  - Lower hybrid coupled power.
+  domain: '[0, inf)'
+P_ICRF:
+  default_unit: W
+  description:
+  - ICRF coupled power.
+  domain: '[0, inf)'
+P_LH:
+  default_unit: W
+  description:
+  - L-H transition threshold power.
+  domain: '[0, inf)'
+P_sep:
+  aliases:
+  - P_SOL
+  default_unit: W
+  description:
+  - Power across the separatrix.
+  domain: '[0, inf)'
+P_sep_over_R:
+  default_unit: W/m
+  description:
+  - P_sep divided by major radius.
+  domain: '[0, inf)'
+P_sep_B_over_q95AR:
+  default_unit: W*T/m
+  description:
+  - P_sep * B0 / (q95 * A * R).
+  domain: '[0, inf)'
+P_loss:
+  default_unit: W
+  description:
+  - Power loss across the plasma boundary.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+P_loss_explicit:
+  default_unit: W
+  description:
+  - Explicit plasma loss power assembled from exhaust and radiation.
+  domain: '[0, inf)'
+P_brem:
+  default_unit: W
+  aliases:
+  - P_bremsstrahlung
+  - P_rad_bremsstrahlung
+  description:
+  - Bremsstrahlung radiated power.
+  domain: '[0, inf)'
+P_line:
+  default_unit: W
+  aliases:
+  - P_rad_line
+  description:
+  - Line radiated power.
+  domain: '[0, inf)'
+P_sync:
+  aliases:
+  - P_synchrotron
+  - P_rad_synchrotron
+  default_unit: W
+  description:
+  - Synchrotron radiated power.
+  domain: '[0, inf)'
+P_rad:
+  default_unit: W
+  description:
+  - Core radiated power (or total if not separated).
+  domain: '[0, inf)'
+Q_sci:
+  aliases:
+  - Q
+  - Q_phy
+  default_unit: dimensionless
+  description:
+  - scientific gain factor Q
+  domain: '[0, inf)'
+  solver_domain: '[0, 1e30]'
+Q_eng:
+  default_unit: dimensionless
+  description:
+  - engineering gain factor Q_eng.
+  domain: '[0, inf)'
+  solver_domain: '[0, 1e30]'
+n_la:
+  default_unit: 1/m^3
+  description:
+  - Line-averaged electron density.
+  domain: '[0, inf)'
+kappa_ipb:
+  default_unit: dimensionless
+  description:
+  - IPB-specific elongation at separatrix.
+afuel:
+  default_unit: amu
+  description:
+  - Average fuel mass number (D/T/He3 only).
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+rho:
+  aliases:
+  - normalized_minor_radius
+  - r_over_a
+  default_unit: dimensionless
+  shape: 1
+  description:
+  - Normalized minor-radius coordinate used for 1D profiles.
+  domain: '[0, 1]'

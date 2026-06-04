@@ -9,11 +9,10 @@ metadata:
   reactor_family: STEP
 tags:
 - tokamak
-- sphericaltokamak
-- H-mode
-- STEP
+- spherical_tokamak
+- h_mode
 solver_tags:
-  mode: overwrite
+  mode: verify
   verbosity: false
 variables:
   R:

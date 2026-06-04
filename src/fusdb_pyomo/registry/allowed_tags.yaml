@@ -1,0 +1,26 @@
+# Allowed reactor/relation tags.
+# Tags are exact after case normalization only. For example, H_Mode is accepted
+# as h_mode, but H-mode is not unless explicitly added here.
+#
+# Matching semantics:
+#   - children imply parents for reactor tags;
+#   - relation tags in the same group are OR alternatives;
+#   - relation tags in different groups are AND requirements;
+#   - untagged relations are generic and always applicable.
+
+device:
+  - tokamak:
+      - spherical_tokamak
+      - compact_tokamak
+      - conventional_tokamak
+  - stellarator
+  - mirror
+
+confinement_mode:
+  - h_mode
+  - l_mode
+  - i_mode
+
+operation:
+  - steady_state
+  - pulsed

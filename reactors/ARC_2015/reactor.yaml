@@ -8,10 +8,10 @@ metadata:
   notes: Conceptual compact tokamak from MIT
 tags:
 - tokamak
-- compact
-- I-mode
+- compact_tokamak
+- i_mode
 solver_tags:
-  mode: overwrite
+  mode: verify
   verbosity: false
 variables:
   R:
@@ -51,12 +51,23 @@ variables:
   f_GW: 
     value: 0.67
     fixed: true
+  T_e:
+    value: ARC2015_Te.csv
+    unit: keV
+  T_i: # Assuming T_i = T_e
+    value: ARC2015_Te.csv
+    unit: keV
+  n_e:
+    value: ARC2015_ne20.csv
+    unit: 1e20 m^-3
+  n_i: # Assuming n_i = n_e
+    value: ARC2015_ne20.csv
+    unit: 1e20 m^-3
   TBR: 1.1
   tau_E: 0.64
   tau_p: 1.0
   H89: 2.8
   H98_y2: 1.8
   G89: 0.14
-  fractions:
-    D: 0.5
-    T: 0.5
+  f_D: 0.5
+  f_T: 0.5

@@ -1,0 +1,16 @@
+# Default relation choices for duplicate output-name sets.
+# Keys are output names. For multi-output relations, use comma-separated names,
+# e.g. "x,y": relation_name.
+#
+# Example:
+tau_E: tau_E_iter_ipb98y2
+sigmav_DT: DT reactivity BoschHale
+sigmav_DDn: DDn reactivity BoschHale
+sigmav_DDp: DDp reactivity BoschHale
+sigmav_DD: DD reactivity BoschHale
+sigmav_DHe3: DHe3 reactivity BoschHale
+sigmav_TT: TT reactivity CF88
+sigmav_He3He3: He3He3 reactivity CF88
+sigmav_THe3_D: THe3_D reactivity CF88
+sigmav_THe3_np: THe3_np reactivity CF88
+sigmav_THe3: THe3 reactivity CF88

@@ -8,10 +8,9 @@ metadata:
   notes: EU-DEMO Physics Baseline 2022
 tags:
 - tokamak
-- DEMO
-- H-mode
+- h_mode
 solver_tags:
-  mode: overwrite
+  mode: verify
   verbosity: false
 variables:
   R:
