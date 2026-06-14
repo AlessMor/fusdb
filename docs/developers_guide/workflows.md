@@ -4,14 +4,14 @@ Practical workflows for extending and validating relation-driven models.
 
 ## Add a New Relation
 
-1. Place the module in the correct physics domain under `src/fusdb_pyomo/...`.
+1. Place the module in the correct physics domain under `src/fusdb/...`.
 2. Declare relations with the `@relation(outputs=..., tags=...)` decorator.
 3. Add hard/soft constraints as needed (use the `constraints` argument).
 4. Add tests covering forward evaluation and at least one verification/solve path.
 
 ## Add a New Variable
 
-1. Add variable metadata in `src/fusdb_pyomo/registry/variables.yaml`.
+1. Add variable metadata in `src/fusdb/registry/variables.yaml`.
 2. Define default behavior and tolerances where required.
 3. Update registry defaults if needed.
 4. Ensure variable unit and dimensionality match all relations that consume it.

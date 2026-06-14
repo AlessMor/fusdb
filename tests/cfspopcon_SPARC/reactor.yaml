@@ -1,0 +1,158 @@
+# fusdb-native transcription of the cfspopcon SPARC PRD case.
+#
+# Source: tests/cfspopcon_SPARC/input.yaml (cfspopcon schema) pinned at the
+# optimized PRD operating point taken from output/PRD.json coords
+# (average_electron_density = 25.0e19 m^-3, average_electron_temp = 9.13793 keV).
+#
+# This reproduces the subset of cfspopcon's 110-step algorithm that maps onto
+# existing fusdb relations (geometry -> profiles -> stored energy -> confinement
+# block -> beta -> DT fusion power -> Greenwald / L-H). Missing-physics steps
+# (bootstrap, ohmic/resistivity, inductances & fluxes, two-point divertor,
+# collisionality, core-seeded radiation) are scaffolded undecorated under
+# src/fusdb/relations/ and are not run here. See the phase-1 plan for details.
+
+metadata:
+  id: SPARC_PRD_cfspopcon
+  name: SPARC PRD (cfspopcon)
+  organization: Commonwealth Fusion Systems / cfspopcon
+  year: 2020
+  doi: 10.1017/S0022377820001257
+  notes: >-
+    Phase-1 cfspopcon reproduction test point. Values use fusdb aliases and
+    unit-conversion; the ordered run mirrors the cfspopcon algorithm order.
+
+solver_tags:
+  mode: ordered
+  verbosity: false
+
+variables:
+  # --- Geometry / field (cfspopcon flat inputs, via aliases + units) ---
+  major_radius: 1.85                 # R [m]
+  magnetic_field_on_axis: 12.2       # B0 [T]
+  inverse_aspect_ratio: 0.3081       # eps
+  areal_elongation: 1.75             # kappa (areal)
+  delta_95: 0.3                      # triangularity_psi95
+  squareness: 0.0
+  I_p:
+    value: 8.7
+    unit: MA
+
+  # --- Operating point (PRD coords) ---
+  average_electron_density:
+    value: 25.0
+    unit: 1e19 m^-3
+  average_electron_temp:
+    value: 9.13793
+    unit: keV
+
+  # --- Composition ---
+  f_D: 0.5
+  f_T: 0.5
+  # Dilution-adjusted average fuel-ion density. BORROWED from PRD
+  # average_ion_density pending the phase-2 zeff/dilution + atomic-data relation
+  # (cfspopcon dilutes n_e=25e19 -> n_i=21.36e19 via impurity charge states).
+  average_ion_density:
+    value: 21.3582
+    unit: 1e19 m^-3
+
+  # --- Profile shape factors ---
+  # temperature_peaking matches input.yaml (2.5); density_peaking BORROWED from
+  # the PRD electron-density profile peak/avg (37.54/25.0) pending the cfspopcon
+  # `prf` peaking model. fusdb generates parabolic (1-rho^2)^alpha profiles.
+  temperature_peaking: 2.5
+  density_peaking: 1.5016
+
+  # --- Confinement ---
+  H98_y2: 1.0                        # confinement_time_scalar
+
+  # --- Non-DT fusion channels (pure-DT case): fixed at zero so the DT-only
+  #     total/neutron power relations close. ---
+  P_fus_DD:
+    value: 0.0
+    unit: W
+  P_fus_DHe3:
+    value: 0.0
+    unit: W
+  P_fus_TT:
+    value: 0.0
+    unit: W
+  P_fus_DDn_n:
+    value: 0.0
+    unit: W
+
+relations:
+  include:
+  - Inverse aspect ratio
+  - Aspect ratio
+  - Triangularity 95%
+  - Tokamak plasma cross-sectional surface
+  - Tokamak plasma volume
+  - Tokamak plasma poloidal length
+  - Tokamak plasma surface
+  - Average fuel mass number
+  - Default ion temperature average from plasma average temperature
+  - Line averaged density from average density
+  - Parabolic electron temperature profile
+  - Parabolic ion temperature profile
+  - Parabolic electron density profile
+  - Parabolic ion density profile
+  - D density from ion density and D fraction
+  - T density from ion density and T fraction
+  - Thermal pressure
+  - Thermal stored energy
+  - tau_E_iter_ipb98y2
+  - Energy confinement balance
+  - Toroidal beta
+  - Normalized beta
+  - DT reactivity BoschHale
+  - DT reaction rate
+  - DT alpha power
+  - DT neutron power
+  - DT fusion power
+  - Total fusion power
+  - Neutron fusion power
+  - Greenwald density limit
+  - Greenwald density fraction
+  - L-H transition threshold power
+  order:
+  # 1. Geometry
+  - Inverse aspect ratio                 # eps -> A
+  - Aspect ratio                         # R, A -> a
+  - Triangularity 95%                    # delta_95 -> delta
+  - Tokamak plasma cross-sectional surface  # -> S_phi
+  - Tokamak plasma volume                # -> V_p
+  - Tokamak plasma poloidal length       # -> L_p
+  - Tokamak plasma surface               # -> A_p
+  # 2. Averages + profiles
+  - Average fuel mass number             # f_D, f_T -> afuel
+  - Default ion temperature average from plasma average temperature  # -> T_i_avg
+  - Line averaged density from average density                        # -> n_la
+  - Parabolic electron temperature profile   # -> T_e
+  - Parabolic ion temperature profile        # -> T_i
+  - Parabolic electron density profile       # -> n_e
+  - Parabolic ion density profile            # n_i_avg -> n_i (dilution-adjusted)
+  - D density from ion density and D fraction
+  - T density from ion density and T fraction
+  # 3. Pressure / stored energy
+  - Thermal pressure                     # -> p_th
+  - Thermal stored energy                # -> W_th
+  # 4. Confinement 2x2 block (cfspopcon "solve_energy_confinement_scaling_for_input_power"):
+  #    solve tau_E and P_loss simultaneously from W_th and the IPB98(y,2) scaling.
+  #    Solved by the shared block solver (_solve_initial_block), the same routine
+  #    reconcile uses for its initial computation.
+  - [tau_E_iter_ipb98y2, Energy confinement balance]
+  # 5. Beta
+  - Toroidal beta                        # -> beta_T
+  - Normalized beta                      # -> beta_N
+  # 6. DT fusion power
+  - DT reactivity BoschHale              # T_i -> sigmav_DT
+  - DT reaction rate                     # -> Rr_DT
+  - DT alpha power                       # -> P_fus_DT_alpha (= P_alpha)
+  - DT neutron power                     # -> P_fus_DT_n
+  - DT fusion power                      # -> P_fus_DT
+  - Total fusion power                   # -> P_fus
+  - Neutron fusion power                 # -> P_neutron
+  # 7. Operational limits
+  - Greenwald density limit              # -> n_GW
+  - Greenwald density fraction           # -> f_GW
+  - L-H transition threshold power       # -> P_LH

@@ -21,7 +21,6 @@ modes.
 - `primary_relations`: the relations originally selected for the system
 - `relations_by_name`: mapping `{name: Relation}`
 - `profile_size`: inferred common profile length used for profile variables
-- `_last_vector_spans`, `_last_solver_values`: internal solver bookkeeping
 
 **Main methods**
 - `run(mode='verify', **options)`: dispatch to one of the available modes

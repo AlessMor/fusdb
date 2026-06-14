@@ -1,16 +1,45 @@
-"""Public FusDB package."""
+"""FusDB public API."""
 
 from __future__ import annotations
 
-import importlib
-import sys
+from .relation import Relation, RelationSolveError, RelationUnderdeterminedError, RelationVerificationError, constraint_from_expression, relation
+from .relationsystem import RelationSystem
+from .variable import Variable
+from .reactor import Reactor
+from .registry import RELATIONS, SPECIES, TAGS, VARIABLES, RelationRegistry, SpeciesRegistry, TagRegistry, VariableRegistry
 
-_IMPL_NAME = "fusdb_pyomo"
-_impl = importlib.import_module(_IMPL_NAME)
 
-from fusdb_pyomo import *  # noqa: F401,F403
+def __getattr__(name: str):
+    """Expose decorated relations as ``fusdb.<function_name>``.
 
-__path__ = list(getattr(_impl, "__path__", []))
+    Args:
+        name: Decorated function name or relation name.
 
-for suffix in ("reactor", "relation", "relationsystem", "variable", "utils", "registry", "modes", "relations"):
-    sys.modules[f"{__name__}.{suffix}"] = importlib.import_module(f"{_IMPL_NAME}.{suffix}")
+    Returns:
+        Relation object.
+    """
+    try:
+        return RELATIONS.get(name)
+    except Exception as exc:
+        raise AttributeError(name) from exc
+
+
+__all__ = [
+    "Relation",
+    "RelationSolveError",
+    "RelationUnderdeterminedError",
+    "RelationVerificationError",
+    "RelationSystem",
+    "Reactor",
+    "Variable",
+    "constraint_from_expression",
+    "relation",
+    "RELATIONS",
+    "SPECIES",
+    "TAGS",
+    "VARIABLES",
+    "RelationRegistry",
+    "SpeciesRegistry",
+    "TagRegistry",
+    "VariableRegistry",
+]

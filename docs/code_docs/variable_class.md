@@ -1,7 +1,7 @@
 # Variable Class
 
 The variable system provides typed containers for scalar and profile values used by
-`fusdb_pyomo.Reactor` and `fusdb_pyomo.RelationSystem`.
+`fusdb.Reactor` and `fusdb.RelationSystem`.
 
 Related modules:
 

@@ -1,10 +1,10 @@
 # Relation Class
 
-`fusdb_pyomo.Relation` represents one physical relation: a callable that
+`fusdb.Relation` represents one physical relation: a callable that
 computes outputs (or a residual) from explicit inputs.
 
 Relations are usually declared with the `@relation` decorator exported by
-the `fusdb_pyomo` package.
+the `fusdb` package.
 
 ## Core Fields
 

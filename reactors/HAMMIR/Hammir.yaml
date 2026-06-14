@@ -1,0 +1,17 @@
+metadata:
+  id: Hammir2024
+  name: Hammir 2024
+  organization: Realta
+  year: 2024
+  doi: 10.1088/1741-4326/ad3fcb
+tags:
+- mirror
+solver_tags:
+  mode: verify
+  verbosity: false
+variables:
+  V_p: 46
+  T_avg:
+    value: 150
+    unit: keV
+  n_avg: 7.5e19
