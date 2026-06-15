@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dependencies = ["PyYAML>=6.0", "sympy>=1.12", "scipy>=1.11", "networkx>=3.0", "pycountry>=24.6.1", "hypernetx==2.4.0", "pandas==2.2.2", "fastjsonschema>=2.18", "pyomo>=6.7"]
 
 [project.optional-dependencies]
+plotting = ["matplotlib>=3.7"]
 docs = [
     "bokeh>=3.5",
     "mkdocs-awesome-pages-plugin>=2.10",
