@@ -7,7 +7,8 @@
       "Bash(python -c \"from fusdb.registry import RELATIONS; print\\('relations:', len\\(list\\(RELATIONS\\)\\)\\)\")",
       "Bash(python -m pytest tests/ -q)",
       "Bash(git stash *)",
-      "Bash(echo \"exit grep: $?\")"
+      "Bash(echo \"exit grep: $?\")",
+      "Bash(python3 -)"
     ]
   }
 }
