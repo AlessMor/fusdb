@@ -5,7 +5,6 @@ root and are mirrored into the docs site through `mkdocs-jupyter`.
 
 ## Available Notebooks
 
-- [Reactor Browser](reactor_browser.ipynb): compare reactors and inspect key variables.
 - [Tau_E Solver](tau_E_solver.ipynb): experiments around confinement and power-loss coupling.
 - [Reactivity Plots](reactivity_plots.ipynb): open the interactive reactivity plotter from a notebook.
 - [Relation Graph Generator](../../code_docs/examples/relation_graph_generator.ipynb): build graph visualizations for relations and variables.

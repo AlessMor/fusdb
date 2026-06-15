@@ -32,7 +32,8 @@ def plot_metric_comparison(
             names (first-seen order) defines the x groups.
         reference: Optional horizontal reference line (e.g. ``1.0`` for limits).
         annotate: When ``True``, label each bar with its value.
-        ylabel, title: Optional axis label and title.
+        ylabel: Optional y-axis label.
+        title: Optional axis title.
         **bar_kw: Forwarded to ``Axes.bar``.
 
     Returns:

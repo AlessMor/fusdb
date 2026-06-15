@@ -46,7 +46,7 @@
 ## Quick Paths
 
 - [Installation and usage guide](getting_started/index.md)
-- [Reactor browser notebook](getting_started/examples/reactor_browser.ipynb)
+- [Reactor reference](code_docs/reactors/index.md)
 - [Cross sections and reactivities](knowledge_base/plasma_physics/0-fusion_plasmas/cross_sections_reactivities.md)
 - [Developer's Guide](developers_guide/index.md)
 - [Source documentation overview](code_docs/index.md)

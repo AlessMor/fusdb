@@ -36,15 +36,21 @@ def plot_parameter_map(
     """Filled contour of ``z`` over the ``(x, y)`` mesh.
 
     Args:
-        x, y, z: 2-D meshgrid arrays; ``z`` is the filled field.
-        cmap, levels: Colormap and number of filled contour levels.
+        x: 2-D meshgrid array of x-coordinates.
+        y: 2-D meshgrid array of y-coordinates.
+        z: 2-D filled field aligned with ``x`` and ``y``.
+        cmap: Colormap for the filled field.
+        levels: Number of filled contour levels.
         clabel: Colorbar label.
-        iso_field, iso_levels: Optional second field drawn as iso-contours at the
-            given levels (e.g. a fixed fusion-power line over a utilisation map).
+        iso_field: Optional second field drawn as iso-contours (e.g. a fixed
+            fusion-power line over a utilisation map).
+        iso_levels: Iso-contour levels for ``iso_field``.
         iso_label: Optional inline label format for the iso-contours.
         marker: Optional ``(x, y)`` point highlighted with a star.
         marker_label: Legend label for the marker.
-        xlabel, ylabel, title: Optional axis labels and title.
+        xlabel: Optional x-axis label.
+        ylabel: Optional y-axis label.
+        title: Optional axis title.
 
     Returns:
         The axis the map was drawn on.

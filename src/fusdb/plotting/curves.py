@@ -35,8 +35,11 @@ def plot_curves(
         curves: Mapping of label -> ``(x, y)`` drawn as connected lines.
         markers: Mapping of label -> ``(x, y)`` drawn as points (e.g. an
             analytical intersection or a solved operating point).
-        xlabel, ylabel, title: Optional axis labels and title.
-        xscale, yscale: matplotlib scales, e.g. ``"log"``.
+        xlabel: Optional x-axis label.
+        ylabel: Optional y-axis label.
+        title: Optional axis title.
+        xscale: matplotlib x-axis scale, e.g. ``"log"``.
+        yscale: matplotlib y-axis scale, e.g. ``"log"``.
         **plot_kw: Forwarded to ``Axes.plot`` for the line curves.
 
     Returns:
