@@ -2,40 +2,42 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from fusdb import relation
 from fusdb.registry import MU0
-from fusdb.relation_util import relation
 #TODO(low): once profiles are implemented, add a beta_avg 
 @relation(
-    name="Toroidal beta",
-    output="beta_T",
-    tags=("plasma",),
-    constraints=("B0 != 0",),
+    name='Toroidal beta',
+    tags=('plasma',),
+    
+    outputs='beta_T',
 )
-def toroidal_beta(p_th: float, B0: float) -> float:
+def toroidal_beta(p_th: float, B0: float) -> Any:
     """Freidberg Eq. 11.58: toroidal field contribution (dimensionless)."""
     return (2 * MU0 * p_th) / (B0 ** 2)
 
 
 ########################################
 @relation(
-    name="Poloidal beta",
-    output="beta_p",
-    tags=("plasma",),
-    constraints=("B_p != 0",),
+    name='Poloidal beta',
+    tags=('plasma',),
+    
+    outputs='beta_p',
 )
-def poloidal_beta(p_th: float, B_p: float) -> float:
+def poloidal_beta(p_th: float, B_p: float) -> Any:
     """Freidberg Eq. 11.58 using poloidal field magnitude."""
     return (2 * MU0 * p_th) / (B_p ** 2)
 
 
 ########################################
 @relation(
-    name="Beta decomposition",
-    output="beta",
-    tags=("plasma",),
-    constraints=("beta_T != 0", "beta_p != 0"),
+    name='Beta decomposition',
+    tags=('plasma',),
+    
+    outputs='beta',
 )
-def beta_decomposition(beta_T: float, beta_p: float) -> float:
+def beta_decomposition(beta_T: float, beta_p: float) -> Any:
     """Total beta from toroidal and poloidal components (Freidberg Eq. 11.59)."""
     return 1 / (1 / beta_T + 1 / beta_p)
 # TODO(high): call it also beta_total?
@@ -43,12 +45,12 @@ def beta_decomposition(beta_T: float, beta_p: float) -> float:
 
 ########################################
 @relation(
-    name="Normalized beta",
-    output="beta_N",
-    tags=("plasma",),
-    constraints=("I_p != 0",),
+    name='Normalized beta',
+    tags=('plasma',),
+    
+    outputs='beta_N',
 )
-def normalized_beta(beta_T: float, a: float, B0: float, I_p: float) -> float:
+def normalized_beta(beta_T: float, a: float, B0: float, I_p: float) -> Any:
     """Wesson/Troyon normalization: beta_N = beta_T(%) * a * B0 / I_p."""
     # beta_T is a fraction; convert to % with factor 100 for standard beta_N definition.
     I_p_MA = I_p / 1e6

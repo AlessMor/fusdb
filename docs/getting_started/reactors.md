@@ -22,7 +22,7 @@ High-level structure:
 from fusdb import Reactor
 
 reactor = Reactor.from_yaml("reactors/ARC_2015")
-reactor.solve()
+result = reactor.run()
 ```
 
 ## Detailed Reactor Class Reference

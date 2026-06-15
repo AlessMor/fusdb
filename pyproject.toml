@@ -7,7 +7,7 @@ name = "fusdb"
 version = "0.1.0"
 description = "Fusion reactor scenario database with per-folder YAML and a single Reactor class."
 requires-python = ">=3.10"
-dependencies = ["PyYAML>=6.0", "sympy>=1.12", "pycountry>=24.6.1", "hypernetx==2.4.0", "pandas==2.2.2", "fastjsonschema>=2.18", "pyomo>=6.7"]
+dependencies = ["PyYAML>=6.0", "sympy>=1.12", "scipy>=1.11", "networkx>=3.0", "pycountry>=24.6.1", "hypernetx==2.4.0", "pandas==2.2.2", "fastjsonschema>=2.18", "pyomo>=6.7"]
 
 [project.optional-dependencies]
 docs = [
@@ -22,9 +22,6 @@ docs = [
     "pymdown-extensions>=10.11",
 ]
 
-[project.scripts]
-fusdb = "fusdb.cli:main"
-
 [tool.setuptools]
 package-dir = {"" = "src"}
 include-package-data = false
@@ -33,4 +30,4 @@ include-package-data = false
 where = ["src"]
 
 [tool.setuptools.package-data]
-fusdb = ["registry/*.yaml"]
+fusdb = ["registry/*.yaml", "registry/reactivity_tables/*.yaml"]

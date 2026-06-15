@@ -2,24 +2,18 @@
 
 from __future__ import annotations
 
-from fusdb.relation_util import relation
+from typing import Any
+
+from fusdb import relation
 
 # TODO: add more L-H transition relations
 
 @relation(
-    name="L-H transition threshold power",
-    output="P_LH",
-    tags=("confinement", "hmode"),
-    constraints=("A_p > 0", "B0 > 0", "n_avg >= 0"),
-    # Provide explicit inverses to allow backward solves without expensive sympy.
-    inverse_functions={
-        "P_LH": lambda values: values["P_LH"],
-        "n_avg": lambda values: 1e20 * (values["P_LH"] / (1e6 * 0.0488 * (values["B0"] ** 0.803) * (values["A_p"] ** 0.941)))** (1.0 / 0.717),
-        "B0": lambda values: (values["P_LH"] / (1e6 * 0.0488 * ((values["n_avg"] / 1e20) ** 0.717) * (values["A_p"] ** 0.941)))** (1.0 / 0.803),
-        "A_p": lambda values: (values["P_LH"] / (1e6 * 0.0488 * ((values["n_avg"] / 1e20) ** 0.717) * (values["B0"] ** 0.803)))** (1.0 / 0.941),
-    },
+    name='L-H transition threshold power',
+    tags=('confinement', 'h_mode', 'constraint'),
+    outputs='P_LH',
 )
-def lh_transition_power(n_avg: float, B0: float, A_p: float) -> float:
+def lh_transition_power(n_avg: float, B0: float, A_p: float) -> Any:
     """Return the L-H transition threshold power using a Martin-2008 style scaling.
 
     Args:

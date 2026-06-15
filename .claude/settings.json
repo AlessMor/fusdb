@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import cfspopcon, os; print\\('installed at', os.path.dirname\\(cfspopcon.__file__\\)\\)\")",
+      "Bash(pip show *)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"from fusdb.registry import RELATIONS; print\\('relations:', len\\(list\\(RELATIONS\\)\\)\\)\")",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(git stash *)",
+      "Bash(echo \"exit grep: $?\")"
+    ]
+  }
+}

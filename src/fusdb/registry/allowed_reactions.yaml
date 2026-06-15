@@ -1,5 +1,5 @@
 settings:
-  table_dir: ../relations/reactivities/reactivity_tables
+  table_dir: reactivity_tables
 
   energy_grid:
     start_log10_kev: 0.0

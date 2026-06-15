@@ -1,373 +1,300 @@
-"""Shared numeric and utility helpers for the fusdb package.
+"""General utilities for FusDB numeric relation solving."""
 
-This module provides common utility functions for:
-- Numeric comparisons with tolerances
-- Tag normalization and comparison
-- Country name normalization
-"""
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
+from numbers import Real
+from typing import Any
 import math
-import warnings
-import pycountry
+import re
+
 import numpy as np
 
 
-def within_tolerance(
-    a: object,
-    b: object,
-    *,
-    rel_tol: float = 0.0,
-    abs_tol: float = 0.0,
-) -> bool:
-    """Check if two values are equal within specified tolerances.
-    
-    Compares two values using both absolute and relative tolerance.
-    The comparison is: ``|a - b| <= max(abs_tol, rel_tol * scale)``
-    where scale is max(abs(a), abs(b), 1.0).
-    
+def unique_preserve_order(items: Iterable[Any]) -> tuple[str, ...]:
+    """Return unique string values while preserving first occurrence order.
+
     Args:
-        a (object): First value (must be convertible to float).
-        b (object): Second value (must be convertible to float).
-        rel_tol (float): Relative tolerance (fraction of larger value).
-        abs_tol (float): Absolute tolerance (in same units as values).
-    
+        items: Values convertible to strings.
+
     Returns:
-        bool: True if values are within tolerance, False otherwise.
-              Returns False if either value is None, non-numeric, or infinite/NaN.
-        
-    Example:
-        >>> within_tolerance(1.0, 1.001, rel_tol=0.01)
-        True
-        >>> within_tolerance(1.0, 1.001, abs_tol=0.0001)
-        False
+        Tuple of unique string values.
     """
-    # Can't compare None or non-numeric values
-    if a is None or b is None:
-        return False
-    
-    # Try to convert to floats
-    try:
-        av = float(a)
-        bv = float(b)
-    except Exception:
-        return False
-    
-    # Reject infinite or NaN values
-    if not math.isfinite(av) or not math.isfinite(bv):
-        return False
-    
-    # Use relative tolerance scaled by larger value
-    scale = max(abs(av), abs(bv), 1.0)
-    return abs(av - bv) <= max(abs_tol, rel_tol * scale)
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item)
+        if text not in seen:
+            seen.add(text)
+            out.append(text)
+    return tuple(out)
 
 
-def safe_float(value: object) -> float | None:
-    """Convert value to float, returning None if conversion fails or non-finite.
-    
+def normalize_tag(tag: str) -> str:
+    """Normalize one tag.
+
     Args:
-        value (object): Value to convert.
-        
+        tag: Raw tag text.
+
     Returns:
-        float | None: Float conversion result, or None if conversion fails or value is infinite/NaN.
+        Lowercase stripped tag.
     """
-    if value is None:
-        return None
-    try:
-        result = float(value)
-        return result if math.isfinite(result) else None
-    except (TypeError, ValueError):
-        return None
+    text = str(tag).strip().lower()
+    if not text:
+        raise ValueError("Tag cannot be empty.")
+    return text
 
 
-def as_profile_array(value: object) -> np.ndarray | None:
-    """Return value as a valid 1D finite profile array.
+def normalize_tags(tags: Iterable[str] | str | None) -> tuple[str, ...]:
+    """Normalize tags while preserving order.
 
     Args:
-        value: Candidate profile payload.
+        tags: None, one string, or an iterable of strings.
 
     Returns:
-        A 1D finite float NumPy array, or None when invalid.
-    """
-    try:
-        arr = np.asarray(value, dtype=float)
-        if arr.ndim == 1 and arr.size > 0 and np.isfinite(arr).all():
-            return arr
-    except Exception:
-        pass
-    return None
-
-def _trapz(y: object, x: object) -> float:
-    """Integrate using numpy trapezoid API with backward-compatible fallback."""
-    if hasattr(np, "trapezoid"):
-        return float(np.trapezoid(y, x))
-    return float(np.trapz(y, x))
-
-
-def integrate_profile_over_volume(
-    profile: object,
-    V_p: object,
-    *,
-    rho: object | None = None,
-) -> float | None:
-    """Integrate a profile over volume using cfspopcon-style ``d(V/V_p)=2*rho drho``.
-
-    Args:
-        profile: Local quantity profile (or scalar value).
-        V_p: Total plasma volume.
-        rho: Optional normalized radial grid in ``[0, 1]``.
-
-    Returns:
-        Integrated scalar value or ``None`` when inputs are not usable.
-    """
-    V_scalar = safe_float(V_p)
-    if V_scalar is None or V_scalar < 0.0:
-        return None
-
-    arr = as_profile_array(profile)
-    if arr is None:
-        scalar = safe_float(profile)
-        return None if scalar is None else float(scalar * V_scalar)
-
-    if rho is None:
-        rho_arr = np.linspace(0.0, 1.0, arr.size, dtype=float)
-    else:
-        rho_arr = as_profile_array(rho)
-        if rho_arr is None:
-            return None
-        if rho_arr.size != arr.size:
-            x_old = np.linspace(0.0, 1.0, arr.size, dtype=float)
-            x_new = np.linspace(0.0, 1.0, rho_arr.size, dtype=float)
-            arr = np.interp(x_new, x_old, arr)
-
-    if rho_arr.size > 1 and np.any(np.diff(rho_arr) < 0):
-        order = np.argsort(rho_arr)
-        rho_arr = rho_arr[order]
-        arr = arr[order]
-
-    return float(V_scalar * _trapz(arr * 2.0 * rho_arr, rho_arr))
-
-
-def integrate_profile(
-    profile: object,
-    V_p: object = 1.0,
-    *,
-    error_label: str = "profile",
-) -> object:
-    """Return a volume-integrated profile with symbolic fallback.
-
-    Args:
-        profile: Local quantity profile, scalar value, or symbolic expression.
-        V_p: Total plasma volume used for the integration. Defaults to unit volume.
-        error_label: Quantity label used in the integration error message.
-
-    Returns:
-        Volume-integrated scalar result, or a symbolic expression when symbolic
-        placeholders are passed in.
-
-    Raises:
-        ValueError: If numeric inputs cannot be integrated.
-    """
-    # Keep symbolic model builds algebraic instead of forcing numeric integration.
-    if getattr(profile, "free_symbols", None) is not None or getattr(V_p, "free_symbols", None) is not None:
-        return profile if safe_float(V_p) == 1.0 else profile * V_p
-
-    # Delegate numeric scalars and 1D profiles to the shared volume integrator.
-    total = integrate_profile_over_volume(profile, V_p)
-    if total is None:
-        raise ValueError(f"Cannot integrate {error_label} profile over volume.")
-    return total
-
-
-def compare_plasma_volume_with_integrated_dv(
-    *,
-    V_p: object,
-    rho: object | None = None,
-    dV_drho: object | None = None,
-    R: object | None = None,
-    a: object | None = None,
-    kappa: object | None = None,
-    rel_tol: float = 0.01,
-    abs_tol: float = 0.0,
-    warn: bool = False,
-) -> tuple[bool, float | None, float | None]:
-    """Compare ``V_p`` with a volume reconstructed from ``dV`` integration.
-
-    Priority for reconstructed volume:
-    1. ``∫ dV_drho drho`` if ``dV_drho`` is provided.
-    2. ``2*pi^2*R*kappa*a^2`` if ``R``, ``a``, and ``kappa`` are provided.
-    3. ``V_p*∫2*rho drho`` (cfspopcon Jacobian sanity check).
-
-    Args:
-        V_p: Reference plasma volume.
-        rho: Optional normalized radial grid.
-        dV_drho: Optional Jacobian profile ``dV/drho``.
-        R: Major radius for geometric estimate.
-        a: Minor radius for geometric estimate.
-        kappa: Elongation for geometric estimate.
-        rel_tol: Relative tolerance for consistency.
-        abs_tol: Absolute tolerance for consistency.
-        warn: Emit ``UserWarning`` if mismatch exceeds tolerance.
-
-    Returns:
-        ``(ok, integrated_volume, reference_volume)``.
-    """
-    V_ref = safe_float(V_p)
-    if V_ref is None:
-        return True, None, None
-
-    V_int: float | None = None
-    rho_arr = as_profile_array(rho) if rho is not None else None
-    jac_arr = as_profile_array(dV_drho) if dV_drho is not None else None
-    if jac_arr is not None:
-        if rho_arr is None:
-            rho_arr = np.linspace(0.0, 1.0, jac_arr.size, dtype=float)
-        elif rho_arr.size != jac_arr.size:
-            x_old = np.linspace(0.0, 1.0, jac_arr.size, dtype=float)
-            x_new = np.linspace(0.0, 1.0, rho_arr.size, dtype=float)
-            jac_arr = np.interp(x_new, x_old, jac_arr)
-        V_int = _trapz(jac_arr, rho_arr)
-    else:
-        Rv = safe_float(R)
-        av = safe_float(a)
-        kv = safe_float(kappa)
-        if Rv is not None and av is not None and kv is not None:
-            V_int = float(2.0 * math.pi ** 2 * Rv * kv * av ** 2)
-        else:
-            if rho_arr is None:
-                rho_arr = np.linspace(0.0, 1.0, 101, dtype=float)
-            V_int = float(V_ref * _trapz(2.0 * rho_arr, rho_arr))
-
-    ok = within_tolerance(V_int, V_ref, rel_tol=rel_tol, abs_tol=abs_tol)
-    if warn and not ok:
-        delta = abs(V_int - V_ref) / max(abs(V_ref), 1.0)
-        warnings.warn(
-            (
-                "Plasma volume mismatch: V_p="
-                f"{V_ref:.6g}, integral(dV)={V_int:.6g}, rel_delta={delta:.3%} "
-                f"(tol={rel_tol:.3%})."
-            ),
-            UserWarning,
-            stacklevel=2,
-        )
-    return ok, V_int, V_ref
-
-
-def normalize_tag(tag: str | None) -> str:
-    """Normalize a single tag for consistent comparison.
-    
-    Converts tag to lowercase and removes non-alphanumeric characters.
-    
-    Args:
-        tag (str | None): Single tag string or None.
-        
-    Returns:
-        str: Normalized tag string (empty string if None/empty).
-        
-    Examples:
-        >>> normalize_tag("Tokamak-Spherical")
-        'tokamakspherical'
-        >>> normalize_tag(None)
-        ''
-    """
-    if not tag:
-        return ""
-    return "".join(ch for ch in str(tag).lower() if ch.isalnum())
-
-
-def normalize_tags_to_tuple(tags: object) -> tuple[str, ...]:
-    """Normalize tags and convert to tuple format.
-    
-    Handles single strings, iterables, or None. Normalizes each tag
-    (lowercase, alphanumeric only) for consistent comparison.
-    
-    Args:
-        tags (object): Tags as string, iterable of strings, or None.
-        
-    Returns:
-        tuple[str, ...]: Tuple of normalized tag strings.
-        
-    Examples:
-        >>> normalize_tags_to_tuple("Tokamak-Spherical")
-        ('tokamakspherical',)
-        >>> normalize_tags_to_tuple(["Tokamak", "H-mode"])
-        ('tokamak', 'hmode')
-        >>> normalize_tags_to_tuple(None)
-        ()
+        Tuple of normalized tags.
     """
     if tags is None:
         return ()
-    
-    # Convert single string to list, otherwise iterate through tags
-    tag_list = [tags] if isinstance(tags, str) else tags
-    
-    # Normalize each tag and filter out empty results
-    return tuple(norm for tag in tag_list if (norm := normalize_tag(tag)))
+    if isinstance(tags, str):
+        return (normalize_tag(tags),)
+    return unique_preserve_order(normalize_tag(tag) for tag in tags)
 
 
-def normalize_country(country: str | None) -> str | None:
-    """Normalize a country name to its official name.
-    
-    Uses the pycountry library to convert country codes, aliases, or
-    informal names to official country names.
-    
+def parse_constraint_specs(spec: Any) -> tuple[tuple[str, bool], ...]:
+    """Normalize constraint specs to ``(expression, enforce)`` pairs.
+
     Args:
-        country (str | None): Country name, code (ISO 3166), or alias.
-    
+        spec: None, one string, or iterable of strings / ``[string, bool]``.
+
     Returns:
-        str | None: Official country name from pycountry, or the original string
-                    if no match found. Returns None if input is None/empty.
-        
-    Example:
-        >>> normalize_country("USA")
-        'United States'
-        >>> normalize_country("UK")
-        'United Kingdom'
-        >>> normalize_country("Unknown")
-        'Unknown'
+        Tuple of normalized constraint specs.
     """
-    if not country:
+    if spec is None:
+        return ()
+    if isinstance(spec, str):
+        return ((spec, True),)
+    if isinstance(spec, Mapping):
+        raise TypeError("constraints must be a string or iterable of strings/pairs.")
+    out: list[tuple[str, bool]] = []
+    for item in spec:
+        if isinstance(item, str):
+            out.append((item, True))
+        elif isinstance(item, (tuple, list)) and len(item) == 2 and isinstance(item[0], str):
+            out.append((item[0], bool(item[1])))
+        else:
+            raise TypeError("Constraint entries must be strings or [text, enforce] pairs.")
+    return tuple(out)
+
+
+def parse_domain(text: Any) -> tuple[float | None, float | None, bool, bool]:
+    """Parse compact domain syntax such as ``[0, inf)``.
+
+    Args:
+        text: Domain string, two-item sequence, or None.
+
+    Returns:
+        ``(lower, upper, lower_inclusive, upper_inclusive)``.
+    """
+    if text is None:
+        return None, None, True, True
+    if isinstance(text, (tuple, list)) and len(text) == 2:
+        return _finite_or_none(text[0]), _finite_or_none(text[1]), True, True
+    raw = str(text).strip()
+    match = re.fullmatch(r"([\[\(])\s*([^,]+)\s*,\s*([^\]\)]+)\s*([\]\)])", raw)
+    if not match:
+        raise ValueError(f"Invalid domain {text!r}; expected e.g. '[0, inf)'.")
+    left, lo, hi, right = match.groups()
+    return _finite_or_none(lo), _finite_or_none(hi), left == "[", right == "]"
+
+
+def _finite_or_none(value: Any) -> float | None:
+    text = str(value).strip().lower()
+    if text in {"inf", "+inf", "infinity", "+infinity", "none", "null"}:
         return None
-    
-    # Attempt to look up and normalize the country name
-    try:
-        match = pycountry.countries.lookup(country)
-        return match.name
-    except Exception:
-        # Not found - return original string
-        return country
+    if text in {"-inf", "-infinity"}:
+        return None
+    return float(value)
 
 
-def normalize_solver_mode(mode: str | None) -> str:
-    """Normalize solver mode values to canonical form.
-    
+def domain_bounds_for_solver(
+    domain: tuple[float | None, float | None, bool, bool],
+    *,
+    zero_tol: float,
+) -> tuple[float | None, float | None]:
+    """Convert a parsed domain to closed numerical bounds.
+
     Args:
-        mode (str | None): Solver mode string.
-        
+        domain: Parsed domain tuple.
+        zero_tol: Offset used for open finite bounds.
+
     Returns:
-        str: Canonical mode string ("overwrite" for override/default/None).
+        Lower and upper bounds, with None for unbounded sides.
     """
-    if mode in ("override", "default", None):
-        return "overwrite"
-    return str(mode)
+    lower, upper, lower_inc, upper_inc = domain
+    lb = lower
+    ub = upper
+    if lb is not None and not lower_inc:
+        lb = lb + zero_tol
+    if ub is not None and not upper_inc:
+        ub = ub - zero_tol
+    if lb is not None and ub is not None and lb > ub:
+        raise ValueError(f"Empty numerical domain after open-bound offset: {domain!r}.")
+    return lb, ub
 
 
-def ensure_list(value: object | None, *, name: str, item_desc: str) -> list:
-    """Ensure a value is a list (or empty), raising a descriptive error otherwise.
-    
+def scipy_bounds(
+    domain: tuple[float | None, float | None, bool, bool],
+    *,
+    zero_tol: float,
+) -> tuple[float, float]:
+    """Return SciPy-compatible bounds for a parsed domain.
+
     Args:
-        value (object | None): Value to check.
-        name (str): Parameter name for error messages.
-        item_desc (str): Description of items for error messages.
-        
+        domain: Parsed domain tuple.
+        zero_tol: Offset used for open finite bounds.
+
     Returns:
-        list: The value as a list, or empty list if None.
-        
-    Raises:
-        TypeError: If value is not a list or None.
+        Bounds using infinities for unbounded sides.
+    """
+    lb, ub = domain_bounds_for_solver(domain, zero_tol=zero_tol)
+    return -np.inf if lb is None else float(lb), np.inf if ub is None else float(ub)
+
+
+def validate_solver_domain(
+    name: str,
+    domain: tuple[float | None, float | None, bool, bool],
+    solver_domain: tuple[float | None, float | None, bool, bool],
+) -> None:
+    """Validate that a solver domain is inside the physical domain.
+
+    Args:
+        name: Variable name used in error messages.
+        domain: Physical domain.
+        solver_domain: Numerical solver domain.
+    """
+    d_lo, d_hi, d_lo_inc, d_hi_inc = domain
+    s_lo, s_hi, s_lo_inc, s_hi_inc = solver_domain
+    if d_lo is not None and s_lo is not None:
+        if s_lo < d_lo or (s_lo == d_lo and s_lo_inc and not d_lo_inc):
+            raise ValueError(f"Variable {name!r} solver_domain lower bound is outside domain.")
+    if d_hi is not None and s_hi is not None:
+        if s_hi > d_hi or (s_hi == d_hi and s_hi_inc and not d_hi_inc):
+            raise ValueError(f"Variable {name!r} solver_domain upper bound is outside domain.")
+    if s_lo is not None and s_hi is not None:
+        if s_lo > s_hi or (s_lo == s_hi and not (s_lo_inc and s_hi_inc)):
+            raise ValueError(f"Variable {name!r} solver_domain is empty.")
+
+
+def value_in_domain(value: Any, domain: tuple[float | None, float | None, bool, bool], *, zero_tol: float = 0.0) -> bool:
+    """Return whether all numeric values are inside a domain.
+
+    Args:
+        value: Scalar or array.
+        domain: Parsed domain tuple.
+        zero_tol: Boundary tolerance.
+
+    Returns:
+        True when every finite value is inside the domain.
+    """
+    try:
+        arr = np.asarray(value, dtype=float)
+    except Exception:
+        return False
+    if not np.all(np.isfinite(arr)):
+        return False
+    lower, upper, lower_inc, upper_inc = domain
+    if lower is not None:
+        ok = arr >= lower - zero_tol if lower_inc else arr > lower + zero_tol
+        if not bool(np.all(ok)):
+            return False
+    if upper is not None:
+        ok = arr <= upper + zero_tol if upper_inc else arr < upper - zero_tol
+        if not bool(np.all(ok)):
+            return False
+    return True
+
+
+def coerce_numeric_value(value: Any) -> Any:
+    """Convert numeric-looking YAML values to Python/NumPy numeric values.
+
+    Args:
+        value: Raw user value.
+
+    Returns:
+        Numeric value where possible, otherwise the original value.
     """
     if value is None:
-        return []
-    if not isinstance(value, list):
-        raise TypeError(f"{name} must be a list of {item_desc}")
+        return None
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return value
+    if isinstance(value, (list, tuple)):
+        try:
+            return np.asarray([coerce_numeric_value(item) for item in value], dtype=float)
+        except Exception:
+            return value
     return value
+
+
+def compare_numeric(
+    lhs: Any,
+    op: str,
+    rhs: Any,
+    *,
+    scale: Any,
+    rel_tol: float,
+    abs_tol: float = 0.0,
+) -> tuple[bool, np.ndarray, np.ndarray]:
+    """Evaluate an equality or inequality using tolerance-width residuals.
+
+    ``scale`` is the physical/current/reference magnitude used for relative
+    tolerance.  It is not itself the residual denominator.  The residual
+    denominator is the actual tolerance width
+
+        max(abs_tol, rel_tol * scale)
+
+    so an error of one residual unit means one allowed tolerance width.  Bounds
+    and unbounded domains must not be passed as ``scale``.
+    """
+    left = np.asarray(lhs, dtype=float)
+    right = np.asarray(rhs, dtype=float)
+    scl = np.maximum(np.asarray(scale, dtype=float), 1.0e-300)
+    tol_width = np.maximum(float(abs_tol), float(rel_tol) * scl)
+    tol_width = np.maximum(tol_width, 1.0e-300)
+    diff = left - right
+    if op == "==":
+        violation = np.abs(diff)
+        residual = diff / tol_width
+    elif op in {"<=", "<"}:
+        violation = np.maximum(diff, 0.0)
+        residual = violation / tol_width
+    elif op in {">=", ">"}:
+        violation = np.maximum(-diff, 0.0)
+        residual = violation / tol_width
+    else:
+        raise ValueError(f"Unsupported comparison operator {op!r}.")
+    ok = bool(np.all(violation <= tol_width))
+    return ok, np.asarray(residual, dtype=float).reshape(-1), np.asarray(violation, dtype=float).reshape(-1)
+
+
+def safe_max_abs(value: Any, default: float = 0.0) -> float:
+    """Return max absolute finite magnitude or a default.
+
+    Args:
+        value: Scalar or array.
+        default: Fallback value.
+
+    Returns:
+        Non-negative finite magnitude.
+    """
+    try:
+        arr = np.asarray(value, dtype=float).reshape(-1)
+    except Exception:
+        return float(default)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return float(default)
+    return float(np.max(np.abs(finite)))

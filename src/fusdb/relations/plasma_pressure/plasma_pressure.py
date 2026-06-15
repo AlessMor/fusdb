@@ -1,30 +1,62 @@
 """Plasma pressure relations expressed via @relation decorators."""
 from __future__ import annotations
 
+from typing import Any
+
+import numpy as np
+from scipy.integrate import trapezoid
+
+from fusdb import relation
 from fusdb.registry import KEV_TO_J
-from fusdb.relation_util import relation
-from fusdb.utils import integrate_profile, safe_float
 
 
-@relation(name="Thermal pressure", output="p_th", tags=("plasma",))
-def thermal_pressure(n_e: float, T_e: float, n_i: float, T_i: float, V_p: float) -> float:
-    """Return volume-averaged thermal pressure from profile/local quantities."""
+@relation(
+    name='Thermal pressure',
+    tags=('plasma',),
+    outputs='p_th',
+)
+def thermal_pressure(n_e: float, T_e: float, n_i: float, T_i: float, rho: float) -> Any:
+    """Return volume-averaged thermal pressure from profile/local quantities.
+
+    Args:
+        n_e: Electron density profile.
+        T_e: Electron temperature profile.
+        n_i: Ion density profile.
+        T_i: Ion temperature profile.
+        rho: Radial grid.
+
+    Returns:
+        Volume-averaged thermal pressure.
+    """
     integrand = n_e * T_e + n_i * T_i
-    if getattr(integrand, "free_symbols", None) is not None or getattr(V_p, "free_symbols", None) is not None:
-        # For scalar symbolic placeholders the profile-average pressure reduces
-        # to the local expression independent of V_p.
-        return KEV_TO_J * integrand
-
-    v_scalar = safe_float(V_p)
-    if v_scalar is None or v_scalar <= 0.0:
-        raise ValueError("V_p must be a positive scalar for thermal pressure integration.")
-
-    integrated = integrate_profile(integrand, v_scalar, error_label="thermal-pressure")
-    return KEV_TO_J * integrated / v_scalar
+    return KEV_TO_J * trapezoid(integrand, x=rho)
 
 
 ########################################
-@relation(name="Peak pressure", output="p_peak", tags=("plasma",))
-def peak_pressure(n0: float, T0: float, n_i_peak: float, T_i_peak: float) -> float:
+@relation(
+    name='Thermal stored energy',
+    tags=('plasma',),
+    outputs='W_th',
+)
+def thermal_stored_energy(p_th: float, V_p: float) -> float:
+    """Return thermal stored energy from pressure and plasma volume.
+
+    Args:
+        p_th: Volume-averaged thermal pressure.
+        V_p: Plasma volume.
+
+    Returns:
+        Thermal stored energy.
+    """
+    return 1.5 * p_th * V_p
+
+
+########################################
+@relation(
+    name='Peak pressure',
+    tags=('plasma',),
+    outputs='p_peak',
+)
+def peak_pressure(n0: float, T0: float, n_i_peak: float, T_i_peak: float) -> Any:
     """Calculate the peak pressure."""
     return (n0 * T0 + n_i_peak * T_i_peak) * KEV_TO_J

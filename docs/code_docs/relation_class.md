@@ -1,70 +1,59 @@
 # Relation Class
 
-`fusdb.relation_class.Relation` represents one physics relation:
-one output computed from explicit inputs.
+`fusdb.Relation` represents one physical relation: a callable that
+computes outputs (or a residual) from explicit inputs.
 
-Relations are usually declared with the `@relation` decorator in
-`fusdb.relation_util`.
+Relations are usually declared with the `@relation` decorator exported by
+the `fusdb` package.
 
 ## Core Fields
 
 Set at construction:
 
-- `name`: human-readable relation name (defaults to function name when using decorator)
-- `output`: canonical output variable name
-- `func`: callable accepting ordered inputs
-- `inputs`: ordered tuple/list of input variable names
+- `name`: stable relation name (defaults to the function name when using the decorator)
+- `input_names`: ordered canonical input variable names
+- `outputs`: declared output variable names (empty means the function implements an outputless residual)
+- `func`: Python callable implementing the forward evaluation
 - `tags`: classification tags, for example `("geometry", "plasma")`
-- `rel_tol_default`, `abs_tol_default`: default tolerances for consistency checks
-- `constraints`: hard constraints, for example `("R > 0", "a < R")`
-- `soft_constraints`: warning-only constraints
-- `initial_guesses`: optional variable-to-callable map for numeric solver initial values
-- `inverse_functions`: optional variable-to-callable map for explicit inverse solvers
-- `sympy_expr`: optional symbolic form used for automatic inversion
+- `constraints`: relation-local validity constraints
+- `enforce`: whether the relation is enforced (True) or warning-only (False)
 
-## Key Property and Methods
+## Key properties and methods
 
-- `variables` -> tuple of `(input_1, ..., input_n, output)`
-- `evaluate(values)` -> computed output value
-- `constraint_violations(values)` -> violated hard constraints
-- `soft_constraint_violations(values)` -> violated soft constraints
-- `check_satisfied(values, rel_tol=None, abs_tol=None, check_constraints=True)` -> `(satisfied, status, residual)`
-- `get_residual(values)` -> `actual - expected`
-- `inverse_solver(unknown)` -> callable or `None`
-- `solve_for_value(unknown, values)` -> solved value or `None`
+- `input_names` -> tuple of input names
+- `evaluate(namespace)` -> call the underlying Python function with the provided namespace
+- `output_map(result)` -> map a function result to declared outputs
+- `comparisons(namespace)` -> list of comparison tuples `(lhs, op, rhs, output_name)` used by the solver
+- `implicit` -> whether outputs also appear among inputs
+- `from_function(...)` and the `relation` decorator -> helpers to construct and register `Relation` objects
 
 ## Creating Relations
 
-### Direct Construction
+### Direct construction
 
 ```python
-from fusdb.relation_class import Relation
+from fusdb.relation import Relation
 
 rel = Relation(
     name="Aspect ratio",
-    output="A",
     func=lambda R, a: R / a,
-    inputs=["R", "a"],
+    input_names=("R", "a"),
+    outputs=("A",),
     tags=("geometry",),
-    rel_tol_default=0.01,
     constraints=("R > 0", "a > 0", "a < R"),
 )
 ```
 
-### Decorator (Recommended)
+### Decorator (recommended)
 
 ```python
-from fusdb.relation_util import relation
+from fusdb.relation import relation
 
 @relation(
     name="Aspect ratio",
-    output="A",
+    outputs=("A",),
     tags=("geometry",),
-    rel_tol_default=0.01,
     constraints=("R > 0", "a > 0", "a < R"),
-    soft_constraints=("A > 2",),
-    initial_guesses={"a": lambda values: 0.3 * values.get("R", 1.0)},
-    inverse_functions={"a": lambda values: values["R"] / values["A"]},
 )
 def aspect_ratio(R: float, a: float) -> float:
     return R / a
@@ -72,47 +61,32 @@ def aspect_ratio(R: float, a: float) -> float:
 
 Decorator parameters:
 
-- `name`: relation display name
-- `output`: output variable name
+- `name`: relation name used for registration
+- `outputs`: output variable name or tuple of names
 - `tags`: classification tags
-- `rel_tol_default`, `abs_tol_default`: default tolerances
-- `constraints`: hard constraints
-- `soft_constraints`: warning-only constraints
-- `initial_guesses`: initial guesses for numeric solvers
-- `inverse_functions`: explicit inverse solvers
+- `enforce`: make a relation warning-only by setting `enforce=False`
+- `constraints`: relation-local validity constraints
 
 !!! note
     For symbolic inversion to work, keep relation functions SymPy-friendly:
     avoid NumPy-only expressions and use SymPy-compatible math/branching.
 
-## Example With RelationSystem
+## Example with RelationSystem
 
 ```python
-from fusdb.relationsystem_class import RelationSystem
-from fusdb.variable_util import make_variable
-from fusdb.relation_util import relation
+from fusdb import RelationSystem
+from fusdb.variable import Variable
+from fusdb.relation import relation
 
-@relation(
-    name="Aspect ratio",
-    output="A",
-    tags=("geometry",),
-    constraints=("R > 0", "a > 0", "a < R"),
-)
+@relation(name="Aspect ratio", outputs=("A",))
 def aspect_ratio(R: float, a: float) -> float:
     return R / a
 
-R = make_variable(name="R", ndim=0, unit="m")
-a = make_variable(name="a", ndim=0, unit="m")
-A = make_variable(name="A", ndim=0, unit="1")
+R = Variable("R", value=3.0, unit="m")
+a = Variable("a", value=1.0, unit="m")
+A = Variable("A", value=None, unit="1")
 
-R.add_value(3.0, as_input=True)
-a.add_value(1.0, as_input=True)
-
-rel_system = RelationSystem(
-    relations=[aspect_ratio],
-    variables=[R, a, A],
-    mode="overwrite",
-)
-rel_system.solve()
-print(rel_system.variables_dict["A"].current_value)  # 3.0
+rel_system = RelationSystem(variables=[R, a, A], relations=[aspect_ratio])
+result = rel_system.run(mode="verify")
+print(result["variables"]["A"].value)
 ```

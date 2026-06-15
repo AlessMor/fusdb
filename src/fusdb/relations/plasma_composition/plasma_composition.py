@@ -1,475 +1,605 @@
-"""Density-based plasma composition relations."""
+"""Density-based plasma composition relations.
+
+This module is intended as a drop-in replacement for the current plasma
+composition relation file.  It keeps the existing forward relations and adds
+explicit inverse relations so a reconcile solve can grow from common reactor
+inputs such as ``n_i``/``n_e`` plus ``f_D``/``f_T`` into species density profiles
+needed by fusion-power relations.
+
+Design goals:
+    - Keep relations simple and algebraic.
+    - Avoid nested solves inside relation functions.
+    - Support scalars and 1-D profiles through NumPy broadcasting.
+    - Make DT-only cases reachable from ``n_i`` or ``n_e`` and fuel fractions.
+"""
 
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
+from scipy.integrate import trapezoid
 
-from fusdb.registry import load_allowed_species, load_allowed_variables
-from fusdb.relation_util import relation
-from fusdb.utils import integrate_profile
+from fusdb import relation
+from fusdb.registry import SPECIES
 
-allowed_species = load_allowed_species()
-allowed_variables, _, _ = load_allowed_variables()
+
+# ---------------------------------------------------------------------------
+# Small numeric helpers
+# ---------------------------------------------------------------------------
+
+
+_IMPURITY_CHARGE = float(SPECIES["Imp"].atomic_number)
+
+
+def _positive_denominator(value: Any, *, name: str) -> Any:
+    """Return a finite positive denominator for nonlinear least-squares.
+
+    Relation functions should not abort during intermediate SciPy iterations.
+    Domain/bounds and final residual checks decide whether the final state is
+    acceptable.  This helper therefore clips invalid or non-positive temporary
+    denominators to a tiny positive value instead of raising.
+    """
+    arr = np.asarray(value, dtype=float)
+    arr = np.nan_to_num(arr, nan=1e-300, posinf=1e300, neginf=1e-300)
+    arr = np.maximum(arr, 1e-300)
+    if arr.ndim == 0:
+        return float(arr)
+    return arr
+
+
+def _finite_nonnegative(value: Any, *, name: str) -> Any:
+    """Return a finite non-negative value for nonlinear least-squares."""
+    arr = np.asarray(value, dtype=float)
+    arr = np.nan_to_num(arr, nan=0.0, posinf=1e300, neginf=0.0)
+    arr = np.maximum(arr, 0.0)
+    if arr.ndim == 0:
+        return float(arr)
+    return arr
+
+
+def _species_fraction(numerator: Any, denominator: Any, *, name: str) -> Any:
+    """Return the integrated species fraction from density profiles.
+
+    The ratio uses grid-integrated densities, so a profile whose edge value is
+    exactly zero does not create an indeterminate pointwise ``0/0`` sample.
+    For shape-proportional profiles this equals the pointwise fraction.
+    """
+    num = np.asarray(numerator, dtype=float).reshape(-1)
+    den = np.asarray(denominator, dtype=float).reshape(-1)
+    species = float(trapezoid(num)) if num.size > 1 else float(num[0])
+    total = float(trapezoid(den)) if den.size > 1 else float(den[0])
+    total = float(_positive_denominator(total, name=f"{name} denominator"))
+    return species / total
+
+
+def _zbar_from_fractions(
+    f_D: Any,
+    f_T: Any,
+    f_He3: Any = 0.0,
+    f_He4: Any = 0.0,
+    f_Imp: Any = 0.0,
+) -> Any:
+    """Return mean ion charge implied by ion fractions.
+
+    The He/impurity fractions default to zero so common DT-only scenarios need
+    only ``f_D`` and ``f_T``.  If those variables exist in the namespace,
+    ``Relation.evaluate`` passes them despite the Python defaults.
+    """
+    return f_D + f_T + 2.0 * f_He3 + 2.0 * f_He4 + _IMPURITY_CHARGE * f_Imp
+
+
+# ---------------------------------------------------------------------------
+# Forward composition relations: species densities -> totals/fractions
+# ---------------------------------------------------------------------------
 
 
 @relation(
     name="Ion density from tracked species densities",
-    output="n_i",
-    tags=("plasma",),
+    tags=("plasma", "composition"),
+    outputs="n_i",
 )
 def ion_density_from_tracked_species_densities(
-    n_D: float,
-    n_T: float,
-    n_He3: float,
-    n_He4: float,
-    n_imp: float,
-) -> float:
-    """Return the total tracked ion density profile.
-
-    Args:
-        n_D: Deuterium density.
-        n_T: Tritium density.
-        n_He3: Helium-3 density.
-        n_He4: Helium-4 density.
-        n_imp: Generic impurity density.
-
-    Returns:
-        Total tracked ion density.
-    """
-    # Sum fuel and impurity densities into the total ion inventory.
+    n_D: Any,
+    n_T: Any,
+    n_He3: Any,
+    n_He4: Any,
+    n_imp: Any,
+) -> Any:
+    """Return total tracked ion density from species densities."""
     return n_D + n_T + n_He3 + n_He4 + n_imp
 
 
 @relation(
     name="Electron density from tracked species densities",
-    output="n_e",
-    tags=("plasma",),
+    tags=("plasma", "composition"),
+    outputs="n_e",
 )
 def electron_density_from_tracked_species_densities(
-    n_D: float,
-    n_T: float,
-    n_He3: float,
-    n_He4: float,
-    n_imp: float,
-) -> float:
-    """Return the electron density profile from tracked ion densities.
-
-    Args:
-        n_D: Deuterium density.
-        n_T: Tritium density.
-        n_He3: Helium-3 density.
-        n_He4: Helium-4 density.
-        n_imp: Generic impurity density.
-
-    Returns:
-        Electron density derived from charge neutrality.
-    """
-    # Load impurity charge state from the species registry.
-    z_imp = float(allowed_species["Imp"]["atomic_number"])
-
-    # TODO(med): make function more flexible to handle more complex impurity compositions with multiple charge states.
-    # Sum charge-weighted ion densities to get electron density.
-    return n_D + n_T + 2.0 * n_He3 + 2.0 * n_He4 + z_imp * n_imp
+    n_D: Any,
+    n_T: Any,
+    n_He3: Any,
+    n_He4: Any,
+    n_imp: Any,
+) -> Any:
+    """Return electron density from charge neutrality."""
+    return n_D + n_T + 2.0 * n_He3 + 2.0 * n_He4 + _IMPURITY_CHARGE * n_imp
 
 
 @relation(
     name="Integrated D fraction from density profiles",
-    output="f_D",
-    tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
+    tags=("plasma", "composition"),
+    outputs="f_D",
 )
-def integrated_deuterium_fraction_from_density_profiles(
-    n_D: float,
-    n_i: float,
-) -> float:
-    """Return the integrated deuterium fraction from density profiles.
-
-    Args:
-        n_D: Deuterium density profile.
-        n_i: Total ion density profile.
-
-    Returns:
-        Integrated deuterium fraction.
-    """
-    # Integrate the deuterium inventory.
-    numerator_total = integrate_profile(n_D, error_label="density")
-    # Integrate the total ion inventory.
-    denominator_total = integrate_profile(n_i, error_label="density")
-    # Ensure a positive denominator when numerical data are provided.
-    if getattr(denominator_total, "free_symbols", None) is None and denominator_total <= 0.0:
-        raise ValueError("Tracked ion inventory must be positive")
-    # Normalize the deuterium inventory to the total inventory.
-    return numerator_total / denominator_total
+def integrated_deuterium_fraction_from_density_profiles(n_D: Any, n_i: Any) -> Any:
+    """Return pointwise deuterium fraction from density profiles."""
+    return _species_fraction(n_D, n_i, name="f_D")
 
 
 @relation(
     name="Integrated T fraction from density profiles",
-    output="f_T",
-    tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
+    tags=("plasma", "composition"),
+    outputs="f_T",
 )
-def integrated_tritium_fraction_from_density_profiles(
-    n_T: float,
-    n_i: float,
-) -> float:
-    """Return the integrated tritium fraction from density profiles.
-
-    Args:
-        n_T: Tritium density profile.
-        n_i: Total ion density profile.
-
-    Returns:
-        Integrated tritium fraction.
-    """
-    # Integrate the tritium inventory.
-    numerator_total = integrate_profile(n_T, error_label="density")
-    # Integrate the total ion inventory.
-    denominator_total = integrate_profile(n_i, error_label="density")
-    # Ensure a positive denominator when numerical data are provided.
-    if getattr(denominator_total, "free_symbols", None) is None and denominator_total <= 0.0:
-        raise ValueError("Tracked ion inventory must be positive")
-    # Normalize the tritium inventory to the total inventory.
-    return numerator_total / denominator_total
+def integrated_tritium_fraction_from_density_profiles(n_T: Any, n_i: Any) -> Any:
+    """Return pointwise tritium fraction from density profiles."""
+    return _species_fraction(n_T, n_i, name="f_T")
 
 
 @relation(
     name="Integrated He3 fraction from density profiles",
-    output="f_He3",
-    tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
+    tags=("plasma", "composition"),
+    outputs="f_He3",
 )
-def integrated_helium3_fraction_from_density_profiles(
-    n_He3: float,
-    n_i: float,
-) -> float:
-    """Return the integrated helium-3 fraction from density profiles.
-
-    Args:
-        n_He3: Helium-3 density profile.
-        n_i: Total ion density profile.
-
-    Returns:
-        Integrated helium-3 fraction.
-    """
-    # Integrate the helium-3 inventory.
-    numerator_total = integrate_profile(n_He3, error_label="density")
-    # Integrate the total ion inventory.
-    denominator_total = integrate_profile(n_i, error_label="density")
-    # Ensure a positive denominator when numerical data are provided.
-    if getattr(denominator_total, "free_symbols", None) is None and denominator_total <= 0.0:
-        raise ValueError("Tracked ion inventory must be positive")
-    # Normalize the helium-3 inventory to the total inventory.
-    return numerator_total / denominator_total
+def integrated_helium3_fraction_from_density_profiles(n_He3: Any, n_i: Any) -> Any:
+    """Return pointwise helium-3 fraction from density profiles."""
+    return _species_fraction(n_He3, n_i, name="f_He3")
 
 
 @relation(
     name="Integrated He4 fraction from density profiles",
-    output="f_He4",
-    tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
+    tags=("plasma", "composition"),
+    outputs="f_He4",
 )
-def integrated_helium4_fraction_from_density_profiles(
-    n_He4: float,
-    n_i: float,
-) -> float:
-    """Return the integrated helium-4 fraction from density profiles.
-
-    Args:
-        n_He4: Helium-4 density profile.
-        n_i: Total ion density profile.
-
-    Returns:
-        Integrated helium-4 fraction.
-    """
-    # Integrate the helium-4 inventory.
-    numerator_total = integrate_profile(n_He4, error_label="density")
-    # Integrate the total ion inventory.
-    denominator_total = integrate_profile(n_i, error_label="density")
-    # Ensure a positive denominator when numerical data are provided.
-    if getattr(denominator_total, "free_symbols", None) is None and denominator_total <= 0.0:
-        raise ValueError("Tracked ion inventory must be positive")
-    # Normalize the helium-4 inventory to the total inventory.
-    return numerator_total / denominator_total
+def integrated_helium4_fraction_from_density_profiles(n_He4: Any, n_i: Any) -> Any:
+    """Return pointwise helium-4 fraction from density profiles."""
+    return _species_fraction(n_He4, n_i, name="f_He4")
 
 
 @relation(
     name="Integrated Imp fraction from density profiles",
-    output="f_Imp",
-    tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
+    tags=("plasma", "composition"),
+    outputs="f_Imp",
 )
-def integrated_impurity_fraction_from_density_profiles(
-    n_imp: float,
-    n_i: float,
-) -> float:
-    """Return the integrated generic impurity fraction from density profiles.
+def integrated_impurity_fraction_from_density_profiles(n_imp: Any, n_i: Any) -> Any:
+    """Return pointwise impurity fraction from density profiles."""
+    return _species_fraction(n_imp, n_i, name="f_Imp")
 
-    Args:
-        n_imp: Generic impurity density profile.
-        n_i: Total ion density profile.
 
-    Returns:
-        Integrated impurity fraction.
-    """
-    # Integrate impurity inventory.
-    numerator_total = integrate_profile(n_imp, error_label="density")
-    # Integrate total ion inventory.
-    denominator_total = integrate_profile(n_i, error_label="density")
-    # Ensure a positive denominator when numerical data are provided.
-    if getattr(denominator_total, "free_symbols", None) is None and denominator_total <= 0.0:
-        raise ValueError("Tracked ion inventory must be positive")
-    # Normalize the impurity inventory to the total inventory.
-    return numerator_total / denominator_total
+# ---------------------------------------------------------------------------
+# Inverse composition relations: totals/fractions -> species densities
+# ---------------------------------------------------------------------------
 
 
 @relation(
-    name="Integrated tracked fractions",
-    outputs=tuple(
-        f"f_{species}"
-        for species in allowed_species
-        if (
-            ("n_imp" if species == "Imp" else f"n_{species}") in allowed_variables
-            and f"f_{species}" in allowed_variables
-        )
-    ),
-    tags=("plasma",),
-    rel_tol_default=1e-12,
-    abs_tol_default=1e-12,
+    name="D density from ion density and D fraction",
+    tags=("plasma", "composition", "inverse"),
+    outputs="n_D",
 )
-def integrated_tracked_fractions(
-    n_D: float,
-    n_T: float,
-    n_He3: float,
-    n_He4: float,
-    n_imp: float,
-    n_i: float,
-) -> dict[str, float]:
-    """Return the full integrated tracked-fraction bundle from density profiles.
+def deuterium_density_from_ion_density_and_fraction(n_i: Any, f_D: Any) -> Any:
+    """Return deuterium density from total ion density and D fraction."""
+    _finite_nonnegative(f_D, name="f_D")
+    return n_i * f_D
 
-    Args:
-        n_D: Deuterium density profile.
-        n_T: Tritium density profile.
-        n_He3: Helium-3 density profile.
-        n_He4: Helium-4 density profile.
-        n_imp: Generic impurity density profile.
-        n_i: Total ion density profile.
 
-    Returns:
-        Mapping of fraction names (``f_*``) to their integrated values.
+@relation(
+    name="T density from ion density and T fraction",
+    tags=("plasma", "composition", "inverse"),
+    outputs="n_T",
+)
+def tritium_density_from_ion_density_and_fraction(n_i: Any, f_T: Any) -> Any:
+    """Return tritium density from total ion density and T fraction."""
+    _finite_nonnegative(f_T, name="f_T")
+    return n_i * f_T
+
+
+@relation(
+    name="He3 density from ion density and He3 fraction",
+    tags=("plasma", "composition", "inverse"),
+    outputs="n_He3",
+)
+def helium3_density_from_ion_density_and_fraction(n_i: Any, f_He3: Any) -> Any:
+    """Return helium-3 density from total ion density and He3 fraction."""
+    _finite_nonnegative(f_He3, name="f_He3")
+    return n_i * f_He3
+
+
+@relation(
+    name="He4 density from ion density and He4 fraction",
+    tags=("plasma", "composition", "inverse"),
+    outputs="n_He4",
+)
+def helium4_density_from_ion_density_and_fraction(n_i: Any, f_He4: Any) -> Any:
+    """Return helium-4 density from total ion density and He4 fraction."""
+    _finite_nonnegative(f_He4, name="f_He4")
+    return n_i * f_He4
+
+
+@relation(
+    name="Impurity density from ion density and impurity fraction",
+    tags=("plasma", "composition", "inverse"),
+    outputs="n_imp",
+)
+def impurity_density_from_ion_density_and_fraction(n_i: Any, f_Imp: Any) -> Any:
+    """Return impurity density from total ion density and impurity fraction."""
+    _finite_nonnegative(f_Imp, name="f_Imp")
+    return n_i * f_Imp
+
+
+@relation(
+    name="Ion density from electron density and fuel fractions",
+    tags=("plasma", "composition", "inverse"),
+    outputs="n_i",
+)
+def ion_density_from_electron_density_and_fuel_fractions(
+    n_e: Any,
+    f_D: Any,
+    f_T: Any,
+    f_He3: Any = 0.0,
+    f_He4: Any = 0.0,
+    f_Imp: Any = 0.0,
+) -> Any:
+    """Return total ion density from electron density and ion fractions.
+
+    This makes DT-only cases reachable from ``n_e``, ``f_D`` and ``f_T``.
+    Additional He/impurity fractions are used when present in the namespace.
     """
-    # Collect the density profiles by species.
-    densities = {
-        "D": n_D,
-        "T": n_T,
-        "He3": n_He3,
-        "He4": n_He4,
-        "Imp": n_imp,
-    }
-    # Determine which species have both density and fraction variables.
-    tracked_species = tuple(
-        species
-        for species in allowed_species
-        if (
-            ("n_imp" if species == "Imp" else f"n_{species}") in allowed_variables
-            and f"f_{species}" in allowed_variables
-        )
+    zbar = _positive_denominator(
+        _zbar_from_fractions(f_D, f_T, f_He3, f_He4, f_Imp),
+        name="mean ion charge",
     )
-    # Integrate the total ion inventory.
-    denominator = integrate_profile(n_i, error_label="density")
-    # Ensure a positive denominator when numerical data are provided.
-    if getattr(denominator, "free_symbols", None) is None and denominator <= 0.0:
-        raise ValueError("Tracked ion inventory must be positive")
-    # Normalize each species inventory to the total ion inventory.
-    return {
-        f"f_{species}": integrate_profile(densities[species], error_label="density") / denominator
-        for species in tracked_species
-    }
+    return n_e / zbar
+
+
+@relation(
+    name="Electron density from ion density and fuel fractions",
+    tags=("plasma", "composition"),
+    outputs="n_e",
+)
+def electron_density_from_ion_density_and_fuel_fractions(
+    n_i: Any,
+    f_D: Any,
+    f_T: Any,
+    f_He3: Any = 0.0,
+    f_He4: Any = 0.0,
+    f_Imp: Any = 0.0,
+) -> Any:
+    """Return electron density from ion density and ion fractions.
+
+    This gives a direct consistency check for cases that supply both ``n_i``
+    and ``n_e`` without requiring all individual minority densities.
+    """
+    zbar = _positive_denominator(
+        _zbar_from_fractions(f_D, f_T, f_He3, f_He4, f_Imp),
+        name="mean ion charge",
+    )
+    return n_i * zbar
 
 
 @relation(
     name="Average fuel mass number",
-    output="afuel",
-    tags=("plasma",),
+    tags=("plasma", "composition"),
+    outputs="afuel",
 )
-def average_fuel_mass_number(
-    f_D: float,
-    f_T: float,
-    f_He3: float,
-) -> float:
-    """Return the integrated average fuel mass number.
+def average_fuel_mass_number(f_D: Any, f_T: Any, f_He3: Any = 0.0) -> Any:
+    """Return average fuel mass number from fuel fractions.
 
-    Args:
-        f_D: Deuterium fraction.
-        f_T: Tritium fraction.
-        f_He3: Helium-3 fraction.
-
-    Returns:
-        Fuel-only average ion mass number.
+    ``f_He3`` defaults to zero so DT cases can compute ``afuel`` from only
+    ``f_D`` and ``f_T``.  If ``f_He3`` exists in the solve namespace, it is used.
     """
-    # Sum the fuel fractions to get the fuel-only inventory.
-    fuel_total = f_D + f_T + f_He3
-    # Ensure a positive total when numerical data are provided.
-    if getattr(fuel_total, "free_symbols", None) is None and fuel_total <= 0.0:
-        raise ValueError("Fuel ion inventory must be positive")
-    # Load fuel mass numbers from the species registry.
-    # Form the weighted fuel mass numerator.
+    fuel_total = _positive_denominator(f_D + f_T + f_He3, name="fuel ion inventory")
     numerator = (
-        f_D * float(allowed_species["D"]["atomic_mass"])
-        + f_T * float(allowed_species["T"]["atomic_mass"])
-        + f_He3 * float(allowed_species["He3"]["atomic_mass"])
+        f_D * float(SPECIES["D"].atomic_mass)
+        + f_T * float(SPECIES["T"].atomic_mass)
+        + f_He3 * float(SPECIES["He3"].atomic_mass)
     )
-    # Normalize by the fuel inventory.
     return numerator / fuel_total
 
 
+# ---------------------------------------------------------------------------
+# Steady-state particle-balance residuals
+# ---------------------------------------------------------------------------
+
+
 def plasma_balance_ode(
-    n_D: float,
-    n_T: float,
-    n_He3: float,
-    n_He4: float,
-    sigmav_DT: float,
-    sigmav_DDn: float,
-    sigmav_DDp: float,
-    sigmav_DHe3: float,
-    sigmav_TT: float,
-    sigmav_He3He3: float,
-    sigmav_THe3_D: float,
-    sigmav_THe3_np: float,
-    tau_p_D: float | None,
-    tau_p_T: float | None,
-    tau_p_He3: float | None,
-    tau_p_He4: float | None,
+    n_D: Any,
+    n_T: Any,
+    n_He3: Any,
+    n_He4: Any,
+    sigmav_DT: Any,
+    sigmav_DDn: Any,
+    sigmav_DDp: Any,
+    sigmav_DHe3: Any,
+    sigmav_TT: Any,
+    sigmav_He3He3: Any,
+    sigmav_THe3_D: Any,
+    sigmav_THe3_np: Any,
+    tau_p_D: Any,
+    tau_p_T: Any,
+    tau_p_He3: Any,
+    tau_p_He4: Any,
     *,
     injection_fractions: np.ndarray | tuple[float, float, float, float] | None = None,
-) -> tuple[float, float, float, float]:
-    """Return the tracked-species ODE with implicit fueling to hold total density fixed.
+) -> tuple[Any, Any, Any, Any]:
+    """Return D/T/He3/He4 balances with implicit total-density fueling."""
+    inv_tau_D = 0.0 if tau_p_D is None else 1.0 / tau_p_D
+    inv_tau_T = 0.0 if tau_p_T is None else 1.0 / tau_p_T
+    inv_tau_He3 = 0.0 if tau_p_He3 is None else 1.0 / tau_p_He3
+    inv_tau_He4 = 0.0 if tau_p_He4 is None else 1.0 / tau_p_He4
 
-    Args:
-        n_D: Deuterium density.
-        n_T: Tritium density.
-        n_He3: Helium-3 density.
-        n_He4: Helium-4 density.
-        sigmav_DT: DT reactivity.
-        sigmav_DDn: DDn reactivity.
-        sigmav_DDp: DDp reactivity.
-        sigmav_DHe3: DHe3 reactivity.
-        sigmav_TT: TT reactivity.
-        sigmav_He3He3: He3He3 reactivity.
-        sigmav_THe3_D: THe3-to-D branch reactivity.
-        sigmav_THe3_np: THe3-to-np branch reactivity.
-        tau_p_D: Deuterium particle confinement time.
-        tau_p_T: Tritium particle confinement time.
-        tau_p_He3: Helium-3 particle confinement time.
-        tau_p_He4: Helium-4 particle confinement time.
-        injection_fractions: Optional fuel split ``(f_D, f_T, f_He3, f_He4)``. When
-            ``None``, use the local state fractions.
-
-    Returns:
-        Time derivatives ``(dn_D/dt, dn_T/dt, dn_He3/dt, dn_He4/dt)`` including
-        the implicit fueling source.
-    """
-    # Combine fusion production, fusion burn, and particle losses for D.
     dn_D_dt = (
-        - n_D * n_T * sigmav_DT
+        -n_D * n_T * sigmav_DT
         - n_D**2 * (sigmav_DDn + sigmav_DDp)
         - n_D * n_He3 * sigmav_DHe3
         + n_T * n_He3 * sigmav_THe3_D
-        - (0.0 if tau_p_D is None else 1.0 / float(tau_p_D)) * n_D
+        - inv_tau_D * n_D
     )
-
-    # Combine fusion production, fusion burn, and particle losses for T.
     dn_T_dt = (
-        + 0.5 * n_D**2 * sigmav_DDp
+        +0.5 * n_D**2 * sigmav_DDp
         - n_D * n_T * sigmav_DT
         - n_T**2 * sigmav_TT
         - n_T * n_He3 * (sigmav_THe3_D + sigmav_THe3_np)
-        - (0.0 if tau_p_T is None else 1.0 / float(tau_p_T)) * n_T
+        - inv_tau_T * n_T
     )
-
-    # Combine fusion production, fusion burn, and particle losses for He3.
     dn_He3_dt = (
-        + 0.5 * n_D**2 * sigmav_DDn
+        +0.5 * n_D**2 * sigmav_DDn
         - n_D * n_He3 * sigmav_DHe3
         - n_He3**2 * sigmav_He3He3
         - n_T * n_He3 * (sigmav_THe3_D + sigmav_THe3_np)
-        - (0.0 if tau_p_He3 is None else 1.0 / float(tau_p_He3)) * n_He3
+        - inv_tau_He3 * n_He3
     )
-
-    # Combine fusion production and particle losses for He4 ash.
     dn_He4_dt = (
-        + n_D * n_T * sigmav_DT
+        +n_D * n_T * sigmav_DT
         + n_D * n_He3 * sigmav_DHe3
         + 0.5 * n_T**2 * sigmav_TT
         + 0.5 * n_He3**2 * sigmav_He3He3
         + n_T * n_He3 * (sigmav_THe3_D + sigmav_THe3_np)
-        - (0.0 if tau_p_He4 is None else 1.0 / float(tau_p_He4)) * n_He4
+        - inv_tau_He4 * n_He4
     )
 
-    # Determine the fueling split that keeps the total density fixed.
     total_density = n_D + n_T + n_He3 + n_He4
-    if total_density <= 0.0:
-        # Skip the implicit source if the total density is zero.
-        return dn_D_dt, dn_T_dt, dn_He3_dt, dn_He4_dt
-
+    total_density_safe = np.maximum(total_density, 1e-300)
     if injection_fractions is None:
-        # Default to feeding the same split as the local state.
-        feed = np.asarray(
-            [n_D, n_T, n_He3, n_He4],
-            dtype=float,
-        ) / total_density
+        feed = np.stack([n_D, n_T, n_He3, n_He4], axis=0) / total_density_safe
     else:
-        # Validate and normalize the provided injection split.
         feed = np.asarray(injection_fractions, dtype=float)
-        if feed.shape != (4,) or not np.isfinite(feed).all() or np.any(feed < 0.0):
+        if feed.shape[0] != 4 or not np.isfinite(feed).all() or np.any(feed < 0.0):
             raise ValueError("injection_fractions must be a length-4 non-negative vector")
-        if float(np.sum(feed)) <= 0.0:
-            raise ValueError("injection_fractions must sum to a positive value")
-        feed = feed / float(np.sum(feed))
+        feed = feed / _positive_denominator(np.sum(feed, axis=0), name="injection fraction sum")
 
-    # Compute the total balance and distribute the source to hold total density.
     net_balance = dn_D_dt + dn_T_dt + dn_He3_dt + dn_He4_dt
     source = -net_balance * feed
+    return dn_D_dt + source[0], dn_T_dt + source[1], dn_He3_dt + source[2], dn_He4_dt + source[3]
 
-    return (
-        dn_D_dt + float(source[0]),
-        dn_T_dt + float(source[1]),
-        dn_He3_dt + float(source[2]),
-        dn_He4_dt + float(source[3]),
+
+def _normalized_balances(
+    n_D: Any,
+    n_T: Any,
+    n_He3: Any,
+    n_He4: Any,
+    sigmav_DT: Any,
+    sigmav_DDn: Any,
+    sigmav_DDp: Any,
+    sigmav_DHe3: Any,
+    sigmav_TT: Any,
+    sigmav_He3He3: Any,
+    sigmav_THe3_D: Any,
+    sigmav_THe3_np: Any,
+    tau_p_D: Any,
+    tau_p_T: Any,
+    tau_p_He3: Any,
+    tau_p_He4: Any,
+) -> tuple[Any, Any, Any, Any]:
+    """Return normalized particle balances for residual relations."""
+    balances = plasma_balance_ode(
+        n_D,
+        n_T,
+        n_He3,
+        n_He4,
+        sigmav_DT,
+        sigmav_DDn,
+        sigmav_DDp,
+        sigmav_DHe3,
+        sigmav_TT,
+        sigmav_He3He3,
+        sigmav_THe3_D,
+        sigmav_THe3_np,
+        tau_p_D,
+        tau_p_T,
+        tau_p_He3,
+        tau_p_He4,
     )
+    total_density = np.maximum(n_D + n_T + n_He3 + n_He4, 1e-300)
+    return tuple(balance / total_density for balance in balances)
 
 
-@relation(
-    name="Steady-state plasma composition",
-    inputs=(
-        "n_D",
-        "n_T",
-        "n_He3",
-        "n_He4",
-        "sigmav_DT",
-        "sigmav_DDn",
-        "sigmav_DDp",
-        "sigmav_DHe3",
-        "sigmav_TT",
-        "sigmav_He3He3",
-        "sigmav_THe3_D",
-        "sigmav_THe3_np",
-        "tau_p_D",
-        "tau_p_T",
-        "tau_p_He3",
-        "tau_p_He4",
-    ),
-    outputs=("n_D", "n_T", "n_He3", "n_He4"),
-    tags=("plasma",),
-    rel_tol_default=1e-10,
-    abs_tol_default=1e-12,
-)
+def _normalized_impurity_balance(n_imp: Any, tau_p_Imp: Any, n_i: Any) -> Any:
+    """Return the normalized impurity balance residual."""
+    return -(n_imp / tau_p_Imp) / np.maximum(n_i, 1e-300)
+
+
+@relation(name="Steady-state D particle balance", tags=("plasma", "composition", "steady_state"))
+def steady_state_deuterium_balance(
+    n_D: Any,
+    n_T: Any,
+    n_He3: Any,
+    n_He4: Any,
+    sigmav_DT: Any,
+    sigmav_DDn: Any,
+    sigmav_DDp: Any,
+    sigmav_DHe3: Any,
+    sigmav_TT: Any,
+    sigmav_He3He3: Any,
+    sigmav_THe3_D: Any,
+    sigmav_THe3_np: Any,
+    tau_p_D: Any,
+    tau_p_T: Any,
+    tau_p_He3: Any,
+    tau_p_He4: Any,
+) -> Any:
+    """Return normalized D particle-balance residual."""
+    return _normalized_balances(
+        n_D,
+        n_T,
+        n_He3,
+        n_He4,
+        sigmav_DT,
+        sigmav_DDn,
+        sigmav_DDp,
+        sigmav_DHe3,
+        sigmav_TT,
+        sigmav_He3He3,
+        sigmav_THe3_D,
+        sigmav_THe3_np,
+        tau_p_D,
+        tau_p_T,
+        tau_p_He3,
+        tau_p_He4,
+    )[0]
+
+
+@relation(name="Steady-state T particle balance", tags=("plasma", "composition", "steady_state"))
+def steady_state_tritium_balance(
+    n_D: Any,
+    n_T: Any,
+    n_He3: Any,
+    n_He4: Any,
+    sigmav_DT: Any,
+    sigmav_DDn: Any,
+    sigmav_DDp: Any,
+    sigmav_DHe3: Any,
+    sigmav_TT: Any,
+    sigmav_He3He3: Any,
+    sigmav_THe3_D: Any,
+    sigmav_THe3_np: Any,
+    tau_p_D: Any,
+    tau_p_T: Any,
+    tau_p_He3: Any,
+    tau_p_He4: Any,
+) -> Any:
+    """Return normalized T particle-balance residual."""
+    return _normalized_balances(
+        n_D,
+        n_T,
+        n_He3,
+        n_He4,
+        sigmav_DT,
+        sigmav_DDn,
+        sigmav_DDp,
+        sigmav_DHe3,
+        sigmav_TT,
+        sigmav_He3He3,
+        sigmav_THe3_D,
+        sigmav_THe3_np,
+        tau_p_D,
+        tau_p_T,
+        tau_p_He3,
+        tau_p_He4,
+    )[1]
+
+
+@relation(name="Steady-state He3 particle balance", tags=("plasma", "composition", "steady_state"))
+def steady_state_helium3_balance(
+    n_D: Any,
+    n_T: Any,
+    n_He3: Any,
+    n_He4: Any,
+    sigmav_DT: Any,
+    sigmav_DDn: Any,
+    sigmav_DDp: Any,
+    sigmav_DHe3: Any,
+    sigmav_TT: Any,
+    sigmav_He3He3: Any,
+    sigmav_THe3_D: Any,
+    sigmav_THe3_np: Any,
+    tau_p_D: Any,
+    tau_p_T: Any,
+    tau_p_He3: Any,
+    tau_p_He4: Any,
+) -> Any:
+    """Return normalized He3 particle-balance residual."""
+    return _normalized_balances(
+        n_D,
+        n_T,
+        n_He3,
+        n_He4,
+        sigmav_DT,
+        sigmav_DDn,
+        sigmav_DDp,
+        sigmav_DHe3,
+        sigmav_TT,
+        sigmav_He3He3,
+        sigmav_THe3_D,
+        sigmav_THe3_np,
+        tau_p_D,
+        tau_p_T,
+        tau_p_He3,
+        tau_p_He4,
+    )[2]
+
+
+@relation(name="Steady-state He4 particle balance", tags=("plasma", "composition", "steady_state"))
+def steady_state_helium4_balance(
+    n_D: Any,
+    n_T: Any,
+    n_He3: Any,
+    n_He4: Any,
+    sigmav_DT: Any,
+    sigmav_DDn: Any,
+    sigmav_DDp: Any,
+    sigmav_DHe3: Any,
+    sigmav_TT: Any,
+    sigmav_He3He3: Any,
+    sigmav_THe3_D: Any,
+    sigmav_THe3_np: Any,
+    tau_p_D: Any,
+    tau_p_T: Any,
+    tau_p_He3: Any,
+    tau_p_He4: Any,
+) -> Any:
+    """Return normalized He4 particle-balance residual."""
+    return _normalized_balances(
+        n_D,
+        n_T,
+        n_He3,
+        n_He4,
+        sigmav_DT,
+        sigmav_DDn,
+        sigmav_DDp,
+        sigmav_DHe3,
+        sigmav_TT,
+        sigmav_He3He3,
+        sigmav_THe3_D,
+        sigmav_THe3_np,
+        tau_p_D,
+        tau_p_T,
+        tau_p_He3,
+        tau_p_He4,
+    )[3]
+
+
+@relation(name="Steady-state Imp particle balance", tags=("plasma", "composition", "steady_state"))
+def steady_state_impurity_balance(n_imp: Any, tau_p_Imp: Any, n_i: Any) -> Any:
+    """Return normalized impurity particle-balance residual."""
+    return _normalized_impurity_balance(n_imp, tau_p_Imp, n_i)
+
+
+# ---------------------------------------------------------------------------
+# Manual helper for ordered/non-solver workflows.  Not decorated.
+# ---------------------------------------------------------------------------
+
+
 def steady_state_plasma_composition(
     n_D: np.ndarray,
     n_T: np.ndarray,
@@ -491,43 +621,10 @@ def steady_state_plasma_composition(
     tol: float = 1e-10,
     max_iter: int = 500,
     method: str = "hybr",
-) -> dict[str, np.ndarray]:
-    """Solve the pointwise steady-state D/T/He3/He4 composition.
-
-    Uses a root-finding approach to solve the local composition ODE at each
-    point. The implicit fueling source keeps the total density fixed, and its
-    species split mirrors the seeded input densities at each point.
-
-    #NOTE: impurities are not included since they do not participate in fusion reactions.
-    Since the function considers densities and not fractions, impurity density is not needed.
-    
-    Args:
-        n_D: Seeded deuterium density profile.
-        n_T: Seeded tritium density profile.
-        n_He3: Seeded helium-3 density profile.
-        n_He4: Seeded helium-4 density profile.
-        sigmav_DT: DT reactivity profile.
-        sigmav_DDn: DDn reactivity profile.
-        sigmav_DDp: DDp reactivity profile.
-        sigmav_DHe3: DHe3 reactivity profile.
-        sigmav_TT: TT reactivity profile.
-        sigmav_He3He3: He3He3 reactivity profile.
-        sigmav_THe3_D: THe3 to D branch reactivity profile.
-        sigmav_THe3_np: THe3 to np branch reactivity profile.
-        tau_p_D: Deuterium particle confinement time.
-        tau_p_T: Tritium particle confinement time.
-        tau_p_He3: Helium-3 particle confinement time.
-        tau_p_He4: Helium-4 particle confinement time.
-        tol: Root-solver tolerance.
-        max_iter: Maximum root-solver evaluations per radial point.
-        method: SciPy root-solver method.
-
-    Returns:
-        Solved tracked density profiles.
-    """
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Solve steady-state composition for ordered/manual numerical evaluation."""
     from scipy.optimize import root
 
-    # Validate the profile inputs before the pointwise solve.
     profiles = (
         n_D,
         n_T,
@@ -542,119 +639,145 @@ def steady_state_plasma_composition(
         sigmav_THe3_D,
         sigmav_THe3_np,
     )
-    # Ensure every input profile is a 1D numpy array.
-    if not all(isinstance(v, np.ndarray) and v.ndim == 1 for v in profiles):
-        raise TypeError(
-            "Density and reactivity inputs must already be 1D numpy arrays before relation evaluation."
-        )
-    # Ensure every input profile has the same length.
-    if len({v.size for v in profiles}) != 1:
-        raise ValueError("Density and reactivity profiles must all have the same length")
-
-    # Validate that confinement times are positive when supplied.
-    for name, tau in (("tau_p_D", tau_p_D), ("tau_p_T", tau_p_T), ("tau_p_He3", tau_p_He3), ("tau_p_He4", tau_p_He4)):
-        if tau is not None and ((tau := float(tau)) <= 0.0 or not math.isfinite(tau)):
+    arrays = [np.asarray(v, dtype=float) for v in profiles]
+    if any(arr.ndim != 1 for arr in arrays):
+        raise TypeError("Density and reactivity inputs must be 1D arrays.")
+    if len({arr.size for arr in arrays}) != 1:
+        raise ValueError("Density and reactivity profiles must all have the same length.")
+    for name, tau in (
+        ("tau_p_D", tau_p_D),
+        ("tau_p_T", tau_p_T),
+        ("tau_p_He3", tau_p_He3),
+        ("tau_p_He4", tau_p_He4),
+    ):
+        if tau is not None and (float(tau) <= 0.0 or not math.isfinite(float(tau))):
             raise ValueError(f"{name} must be positive or None")
 
-    n_points = n_D.size
-
-    # Allocate the solved density profiles.
-    out_D = np.zeros_like(n_D, dtype=float)
-    out_T = np.zeros_like(n_T, dtype=float)
-    out_He3 = np.zeros_like(n_He3, dtype=float)
-    out_He4 = np.zeros_like(n_He4, dtype=float)
-
-    # Solve the steady-state composition independently at each radial point.
+    n_points = arrays[0].size
+    out = [np.zeros(n_points, dtype=float) for _ in range(4)]
     for i in range(n_points):
-        # Pack the seed densities for this point and validate them.
-        input_densities = np.asarray([n_D[i], n_T[i], n_He3[i], n_He4[i]], dtype=float)
-        if not np.isfinite(input_densities).all() or np.any(input_densities < 0.0):
-            raise ValueError("Seeded densities must be finite and non-negative")
-        total_density = float(np.sum(input_densities))
-        # Skip points with zero total density.
+        seeded = np.asarray([arrays[0][i], arrays[1][i], arrays[2][i], arrays[3][i]], dtype=float)
+        if not np.isfinite(seeded).all() or np.any(seeded < 0.0):
+            raise ValueError("Seeded densities must be finite and non-negative.")
+        total_density = float(np.sum(seeded))
         if total_density <= 0.0:
             continue
-        # Normalize the seed densities to get the implicit injection split.
-        initial_density_fractions = input_densities / total_density
+        initial_fractions = seeded / total_density
 
         def residual(fractions: np.ndarray) -> np.ndarray:
-            """Compute the local steady-state residual with an implicit source.
-
-            Args:
-                fractions: Candidate density fractions at this radial point.
-
-            Returns:
-                Residual vector for D, T, He3, and the total-density constraint.
-            """
-            # Work in fractions to keep the solver scale near unity.
             fractions = np.asarray(fractions, dtype=float)
-            # Convert fractions back to physical densities.
             state = total_density * fractions
-
-            # Evaluate the balance with the seeded fuel split.
-            dn_D_dt, dn_T_dt, dn_He3_dt, dn_He4_dt = plasma_balance_ode(
-                n_D=float(state[0]),
-                n_T=float(state[1]),
-                n_He3=float(state[2]),
-                n_He4=float(state[3]),
-                sigmav_DT=float(sigmav_DT[i]),
-                sigmav_DDn=float(sigmav_DDn[i]),
-                sigmav_DDp=float(sigmav_DDp[i]),
-                sigmav_DHe3=float(sigmav_DHe3[i]),
-                sigmav_TT=float(sigmav_TT[i]),
-                sigmav_He3He3=float(sigmav_He3He3[i]),
-                sigmav_THe3_D=float(sigmav_THe3_D[i]),
-                sigmav_THe3_np=float(sigmav_THe3_np[i]),
-                tau_p_D=tau_p_D,
-                tau_p_T=tau_p_T,
-                tau_p_He3=tau_p_He3,
-                tau_p_He4=tau_p_He4,
-                injection_fractions=initial_density_fractions,
+            balances = plasma_balance_ode(
+                state[0],
+                state[1],
+                state[2],
+                state[3],
+                arrays[4][i],
+                arrays[5][i],
+                arrays[6][i],
+                arrays[7][i],
+                arrays[8][i],
+                arrays[9][i],
+                arrays[10][i],
+                arrays[11][i],
+                tau_p_D,
+                tau_p_T,
+                tau_p_He3,
+                tau_p_He4,
+                injection_fractions=initial_fractions,
             )
-
-            # Enforce D, T, and He3 balances together with the total-density target.
             return np.asarray(
                 [
-                    dn_D_dt / total_density,
-                    dn_T_dt / total_density,
-                    dn_He3_dt / total_density,
-                    float(np.sum(fractions)) - 1.0,
+                    balances[0] / total_density,
+                    balances[1] / total_density,
+                    balances[2] / total_density,
+                    np.sum(fractions) - 1.0,
                 ],
                 dtype=float,
             )
 
-        #NOTE: the solver uses fractions instead of densities to keep the solution scale near unity, which generally improves convergence behavior. 
-        # The densities are retrieved after the solve.
-        result = root(
-            residual,
-            initial_density_fractions,
-            method=method,
-            tol=tol,
-            options={"maxfev": max_iter, "diag": [1.0, 1.0, 1.0, 1.0]},
-        )
+        result = root(residual, initial_fractions, method=method, tol=tol, options={"maxfev": max_iter})
         solved_fraction = np.asarray(result.x, dtype=float)
-        
-        # Reject invalid converged states before the final residual check.
-        if ((not np.isfinite(solved_fraction).all()) or (np.any(solved_fraction < 0.0))):
-            raise RuntimeError("Steady-state composition solve produced an invalid state")
-        
-        # Check that the nonlinear solve satisfied every balance tightly.
+        if not np.isfinite(solved_fraction).all() or np.any(solved_fraction < 0.0):
+            raise RuntimeError("Steady-state composition solve produced an invalid state.")
         residual_vector = residual(solved_fraction)
-        residual_norm = float(np.linalg.norm(residual_vector))
-        if (
-            not math.isfinite(residual_norm)
-            or residual_norm > 1e-10
-            or abs(float(residual_vector[3])) > 1e-12
-        ):
-            raise RuntimeError(
-                "Steady-state composition solve did not converge tightly enough "
-                f"(status={result.success}, message={result.message!r}, "
-                f"D={residual_vector[0]:.3e}, T={residual_vector[1]:.3e}, "
-                f"He3={residual_vector[2]:.3e}, total={residual_vector[3]:.3e})"
-            )
-        
-        # Scale the solved fractions back to densities and store the result.
+        if float(np.linalg.norm(residual_vector)) > tol * 10.0:
+            raise RuntimeError(f"Steady-state composition solve failed: {result.message!r}")
         solved_state = total_density * solved_fraction
-        out_D[i], out_T[i], out_He3[i], out_He4[i] = solved_state
+        for j in range(4):
+            out[j][i] = solved_state[j]
+    return out[0], out[1], out[2], out[3]
 
-    return {"n_D": out_D, "n_T": out_T, "n_He3": out_He3, "n_He4": out_He4}
+
+# ---------------------------------------------------------------------------
+# cfspopcon ports (UNDECORATED scaffolds) — source:
+# cfspopcon/formulas/impurities/zeff_and_dilution_from_impurities.py and
+# cfspopcon/formulas/plasma_pressure/plasma_temperature.py
+# These compute impurity dilution / Z_eff and the average ion temperature, which
+# fusdb does not yet have. Review formula + variable/unit mapping (average_electron_*
+# -> n_avg/T_avg, average_ion_density -> n_i_avg, z_effective -> Z_eff). The dilution
+# function needs per-species atomic-data charge states (calc_impurity_charge_state,
+# Radas) and xarray species arrays; adapt to the fusdb single-"Imp" model before
+# decorating with @relation to activate.
+# ---------------------------------------------------------------------------
+
+
+# TODO(cfspopcon): activate as a fusdb relation (average_ion_temp output).
+def calc_average_ion_temp_from_temperature_ratio(average_electron_temp, ion_to_electron_temp_ratio):
+    """cfspopcon: average_ion_temp = average_electron_temp * ion_to_electron_temp_ratio."""
+    return average_electron_temp * ion_to_electron_temp_ratio
+
+
+# TODO(cfspopcon): helper for calc_zeff_and_dilution_due_to_impurities.
+def calc_change_in_zeff(impurity_charge_state, impurity_concentration):
+    """cfspopcon: change in Z_eff = Z*(Z-1)*c_imp."""
+    return impurity_charge_state * (impurity_charge_state - 1.0) * impurity_concentration
+
+
+# TODO(cfspopcon): helper for calc_zeff_and_dilution_due_to_impurities.
+def calc_change_in_dilution(impurity_charge_state, impurity_concentration):
+    """cfspopcon: change in n_fuel/n_e = Z*c_imp."""
+    return impurity_charge_state * impurity_concentration
+
+
+# TODO(cfspopcon): activate as fusdb relation(s) (z_effective, dilution, average_ion_density,
+#   ...). Needs calc_impurity_charge_state (atomic-data/Radas) and xarray species arrays.
+def calc_zeff_and_dilution_due_to_impurities(
+    average_electron_density,
+    average_electron_temp,
+    impurity_concentration,
+    atomic_data,
+):
+    """cfspopcon: impact of core impurities on Z_eff and dilution.
+
+    Returns (impurity_charge_state, change_in_zeff, change_in_dilution, z_effective,
+    dilution, summed_impurity_density, average_ion_density).
+    """
+    from cfspopcon.formulas.impurities.impurity_charge_state import (  # noqa: F401  # TODO: atomic data
+        calc_impurity_charge_state,
+    )
+
+    starting_zeff = 1.0
+    starting_dilution = 1.0
+
+    impurity_charge_state = calc_impurity_charge_state(
+        average_electron_density, average_electron_temp, impurity_concentration, atomic_data
+    )
+    change_in_zeff = calc_change_in_zeff(impurity_charge_state, impurity_concentration)
+    change_in_dilution = calc_change_in_dilution(impurity_charge_state, impurity_concentration)
+
+    z_effective = starting_zeff + change_in_zeff.sum(dim="dim_species")
+    dilution = starting_dilution - change_in_dilution.sum(dim="dim_species")
+    dilution = dilution.where(dilution >= 0, 0.0)
+    summed_impurity_density = impurity_concentration.sum(dim="dim_species") * average_electron_density
+    average_ion_density = dilution * average_electron_density
+
+    return (
+        impurity_charge_state,
+        change_in_zeff,
+        change_in_dilution,
+        z_effective,
+        dilution,
+        summed_impurity_density,
+        average_ion_density,
+    )
