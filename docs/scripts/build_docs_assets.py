@@ -8,8 +8,9 @@ docs build. The actual API extraction is left to ``mkdocstrings`` via the
 ``::: module`` stubs emitted here.
 
 The one exception is the embedded figure widgets, which import ``fusdb.plotting``
-to render live figures. That import is wrapped in a best-effort guard so a
-plotting/matplotlib failure degrades to a placeholder instead of failing the
+to render live figures (the interactive reactivity plotter via Bokeh, the
+relation graph via matplotlib). That import is wrapped in a best-effort guard so
+a plotting backend failure degrades to a placeholder instead of failing the
 build.
 
 Generated pages:
@@ -403,20 +404,10 @@ def build_figure_widgets() -> None:
 
 
 def _render_reactivity_widget(title: str) -> str:
-    """Render the fusion-reactivity figure as embeddable HTML."""
-    import matplotlib
+    """Render the interactive Bokeh reactivity plotter as embeddable HTML."""
+    from fusdb.plotting.reactivity_app import render_reactivity_app_html
 
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    from fusdb.plotting import figure_to_html, plot_reactivity
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    plot_reactivity(ax=ax)
-    ax.set_title(title)
-    html = figure_to_html(fig, fmt="svg", title=title)
-    plt.close(fig)
-    return html
+    return render_reactivity_app_html(title=title, num_points=400)
 
 
 def _render_relation_graph_widget(title: str) -> str:
