@@ -4,6 +4,32 @@
 specification, holds variable values and relation-selection settings, and can
 build a `RelationSystem` for numeric evaluation.
 
+## Reactor Data Layout
+
+Each reactor lives in one of these forms:
+
+- `reactors/<reactor_id>/reactor.yaml`
+- `reactors/<reactor_id>.yaml`
+
+High-level structure:
+
+- `metadata`: id/name/year/country/source information
+- `tags`: labels used for relation filtering
+- `solver_tags`: solve mode, verbosity, optional solving order
+- `variables`: scalar/profile variable values and optional solver hints
+
+The generated [reactor YAML reference](reactors/index.md) is built from the
+current files under `reactors/`.
+
+## Loading and Solving
+
+```python
+from fusdb import Reactor
+
+reactor = Reactor.from_yaml("reactors/ARC_V0")
+result = reactor.run()
+```
+
 **Core fields**
 - `name`, `organization`, `country`, `year`, `doi`, `notes`
 - `tags`: tuple of strings used to filter relations

@@ -1,4 +1,4 @@
-# Workflow Playbooks
+# Workflow
 
 Practical workflows for extending and validating relation-driven models.
 

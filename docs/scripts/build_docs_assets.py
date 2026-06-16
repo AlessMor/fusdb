@@ -23,13 +23,15 @@ Generated pages:
   * ``code_docs/reactivity_plotter.html``      -- reactivity figure widget
   * ``code_docs/relations_variables_graph.html`` -- relation/variable graph widget
 
-To extend: map a notebook in ``NOTEBOOK_TARGETS``, or just drop files into
-``src/fusdb``, ``reactors/`` or ``src/fusdb/registry`` -- the API, reactor and
-registry pages are discovered from the filesystem automatically.
+To extend: drop files into ``examples/``, ``src/fusdb``, ``reactors/`` or
+``src/fusdb/registry`` -- the example, API, reactor and registry pages are
+discovered from the filesystem automatically.
 """
 
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 
 import mkdocs_gen_files
@@ -43,19 +45,14 @@ REGISTRY = PKG / "registry"
 REACTORS = ROOT / "reactors"
 README = ROOT / "README.md"
 EXAMPLES = ROOT / "examples"
+BIBLIOGRAPHY = ROOT / "docs" / "bibliography" / "bibliography.bib"
 
 # --- Site layout (docs-relative output paths) -------------------------------
 API_ROOT = Path("code_docs/api")
 REACTOR_ROOT = Path("code_docs/reactors")
-
-# Example notebooks to mirror into the site: source filename -> output path.
-# Notebooks that are missing from ``examples/`` are skipped silently.
-NOTEBOOK_TARGETS = {
-    "reactivity_plots.ipynb": "getting_started/examples/reactivity_plots.ipynb",
-    "tau_E_solver.ipynb": "getting_started/examples/tau_E_solver.ipynb",
-    "relation_graph_generator.ipynb": "code_docs/examples/relation_graph_generator.ipynb",
-    "read_ENDF6-format.ipynb": "code_docs/examples/read_ENDF6-format.ipynb",
-}
+GETTING_STARTED_REACTORS = Path("getting_started/reactors.md")
+GETTING_STARTED_EXAMPLES = Path("getting_started/examples")
+CODE_DOC_EXAMPLES = Path("code_docs/examples")
 
 
 # --- Output + markdown helpers ----------------------------------------------
@@ -140,6 +137,35 @@ def yaml_tables(document: object, *, key_header: str = "Key") -> list[str]:
     return ["_None provided._"]
 
 
+# --- Bibliography -----------------------------------------------------------
+def build_bibliography_index() -> None:
+    """Generate a plain bibliography page without footnote backrefs."""
+    if not BIBLIOGRAPHY.is_file():
+        return
+    try:
+        from pybtex.database import parse_file
+        from pybtex.plugin import find_plugin
+    except Exception:
+        return
+
+    data = parse_file(str(BIBLIOGRAPHY))
+    style = find_plugin("pybtex.style.formatting", "plain")()
+    formatted = style.format_bibliography(data)
+    lines = [
+        "---",
+        "title: Full Bibliography",
+        "---",
+        "",
+        "# Full Bibliography",
+        "",
+    ]
+    for entry in formatted:
+        text = entry.text.render_as("text").strip()
+        lines.append(f"- {md_escape(text)}")
+    lines.append("")
+    _write("bibliography/index.md", "\n".join(lines))
+
+
 # --- Getting Started landing page -------------------------------------------
 def build_getting_started_index() -> None:
     """Generate the Getting Started landing page from the repository README."""
@@ -153,14 +179,78 @@ def build_getting_started_index() -> None:
 
 
 # --- Example notebooks ------------------------------------------------------
-def mirror_notebooks() -> None:
-    """Copy mapped example notebooks into their documentation locations."""
-    for name, target in NOTEBOOK_TARGETS.items():
-        source = EXAMPLES / name
-        if not source.is_file():
-            continue
-        _write(target, source.read_text(encoding="utf-8"))
-        _set_edit(target, source)
+def _iter_example_notebooks() -> list[Path]:
+    """Return every repository example notebook."""
+    return sorted(EXAMPLES.glob("*.ipynb"))
+
+
+def _notebook_title_and_summary(path: Path) -> tuple[str, str]:
+    """Return a notebook title and first markdown-cell summary.
+
+    The summary is the first markdown cell with the top-level title removed, so
+    adding a new notebook automatically gives the examples index useful text.
+    """
+    try:
+        notebook = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return path.stem.replace("_", " ").title(), ""
+
+    first_markdown = next(
+        (
+            "".join(cell.get("source", ""))
+            for cell in notebook.get("cells", [])
+            if cell.get("cell_type") == "markdown"
+        ),
+        "",
+    ).strip()
+    title = path.stem.replace("_", " ").title()
+    body = first_markdown
+    if first_markdown.startswith("#"):
+        lines = first_markdown.splitlines()
+        title = lines[0].lstrip("#").strip() or title
+        body = "\n".join(lines[1:]).strip()
+    summary = re.sub(r"\s+", " ", body).strip()
+    return title, summary
+
+
+def _notebook_index_markdown(notebooks: list[Path], *, target_root: Path) -> str:
+    """Render an automatically discovered notebook index."""
+    rows: list[list[str]] = []
+    for path in notebooks:
+        title, summary = _notebook_title_and_summary(path)
+        rows.append([f"[{md_escape(title)}]({path.name})", md_escape(summary)])
+    return "\n".join(
+        [
+            "---",
+            "title: Notebooks",
+            "---",
+            "",
+            "# Notebooks",
+            "",
+            "Notebook-based exploratory workflows are discovered from `examples/` at build time.",
+            "",
+            *md_table(["Notebook", "Description"], rows),
+            "",
+            "## Local Usage",
+            "",
+            "1. Install Jupyter if needed: `pip install jupyterlab`",
+            "2. Start Jupyter: `python -m jupyter lab`",
+            "3. Open notebooks from the `examples/` folder.",
+            "",
+        ]
+    )
+
+
+def build_notebook_pages() -> None:
+    """Mirror every example notebook and generate notebook indexes."""
+    notebooks = _iter_example_notebooks()
+    for root in (GETTING_STARTED_EXAMPLES, CODE_DOC_EXAMPLES):
+        _write(root / "notebooks.md", _notebook_index_markdown(notebooks, target_root=root))
+        _write(root / ".pages", 'nav:\n  - notebooks.md\n  - "..."\n')
+        for source in notebooks:
+            target = root / source.name
+            _write(target, source.read_text(encoding="utf-8"))
+            _set_edit(target, source)
 
 
 # --- API reference tree -----------------------------------------------------
@@ -351,11 +441,45 @@ def _reactor_index_markdown(reactor_files: list[Path]) -> str:
     return "\n".join(lines)
 
 
+def _reactor_collection_markdown(reactor_files: list[Path]) -> str:
+    """Render the Getting Started reactor collection from YAML files."""
+    lines = [
+        "---",
+        "title: Reactors",
+        "---",
+        "",
+        "# Reactors",
+        "",
+        "Available reactor scenarios are discovered from `reactors/` at build time.",
+        "",
+    ]
+    for path in reactor_files:
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        document = document if isinstance(document, dict) else {}
+        metadata = document.get("metadata") if isinstance(document.get("metadata"), dict) else {}
+        reactor_id = metadata.get("id") or _reactor_id(path)
+        lines += [
+            f"## `{reactor_id}`",
+            "",
+            f"Source: `{path.relative_to(ROOT).as_posix()}`",
+            "",
+        ]
+        for heading, key, header in (
+            ("Metadata", "metadata", "Field"),
+            ("Tags", "tags", "Tag"),
+            ("Solver Tags", "solver_tags", "Key"),
+            ("Variables", "variables", "Variable"),
+        ):
+            lines += [f"### {heading}", "", *yaml_tables(document.get(key), key_header=header), ""]
+    return "\n".join(lines)
+
+
 def build_reactor_reference() -> None:
     """Generate reference tables for the reactor input YAML files."""
     reactor_files = _iter_reactor_yaml()
     if not reactor_files:
         return
+    _write(GETTING_STARTED_REACTORS, _reactor_collection_markdown(reactor_files))
     _write(REACTOR_ROOT / "index.md", _reactor_index_markdown(reactor_files))
     _write(REACTOR_ROOT / ".pages", 'nav:\n  - index.md\n  - "..."\n')
     for path in reactor_files:
@@ -428,7 +552,8 @@ def _render_relation_graph_widget(title: str) -> str:
 
 
 build_getting_started_index()
-mirror_notebooks()
+build_bibliography_index()
+build_notebook_pages()
 build_api_reference()
 build_reactor_reference()
 build_figure_widgets()

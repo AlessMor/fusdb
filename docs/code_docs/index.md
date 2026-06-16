@@ -15,6 +15,12 @@ A [Reactor](reactor_class.md) is an object containing all the information pertai
 
 Reactor can be defined directly as an object or as yaml files. Reactor YAML inputs are summarized in the [Reactor YAML Reference](reactors/index.md). The full reactor library is available in the [`reactors/` folder](https://github.com/AlessMor/fusdb/tree/main/reactors).
 
+## Examples
+
+Example notebooks are summarized in the generated [Examples Reference](examples/notebooks.md).
+The page is built from the current files under `examples/`, so new notebooks are
+listed automatically.
+
 ## Relations, Variables and RelationSystem
 
 Each reactor data is classified as a [Variable](variable_class.md). Since the main scope of `fusdb` is to infer missing data from a reactor and find inconsistencies, the variables are considered as "suggestions" rather than being fixed (unless specified in the reactor file).

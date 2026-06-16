@@ -9,7 +9,7 @@ from .reactor import Reactor
 from .registry import RELATIONS, SPECIES, TAGS, VARIABLES, RelationRegistry, SpeciesRegistry, TagRegistry, VariableRegistry
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Relation:
     """Expose decorated relations as ``fusdb.<function_name>``.
 
     Args:

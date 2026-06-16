@@ -177,14 +177,15 @@ def reactivity_app(
     num_points: int = 1000,
     width: int = 960,
     height: int = 620,
-):
+) -> Any:
     """Return a standalone Bokeh layout for interactive reactivity exploration.
 
     Args:
         x_limits: Initial ion-temperature axis range in keV (log scale).
         y_limits: Initial reactivity axis range in m^3/s (log scale).
         num_points: Samples per curve across ``x_limits``.
-        width, height: Plot size in pixels.
+        width: Plot width in pixels.
+        height: Plot height in pixels.
 
     Returns:
         A Bokeh layout model (embed with :func:`render_reactivity_app_html`).

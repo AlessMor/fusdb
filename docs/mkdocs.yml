@@ -65,11 +65,10 @@ plugins:
       enable_inline_citations: false
 
 hooks:
-  - hooks/status_filter.py
+  - scripts/status_filter.py
 
 not_in_nav: |
   /index.md
-  /getting_started/examples/reactivity_plots.ipynb
   /knowledge_base/_templates/**
 
 markdown_extensions:

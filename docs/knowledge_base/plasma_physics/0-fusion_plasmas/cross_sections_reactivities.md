@@ -45,8 +45,14 @@ Often the particles move with a distribution of relative velocities, $f(v)$
   ></iframe>
 </div>
 
-The implemented reactivity functions relations can be browsed in the
-[API reference](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions)
+The interactive plotter is built from `fusdb.plotting.reactivity`. Every
+reaction and parametrisation in the relation registry is discovered at site
+build time, so new reactivity relations appear automatically. Use the reaction
+and source controls to filter curves, click legend entries to hide individual
+curves, and use the toolbar or explicit axis limits to pan and zoom.
+
+The implemented reactivity relations can be browsed in the
+[reactions API reference](../../../code_docs/api/fusdb/relations/reactions/index.md).
 
 ### Bosch and Hale, 1992
 
@@ -55,12 +61,12 @@ The most renowened analytical fits for fusion relevant applications were defined
 It is implemented in both cfspopcon and PROCESS codes.
 
 In `fusdb`, Bosch-Hale reactivities are available for
-[DT](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DT_BoschHale),
-[DD](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DD_BoschHale),
+[DT](../../../code_docs/api/fusdb/relations/reactions/DT.md#fusdb.relations.reactions.DT.sigmav_DT_BoschHale),
+[DD](../../../code_docs/api/fusdb/relations/reactions/DD.md#fusdb.relations.reactions.DD.sigmav_DD_BoschHale),
 and its two channels:
-[DDn](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DDn_BoschHale),
-[DDp](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DDp_BoschHale),
-[DHe3](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DHe3_BoschHale).
+[DDn](../../../code_docs/api/fusdb/relations/reactions/DD.md#fusdb.relations.reactions.DD.sigmav_DDn_BoschHale),
+[DDp](../../../code_docs/api/fusdb/relations/reactions/DD.md#fusdb.relations.reactions.DD.sigmav_DDp_BoschHale),
+[DHe3](../../../code_docs/api/fusdb/relations/reactions/DHe3.md#fusdb.relations.reactions.DHe3.sigmav_DHe3_BoschHale).
 
 ### NRL plasma formualry, 1972 - ongoing
 
@@ -69,11 +75,11 @@ The NRL plasma formulary [@beresnyak_2023_nrl_plasma_formulary] fits and tabulat
 It also cites a more modern 3-parameters fit [@li_2008].
 
 In `fusdb`, NRL reactivities are available for
-[DT](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DT_NRL),
-[DD](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DD_NRL),
-[DHe3](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DHe3_NRL),
-[TT](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_TT_NRL),
-[THe3](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_NRL).
+[DT](../../../code_docs/api/fusdb/relations/reactions/DT.md#fusdb.relations.reactions.DT.sigmav_DT_NRL),
+[DD](../../../code_docs/api/fusdb/relations/reactions/DD.md#fusdb.relations.reactions.DD.sigmav_DD_NRL),
+[DHe3](../../../code_docs/api/fusdb/relations/reactions/DHe3.md#fusdb.relations.reactions.DHe3.sigmav_DHe3_NRL),
+[TT](../../../code_docs/api/fusdb/relations/reactions/TT.md#fusdb.relations.reactions.TT.sigmav_TT_NRL),
+[THe3](../../../code_docs/api/fusdb/relations/reactions/THe3.md#fusdb.relations.reactions.THe3.sigmav_THe3_NRL).
 
 
 ### ENDF/B, 1966 - ongoing
@@ -81,34 +87,34 @@ In `fusdb`, NRL reactivities are available for
 The Evaluated Nuclear Data File database includes experimental data for several nuclear reactions, including collisions of deuterons, tritons and helium-3 with other light nuclei. The latest release (as of 2026) is ENDF/B-VIII.1 [@nobre_endfb-viii1_2025].
 
 In `fusdb`, ENDF/B reactivities are available for
-[DT](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DT_ENDFB_VIII1),
-[DD](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DD_ENDFB_VIII1) and its channels:
-[DDn](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DDn_ENDFB_VIII1),
-[DDp](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DDp_ENDFB_VIII1),
-[DHe3](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DHe3_ENDFB_VIII1),
-[TT](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_TT_ENDFB_VIII1),
-[He3He3](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_He3He3_ENDFB_VIII1),
-[THe3 total](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_ENDFB_VIII1),
+[DT](../../../code_docs/api/fusdb/relations/reactions/DT.md#fusdb.relations.reactions.DT.sigmav_DT_ENDFB_VIII1),
+[DD](../../../code_docs/api/fusdb/relations/reactions/DD.md#fusdb.relations.reactions.DD.sigmav_DD_ENDFB_VIII1) and its channels:
+[DDn](../../../code_docs/api/fusdb/relations/reactions/DD.md#fusdb.relations.reactions.DD.sigmav_DDn_ENDFB_VIII1),
+[DDp](../../../code_docs/api/fusdb/relations/reactions/DD.md#fusdb.relations.reactions.DD.sigmav_DDp_ENDFB_VIII1),
+[DHe3](../../../code_docs/api/fusdb/relations/reactions/DHe3.md#fusdb.relations.reactions.DHe3.sigmav_DHe3_ENDFB_VIII1),
+[TT](../../../code_docs/api/fusdb/relations/reactions/TT.md#fusdb.relations.reactions.TT.sigmav_TT_ENDFB_VIII1),
+[He3He3](../../../code_docs/api/fusdb/relations/reactions/He3He3.md#fusdb.relations.reactions.He3He3.sigmav_He3He3_ENDFB_VIII1),
+[THe3 total](../../../code_docs/api/fusdb/relations/reactions/THe3.md#fusdb.relations.reactions.THe3.sigmav_THe3_ENDFB_VIII1),
 and branch-resolved
-[THe3_D](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_D_ENDFB_VIII1)
+[THe3_D](../../../code_docs/api/fusdb/relations/reactions/THe3.md#fusdb.relations.reactions.THe3.sigmav_THe3_D_ENDFB_VIII1)
 and
-[THe3_np](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_np_ENDFB_VIII1).
+[THe3_np](../../../code_docs/api/fusdb/relations/reactions/THe3.md#fusdb.relations.reactions.THe3.sigmav_THe3_np_ENDFB_VIII1).
 
 ### Other fits:
 
 In `fusdb`, this currently includes Hively (1977) reactivities:
-[DT Hively](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DT_Hively),
-[DD Hively](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DD_Hively) and its two channels
-[DDn Hively](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DDn_Hively),
-[DDp Hively](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_DDp_Hively),
+[DT Hively](../../../code_docs/api/fusdb/relations/reactions/DT.md#fusdb.relations.reactions.DT.sigmav_DT_Hively),
+[DD Hively](../../../code_docs/api/fusdb/relations/reactions/DD.md#fusdb.relations.reactions.DD.sigmav_DD_Hively) and its two channels
+[DDn Hively](../../../code_docs/api/fusdb/relations/reactions/DD.md#fusdb.relations.reactions.DD.sigmav_DDn_Hively),
+[DDp Hively](../../../code_docs/api/fusdb/relations/reactions/DD.md#fusdb.relations.reactions.DD.sigmav_DDp_Hively),
 [@hively_1977]
 as well as Caughlan and Fowler (1988) reactivities:[@caughlan_fowler_1988]
-[TT CF88](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_TT_CF88),
-[He3He3 CF88](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_He3He3_CF88),
+[TT CF88](../../../code_docs/api/fusdb/relations/reactions/TT.md#fusdb.relations.reactions.TT.sigmav_TT_CF88),
+[He3He3 CF88](../../../code_docs/api/fusdb/relations/reactions/He3He3.md#fusdb.relations.reactions.He3He3.sigmav_He3He3_CF88),
 and
-[THe3 CF88](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_CF88) and its channels:
-[THe3_D CF88](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_D_CF88).
-[THe3_np CF88](../../../code_docs/api/fusdb/relations/reactivities/reactivity_functions.md#fusdb.relations.reactivities.reactivity_functions.sigmav_THe3_np_CF88).
+[THe3 CF88](../../../code_docs/api/fusdb/relations/reactions/THe3.md#fusdb.relations.reactions.THe3.sigmav_THe3_CF88) and its channels:
+[THe3_D CF88](../../../code_docs/api/fusdb/relations/reactions/THe3.md#fusdb.relations.reactions.THe3.sigmav_THe3_D_CF88).
+[THe3_np CF88](../../../code_docs/api/fusdb/relations/reactions/THe3.md#fusdb.relations.reactions.THe3.sigmav_THe3_np_CF88).
 
 ## References and Links:
 
@@ -118,7 +124,7 @@ and
 
 - A comprehensive discussion on the reaction rate is done by Freidberg (2007) [@freidberg_2007]
 
-- ENDF website: [@ENDF]  [https://www.nndc.bnl.gov/endf/](https://www.nndc.bnl.gov/endf/)
+- ENDF website: [https://www.nndc.bnl.gov/endf/](https://www.nndc.bnl.gov/endf/)
 
 ### Bibliography:
 \bibliography

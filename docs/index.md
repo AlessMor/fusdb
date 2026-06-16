@@ -2,42 +2,41 @@
   <div class="home-hero__media" aria-hidden="true"></div>
   <div class="home-hero__veil"></div>
   <div class="home-hero__content">
-    <p class="home-hero__eyebrow">Fusion reactor scenario database and solver</p>
+    <!-- <p class="home-hero__eyebrow">Fusion reactor scenario database and solver</p> -->
     <h1>fusdb</h1>
     <p class="home-hero__lead">
-      Structured reactor inputs, physics relations, and interactive documentation
-      for fusion studies.
+      A user-friendly framework for nuclear fusion reactor studies.
     </p>
-    <div class="home-hero__actions">
+    <!-- <div class="home-hero__actions">
       <a class="md-button md-button--primary" href="getting_started/">Getting Started</a>
       <a class="md-button" href="knowledge_base/">Knowledge Base</a>
       <a class="md-button" href="developers_guide/">Developer's Guide</a>
       <a class="md-button" href="code_docs/">Source Documentation</a>
-    </div>
+    </div> -->
   </div>
 </section>
 
 <div class="home-grid">
   <a class="home-card" href="getting_started/">
-    <span class="home-card__label">Getting Started</span>
+    <span class="home-card__label">🏁 Getting Started</span>
     <strong>Install `fusdb`, load reactors, and use the main tools.</strong>
     <span>Includes the usage guide, reactor browser notebook, and reactivity plotter.</span>
   </a>
 
   <a class="home-card" href="knowledge_base/">
-    <span class="home-card__label">Knowledge Base</span>
+    <span class="home-card__label">📖 Knowledge Base</span>
     <strong>Physics notes, definitions, and modelling context.</strong>
     <span>Published topic pages plus cross-sections and reactivity notes.</span>
   </a>
 
   <a class="home-card" href="developers_guide/">
-    <span class="home-card__label">Developer's Guide</span>
+    <span class="home-card__label">🔧 Developer's Guide</span>
     <strong>Contribution and extension guidance for the project.</strong>
     <span>Main entry page for now, with the section structure ready for future content.</span>
   </a>
 
   <a class="home-card" href="code_docs/">
-    <span class="home-card__label">Source Documentation</span>
+    <span class="home-card__label">🖥️ Source Documentation</span>
     <strong>Code overview pages plus generated API reference.</strong>
     <span>Architecture notes, class docs, and module-level pages built from the source.</span>
   </a>
