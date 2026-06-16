@@ -37,15 +37,14 @@
   </a>
   
   <!-- TODO: add reactors and relationsystem cards -->
-  <a class="home-card" href="getting_started/reactors.md">
+  <a class="home-card" href="getting_started/reactors/">
     <span class="home-card__label">💥 Reactors</span>
     <span></span>
-    
-  <a class="home-card" href="code_docs/relationsystem_class.md">
-    <span class="home-card__label">🌐 RelationSystem</span>
-    <span>The core of FusDB</span>
   </a>
 
+  <a class="home-card" href="code_docs/relationsystem_class/">
+    <span class="home-card__label">🌐 RelationSystem</span>
+    <span>The core of FusDB</span>
   </a>
 </div>
 
