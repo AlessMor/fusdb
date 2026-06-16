@@ -24,7 +24,7 @@ Over time, the project evolved in three directions:
 3. a lightweight knowledge base containing definitions, explanations, assumptions, and references for the quantities and relations it uses.
 
 
-## Installation
+# Installation
 <!-- If the package has been published to PyPI:
 
 ```bash
@@ -43,7 +43,7 @@ pip install -e .
 3. For a local build:
    `mkdocs build -f docs/mkdocs.yml` -->
 
-## Where To Look Next
+# Where To Look Next
 
 - Documentation site: [https://alessmor.github.io/fusdb/](https://alessmor.github.io/fusdb/)
 - Source documentation: [https://alessmor.github.io/fusdb/code_docs/](https://alessmor.github.io/fusdb/code_docs/)
@@ -54,14 +54,14 @@ pip install -e .
 This repository contains code adapted from open-source projects.
 The relevant license notices, source code references are listed below.
 
-## Code adapted from cfspopcon  
+### Code adapted from cfspopcon  
 
 - Repository: https://github.com/cfs-energy/cfspopcon  
 - Copyright notice: Copyright (c) 2023 Commonwealth Fusion Systems
 - License: MIT License
 - Identifier used in the code: # Adapted from cfspopcon; see README.md section "Third-party Notices".
 
-## Code adapted from PROCESS
+### Code adapted from PROCESS
 
 - Repository: https://github.com/ukaea/PROCESS
 - Copyright notice: Copyright (c) 2023 United Kingdom Atomic Energy Authority
