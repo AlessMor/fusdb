@@ -59,12 +59,14 @@ The relevant license notices, source code references are listed below.
 - Repository: https://github.com/cfs-energy/cfspopcon  
 - Copyright notice: Copyright (c) 2023 Commonwealth Fusion Systems
 - License: MIT License
+- Identifier used in the code: # Adapted from cfspopcon; see README.md section "Third-party Notices".
 
 ## Code adapted from PROCESS
 
 - Repository: https://github.com/ukaea/PROCESS
 - Copyright notice: Copyright (c) 2023 United Kingdom Atomic Energy Authority
 - License: MIT License
+- Identifier used in the code: # Adapted from PROCESS; see README.md section "Third-party Notices".
 
 # Use of generative AI disclosure:
 

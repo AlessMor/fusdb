@@ -21,6 +21,7 @@ def neo_alcator_confinement_time(
     n_avg: float, rminor: float, rmajor: float, qstar: float
 ) -> float:
     """Calculate the Nec-Alcator(NA) OH scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -57,6 +58,7 @@ def neo_alcator_confinement_time(
 )
 def mirnov_confinement_time(rminor: float, kappa95: float, I_p: float) -> float:
     """Calculate the Mirnov scaling (H-mode) confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -98,6 +100,7 @@ def merezhkin_muhkovatov_confinement_time(
     ten: float,
 ) -> float:
     """Calculate the Merezhkin-Mukhovatov (MM) OH/L-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -155,6 +158,7 @@ def shimomura_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the  Shimomura (S) optimized H-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -206,6 +210,7 @@ def kaye_goldston_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Kaye-Goldston (KG) L-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -278,6 +283,7 @@ def iter_89p_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the ITER Power scaling - ITER 89-P (L-mode) confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -347,6 +353,7 @@ def iter_89_0_confinement_time(
 ) -> float:
     """Calculate the ITER Offset linear scaling - ITER 89-O (L-mode) confinement
       time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -420,6 +427,7 @@ def rebut_lallia_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Rebut-Lallia offset linear scaling (L-mode) confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -485,6 +493,7 @@ def goldston_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Goldston scaling (L-mode) confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -543,6 +552,7 @@ def t10_confinement_time(
     I_p: float,
 ) -> float:
     """Calculate the T-10 scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -613,6 +623,7 @@ def jaeri_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the JAERI / Odajima-Shimomura L-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -689,6 +700,7 @@ def kaye_big_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Kaye-Big scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -754,6 +766,7 @@ def iter_h90_p_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the ITER H-mode scaling - ITER H90-P confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -818,6 +831,7 @@ def minimum_of_iter_89p_and_iter_89_0_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the minimum of the ITER 89-P and ITER 89-O scalings.
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -882,6 +896,7 @@ def riedel_l_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Riedel scaling (L-mode) confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -942,6 +957,7 @@ def christiansen_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the Christiansen et al scaling (L-mode) confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1003,6 +1019,7 @@ def lackner_gottardi_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Lackner-Gottardi scaling (L-mode) confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1069,6 +1086,7 @@ def neo_kaye_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Neo-Kaye scaling (L-mode) confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1130,6 +1148,7 @@ def riedel_h_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Riedel scaling (H-mode) confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1191,6 +1210,7 @@ def iter_h90_p_amended_confinement_time(
     kappa: float,
 ) -> float:
     """Calculate the amended ITER H90-P confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1244,6 +1264,7 @@ def sudo_et_al_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Sudo et al. scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1295,6 +1316,7 @@ def gyro_reduced_bohm_confinement_time(
     rmajor: float,
 ) -> float:
     """Calculate the Gyro-reduced Bohm scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1346,6 +1368,7 @@ def lackner_gottardi_stellarator_confinement_time(
     q95: float,
 ) -> float:
     """Calculate the Lackner-Gottardi stellarator scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1404,6 +1427,7 @@ def iter_93h_confinement_time(
     kappa: float,
 ) -> float:
     """Calculate the ITER-93H scaling ELM-free confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1468,6 +1492,7 @@ def iter_h97p_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the ELM-free ITER H-mode scaling - ITER H97-P confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1533,6 +1558,7 @@ def iter_h97p_elmy_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the ELMy ITER H-mode scaling - ITER H97-P(y) confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1602,6 +1628,7 @@ def iter_96p_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the ITER-96P (= ITER-97L) L-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1670,6 +1697,7 @@ def valovic_elmy_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Valovic modified ELMy-H mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1728,6 +1756,7 @@ def kaye_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Kaye PPPL Workshop April 1998 L-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1790,6 +1819,7 @@ def iter_pb98py_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the ITERH-PB98P(y) ELMy H-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1848,6 +1878,7 @@ def iter_ipb98y_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the IPB98(y) ELMy H-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1924,6 +1955,7 @@ def iter_ipb98y1_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the IPB98(y,1) ELMy H-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -1999,6 +2031,7 @@ def tau_E_iter_ipb98y2(
     afuel: float,
 ) -> float:
     """Calculate the IPB98(y,2) ELMy H-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2074,6 +2107,7 @@ def iter_ipb98y2_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the IPB98(y,2) ELMy H-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2149,6 +2183,7 @@ def iter_ipb98y3_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the IPB98(y,3) ELMy H-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2224,6 +2259,7 @@ def iter_ipb98y4_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the IPB98(y,4) ELMy H-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2297,6 +2333,7 @@ def iss95_stellarator_confinement_time(
     iotabar: float,
 ) -> float:
     """Calculate the ISS95 stellarator scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2352,6 +2389,7 @@ def iss04_stellarator_confinement_time(
     iotabar: float,
 ) -> float:
     """Calculate the ISS04 stellarator scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2410,6 +2448,7 @@ def ds03_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the DS03 beta-independent H-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2473,6 +2512,7 @@ def murari_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Murari H-mode energy confinement scaling time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2544,6 +2584,7 @@ def petty08_confinement_time(
     aspect: float,
 ) -> float:
     """Calculate the beta independent dimensionless Petty08 confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2618,6 +2659,7 @@ def lang_high_density_confinement_time(
     kappa_ipb: float,
 ) -> float:
     """Calculate the high density relevant confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2692,6 +2734,7 @@ def hubbard_nominal_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Hubbard 2017 I-mode confinement time scaling - nominal
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2741,6 +2784,7 @@ def hubbard_lower_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Hubbard 2017 I-mode confinement time scaling - lower
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2790,6 +2834,7 @@ def hubbard_upper_confinement_time(
     p_plasma_loss: float,
 ) -> float:
     """Calculate the Hubbard 2017 I-mode confinement time scaling - upper
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2843,6 +2888,7 @@ def menard_nstx_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the Menard NSTX ELMy H-mode scaling confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -2920,6 +2966,7 @@ def menard_nstx_petty08_hybrid_confinement_time(
     afuel: float,
 ) -> float:
     """Calculate the Menard NSTX-Petty hybrid confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -3018,6 +3065,7 @@ def nstx_gyro_bohm_confinement_time(
     n_la: float,
 ) -> float:
     """Calculate the NSTX gyro-Bohm confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -3076,6 +3124,7 @@ def itpa20_confinement_time(
     aion: float,
 ) -> float:
     """Calculate the ITPA20 Issue #3164 confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------
@@ -3151,6 +3200,7 @@ def itpa20_il_confinement_time(
     kappa_ipb: float,
 ) -> float:
     """Calculate the ITPA20-IL Issue #1852 confinement time
+    Adapted from PROCESS; see README.md section "Third-party Notices".
 
     Parameters
     ----------

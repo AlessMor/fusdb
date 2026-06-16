@@ -43,6 +43,12 @@ pip-delete-this-directory.txt
 .settings/
 *.sublime-project
 *.sublime-workspace
+.claude/
+
+# Agent/tool local state
+AGENTS.md
+.agents/
+.codex/
 
 # Testing & Coverage
 .tox/
@@ -54,6 +60,7 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+.ruff_cache/
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -82,7 +89,6 @@ Thumbs.db
 # IDE temp files
 .*.swp
 .*.swo
-.codex
 
 # Docs builds
 _build/
