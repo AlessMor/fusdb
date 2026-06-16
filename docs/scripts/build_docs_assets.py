@@ -51,6 +51,7 @@ BIBLIOGRAPHY = ROOT / "docs" / "bibliography" / "bibliography.bib"
 API_ROOT = Path("code_docs/api")
 REACTOR_ROOT = Path("code_docs/reactors")
 GETTING_STARTED_REACTORS = Path("getting_started/reactors.md")
+GETTING_STARTED_REACTORS_SOURCE = ROOT / "docs" / "getting_started" / "reactors.md"
 GETTING_STARTED_EXAMPLES = Path("getting_started/examples")
 CODE_DOC_EXAMPLES = Path("code_docs/examples")
 
@@ -448,16 +449,19 @@ def _reactor_index_markdown(reactor_files: list[Path]) -> str:
 
 def _reactor_collection_markdown(reactor_files: list[Path]) -> str:
     """Render the Getting Started reactor collection from YAML files."""
-    lines = [
-        "---",
-        "title: Reactors",
-        "---",
-        "",
-        "# Reactors",
-        "",
-        "Available reactor scenarios are discovered from `reactors/` at build time.",
-        "",
-    ]
+    if GETTING_STARTED_REACTORS_SOURCE.is_file():
+        lines = GETTING_STARTED_REACTORS_SOURCE.read_text(encoding="utf-8").rstrip().splitlines()
+    else:
+        lines = [
+            "---",
+            "title: Reactors",
+            "---",
+            "",
+            "# Reactors",
+            "",
+            "Available reactor scenarios are discovered from `reactors/` at build time.",
+        ]
+    lines += ["", "## Available Reactors", ""]
     for path in reactor_files:
         document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         document = document if isinstance(document, dict) else {}
