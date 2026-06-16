@@ -8,7 +8,7 @@ I initially began by collecting and structuring functions that I found myself re
 
 Later, during my PhD work, I often had to search through many papers to collect fusion reactor parameters, compare assumptions, and check consistency between sources. This process was time-consuming and difficult to reproduce. So I asked myself:
 > Could I automate the verification of a reactor operating scenario?
-This pushed me to include a way to _verify_ and possibly _reconcile_ a set of parameters defining an operating scenario, similarly to what [PROCESS}(https://github.com/ukaea/PROCESS) does.
+This pushed me to include a way to _verify_ and possibly _reconcile_ a set of parameters defining an operating scenario, similarly to what [PROCESS](https://github.com/ukaea/PROCESS) does.
 
 In the meantime, I was reorganizing my notes on the plasma physics courses I did during my master and PhD, and I wanted to have them all in one place.
 > Can FusDB include the relevant plasma physics background together with the relations it uses?
