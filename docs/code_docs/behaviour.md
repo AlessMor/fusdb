@@ -311,7 +311,7 @@ Stores one scenario.
 - Converts input values to computation units.
 - Expands scalar values to constant profiles when a profile variable is expected and grid size is known.
 - Stores reactor-level constraint strings.
-- Does not compile Pyomo directly except through to_relation_system() or run().
+- Does not compile Pyomo directly except through relation_system() or run().
 
 Example relation section:
 

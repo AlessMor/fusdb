@@ -405,7 +405,7 @@ def build_figure_widgets() -> None:
 
 def _render_reactivity_widget(title: str) -> str:
     """Render the interactive Bokeh reactivity plotter as embeddable HTML."""
-    from fusdb.plotting.reactivity_app import render_reactivity_app_html
+    from fusdb.plotting.reactivity import render_reactivity_app_html
 
     return render_reactivity_app_html(title=title, num_points=400)
 

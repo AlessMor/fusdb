@@ -1,0 +1,1 @@
+"""Fusion power relations."""

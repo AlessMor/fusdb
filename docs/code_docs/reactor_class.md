@@ -33,7 +33,7 @@ reactor = Reactor(
   profile files), and applies registry defaults.
 - `selected_relations(...)` returns the relation list after applying includes,
   excludes, tags, and ordering.
-- `to_relation_system(...)` builds and returns a `RelationSystem` bound to the
+- `relation_system(...)` builds and returns a `RelationSystem` bound to the
   reactor's current variables and selected relations.
 - `run(**kwargs)` convenience wrapper that builds a `RelationSystem` and runs
   the configured `mode`.
@@ -43,7 +43,7 @@ reactor = Reactor(
   `rel_tol`, `fixed`, `size`, and `constraints` entries. Profile files may be
   supplied via `file: path.csv` or `value: path.csv` in YAML; simple numeric
   strings are left to variable coercion.
-- When selected relations require variables that were not provided, `to_relation_system`
+- When selected relations require variables that were not provided, `relation_system`
   will create placeholder `Variable` objects using registry defaults (including
   profile `size` from `grid.size` when available).
 

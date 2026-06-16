@@ -2,7 +2,7 @@
 
 This page embeds an interactive Bokeh plotter of the fusion reactivities
 `⟨σv⟩(T_i)`, built from the `fusdb` reactivity relations by
-`fusdb.plotting.reactivity_app`. Every reaction/parametrisation in the relation
+`fusdb.plotting.reactivity`. Every reaction/parametrisation in the relation
 registry is a curve; all curve data is precomputed at site-build time, then the
 interactivity runs client-side with no Python kernel.
 
@@ -22,6 +22,6 @@ interactivity runs client-side with no Python kernel.
 - To reproduce or customise it in your own code:
 
   ```python
-  from fusdb.plotting.reactivity_app import save_reactivity_app_html
+  from fusdb.plotting.reactivity import save_reactivity_app_html
   save_reactivity_app_html("reactivity.html")   # standalone interactive page
   ```
