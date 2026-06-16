@@ -101,10 +101,11 @@
 }
 
 .home-hero__actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.8rem;
   margin-top: 1.6rem;
+  max-width: 58rem;
 }
 
 .home-hero .md-button {
@@ -112,6 +113,9 @@
   background: rgba(255, 255, 255, 0.08);
   color: #f5fbfb;
   backdrop-filter: blur(12px);
+  min-width: 0;
+  text-align: center;
+  white-space: normal;
 }
 
 .home-hero .md-button--primary {
@@ -201,6 +205,10 @@
 @media screen and (max-width: 59.9375em) {
   .home-grid {
     grid-template-columns: 1fr;
+  }
+
+  .home-hero__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .home-hero {

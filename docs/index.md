@@ -5,17 +5,18 @@
     <!-- <p class="home-hero__eyebrow">Fusion reactor scenario database and solver</p> -->
     <h1>fusdb</h1>
     <p class="home-hero__lead">
-      A user-friendly framework for nuclear fusion reactor studies.
+      A user friendly framework for nuclear fusion reactor studies.
     </p>
-    <!-- <div class="home-hero__actions">
+    <div class="home-hero__actions">
       <a class="md-button md-button--primary" href="getting_started/">Getting Started</a>
       <a class="md-button" href="knowledge_base/">Knowledge Base</a>
       <a class="md-button" href="developers_guide/">Developer's Guide</a>
       <a class="md-button" href="code_docs/">Source Documentation</a>
-    </div> -->
+    </div>
   </div>
 </section>
 
+<!--
 <div class="home-grid">
   <a class="home-card" href="getting_started/">
     <span class="home-card__label">🏁 Getting Started</span>
@@ -41,6 +42,7 @@
     <span>Architecture notes, class docs, and module-level pages built from the source.</span>
   </a>
 </div>
+-->
 
 ## Quick Paths
 

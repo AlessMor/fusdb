@@ -351,7 +351,12 @@ def build_api_reference() -> None:
             continue
         module = _module_name(source)
         page_path = _api_doc_path(source)
-        _write(page_path, f"# `{source.stem}`\n\n`{module}`\n\n::: {module}\n")
+        source_options = (
+            "\n    options:\n      show_source: true"
+            if source.is_relative_to(PKG / "relations")
+            else ""
+        )
+        _write(page_path, f"# `{source.stem}`\n\n`{module}`\n\n::: {module}{source_options}\n")
         _set_edit(page_path, source)
 
     for yaml_path in registry_yaml:
