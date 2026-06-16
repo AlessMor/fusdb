@@ -8,7 +8,6 @@ import numpy as np
 from scipy.optimize import Bounds, NonlinearConstraint, minimize
 
 from . import verify as verify_mode
-from .verify import verify_values
 
 
 def run(
@@ -24,6 +23,10 @@ def run(
     self = system
     result = self._new_result("optimize")
     if self._reject_unknown_options(result, _unused):
+        return result
+    if sense not in {"minimize", "maximize"}:
+        result["errors"].append(f"optimize sense must be 'minimize' or 'maximize', got {sense!r}.")
+        result["termination"] = "invalid options"
         return result
     if objective is None:
         result["errors"].append("optimize requires an objective variable or callable.")

@@ -4,6 +4,7 @@ defaults:
 R:
   aliases:
   - major_radius
+  - rmajor
   default_unit: m
   description:
   - Major radius.
@@ -14,6 +15,7 @@ a:
   aliases:
   - minor_radius
   - r_minor
+  - rminor
   default_unit: m
   description:
   - Minor radius.
@@ -24,6 +26,7 @@ A:
   default_unit: dimensionless
   aliases:
   - aspect_ratio
+  - aspect
   description:
   - Aspect ratio (R/a).
   domain: (0, inf)
@@ -50,6 +53,8 @@ kappa:
   solver_domain: '[0.1, 10]'
   abs_tol: 0.001
 kappa_95:
+  aliases:
+  - kappa95
   default_unit: dimensionless
   description:
   - Elongation at 95% flux surface.
@@ -60,6 +65,7 @@ delta:
   default_unit: dimensionless
   aliases:
   - triangularity
+  - triang
   description:
   - Core triangularity.
   domain: '[-1, 1]'
@@ -155,6 +161,7 @@ B0:
   default_unit: T
   aliases:
   - magnetic_field_on_axis
+  - b_plasma_toroidal_on_axis
   description:
   - Toroidal field on axis.
   domain: (0, inf)
@@ -300,6 +307,7 @@ T_avg:
   aliases:
   - T_e_avg
   - average_electron_temp
+  - ten
   default_unit: keV
   description:
   - Volume-averaged electron temperature.
@@ -462,6 +470,8 @@ sudo_margin:
   - Margin to the Sudo density limit.
   abs_tol: 1.0e+18
 Z_eff:
+  aliases:
+  - zeff
   default_unit: dimensionless
   description:
   - Effective charge.
@@ -897,10 +907,115 @@ P_fus_DHe3_p:
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
+P_fus_He3He3:
+  default_unit: W
+  description:
+  - Total He3-He3 fusion power.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_He3He3_alpha:
+  aliases:
+  - P_alpha_He3He3
+  default_unit: W
+  description:
+  - Alpha power from He3-He3 fusion.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_He3He3_p:
+  aliases:
+  - P_p_He3He3
+  default_unit: W
+  description:
+  - Combined proton power from He3-He3 fusion.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
 P_fus_TT:
   default_unit: W
   description:
   - Total T-T fusion power.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_TT_alpha:
+  aliases:
+  - P_alpha_TT
+  default_unit: W
+  description:
+  - Alpha power from T-T fusion.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_TT_n:
+  default_unit: W
+  description:
+  - Combined neutron power from T-T fusion.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_THe3:
+  default_unit: W
+  description:
+  - Total T-He3 fusion power.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_THe3_D:
+  default_unit: W
+  description:
+  - T-He3 fusion power from the alpha+D branch.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_THe3_D_alpha:
+  aliases:
+  - P_alpha_THe3_D
+  default_unit: W
+  description:
+  - Alpha power from the T-He3 alpha+D branch.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_THe3_D_D:
+  aliases:
+  - P_D_THe3_D
+  default_unit: W
+  description:
+  - Deuteron power from the T-He3 alpha+D branch.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_THe3_np:
+  default_unit: W
+  description:
+  - T-He3 fusion power from the alpha+n+p branch.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_THe3_np_alpha:
+  aliases:
+  - P_alpha_THe3_np
+  default_unit: W
+  description:
+  - Alpha power from the T-He3 alpha+n+p branch.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_THe3_np_n:
+  default_unit: W
+  description:
+  - Neutron power from the T-He3 alpha+n+p branch.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+P_fus_THe3_np_p:
+  aliases:
+  - P_p_THe3_np
+  default_unit: W
+  description:
+  - Proton power from the T-He3 alpha+n+p branch.
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
@@ -1044,6 +1159,8 @@ P_sep_B_over_q95AR:
   domain: '[0, inf)'
   abs_tol: 100000.0
 P_loss:
+  aliases:
+  - p_plasma_loss
   default_unit: W
   description:
   - Power loss across the plasma boundary.
@@ -1111,6 +1228,8 @@ Q_eng:
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
 n_la:
+  aliases:
+  - nd_plasma_electron_line
   default_unit: 1/m^3
   description:
   - Line-averaged electron density.

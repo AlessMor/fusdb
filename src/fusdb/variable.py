@@ -9,7 +9,7 @@ import numpy as np
 
 from .relation import Relation, constraint_from_expression
 from .registry import VARIABLES, convert_value
-from .utils import coerce_numeric_value, parse_constraint_specs, value_in_domain
+from .utils import coerce_numeric_value, coerce_to_shape, parse_constraint_specs, value_in_domain
 
 
 @dataclass
@@ -126,21 +126,10 @@ class Variable:
         """Normalize a canonical-unit value to this variable shape."""
         if value is None:
             return None
-        if self.shape == 1:
-            arr = np.asarray(value, dtype=float)
-            if arr.ndim == 0:
-                return float(arr) if self.size is None else np.full(self.size, float(arr))
-            if arr.ndim == 1:
-                if self.size is None:
-                    self.size = int(arr.shape[0])
-                elif self.size != int(arr.shape[0]):
-                    raise ValueError(f"Variable {self.name!r} size mismatch: {self.size} vs {arr.shape[0]}.")
-                return arr.astype(float)
-            raise ValueError(f"Profile variable {self.name!r} value must be scalar or 1D.")
-        arr = np.asarray(value, dtype=float)
-        if arr.ndim != 0:
-            raise ValueError(f"Scalar variable {self.name!r} value must be scalar.")
-        return float(arr)
+        coerced, self.size = coerce_to_shape(
+            self.name, value, is_profile=self.shape == 1, size=self.size
+        )
+        return coerced
 
     def set_input(self, value: Any) -> None:
         """Set the user/input value in canonical units.

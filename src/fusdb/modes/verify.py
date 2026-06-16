@@ -65,22 +65,4 @@ def run(system: Any, **_options: Any) -> dict[str, Any]:
     self = system
     values = self._values_from_variables(for_solver=True, skip_missing=False)
     certificate = verify_values(self, values, complete=True)
-    result = self._new_result("verify")
-    result.update(
-        {
-            "relation_status": certificate["relation_status"],
-            "residuals": certificate["residuals"].tolist(),
-            "errors": certificate["errors"],
-            "warnings": certificate["warnings"],
-            "variable_status": self._classify_variables(certificate["relation_status"]),
-            "termination": "verification evaluated",
-            "success": bool(certificate["verified"]),
-            "verified": bool(certificate["verified"]),
-            "certificate": {k: v for k, v in certificate.items() if k not in {"residuals", "values"}},
-            "variables": self.variables_by_name,
-            "relations": self.primary_relations,
-            "graph": self.graph,
-            "compiler_report": self.compiler_report,
-        }
-    )
-    return result
+    return self._result_from_certificate("verify", certificate, termination="verification evaluated")

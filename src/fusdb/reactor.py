@@ -221,26 +221,6 @@ class Reactor:
         """
         return RELATIONS.get_filtered_relations(names=self.relation_include, tags=TAGS.expand(self.tags), exclude=self.relation_exclude, order=None)
 
-    def to_relation_system(self, *, targets: Iterable[str] | None = None, solve_for: Iterable[str] | None = None) -> RelationSystem:
-        """Build a RelationSystem for this reactor.
-
-        Args:
-            targets: Optional target variables that anchor graph components.
-            solve_for: Optional variables requested as solution outputs.
-
-        Returns:
-            RelationSystem instance.
-        """
-        return RelationSystem(
-            [var.clone() for var in self.variables.values()],
-            self.relations(),
-            constraints=self.constraints,
-            name=self.name,
-            verbose=self.verbose,
-            targets=targets,
-            solve_for=solve_for,
-        )
-
     def relation_system(self, *, targets: Iterable[str] | None = None, solve_for: Iterable[str] | None = None) -> RelationSystem:
         """Build a RelationSystem for this reactor.
 

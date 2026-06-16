@@ -17,6 +17,7 @@ device:
   - mirror
 
 confinement_mode:
+  - ohmic_mode
   - h_mode
   - l_mode
   - i_mode

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any
+from typing import Any, NamedTuple
 
 import networkx as nx
 import numpy as np
@@ -14,10 +14,25 @@ from scipy.sparse.csgraph import maximum_bipartite_matching
 
 from .relation import Relation, constraint_from_expression
 from .registry import VARIABLES, VariableRegistry
-from .utils import domain_bounds_for_solver, parse_constraint_specs, scipy_bounds, value_in_domain
+from .utils import coerce_to_shape, domain_bounds_for_solver, parse_constraint_specs, scipy_bounds, value_in_domain
 from .variable import Variable
 
 DEFAULT_PROFILE_SIZE = 46
+
+
+class Span(NamedTuple):
+    """Packing span for one free variable in the solver vector.
+
+    Fields mirror the previous 5-tuple ``(name, start, stop, offsets, scales)``
+    so existing positional unpacking continues to work, while named access
+    (``span.offsets``) keeps the many span signatures readable.
+    """
+
+    name: str
+    start: int
+    stop: int
+    offsets: np.ndarray
+    scales: np.ndarray
 
 
 class RelationSystem:
@@ -59,12 +74,31 @@ class RelationSystem:
                 raise ValueError(f"Duplicate variable {var.name!r}.")
             self.variables_by_name[var.name] = var
 
-        # Resolve relation variable names and create system constraints.
-        # A relation whose declared output collapses onto one of its own inputs
-        # after alias resolution (for example ``n_e_avg = n_avg`` when
-        # ``n_e_avg`` is an alias of ``n_avg``) is a tautology for this
-        # registry: it determines nothing, and the acausal seeding would
-        # otherwise "solve" the identity to an arbitrary grid value.
+        # Compilation runs as an ordered sequence of phases; each reads the
+        # state left by earlier phases and writes its own attributes.
+        self._build_candidate_relations(relations, constraints)
+        self._infer_profile_size()
+        self._ensure_rho_grid()
+        self._broadcast_profiles()
+        self._build_profile_shape_controls()
+        self._compile_active_relations()
+        self._register_profile_generators()
+        self._append_active_guards()
+
+        # Do not write relation-derived outputs into Variable.value during compilation.
+        # Missing outputs are completed in local value maps during residual evaluation
+        # and are stored only after a solve/ordered run finishes.
+        self._refresh_scales()
+
+    def _build_candidate_relations(self, relations: Iterable[Relation], constraints: Any) -> None:
+        """Resolve relation variable names and create system constraints.
+
+        A relation whose declared output collapses onto one of its own inputs
+        after alias resolution (for example ``n_e_avg = n_avg`` when
+        ``n_e_avg`` is an alias of ``n_avg``) is a tautology for this
+        registry: it determines nothing, and the acausal seeding would
+        otherwise "solve" the identity to an arbitrary grid value.
+        """
         self.alias_degenerate_reasons: dict[str, str] = {}
         self.candidate_primary_relations = []
         for rel in relations:
@@ -84,7 +118,8 @@ class RelationSystem:
             for index, (text, enforce) in enumerate(parse_constraint_specs(constraints))
         ]
 
-        # Infer one shared profile grid size from the supplied profile metadata.
+    def _infer_profile_size(self) -> None:
+        """Infer one shared profile grid size from the supplied profile metadata."""
         profile_sizes: set[int] = set()
         for var in self.variables:
             if var.shape != 1:
@@ -97,8 +132,11 @@ class RelationSystem:
             raise ValueError(f"Profile sizes are incompatible: {sorted(profile_sizes)}.")
         self.profile_size = next(iter(profile_sizes), DEFAULT_PROFILE_SIZE)
 
-        # Ensure a canonical fixed ``rho`` grid exists whenever profiles or
-        # rho-dependent relations are present.
+    def _ensure_rho_grid(self) -> None:
+        """Ensure a canonical fixed ``rho`` grid exists.
+
+        Created whenever profiles or rho-dependent relations are present.
+        """
         if "rho" in self.variable_registry:
             uses_rho = any("rho" in rel.variables for rel in self.candidate_primary_relations)
             has_profile = any(var.shape == 1 for var in self.variables_by_name.values())
@@ -115,8 +153,11 @@ class RelationSystem:
                         rho.set_input(rho_value)
                     rho.fixed = True
 
-        # Broadcast scalar profile data onto the shared grid and validate
-        # explicitly supplied profile lengths.
+    def _broadcast_profiles(self) -> None:
+        """Broadcast scalar profile data onto the shared grid.
+
+        Also validates explicitly supplied profile lengths.
+        """
         for var in self.variables_by_name.values():
             if var.shape != 1:
                 continue
@@ -135,8 +176,12 @@ class RelationSystem:
                 elif arr.ndim == 1 and arr.shape[0] != var.size:
                     raise ValueError(f"Profile {var.name!r} current length {arr.shape[0]}, expected {var.size}.")
 
-        # Convert supplied fixed profiles into fixed shapes plus scalar average
-        # controls when the registry exposes an average variable.
+    def _build_profile_shape_controls(self) -> None:
+        """Convert supplied fixed profiles into fixed shapes plus scalar averages.
+
+        Builds the shape/average controls used when the registry exposes an
+        average variable for a supplied profile.
+        """
         self.profile_shape_by_name: dict[str, np.ndarray] = {}
         self.profile_average_by_name: dict[str, str] = {}
         self.profile_source_by_name: dict[str, str] = {}
@@ -173,8 +218,13 @@ class RelationSystem:
                 if created_average_input:
                     avg_var.fixed = True
 
-        # Classify usable relations, activate required defaults, and compute the
-        # block/derived-variable plan for execution modes.
+    def _compile_active_relations(self) -> None:
+        """Classify usable relations and compute the block/derived-variable plan.
+
+        Activates the required defaults, partitions the system into decidable
+        and undecidable variables, and writes the active relation set, block
+        cores, derived providers and compiler report consumed by modes.
+        """
         for name in sorted(self.targets | self.solve_for):
             self._ensure_variable_exists(name)
         requested = set(self.targets) | set(self.solve_for)
@@ -283,8 +333,12 @@ class RelationSystem:
             },
         }
 
-        # Register explicit lower-dimensional profile generators as derived
-        # providers and activate any required scalar-average controls.
+    def _register_profile_generators(self) -> None:
+        """Register explicit lower-dimensional profile generators as providers.
+
+        Activates any required scalar-average controls and refreshes the
+        profile-related compiler report views.
+        """
         for rel in list(getattr(self, "relations", ())):
             profile_outputs = [
                 out for out in rel.output_names
@@ -319,8 +373,12 @@ class RelationSystem:
         self.compiler_report["active_variables"] = tuple(sorted(self.active_variable_names))
         self.compiler_report["derived_variables"] = tuple(sorted(self.derived_variable_names))
 
-        # Append active relation guards from relation-local, variable-local, and
-        # system-level constraints.
+    def _append_active_guards(self) -> None:
+        """Append active relation guards and build the relation name index.
+
+        Guards come from relation-local, variable-local, and system-level
+        constraints whose variables are all active.
+        """
         active_names = {rel.name for rel in self.relations}
         active_vars = set(self.active_variable_names)
         for rel in list(self.primary_relations):
@@ -342,11 +400,6 @@ class RelationSystem:
         self.relations_by_name = {
             rel.name: rel for rel in [*self.candidate_primary_relations, *self.system_constraint_relations, *self.relations]
         }
-
-        # Do not write relation-derived outputs into Variable.value during compilation.
-        # Missing outputs are completed in local value maps during residual evaluation
-        # and are stored only after a solve/ordered run finishes.
-        self._refresh_scales()
 
     def _incidence_views(self) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]:
         """Return ``(relation_to_vars, var_to_relations)`` over candidate relations.
@@ -1241,7 +1294,7 @@ class RelationSystem:
         upper = (ub - init) / scale if np.isfinite(ub) else np.inf
         return scale, init, lower, upper, "linear"
 
-    def _pack_free_variables(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[tuple[str, int, int, np.ndarray, np.ndarray]]]:
+    def _pack_free_variables(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Span]]:
         """Pack active non-fixed variables into one scaled vector.
 
         Returns:
@@ -1251,7 +1304,7 @@ class RelationSystem:
         lower: list[float] = []
         upper: list[float] = []
         x_scale: list[float] = []
-        spans: list[tuple[str, int, int, np.ndarray, np.ndarray]] = []
+        spans: list[Span] = []
         transforms: dict[str, str] = {}
         self._uninitialized_free_variables = []
         for name in sorted(self.active_variable_names):
@@ -1287,7 +1340,7 @@ class RelationSystem:
                 scales.append(scale)
                 if transform == "log":
                     transforms[name] = "log"
-            spans.append((name, start, len(x0), np.asarray(offsets, dtype=float), np.asarray(scales, dtype=float)))
+            spans.append(Span(name, start, len(x0), np.asarray(offsets, dtype=float), np.asarray(scales, dtype=float)))
         self._span_transforms = transforms
         return np.asarray(x0), np.asarray(lower), np.asarray(upper), np.asarray(x_scale), spans
 
@@ -1326,7 +1379,7 @@ class RelationSystem:
         result["termination"] = "invalid options"
         return True
 
-    def _values_from_vector(self, x: np.ndarray, spans: list[tuple[str, int, int, np.ndarray, np.ndarray]]) -> dict[str, Any]:
+    def _values_from_vector(self, x: np.ndarray, spans: list[Span]) -> dict[str, Any]:
         """Reconstruct solver values from a packed vector.
 
         Args:
@@ -1651,7 +1704,7 @@ class RelationSystem:
             return {name}
         return {name} | nx.ancestors(graph, name)
 
-    def _build_jac_sparsity(self, spans: list[tuple[str, int, int, np.ndarray, np.ndarray]], reference: Mapping[str, Any] | None = None):
+    def _build_jac_sparsity(self, spans: list[Span], reference: Mapping[str, Any] | None = None):
         """Build conservative residual-variable sparsity for SciPy coloring.
 
         The matrix rows must match the complete least-squares residual vector:
@@ -1773,7 +1826,7 @@ class RelationSystem:
                 rows.append(np.maximum(arr - boundary, 0.0) / tol)
         return np.concatenate(rows) if rows else np.empty(0, dtype=float)
 
-    def _movement_residuals(self, values: Mapping[str, Any], reference: Mapping[str, Any], spans: list[tuple[str, int, int, np.ndarray, np.ndarray]]) -> np.ndarray:
+    def _movement_residuals(self, values: Mapping[str, Any], reference: Mapping[str, Any], spans: list[Span]) -> np.ndarray:
         """Return normalized movement from reference values.
 
         Args:
@@ -1886,27 +1939,14 @@ class RelationSystem:
         if name not in self.variable_registry:
             return value
         spec = self.variable_registry.get(name)
-        arr = np.asarray(value, dtype=float)
-        if np.any(np.isnan(arr)):
-            raise ValueError(f"Variable {name!r} contains nan.")
-        if spec.shape == 0:
-            if arr.ndim == 0:
-                return float(arr)
-            flat = arr.reshape(-1)
-            if flat.size == 1:
-                return float(flat[0])
-            raise ValueError(
-                f"Scalar variable {name!r} received non-scalar value with shape {arr.shape}."
-            )
-        if arr.ndim == 0:
-            size = int(self.variables_by_name.get(name).size or self.profile_size)
-            return np.full(size, float(arr), dtype=float)
-        if arr.ndim != 1:
-            raise ValueError(f"Profile variable {name!r} received non-1D value with shape {arr.shape}.")
-        size = int(self.variables_by_name.get(name).size or self.profile_size)
-        if arr.shape[0] != size:
-            raise ValueError(f"Profile variable {name!r} has length {arr.shape[0]}, expected {size}.")
-        return arr.astype(float, copy=True)
+        size: int | None = None
+        if spec.shape == 1:
+            var = self.variables_by_name.get(name)
+            size = int((var.size if var is not None else None) or self.profile_size)
+        coerced, _size = coerce_to_shape(
+            name, value, is_profile=spec.shape == 1, size=size, squeeze_scalar=True, reject_nan=True
+        )
+        return coerced
 
     def _solver_value(self, name: str, value: Any) -> Any:
         """Convert a public value to canonical solver shape.
@@ -2228,7 +2268,7 @@ class RelationSystem:
             result["errors"].append("Ordered solve block did not verify.")
             return False
 
-        spans: list[tuple[str, int, int, np.ndarray, np.ndarray]] = []
+        spans: list[Span] = []
         x0: list[float] = []
         lower: list[float] = []
         upper: list[float] = []
@@ -2255,7 +2295,7 @@ class RelationSystem:
                 upper.append(hi)
                 offsets.append(offset)
                 scales.append(scale)
-            spans.append((name, start, len(x0), np.asarray(offsets), np.asarray(scales)))
+            spans.append(Span(name, start, len(x0), np.asarray(offsets), np.asarray(scales)))
 
         def block_values(x: np.ndarray) -> dict[str, Any]:
             out = dict(values)
@@ -2340,3 +2380,77 @@ class RelationSystem:
 
     def _new_result(self, mode: str) -> dict[str, Any]:
         return {"mode": mode, "success": False, "termination": "not run", "errors": [], "warnings": [], "compiler_report": getattr(self, "compiler_report", {})}
+
+    def _result_from_certificate(
+        self,
+        mode: str,
+        certificate: Mapping[str, Any],
+        *,
+        termination: str,
+        solver: Mapping[str, Any] | None = None,
+        include_values: bool = False,
+        extra: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build a mode result dict from a verification certificate.
+
+        Shared by verify/reconcile/optimize so the common result shape (status,
+        residuals, certificate, graph and compiler views) is assembled in one
+        place.  ``solver`` and ``values`` are added only when supplied, and
+        ``extra`` overlays any mode-specific keys.
+        """
+        result = self._new_result(mode)
+        result.update(
+            {
+                "relation_status": certificate["relation_status"],
+                "residuals": certificate["residuals"].tolist(),
+                "errors": certificate["errors"],
+                "warnings": certificate["warnings"],
+                "variable_status": self._classify_variables(certificate["relation_status"]),
+                "termination": termination,
+                "success": bool(certificate["verified"]),
+                "verified": bool(certificate["verified"]),
+                "certificate": {k: v for k, v in certificate.items() if k not in {"residuals", "values"}},
+                "variables": self.variables_by_name,
+                "relations": self.primary_relations,
+                "graph": self.graph,
+                "compiler_report": self.compiler_report,
+            }
+        )
+        if include_values:
+            result["values"] = certificate["values"]
+        if solver is not None:
+            result["solver"] = dict(solver)
+        if extra:
+            result.update(extra)
+        return result
+
+    def _solver_report(self, **overrides: Any) -> dict[str, Any]:
+        """Return a solver-metadata block with neutral defaults.
+
+        Modes override only the fields they have; the no-solve paths keep the
+        same key set without hand-writing a full block of zeros.
+        """
+        report: dict[str, Any] = {
+            "backend": "none",
+            "success": True,
+            "status": 0,
+            "cost": 0.0,
+            "optimality": 0.0,
+            "nfev": 0,
+            "message": "",
+            "residual_calls": 0,
+            "residual_eval_time_s": 0.0,
+            "residual_size": 0,
+            "solver_dim": 0,
+            "jac_sparsity_used": False,
+            "jac_sparsity_shape": None,
+            "residual_eval_mean_ms": 0.0,
+            "relation_weight": 0.0,
+            "relation_weight_schedule": [],
+            "phase_schedule": [],
+            "stage_history": [],
+            "movement_weight": 0.0,
+            "initial_guess_variables": 0,
+        }
+        report.update(overrides)
+        return report

@@ -249,6 +249,38 @@ class Relation:
         self._verify_solved_namespace(ns, target)
         return value
 
+    def _scaled_comparison(
+        self,
+        lhs: Any,
+        op: str,
+        rhs: Any,
+        out: str | None,
+        *,
+        scales: Mapping[str, Any] | None,
+        rel_tols: Mapping[str, float] | None,
+        abs_tols: Mapping[str, float] | None,
+    ) -> tuple[bool, np.ndarray, np.ndarray]:
+        """Resolve scale and tolerances for one comparison and evaluate it.
+
+        Shared by ``residual_vector`` and ``verify_status`` so the scale and
+        tolerance derivation lives in one place; returns ``compare_numeric``'s
+        ``(ok, residual, violation)``.
+        """
+        if out is not None and scales is not None:
+            base_scale = scales.get(out, 1.0)
+        else:
+            base_scale = max(safe_max_abs(lhs), safe_max_abs(rhs), 1.0)
+        scale = np.maximum(np.maximum(np.abs(np.asarray(lhs, dtype=float)), np.abs(np.asarray(rhs, dtype=float))), base_scale)
+        if out is not None and rel_tols and out in rel_tols:
+            tol = float(rel_tols[out])
+        else:
+            tol = self._variable_tolerance(out)[0]
+        if out is not None and abs_tols and out in abs_tols:
+            atol = float(abs_tols[out])
+        else:
+            atol = self._variable_tolerance(out)[1]
+        return compare_numeric(lhs, op, rhs, scale=scale, rel_tol=tol, abs_tol=atol)
+
     def residual_vector(
         self,
         ns: Mapping[str, Any],
@@ -272,23 +304,10 @@ class Relation:
         """
         rows: list[np.ndarray] = []
         try:
-            comparisons = self.comparisons(ns)
-            for lhs, op, rhs, out in comparisons:
-                base_scale = 1.0
-                if out is not None and scales is not None:
-                    base_scale = scales.get(out, 1.0)
-                else:
-                    base_scale = max(safe_max_abs(lhs), safe_max_abs(rhs), 1.0)
-                scale = np.maximum(np.maximum(np.abs(np.asarray(lhs, dtype=float)), np.abs(np.asarray(rhs, dtype=float))), base_scale)
-                if out is not None and rel_tols and out in rel_tols:
-                    tol = float(rel_tols[out])
-                else:
-                    tol = self._variable_tolerance(out)[0]
-                if out is not None and abs_tols and out in abs_tols:
-                    atol = float(abs_tols[out])
-                else:
-                    atol = self._variable_tolerance(out)[1]
-                _ok, residual, _violation = compare_numeric(lhs, op, rhs, scale=scale, rel_tol=tol, abs_tol=atol)
+            for lhs, op, rhs, out in self.comparisons(ns):
+                _ok, residual, _violation = self._scaled_comparison(
+                    lhs, op, rhs, out, scales=scales, rel_tols=rel_tols, abs_tols=abs_tols
+                )
                 rows.append(residual.reshape(-1))
             out = np.concatenate(rows) if rows else np.empty(0, dtype=float)
             if not np.all(np.isfinite(out)):
@@ -325,17 +344,9 @@ class Relation:
         ok = True
         try:
             for lhs, op, rhs, out in self.comparisons(ns):
-                if out is not None and rel_tols and out in rel_tols:
-                    tol = float(rel_tols[out])
-                else:
-                    tol = self._variable_tolerance(out)[0]
-                base_scale = scales.get(out, 1.0) if out is not None and scales else max(safe_max_abs(lhs), safe_max_abs(rhs), 1.0)
-                scale = np.maximum(np.maximum(np.abs(np.asarray(lhs, dtype=float)), np.abs(np.asarray(rhs, dtype=float))), base_scale)
-                if out is not None and abs_tols and out in abs_tols:
-                    atol = float(abs_tols[out])
-                else:
-                    atol = self._variable_tolerance(out)[1]
-                passed, residual, violation = compare_numeric(lhs, op, rhs, scale=scale, rel_tol=tol, abs_tol=atol)
+                passed, residual, violation = self._scaled_comparison(
+                    lhs, op, rhs, out, scales=scales, rel_tols=rel_tols, abs_tols=abs_tols
+                )
                 residuals.extend(float(item) for item in residual)
                 if violation.size:
                     max_violation = max(max_violation, float(np.max(violation)))

@@ -40,10 +40,16 @@ class RelationRegistry:
 
     def get(self, name: str) -> Relation:
         """Return one relation by name or decorated function name."""
+        return self._resolve(name)
+
+    def _resolve(self, name: str) -> Relation:
+        """Resolve a relation by user-facing name or decorated function name."""
         text = str(name)
         if text in self._relations:
             return self._relations[text]
-        return self._by_function[text]
+        if text in self._by_function:
+            return self._by_function[text]
+        raise KeyError(f"Unknown relation {name!r}.")
 
     def get_filtered_relations(
         self,
@@ -86,9 +92,8 @@ class RelationRegistry:
 
         selected_by_name = {rel.name: rel for rel in selected}
         for name in include_names:
-            if name not in self._relations:
-                raise KeyError(f"Unknown relation {name!r}.")
-            selected_by_name.setdefault(name, self._relations[name])
+            rel = self._resolve(name)
+            selected_by_name.setdefault(rel.name, rel)
         for name in exclude_set:
             selected_by_name.pop(name, None)
 

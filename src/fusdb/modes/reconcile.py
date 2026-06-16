@@ -58,50 +58,21 @@ def run(
     )
     current_certificate = verify_values(self, current_values, complete=True)
     if bool(current_certificate.get("verified", False)):
-        completed_values = current_certificate["values"]
-        validation = self._new_result(mode)
-        validation.update(
-            {
-                "relation_status": current_certificate["relation_status"],
-                "residuals": current_certificate["residuals"].tolist(),
-                "errors": current_certificate["errors"],
-                "warnings": current_certificate["warnings"],
-                "variable_status": self._classify_variables(current_certificate["relation_status"]),
-                "termination": "already verified; no reconcile solve",
-                "success": True,
-                "verified": True,
-                "certificate": {k: v for k, v in current_certificate.items() if k not in {"residuals", "values"}},
-                "variables": self.variables_by_name,
-                "relations": self.primary_relations,
-                "graph": self.graph,
-                "compiler_report": self.compiler_report,
-                "values": completed_values,
-                "uninitialized_free_variables": [],
-                "solver": {
-                    "backend": "none",
-                    "success": True,
-                    "status": 0,
-                    "cost": 0.0,
-                    "optimality": 0.0,
-                    "nfev": 0,
-                    "message": "already verified; no reconcile solve",
-                    "residual_calls": 0,
-                    "residual_eval_time_s": 0.0,
-                    "residual_size": int(current_certificate["residuals"].size),
-                    "solver_dim": 0,
-                    "jac_sparsity_used": False,
-                    "jac_sparsity_shape": None,
-                    "residual_eval_mean_ms": 0.0,
-                    "relation_weight": float(relation_weight),
-                    "relation_weight_schedule": [],
-                    "phase_schedule": [],
-                    "stage_history": [],
-                    "movement_weight": float(movement_weight),
-                    "initial_guess_variables": int(len(initial_values)),
-                },
-            }
+        solver = self._solver_report(
+            message="already verified; no reconcile solve",
+            residual_size=int(current_certificate["residuals"].size),
+            relation_weight=float(relation_weight),
+            movement_weight=float(movement_weight),
+            initial_guess_variables=int(len(initial_values)),
         )
-        return validation
+        return self._result_from_certificate(
+            mode,
+            current_certificate,
+            termination="already verified; no reconcile solve",
+            solver=solver,
+            include_values=True,
+            extra={"uninitialized_free_variables": []},
+        )
 
     try:
         x0, lower, upper, x_scale, spans = self._pack_free_variables()
@@ -213,9 +184,6 @@ def run(
     solve_result = None
     current_x = np.asarray(x0, dtype=float)
     relation_status: dict[str, dict[str, Any]] = {}
-    residuals = np.empty(0, dtype=float)
-    errors: list[str] = []
-    warnings: list[str] = []
     completed_values: dict[str, Any] = {}
     certificate: dict[str, Any] = {}
     verified = False
@@ -258,7 +226,7 @@ def run(
                 jac_sparsity = sparsity
             solve_result = least_squares(residual_function, current_x, **stage_kwargs)
             current_x = np.asarray(solve_result.x, dtype=float)
-            relation_status, residuals, errors, warnings, verified, completed_values, certificate = verify_candidate(current_x)
+            relation_status, _residuals, _errors, _warnings, verified, completed_values, certificate = verify_candidate(current_x)
             failed_count = sum(
                 1
                 for item in relation_status.values()
@@ -292,47 +260,35 @@ def run(
         result["termination"] = "solver error"
         return result
 
-    validation = self._new_result(mode)
-    validation.update(
-        {
-            "relation_status": relation_status,
-            "residuals": residuals.tolist(),
-            "errors": errors,
-            "warnings": warnings,
-            "variable_status": self._classify_variables(relation_status),
-            "termination": str(solve_result.message),
-            "success": bool(verified),
-            "verified": bool(verified),
-            "certificate": {k: v for k, v in certificate.items() if k not in {"residuals", "values"}},
-            "variables": self.variables_by_name,
-            "relations": self.primary_relations,
-            "graph": self.graph,
-            "compiler_report": self.compiler_report,
-            "values": completed_values,
-            "uninitialized_free_variables": list(getattr(self, "_uninitialized_free_variables", [])),
-            "solver": {
-                "backend": "scipy.optimize.least_squares",
-                "success": bool(solve_result.success),
-                "status": int(getattr(solve_result, "status", 0)),
-                "cost": float(getattr(solve_result, "cost", np.nan)),
-                "optimality": float(getattr(solve_result, "optimality", np.nan)),
-                "nfev": int(getattr(solve_result, "nfev", -1)),
-                "message": str(solve_result.message),
-                "residual_calls": int(residual_calls),
-                "residual_eval_time_s": float(residual_eval_time_s),
-                "residual_size": int(final_probe_size),
-                "solver_dim": int(x0.size),
-                "jac_sparsity_used": bool(jac_sparsity_used),
-                "jac_sparsity_shape": tuple(jac_sparsity.shape) if jac_sparsity is not None else None,
-                "residual_eval_mean_ms": float(1000.0 * residual_eval_time_s / max(residual_calls, 1)),
-                "relation_weight": float(current_relation_weight),
-                "relation_weight_schedule": [float(item) for item in weight_schedule],
-                "phase_schedule": [{"relation_weight": float(rw), "movement_weight": float(mw)} for rw, mw in phase_schedule],
-                "stage_history": stage_history,
-                "movement_weight": float(current_movement_weight),
-                "initial_guess_variables": int(len(initial_values)),
-            },
-        }
+    solver = self._solver_report(
+        backend="scipy.optimize.least_squares",
+        success=bool(solve_result.success),
+        status=int(getattr(solve_result, "status", 0)),
+        cost=float(getattr(solve_result, "cost", np.nan)),
+        optimality=float(getattr(solve_result, "optimality", np.nan)),
+        nfev=int(getattr(solve_result, "nfev", -1)),
+        message=str(solve_result.message),
+        residual_calls=int(residual_calls),
+        residual_eval_time_s=float(residual_eval_time_s),
+        residual_size=int(final_probe_size),
+        solver_dim=int(x0.size),
+        jac_sparsity_used=bool(jac_sparsity_used),
+        jac_sparsity_shape=tuple(jac_sparsity.shape) if jac_sparsity is not None else None,
+        residual_eval_mean_ms=float(1000.0 * residual_eval_time_s / max(residual_calls, 1)),
+        relation_weight=float(current_relation_weight),
+        relation_weight_schedule=[float(item) for item in weight_schedule],
+        phase_schedule=[{"relation_weight": float(rw), "movement_weight": float(mw)} for rw, mw in phase_schedule],
+        stage_history=stage_history,
+        movement_weight=float(current_movement_weight),
+        initial_guess_variables=int(len(initial_values)),
+    )
+    validation = self._result_from_certificate(
+        mode,
+        certificate,
+        termination=str(solve_result.message),
+        solver=solver,
+        include_values=True,
+        extra={"uninitialized_free_variables": list(getattr(self, "_uninitialized_free_variables", []))},
     )
 
     # There is no separate candidate/final variable state. The latest solve output

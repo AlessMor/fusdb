@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from numbers import Real
 from typing import Any
-import math
 import re
 
 import numpy as np
@@ -237,6 +235,55 @@ def coerce_numeric_value(value: Any) -> Any:
         except Exception:
             return value
     return value
+
+
+def coerce_to_shape(
+    name: str,
+    value: Any,
+    *,
+    is_profile: bool,
+    size: int | None,
+    squeeze_scalar: bool = False,
+    reject_nan: bool = False,
+) -> tuple[Any, int | None]:
+    """Coerce a numeric value to a scalar or 1-D profile.
+
+    Shared by ``Variable._normalize_value`` (public/user values) and
+    ``RelationSystem._coerce_to_registry_shape`` (solver namespaces); the
+    flags capture the few rule differences between those callers.
+
+    Args:
+        name: Variable name used in error messages.
+        value: Scalar or array-like numeric value.
+        is_profile: Whether the variable is a 1-D profile (registry shape 1).
+        size: Known profile length, or None to infer it from a 1-D value.
+        squeeze_scalar: Accept a single-element array as a scalar value.
+        reject_nan: Raise when any element is NaN.
+
+    Returns:
+        ``(coerced_value, size)`` with the possibly inferred profile size.
+    """
+    arr = np.asarray(value, dtype=float)
+    if reject_nan and np.any(np.isnan(arr)):
+        raise ValueError(f"Variable {name!r} contains nan.")
+    if not is_profile:
+        if arr.ndim == 0:
+            return float(arr), size
+        flat = arr.reshape(-1)
+        if squeeze_scalar and flat.size == 1:
+            return float(flat[0]), size
+        raise ValueError(f"Scalar variable {name!r} received non-scalar value with shape {arr.shape}.")
+    if arr.ndim == 0:
+        if size is None:
+            return float(arr), None
+        return np.full(int(size), float(arr), dtype=float), size
+    if arr.ndim == 1:
+        if size is None:
+            return arr.astype(float), int(arr.shape[0])
+        if int(size) != int(arr.shape[0]):
+            raise ValueError(f"Variable {name!r} size mismatch: {size} vs {arr.shape[0]}.")
+        return arr.astype(float), size
+    raise ValueError(f"Profile variable {name!r} value must be scalar or 1D.")
 
 
 def compare_numeric(
