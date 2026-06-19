@@ -1,0 +1,1 @@
+"""Tearing stability placeholders."""

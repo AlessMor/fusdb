@@ -82,7 +82,7 @@ def run(
         result["termination"] = "solver error"
         return result
     values = self._values_from_vector(sol.x, spans)
-    completed_values = self._complete_values(dict(values), strict=False)
+    completed_values = self._complete_values(dict(values))
     self._store_solved_values(completed_values)
     validation = verify_mode.run(self)
     validation.update({"mode": "optimize", "termination": str(sol.message), "solver": {"backend": "scipy.optimize.minimize", "success": bool(sol.success), "niter": int(getattr(sol, "nit", -1))}})

@@ -466,8 +466,7 @@ class RelationSystem:
             return None
         spec = self.variable_registry.get(name)
         if getattr(spec, "average_variable", None):
-            candidate = str(spec.average_variable)
-            return self.variable_registry.resolve(candidate) if candidate in self.variable_registry else candidate
+            return self.variable_registry.canonical(str(spec.average_variable))
         alias = f"{name}_avg"
         if alias in self.variable_registry:
             return self.variable_registry.resolve(alias)
@@ -494,12 +493,11 @@ class RelationSystem:
                     return float(trapezoid(arr, x=rho) / width)
         return float(np.mean(arr))
 
-    def _with_profile_values(self, values: dict[str, Any], *, strict: bool) -> dict[str, Any]:
+    def _with_profile_values(self, values: dict[str, Any]) -> dict[str, Any]:
         """Rebuild profile arrays from scalar averages and stored shapes.
 
         Args:
             values: Current scalar/profile namespace.
-            strict: Whether missing average controls should raise.
 
         Returns:
             Namespace with shape-controlled profiles updated.
@@ -517,8 +515,6 @@ class RelationSystem:
             if avg_name is None:
                 continue
             if avg_name not in out or out[avg_name] is None:
-                if strict:
-                    raise ValueError(f"Could not rebuild profile {name!r}; missing average {avg_name!r}.")
                 continue
             avg = float(np.asarray(out[avg_name], dtype=float).reshape(-1)[0])
             out[name] = self._solver_value(name, avg * shape)
@@ -800,7 +796,7 @@ class RelationSystem:
         anchor, so no separate block solver is needed here.
         """
         values = self._values_from_variables(for_solver=True, skip_missing=True, complete=False, use_input_values=True)
-        values = self._with_profile_values(dict(values), strict=False)
+        values = self._with_profile_values(dict(values))
         original = set(values)
         info: dict[str, Any] = {}
         residual_tol = float(residual_tol)
@@ -1051,7 +1047,7 @@ class RelationSystem:
                         ns[produced] = self._solver_value(produced, mapped[produced])
                 except Exception:
                     continue
-            return self._complete_values(ns, strict=False)
+            return self._complete_values(ns)
 
         def residual_from(core_values: Mapping[str, float]) -> np.ndarray:
             ns = namespace_from(core_values)
@@ -1398,7 +1394,7 @@ class RelationSystem:
             else:
                 actual = offsets + scales * local_x
             values[name] = actual.copy() if var.shape == 1 else float(actual[0])
-        return self._complete_values(values, strict=False)
+        return self._complete_values(values)
 
     def _values_from_variables(
         self,
@@ -1428,24 +1424,23 @@ class RelationSystem:
                 continue
             values[name] = self._solver_value(name, value) if for_solver else value
         if for_solver and complete:
-            values = self._complete_values(values, strict=False)
+            values = self._complete_values(values)
         return values
 
-    def _complete_values(self, values: dict[str, Any], *, strict: bool) -> dict[str, Any]:
+    def _complete_values(self, values: dict[str, Any]) -> dict[str, Any]:
         """Apply profile-shape reconstruction and derived providers.
 
         Args:
             values: Current namespace.
-            strict: Whether unresolved providers should raise.
 
         Returns:
             Completed solver namespace.
         """
-        out = self._with_profile_values(values, strict=strict)
-        out = self._with_derived_values(out, strict=strict)
+        out = self._with_profile_values(values)
+        out = self._with_derived_values(out)
         return out
 
-    def _with_derived_values(self, values: dict[str, Any], *, strict: bool) -> dict[str, Any]:
+    def _with_derived_values(self, values: dict[str, Any]) -> dict[str, Any]:
         """Complete a namespace using graph providers and defaults.
 
         Runtime completion is the only place where missing variables may be
@@ -1464,7 +1459,6 @@ class RelationSystem:
 
         out = dict(values)
         active_vars = set(getattr(self, "active_variable_names", ()))
-        unresolved = set(explicit_providers)
 
         def missing(name: str) -> bool:
             return name not in out or out[name] is None
@@ -1476,8 +1470,6 @@ class RelationSystem:
                 eval_values = self._relation_evaluation_values(rel, out)
                 mapped = rel.output_map(rel.evaluate(eval_values))
             except Exception:
-                if strict:
-                    raise
                 return False
             changed_local = False
             for out_name, out_value in mapped.items():
@@ -1490,13 +1482,10 @@ class RelationSystem:
                 try:
                     value = self._solver_value(out_name, out_value)
                 except Exception:
-                    if strict:
-                        raise
                     continue
                 old_missing = missing(out_name)
                 old_value = out.get(out_name, None)
                 out[out_name] = value
-                unresolved.discard(out_name)
                 if old_missing:
                     changed_local = True
                 else:
@@ -1525,19 +1514,6 @@ class RelationSystem:
             if not changed:
                 break
 
-        if strict:
-            missing_explicit = {
-                name: [inp for inp in explicit_providers[name].input_names if missing(inp)]
-                for name in unresolved
-                if missing(name)
-            }
-            missing_active = sorted(name for name in active_vars if missing(name))
-            if missing_explicit or missing_active:
-                raise ValueError(
-                    "Could not complete active graph; "
-                    f"missing explicit providers={missing_explicit}, "
-                    f"missing active variables={missing_active}"
-                )
         return out
 
     def _provider_graph(self) -> nx.DiGraph:
@@ -2200,21 +2176,18 @@ class RelationSystem:
         return int(self.variables_by_name.get(name).size or self.profile_size)
 
     def _resolve_relation_names(self, rel: Relation) -> Relation:
-        inputs = tuple(self.variable_registry.resolve(name) if name in self.variable_registry else name for name in rel.input_names)
-        outputs = tuple(self.variable_registry.resolve(name) if name in self.variable_registry else name for name in rel.output_names)
+        canonical = self.variable_registry.canonical
+        inputs = tuple(canonical(name) for name in rel.input_names)
+        outputs = tuple(canonical(name) for name in rel.output_names)
         if inputs == rel.input_names and outputs == rel.output_names:
             return rel
         return Relation(name=rel.name, func=rel.func, input_names=inputs, outputs=outputs, op=rel.op, rhs=rel.rhs, tags=rel.tags, enforce=rel.enforce, constraints=rel.constraints, source_kind=rel.source_kind, source_name=rel.source_name, constant_names=rel.constant_names, dependency=rel.dependency, function_name=rel.function_name, argument_names=rel.argument_names)
 
     def _resolve_names(self, names: Iterable[str]) -> set[str]:
-        out: set[str] = set()
-        for name in names:
-            text = str(name)
-            out.add(self.variable_registry.resolve(text) if text in self.variable_registry else text)
-        return out
+        return {self.variable_registry.canonical(str(name)) for name in names}
 
     def _ensure_variable_exists(self, raw_name: str) -> Variable:
-        name = self.variable_registry.resolve(raw_name) if raw_name in self.variable_registry else str(raw_name)
+        name = self.variable_registry.canonical(str(raw_name))
         if name in self.variables_by_name:
             return self.variables_by_name[name]
         if name not in self.variable_registry:

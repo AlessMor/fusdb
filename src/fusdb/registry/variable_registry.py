@@ -6,7 +6,6 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
 
 import yaml
 
@@ -100,11 +99,20 @@ class VariableRegistry:
         return cls(specs, rel_tol_default=rel_tol_default)
 
     def resolve(self, name: str) -> str:
-        """Resolve a canonical name or alias."""
+        """Resolve a canonical name or alias. Raises for unknown names."""
         try:
             return self._alias_to_name[str(name)]
         except KeyError as exc:
             raise KeyError(f"Unknown variable {name!r}.") from exc
+
+    def canonical(self, name: str) -> str:
+        """Return the canonical name, or the name unchanged if not a known variable.
+
+        Lenient counterpart to :meth:`resolve`, for boundaries where a name may
+        be a registry variable (canonicalize it) or an ad-hoc/constant name
+        (leave it). Use ``resolve`` when the name must be a registry variable.
+        """
+        return self._alias_to_name.get(str(name), str(name))
 
     def get(self, name: str) -> VariableSpec:
         """Return one variable spec by name or alias."""

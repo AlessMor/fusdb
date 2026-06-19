@@ -215,6 +215,26 @@ q95:
   domain: (0, inf)
   solver_domain: '[1e-12, 50]'
   abs_tol: 0.001
+q_cyl:
+  aliases:
+  - cylindrical_safety_factor
+  - q_cylindrical
+  - q_I
+  default_unit: dimensionless
+  description:
+  - Cylindrical edge safety factor.
+  domain: (0, inf)
+  solver_domain: '[1e-12, 50]'
+  abs_tol: 0.001
+qstar:
+  aliases:
+  - q_star
+  default_unit: dimensionless
+  description:
+  - Equivalent cylindrical edge safety factor.
+  domain: (0, inf)
+  solver_domain: '[1e-12, 50]'
+  abs_tol: 0.001
 q_a:
   default_unit: dimensionless
   description:
@@ -314,6 +334,15 @@ T_avg:
   domain: (0, inf)
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
+T_sep:
+  aliases:
+  - separatrix_electron_temp
+  default_unit: keV
+  description:
+  - Separatrix electron temperature.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, 300]'
+  abs_tol: 0.05
 T_e:
   aliases:
   - T_e_prof
@@ -364,6 +393,13 @@ T_i_peak:
   domain: '[0, inf)'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
+ion_to_electron_temp_ratio:
+  default_unit: dimensionless
+  description:
+  - Ratio of volume-averaged ion temperature to electron temperature.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
 n_avg:
   aliases:
   - n_e_avg
@@ -372,6 +408,15 @@ n_avg:
   description:
   - Volume-averaged electron density.
   domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 1.0e+18
+n_sep:
+  aliases:
+  - separatrix_electron_density
+  default_unit: 1/m^3
+  description:
+  - Separatrix electron density.
+  domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
 n_i_avg:
@@ -472,10 +517,20 @@ sudo_margin:
 Z_eff:
   aliases:
   - zeff
+  - z_effective
   default_unit: dimensionless
   description:
   - Effective charge.
   domain: '[0, inf)'
+  abs_tol: 0.001
+Z_bar:
+  aliases:
+  - mean_ion_charge_state
+  default_unit: dimensionless
+  description:
+  - Mean ion charge state.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 n_D:
   default_unit: 1/m^3
@@ -577,6 +632,59 @@ tau_E:
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.005
+nu_star:
+  default_unit: dimensionless
+  description:
+  - Normalized collisionality.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+nu_ee:
+  default_unit: 1/s
+  description:
+  - Electron-electron collision frequency.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0
+nu_ei:
+  default_unit: 1/s
+  description:
+  - Electron-ion collision frequency.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0
+rho_star:
+  default_unit: dimensionless
+  description:
+  - Normalized gyroradius.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+rho_L:
+  aliases:
+  - larmor_radius
+  - gyroradius
+  - ion_larmor_radius
+  default_unit: m
+  description:
+  - Ion Larmor radius.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-6
+alpha_t:
+  default_unit: dimensionless
+  description:
+  - Turbulence parameter.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+edge_collisionality:
+  default_unit: dimensionless
+  description:
+  - Edge collisionality.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
 tau_p:
   default_unit: s
   description:
@@ -1060,6 +1168,7 @@ P_aux:
   default_unit: W
   aliases:
   - P_auxiliary_absorbed
+  - P_aux_absorbed
   description:
   - Total auxiliary heating power absorbed by the plasma.
   domain: '[0, inf)'
@@ -1106,6 +1215,13 @@ P_wall:
   - Fusion power wall loading.
   domain: '[0, inf)'
   abs_tol: 1000.0
+q_wall:
+  default_unit: W/m^2
+  description:
+  - Neutron wall loading.
+  domain: '[0, inf)'
+  abs_tol: 10
+  solver_domain: '[0, inf)'
 P_NBI:
   default_unit: W
   description:
@@ -1243,6 +1359,9 @@ kappa_ipb:
   abs_tol: 0.001
   solver_domain: '[0.1, 10]'
 afuel:
+  aliases:
+  - average_ion_mass
+  - aion
   default_unit: amu
   description:
   - Average fuel mass number (D/T/He3 only).
@@ -1274,4 +1393,39 @@ density_peaking:
   domain: '[1, inf)'
   solver_domain: '[1, inf)'
   rel_tol: 0.05
+  abs_tol: 0.001
+P_in:
+  default_unit: W
+  description:
+  - Total input heating power.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1000000.0
+P_external:
+  default_unit: W
+  description:
+  - External heating power (input power minus charged-particle fusion power).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1000000.0
+P_aux_launched:
+  default_unit: W
+  description:
+  - Auxiliary heating power launched toward the plasma (before coupling losses).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1000000.0
+fraction_of_external_power_coupled:
+  default_unit: dimensionless
+  description:
+  - Fraction of launched external heating power coupled to (absorbed by) the plasma.
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  abs_tol: 0.001
+iotabar:
+  default_unit: dimensionless
+  description:
+  - Rotational transform (iota-bar) used by stellarator confinement scalings.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001

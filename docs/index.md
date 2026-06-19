@@ -6,7 +6,7 @@
     <h1>fusdb</h1>
     <p class="home-hero__lead">
       A lightweight and extensible database for nucelar fusion data and relations used for reactor analysis.
-    </p>.
+    </p>
   </div>
 </section>
 
@@ -39,12 +39,12 @@
   <!-- TODO: add reactors and relationsystem cards -->
   <a class="home-card" href="getting_started/reactors/">
     <span class="home-card__label">💥 Reactors</span>
-    <span></span>
+    <span>Explore the available reactor data.</span>
   </a>
 
   <a class="home-card" href="code_docs/relationsystem_class/">
     <span class="home-card__label">🌐 RelationSystem</span>
-    <span>The core of FusDB</span>
+    <span>The core of FusDB.</span>
   </a>
 </div>
 

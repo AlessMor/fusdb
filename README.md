@@ -61,13 +61,13 @@ The relevant license notices, source code references are listed below.
 - License: MIT License
 - Identifier used in the code: # Adapted from PROCESS; see README.md section "Third-party Notices".
 
-## Use of generative AI disclosure:
+## Use of generative AI disclosure
 
 FusDB is a personal project, that goes beyond the activities carried out during my PhD.  
 For this reason, I used AI tools to help me during code and drafting, refactoring, documentation and testing.  
 
 Nonetheless, FusDB was reviewed and accepted manually. This is especially true for all physics relations that, whenever possible, are also accompanied by a published reference.
 
-## Applicability of FusDB:
+## Applicability of FusDB
 
 FusDB is meant as a practical tool, not as a scientific source. Results should be checked before being used in analysis.

@@ -1,0 +1,1 @@
+"""Operational temperature limit placeholders."""

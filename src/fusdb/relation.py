@@ -399,9 +399,7 @@ class Relation:
             if text in self.constant_names:
                 out[text] = value
                 continue
-            resolved = text
-            if registry is not None and text in registry:
-                resolved = registry.resolve(text)
+            resolved = registry.canonical(text) if registry is not None else text
             if resolved not in allowed:
                 unknown.append(text)
                 continue

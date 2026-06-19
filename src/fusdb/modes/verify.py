@@ -18,7 +18,7 @@ def verify_values(system: Any, values: Mapping[str, Any], *, complete: bool = Tr
     self = system
     check_values = dict(values)
     if complete:
-        check_values = self._complete_values(check_values, strict=False)
+        check_values = self._complete_values(check_values)
     relation_status, residuals, errors, warnings = self._evaluate_relation_residuals(
         check_values, strict=False, solver_residuals=False
     )

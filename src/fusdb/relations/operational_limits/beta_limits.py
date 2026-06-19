@@ -1,10 +1,10 @@
-"""Operational beta limits."""
-
-from __future__ import annotations
+"""Operational beta limit relations."""
 
 from typing import Any
 
 from fusdb import relation
+
+
 @relation(
     name='Troyon beta limit',
     tags=('plasma', 'tokamak'),
@@ -17,7 +17,6 @@ def troyon_beta_limit(a: float, B0: float, I_p: float) -> Any:
     return 0.028 * I_p_MA / (a * B0)
 
 
-########################################
 @relation(
     name='Troyon margin',
     tags=('plasma', 'tokamak', 'constraint'),

@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 from .relation import Relation, constraint_from_expression
-from .registry import VARIABLES, convert_value
+from .registry import VARIABLES, VariableSpec, convert_value
 from .utils import coerce_numeric_value, coerce_to_shape, parse_constraint_specs, value_in_domain
 
 
@@ -16,10 +16,16 @@ from .utils import coerce_numeric_value, coerce_to_shape, parse_constraint_specs
 class Variable:
     """One active scalar or profile variable.
 
+    A ``Variable`` is its registry :class:`VariableSpec` (the immutable
+    definition: name, aliases, unit, shape, domain, tolerances) plus the
+    per-scenario state (``value``/``input_value``/``fixed``).  Definition
+    metadata is read through ``self.spec``; it is never copied onto the
+    instance, so a variable cannot drift out of sync with its registry.
+
     Args:
         name: Canonical variable name or alias.
         value: Scalar, one-dimensional profile, or None.
-        unit: Unit of ``value``. If omitted, the registry default is assumed.
+        unit: Unit of the supplied ``value``. If omitted, the registry default is assumed.
         rel_tol: Relative tolerance override.
         fixed: Whether solve modes may change this value.
         size: Profile length for one-dimensional variables.
@@ -34,24 +40,29 @@ class Variable:
     fixed: bool = False
     size: int | None = None
     constraints: Any = None
-    aliases: tuple[str, ...] = field(default_factory=tuple, init=False)
-    shape: int = field(default=0, init=False)
+    spec: VariableSpec = field(default=None, init=False)
     input_value: Any = field(default=None, init=False)
     relations: tuple[Relation, ...] = field(default_factory=tuple, init=False)
 
+    @property
+    def aliases(self) -> tuple[str, ...]:
+        """Registry aliases for this variable."""
+        return self.spec.aliases
+
+    @property
+    def shape(self) -> int:
+        """Registry shape: 0 for scalars, 1 for profiles."""
+        return self.spec.shape
+
     def __post_init__(self) -> None:
         """Resolve registry metadata and normalize the value."""
-        spec = VARIABLES.get(self.name)
+        self.spec = spec = VARIABLES.get(self.name)
         self.name = spec.name
-        self.aliases = tuple(spec.aliases)
-        self.shape = spec.shape
         self.rel_tol = spec.rel_tol if self.rel_tol is None else float(self.rel_tol)
         self.abs_tol = spec.abs_tol if self.abs_tol is None else float(self.abs_tol)
-        input_unit = self.unit or spec.unit
         self.value = coerce_numeric_value(self.value)
         if self.value is not None:
-            self.value = convert_value(self.value, from_unit=input_unit, to_unit=spec.unit)
-        self.unit = spec.unit
+            self.value = convert_value(self.value, from_unit=self.unit or spec.unit, to_unit=spec.unit)
         self.input_value = self._copy_value(self.value)
 
         # Validate profile shape and physical domain.
@@ -64,17 +75,7 @@ class Variable:
         if self.value is not None and not value_in_domain(self.value, spec.domain):
             raise ValueError(f"Variable {self.name!r} value is outside domain {spec.domain!r}.")
         if self.shape == 1 and self.value is not None:
-            arr = np.asarray(self.value, dtype=float)
-            if arr.ndim == 0:
-                self.value = float(arr) if self.size is None else np.full(self.size, float(arr))
-            elif arr.ndim == 1:
-                if self.size is None:
-                    self.size = int(arr.shape[0])
-                elif self.size != int(arr.shape[0]):
-                    raise ValueError(f"Variable {self.name!r} size mismatch: {self.size} vs {arr.shape[0]}.")
-                self.value = arr.astype(float)
-            else:
-                raise ValueError(f"Profile variable {self.name!r} value must be scalar or 1D.")
+            self.value, self.size = coerce_to_shape(self.name, self.value, is_profile=True, size=self.size)
 
         # Variable constraints are relation guards attached to the variable.
         built: list[Relation] = []
@@ -112,7 +113,7 @@ class Variable:
         data = {
             "name": self.name,
             "value": self._copy_value(self.input_value),
-            "unit": self.unit,
+            "unit": self.spec.unit,
             "rel_tol": self.rel_tol,
             "abs_tol": self.abs_tol,
             "fixed": self.fixed,
@@ -138,9 +139,8 @@ class Variable:
             value: New canonical-unit value.
         """
         normalized = self._normalize_value(value)
-        spec = VARIABLES.get(self.name)
-        if normalized is not None and not value_in_domain(normalized, spec.domain, zero_tol=0.0):
-            raise ValueError(f"Variable {self.name!r} value is outside domain {spec.domain!r}.")
+        if normalized is not None and not value_in_domain(normalized, self.spec.domain, zero_tol=0.0):
+            raise ValueError(f"Variable {self.name!r} value is outside domain {self.spec.domain!r}.")
         self.input_value = self._copy_value(normalized)
         self.value = self._copy_value(normalized)
 
@@ -151,9 +151,8 @@ class Variable:
             value: New canonical-unit value.
         """
         normalized = self._normalize_value(value)
-        spec = VARIABLES.get(self.name)
-        if normalized is not None and not value_in_domain(normalized, spec.domain, zero_tol=0.0):
-            raise ValueError(f"Variable {self.name!r} value is outside domain {spec.domain!r}.")
+        if normalized is not None and not value_in_domain(normalized, self.spec.domain, zero_tol=0.0):
+            raise ValueError(f"Variable {self.name!r} value is outside domain {self.spec.domain!r}.")
         self.value = self._copy_value(normalized)
 
     def _copy_value(self, value: Any) -> Any:

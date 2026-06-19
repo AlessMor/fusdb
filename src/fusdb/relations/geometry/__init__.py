@@ -1,5 +1,7 @@
-"""Geometry relation helpers."""
+"""Geometry relations."""
 
-# Import plasma_geometry to register decorated relations when geometry is imported first.
-
-from . import plasma_geometry  # noqa: F401
+from .basic_shape import *
+from ..stability.safety_factor import *
+from .sauter_geometry import *
+from .separatrix_shape import *
+from .spherical_tokamak_shape import *

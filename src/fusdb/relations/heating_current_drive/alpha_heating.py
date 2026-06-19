@@ -1,0 +1,1 @@
+"""Alpha-heating relation placeholders."""
