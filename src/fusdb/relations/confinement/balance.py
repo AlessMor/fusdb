@@ -37,3 +37,23 @@ def energy_confinement_balance(W_th: float, P_loss: float, tau_E: float) -> Any:
     rhs = np.asarray(P_loss, dtype=float) * np.asarray(tau_E, dtype=float)
     scale = np.maximum(np.maximum(np.abs(lhs), np.abs(rhs)), 1.0)
     return (lhs - rhs) / scale
+
+
+@relation(
+    name='Thermal stored energy',
+    tags=('plasma',),
+    outputs='W_th',
+)
+def thermal_stored_energy(p_th: float, V_p: float) -> float:
+    """Return thermal stored energy from pressure and plasma volume.
+
+    Args:
+        p_th: Volume-averaged thermal pressure.
+        V_p: Plasma volume.
+
+    Returns:
+        Thermal stored energy.
+    """
+    return 1.5 * p_th * V_p
+
+

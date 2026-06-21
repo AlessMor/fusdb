@@ -86,12 +86,14 @@ def run(
 
     if max_nfev is None:
         # Per-stage budget for one continuation phase.  Trust-region solves on
-        # these systems need roughly O(dim) evaluations to converge, so the
-        # budget scales with the packed dimension with a floor that lets small
-        # well-posed systems finish.  Genuinely inconsistent cases still stop
-        # at the gtol/ftol plateau well before exhausting this budget; callers
-        # can pass max_nfev explicitly to tighten or extend the search.
-        max_nfev = int(min(40, max(15, 3 * int(x0.size))))
+        # these stiff, highly nonlinear systems (reactivity is near-exponential
+        # in temperature) empirically need tens of evaluations per packed
+        # dimension to reach the gtol/ftol plateau, so the budget scales with
+        # dimension with a floor that lets small well-posed systems finish and a
+        # cap that keeps genuinely inconsistent cases from running unbounded.
+        # Such cases still stop at the gtol/ftol plateau well before exhausting
+        # this budget; callers can pass max_nfev explicitly to tighten or extend.
+        max_nfev = int(min(600, max(100, 30 * int(x0.size))))
     if x0.size == 0:
         validation = verify_mode.run(self)
         validation["mode"] = mode

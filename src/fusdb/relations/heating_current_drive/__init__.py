@@ -1,6 +1,5 @@
 """Heating and current-drive relations."""
 
-from .alpha_heating import *
 from .auxiliary import *
 from .bootstrap import *
 from .deposition import *

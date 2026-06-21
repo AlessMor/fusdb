@@ -13,12 +13,17 @@ from fusdb import relation
 def fusion_power_total(
     P_fus_DT: float,
     P_fus_DD: float,
-    P_fus_DHe3: float,
     P_fus_TT: float,
+    P_fus_DHe3: float = 0.0,
     P_fus_He3He3: float = 0.0,
     P_fus_THe3: float = 0.0,
  ) -> Any:
-    """Return total fusion power from all implemented reaction channels."""
+    """Return total fusion power from all implemented reaction channels.
+
+    Only the always-present D/T base channels (DT, DD, TT) are required; the
+    He3-bearing channels are optional and contribute zero when their species
+    are absent and the channel has been pruned from the system.
+    """
     return P_fus_DT + P_fus_DD + P_fus_DHe3 + P_fus_He3He3 + P_fus_THe3 + P_fus_TT
 
 
@@ -32,8 +37,8 @@ def charged_fusion_power(
     P_fus_DDn_He3: float,
     P_fus_DDp_T: float,
     P_fus_DDp_p: float,
-    P_fus_DHe3_alpha: float,
-    P_fus_DHe3_p: float,
+    P_fus_DHe3_alpha: float = 0.0,
+    P_fus_DHe3_p: float = 0.0,
     P_fus_He3He3_alpha: float = 0.0,
     P_fus_He3He3_p: float = 0.0,
     P_fus_THe3_D_alpha: float = 0.0,

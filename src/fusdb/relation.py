@@ -399,7 +399,7 @@ class Relation:
             if text in self.constant_names:
                 out[text] = value
                 continue
-            resolved = registry.canonical(text) if registry is not None else text
+            resolved = registry.resolve(text) if registry is not None and text in registry else text
             if resolved not in allowed:
                 unknown.append(text)
                 continue
@@ -681,6 +681,58 @@ def relation(
     if _func is not None:
         return decorator(_func)
     return decorator
+
+
+def canonicalize_relation_names(rel: "Relation", variable_registry: Any) -> "Relation":
+    """Return ``rel`` with input/output variable names resolved to canonical names.
+
+    Pure canonicalization: aliases are mapped through ``variable_registry`` and a
+    new :class:`Relation` is returned only when a name actually changed.  No
+    validation is performed -- see :func:`canonicalize_relation` for the variant
+    that also rejects alias-degenerate relations.
+    """
+    inputs = tuple(variable_registry.get(name).canonical_name for name in rel.input_names)
+    outputs = tuple(variable_registry.get(name).canonical_name for name in rel.outputs)
+    if inputs == rel.input_names and outputs == rel.outputs:
+        return rel
+    return Relation(
+        name=rel.name,
+        func=rel.func,
+        input_names=inputs,
+        outputs=outputs,
+        op=rel.op,
+        rhs=rel.rhs,
+        tags=rel.tags,
+        enforce=rel.enforce,
+        constraints=rel.constraints,
+        source_kind=rel.source_kind,
+        source_name=rel.source_name,
+        constant_names=rel.constant_names,
+        dependency=rel.dependency,
+        function_name=rel.function_name,
+        argument_names=rel.argument_names,
+    )
+
+
+def canonicalize_relation(rel: "Relation", variable_registry: Any) -> "Relation":
+    """Canonicalize ``rel`` and reject alias-degenerate relations.
+
+    A relation whose declared outputs collapse onto one of its own inputs after
+    alias resolution (for example ``n_e_avg = n_avg`` when ``n_e_avg`` is an
+    alias of ``n_avg``) is a tautology for this registry: it determines nothing,
+    and acausal seeding would otherwise "solve" the identity to an arbitrary
+    value.  Because this depends only on ``(rel, variable_registry)`` and not on
+    any scenario, it is an authoring error and is raised here -- at registry /
+    system build time -- rather than being silently dropped per system.
+    """
+    resolved = canonicalize_relation_names(rel, variable_registry)
+    if resolved.implicit and not rel.implicit:
+        raise ValueError(
+            f"Relation {rel.name!r} is alias-degenerate: declared outputs ("
+            + ", ".join(sorted(rel.outputs))
+            + ") resolve to the same canonical variable as an input."
+        )
+    return resolved
 
 
 _COMPARE_OPS = {ast.Eq: "==", ast.Lt: "<", ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">="}

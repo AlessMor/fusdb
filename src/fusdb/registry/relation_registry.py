@@ -7,26 +7,37 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Iterable
 
-from ..relation import REGISTERED_RELATIONS, Relation
+from ..relation import REGISTERED_RELATIONS, Relation, canonicalize_relation
 from ..utils import normalize_tags
 from .tag_registry import TAGS, TagRegistry
 from .variable_registry import VARIABLES, VariableRegistry
 
 
 class RelationRegistry:
-    """Registry of decorated relations."""
+    """Registry of decorated relations.
 
-    def __init__(self, relations: Iterable[Relation] = ()) -> None:
+    Relations are validated against ``variable_registry`` at build time, so
+    alias-degenerate relations (declared outputs that resolve to one of their own
+    inputs) are rejected here rather than silently dropped when a RelationSystem
+    is later compiled.
+    """
+
+    def __init__(self, relations: Iterable[Relation] = (), *, variable_registry: VariableRegistry = VARIABLES) -> None:
         by_name: dict[str, Relation] = {}
         for rel in relations:
             if rel.name in by_name:
                 raise ValueError(f"Duplicate relation {rel.name!r}.")
+            # Validate against the variable registry (rejects alias-degenerate
+            # relations) but keep the original relation: name canonicalization is
+            # left to RelationSystem, so registry-level filtering semantics are
+            # unchanged.
+            canonicalize_relation(rel, variable_registry)
             by_name[rel.name] = rel
         self._relations = MappingProxyType(by_name)
         self._by_function = MappingProxyType({rel.function_name: rel for rel in by_name.values()})
 
     @classmethod
-    def discover(cls) -> "RelationRegistry":
+    def discover(cls, *, variable_registry: VariableRegistry = VARIABLES) -> "RelationRegistry":
         """Import all modules under ``fusdb.relations`` and collect decorators."""
         package_root = Path(__file__).resolve().parents[1]
         relations_root = package_root / "relations"
@@ -36,7 +47,7 @@ class RelationRegistry:
             rel = path.relative_to(package_root).with_suffix("")
             module = f"fusdb.{'.'.join(rel.parts)}"
             importlib.import_module(module)
-        return cls(REGISTERED_RELATIONS.values())
+        return cls(REGISTERED_RELATIONS.values(), variable_registry=variable_registry)
 
     def get(self, name: str) -> Relation:
         """Return one relation by name or decorated function name."""

@@ -4,6 +4,7 @@ import math
 from typing import Any
 
 import numpy as np
+from scipy.integrate import trapezoid
 
 from fusdb import relation
 from fusdb.registry import (
@@ -142,9 +143,14 @@ def plasma_balance_ode(
     )
 
     total_density = n_D + n_T + n_He3 + n_He4
-    total_density_safe = np.maximum(total_density, 1e-300)
     if injection_fractions is None:
-        feed = np.stack([n_D, n_T, n_He3, n_He4], axis=0) / total_density_safe
+        # Physical fuelling replenishes burned FUEL (D, T) in their current
+        # ratio and never injects ash (He3/He4): injecting ash proportionally
+        # to its own density is a positive feedback that drives the ash
+        # fraction to unity instead of the trace steady state.
+        fuel_total_safe = np.maximum(n_D + n_T, 1e-300)
+        zero = np.zeros_like(np.asarray(n_D, dtype=float))
+        feed = np.stack([n_D / fuel_total_safe, n_T / fuel_total_safe, zero, zero], axis=0)
     else:
         feed = np.asarray(injection_fractions, dtype=float)
         if feed.shape[0] != 4 or not np.isfinite(feed).all() or np.any(feed < 0.0):
@@ -169,12 +175,14 @@ def _normalized_balances(
     sigmav_He3He3: Any,
     sigmav_THe3_D: Any,
     sigmav_THe3_np: Any,
-    tau_p_D: Any,
-    tau_p_T: Any,
-    tau_p_He3: Any,
-    tau_p_He4: Any,
+    tau_p: Any,
 ) -> tuple[Any, Any, Any, Any]:
-    """Return normalized particle balances for residual relations."""
+    """Return normalized particle balances for residual relations.
+
+    A single global particle confinement time ``tau_p`` is applied to every
+    species (uniform confinement); per-species loss could be reintroduced by
+    splitting ``tau_p`` here.
+    """
     balances = plasma_balance_ode(
         n_D,
         n_T,
@@ -188,16 +196,42 @@ def _normalized_balances(
         sigmav_He3He3,
         sigmav_THe3_D,
         sigmav_THe3_np,
-        tau_p_D,
-        tau_p_T,
-        tau_p_He3,
-        tau_p_He4,
+        tau_p,
+        tau_p,
+        tau_p,
+        tau_p,
     )
     total_density = np.maximum(n_D + n_T + n_He3 + n_He4, 1e-300)
     return tuple(balance / total_density for balance in balances)
 
 
-@relation(name="Steady-state D particle balance", tags=("plasma", "composition", "steady_state"))
+def _integrated_balances(rho: Any, *balance_args: Any) -> tuple[float, float, float, float]:
+    """Return the rho-integrated normalized particle balances (one scalar each).
+
+    The steady-state balance is a relation between profiles, but the species
+    are parameterized by scalar fractions (a profile of fixed shape ``n_i`` times
+    a scalar ``f_X``).  The meaningful residual is therefore the profile reduced
+    to its single free degree of freedom: the line-average over the ``rho`` grid,
+    using the same trapezoid convention profiles use for their average.  This
+    yields one scalar residual per species, matched to the scalar fraction it
+    constrains, instead of an over-weighted bundle of per-point residuals that no
+    scalar fraction can zero everywhere.
+    """
+    balances = _normalized_balances(*balance_args)
+    rho_arr = np.asarray(rho, dtype=float).reshape(-1)
+    if rho_arr.size <= 1:
+        return tuple(float(np.asarray(b, dtype=float).reshape(-1)[0]) for b in balances)
+    width = float(rho_arr[-1] - rho_arr[0]) or 1.0
+    out: list[float] = []
+    for b in balances:
+        arr = np.asarray(b, dtype=float).reshape(-1)
+        if arr.size != rho_arr.size:
+            arr = np.full(rho_arr.size, float(arr[0]))
+        out.append(float(trapezoid(arr, x=rho_arr) / width))
+    return tuple(out)
+
+
+@relation(name="Steady-state D particle balance", tags=("plasma", "composition"))
 def steady_state_deuterium_balance(
     n_D: Any,
     n_T: Any,
@@ -211,13 +245,12 @@ def steady_state_deuterium_balance(
     sigmav_He3He3: Any,
     sigmav_THe3_D: Any,
     sigmav_THe3_np: Any,
-    tau_p_D: Any,
-    tau_p_T: Any,
-    tau_p_He3: Any,
-    tau_p_He4: Any,
+    tau_p: Any,
+    rho: Any,
 ) -> Any:
-    """Return normalized D particle-balance residual."""
-    return _normalized_balances(
+    """Return rho-integrated D particle-balance residual."""
+    return _integrated_balances(
+        rho,
         n_D,
         n_T,
         n_He3,
@@ -230,14 +263,11 @@ def steady_state_deuterium_balance(
         sigmav_He3He3,
         sigmav_THe3_D,
         sigmav_THe3_np,
-        tau_p_D,
-        tau_p_T,
-        tau_p_He3,
-        tau_p_He4,
+        tau_p,
     )[0]
 
 
-@relation(name="Steady-state T particle balance", tags=("plasma", "composition", "steady_state"))
+@relation(name="Steady-state T particle balance", tags=("plasma", "composition"))
 def steady_state_tritium_balance(
     n_D: Any,
     n_T: Any,
@@ -251,13 +281,12 @@ def steady_state_tritium_balance(
     sigmav_He3He3: Any,
     sigmav_THe3_D: Any,
     sigmav_THe3_np: Any,
-    tau_p_D: Any,
-    tau_p_T: Any,
-    tau_p_He3: Any,
-    tau_p_He4: Any,
+    tau_p: Any,
+    rho: Any,
 ) -> Any:
-    """Return normalized T particle-balance residual."""
-    return _normalized_balances(
+    """Return rho-integrated T particle-balance residual."""
+    return _integrated_balances(
+        rho,
         n_D,
         n_T,
         n_He3,
@@ -270,14 +299,11 @@ def steady_state_tritium_balance(
         sigmav_He3He3,
         sigmav_THe3_D,
         sigmav_THe3_np,
-        tau_p_D,
-        tau_p_T,
-        tau_p_He3,
-        tau_p_He4,
+        tau_p,
     )[1]
 
 
-@relation(name="Steady-state He3 particle balance", tags=("plasma", "composition", "steady_state"))
+@relation(name="Steady-state He3 particle balance", tags=("plasma", "composition"))
 def steady_state_helium3_balance(
     n_D: Any,
     n_T: Any,
@@ -291,13 +317,12 @@ def steady_state_helium3_balance(
     sigmav_He3He3: Any,
     sigmav_THe3_D: Any,
     sigmav_THe3_np: Any,
-    tau_p_D: Any,
-    tau_p_T: Any,
-    tau_p_He3: Any,
-    tau_p_He4: Any,
+    tau_p: Any,
+    rho: Any,
 ) -> Any:
-    """Return normalized He3 particle-balance residual."""
-    return _normalized_balances(
+    """Return rho-integrated He3 particle-balance residual."""
+    return _integrated_balances(
+        rho,
         n_D,
         n_T,
         n_He3,
@@ -310,14 +335,11 @@ def steady_state_helium3_balance(
         sigmav_He3He3,
         sigmav_THe3_D,
         sigmav_THe3_np,
-        tau_p_D,
-        tau_p_T,
-        tau_p_He3,
-        tau_p_He4,
+        tau_p,
     )[2]
 
 
-@relation(name="Steady-state He4 particle balance", tags=("plasma", "composition", "steady_state"))
+@relation(name="Steady-state He4 particle balance", tags=("plasma", "composition"))
 def steady_state_helium4_balance(
     n_D: Any,
     n_T: Any,
@@ -331,13 +353,12 @@ def steady_state_helium4_balance(
     sigmav_He3He3: Any,
     sigmav_THe3_D: Any,
     sigmav_THe3_np: Any,
-    tau_p_D: Any,
-    tau_p_T: Any,
-    tau_p_He3: Any,
-    tau_p_He4: Any,
+    tau_p: Any,
+    rho: Any,
 ) -> Any:
-    """Return normalized He4 particle-balance residual."""
-    return _normalized_balances(
+    """Return rho-integrated He4 particle-balance residual."""
+    return _integrated_balances(
+        rho,
         n_D,
         n_T,
         n_He3,
@@ -350,10 +371,7 @@ def steady_state_helium4_balance(
         sigmav_He3He3,
         sigmav_THe3_D,
         sigmav_THe3_np,
-        tau_p_D,
-        tau_p_T,
-        tau_p_He3,
-        tau_p_He4,
+        tau_p,
     )[3]
 
 
@@ -370,10 +388,7 @@ def steady_state_plasma_composition(
     sigmav_He3He3: np.ndarray,
     sigmav_THe3_D: np.ndarray,
     sigmav_THe3_np: np.ndarray,
-    tau_p_D: float | None,
-    tau_p_T: float | None,
-    tau_p_He3: float | None,
-    tau_p_He4: float | None,
+    tau_p: float | None,
     *,
     tol: float = 1e-10,
     max_iter: int = 500,
@@ -401,14 +416,8 @@ def steady_state_plasma_composition(
         raise TypeError("Density and reactivity inputs must be 1D arrays.")
     if len({arr.size for arr in arrays}) != 1:
         raise ValueError("Density and reactivity profiles must all have the same length.")
-    for name, tau in (
-        ("tau_p_D", tau_p_D),
-        ("tau_p_T", tau_p_T),
-        ("tau_p_He3", tau_p_He3),
-        ("tau_p_He4", tau_p_He4),
-    ):
-        if tau is not None and (float(tau) <= 0.0 or not math.isfinite(float(tau))):
-            raise ValueError(f"{name} must be positive or None")
+    if tau_p is not None and (float(tau_p) <= 0.0 or not math.isfinite(float(tau_p))):
+        raise ValueError("tau_p must be positive or None")
 
     n_points = arrays[0].size
     out = [np.zeros(n_points, dtype=float) for _ in range(4)]
@@ -437,11 +446,10 @@ def steady_state_plasma_composition(
                 arrays[9][i],
                 arrays[10][i],
                 arrays[11][i],
-                tau_p_D,
-                tau_p_T,
-                tau_p_He3,
-                tau_p_He4,
-                injection_fractions=initial_fractions,
+                tau_p,
+                tau_p,
+                tau_p,
+                tau_p,
             )
             return np.asarray(
                 [

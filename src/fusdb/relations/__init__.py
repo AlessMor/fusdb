@@ -1,6 +1,5 @@
 """Relation modules grouped by plasma physics domain."""
 
-from .nofit import *
 from .composition import *
 from .confinement import *
 from .current_flux import *

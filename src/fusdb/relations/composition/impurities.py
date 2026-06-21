@@ -28,18 +28,6 @@ def impurity_density_from_ion_density_and_fraction(n_i: Any, f_Imp: Any) -> Any:
     """Return impurity density from total ion density and impurity fraction."""
     return n_i * f_Imp
 
-
-def _normalized_impurity_balance(n_imp: Any, tau_p_Imp: Any, n_i: Any) -> Any:
-    """Return the normalized impurity balance residual."""
-    return -(n_imp / tau_p_Imp) / np.maximum(n_i, 1e-300)
-
-
-@relation(name="Steady-state Imp particle balance", tags=("plasma", "composition", "steady_state"))
-def steady_state_impurity_balance(n_imp: Any, tau_p_Imp: Any, n_i: Any) -> Any:
-    """Return normalized impurity particle-balance residual."""
-    return _normalized_impurity_balance(n_imp, tau_p_Imp, n_i)
-
-
 def calc_change_in_zeff(impurity_charge_state, impurity_concentration):
     """cfspopcon: change in Z_eff = Z*(Z-1)*c_imp."""
     return impurity_charge_state * (impurity_charge_state - 1.0) * impurity_concentration

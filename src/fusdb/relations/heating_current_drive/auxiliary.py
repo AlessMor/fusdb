@@ -13,7 +13,7 @@ from fusdb import relation
 def auxiliary_power_from_sources(P_NBI: float, P_ICRF: float, P_LHCD: float) -> Any:
     """Return total auxiliary power from injected sources.
     # TODO: check if additional power sources should be included here (e.g. ECRH, EBW,...).
-    Adapted from cfspopcon; see README.md section "Third-party Notices"."""
+    """
     return P_NBI + P_ICRF + P_LHCD
 
 

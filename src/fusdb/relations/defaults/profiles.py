@@ -66,27 +66,9 @@ def default_ion_temperature_average_from_plasma_average_temperature(T_avg: float
 
 
 @relation(
-    name="Default electron temperature average from plasma average temperature",
-    tags=("default", "plasma", "profile", "tokamak", "stellarator", "mirror"),
-    outputs="T_e_avg",
-)
-def default_electron_temperature_average_from_plasma_average_temperature(T_avg: float) -> float:
-    return T_avg
-
-
-@relation(
     name="Default ion density average from plasma average density",
     tags=("default", "plasma", "profile", "tokamak", "stellarator", "mirror"),
     outputs="n_i_avg",
 )
 def default_ion_density_average_from_plasma_average_density(n_avg: float) -> float:
-    return n_avg
-
-
-@relation(
-    name="Default electron density average from plasma average density",
-    tags=("default", "plasma", "profile", "tokamak", "stellarator", "mirror"),
-    outputs="n_e_avg",
-)
-def default_electron_density_average_from_plasma_average_density(n_avg: float) -> float:
     return n_avg

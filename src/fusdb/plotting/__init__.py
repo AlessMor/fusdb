@@ -19,7 +19,14 @@ from .export import figure_to_html
 from .maps import plot_parameter_map
 from .profiles import plot_profile_grid, plot_profiles
 from .reactivity import default_reactivities, plot_reactivity
-from .relation_graph import build_relation_graph, plot_relation_graph
+from .relation_graph import (
+    bokeh_relation_graph,
+    build_relation_graph,
+    build_relation_node_graph,
+    build_variable_relation_graph,
+    plot_relation_graph,
+    relation_graph_html,
+)
 
 __all__ = [
     "plot_reactivity",
@@ -27,7 +34,11 @@ __all__ = [
     "plot_profiles",
     "plot_profile_grid",
     "build_relation_graph",
+    "build_relation_node_graph",
+    "build_variable_relation_graph",
     "plot_relation_graph",
+    "bokeh_relation_graph",
+    "relation_graph_html",
     "plot_curves",
     "plot_metric_comparison",
     "plot_parameter_map",

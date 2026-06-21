@@ -12,12 +12,10 @@ from scipy.optimize import least_squares
 from scipy.sparse import lil_matrix
 from scipy.sparse.csgraph import maximum_bipartite_matching
 
-from .relation import Relation, constraint_from_expression
+from .relation import Relation, canonicalize_relation, canonicalize_relation_names, constraint_from_expression
 from .registry import VARIABLES, VariableRegistry
 from .utils import coerce_to_shape, domain_bounds_for_solver, parse_constraint_specs, scipy_bounds, value_in_domain
 from .variable import Variable
-
-DEFAULT_PROFILE_SIZE = 46
 
 
 class Span(NamedTuple):
@@ -65,6 +63,9 @@ class RelationSystem:
         self.verbose = bool(verbose)
         self.variable_registry = variable_registry
         self.zero_tol = 1e-12
+        # Variables found unevaluable by the prune pass (no value, no producer,
+        # no anchored block); relations that need them are deactivated.
+        self._unevaluable_names: set[str] = set()
         self.targets = self._resolve_names(targets or ())
         self.solve_for = self._resolve_names(solve_for or ())
         self.variables = list(variables)
@@ -81,36 +82,25 @@ class RelationSystem:
         self._ensure_rho_grid()
         self._broadcast_profiles()
         self._build_profile_shape_controls()
-        self._compile_active_relations()
-        self._register_profile_generators()
-        self._append_active_guards()
-
+        # Build the static active set only. Runtime preparation, including
+        # default seeding and computed initial values used to prune unevaluable
+        # variables, is dispatched by ``run()`` so constructing a RelationSystem
+        # does not perform solve-oriented initialization.
+        #
         # Do not write relation-derived outputs into Variable.value during compilation.
         # Missing outputs are completed in local value maps during residual evaluation
         # and are stored only after a solve/ordered run finishes.
-        self._refresh_scales()
+        self._compile_static()
 
     def _build_candidate_relations(self, relations: Iterable[Relation], constraints: Any) -> None:
         """Resolve relation variable names and create system constraints.
 
-        A relation whose declared output collapses onto one of its own inputs
-        after alias resolution (for example ``n_e_avg = n_avg`` when
-        ``n_e_avg`` is an alias of ``n_avg``) is a tautology for this
-        registry: it determines nothing, and the acausal seeding would
-        otherwise "solve" the identity to an arbitrary grid value.
+        Each candidate relation is canonicalized and validated by :func:`canonicalize_relation`, 
+        which rejects alias-degenerate relations (declared outputs that resolve to one of their own inputs).  
+        Relations sourced from the shared registry are already validated at build time;
+        re-validating here keeps ad-hoc relations passed directly to a RelationSystem equally safe.
         """
-        self.alias_degenerate_reasons: dict[str, str] = {}
-        self.candidate_primary_relations = []
-        for rel in relations:
-            resolved = self._resolve_relation_names(rel)
-            if resolved.implicit and not rel.implicit:
-                self.alias_degenerate_reasons[resolved.name] = (
-                    "inactive_alias_degenerate: declared outputs ("
-                    + ", ".join(sorted(rel.outputs))
-                    + ") resolve to the same canonical variable as an input"
-                )
-                continue
-            self.candidate_primary_relations.append(resolved)
+        self.candidate_primary_relations = [canonicalize_relation(rel, self.variable_registry) for rel in relations]
         self.system_constraint_relations = [
             self._resolve_relation_names(
                 constraint_from_expression(text, name=f"system_constraint_{index}", enforce=enforce, source_kind="system", source_name=self.name)
@@ -130,7 +120,7 @@ class RelationSystem:
                 profile_sizes.add(int(var.input_value.shape[0]))
         if len(profile_sizes) > 1:
             raise ValueError(f"Profile sizes are incompatible: {sorted(profile_sizes)}.")
-        self.profile_size = next(iter(profile_sizes), DEFAULT_PROFILE_SIZE)
+        self.profile_size = next(iter(profile_sizes), self.variable_registry.profile_size_default)
 
     def _ensure_rho_grid(self) -> None:
         """Ensure a canonical fixed ``rho`` grid exists.
@@ -141,7 +131,7 @@ class RelationSystem:
             uses_rho = any("rho" in rel.variables for rel in self.candidate_primary_relations)
             has_profile = any(var.shape == 1 for var in self.variables_by_name.values())
             if uses_rho or has_profile:
-                rho_value = np.linspace(0.0, 1.0, self.profile_size)
+                rho_value = self.variable_registry.uniform_profile_grid(self.profile_size)
                 if "rho" not in self.variables_by_name:
                     rho = Variable("rho", value=rho_value, size=self.profile_size, fixed=True)
                     self.variables.append(rho)
@@ -229,7 +219,7 @@ class RelationSystem:
             self._ensure_variable_exists(name)
         requested = set(self.targets) | set(self.solve_for)
         supplied = {name for name, var in self.variables_by_name.items() if var.input_value is not None}
-        inactive: dict[str, str] = dict(self.alias_degenerate_reasons)
+        inactive: dict[str, str] = {}
         usable: list[Relation] = []
         for rel in self.candidate_primary_relations:
             if rel.dependency == "generated_profile" and rel.output_names and all(
@@ -243,25 +233,82 @@ class RelationSystem:
                 self._ensure_variable_exists(rel_name)
         non_default = [rel for rel in usable if not self._is_default_relation(rel)]
         defaults = [rel for rel in usable if self._is_default_relation(rel)]
-        self.default_provider_by_output = {}
-        for rel in sorted(defaults, key=lambda item: item.name):
-            for out in rel.output_names:
-                self.default_provider_by_output.setdefault(out, rel)
         non_default_profile_outputs = {
             out for rel in non_default for out in rel.output_names
             if out in self.variable_registry and self.variable_registry.get(out).shape == 1
         }
-        forward = set(self._forward_decision_rounds(non_default)[0])
+        # A relation is an equation, not a one-way assignment: a two-variable
+        # (bijective) relation determines either side from the other.  So forward
+        # decidability is closed under inverting two-variable relations whose one
+        # other side is known -- this lets ``kappa`` be derived from a supplied
+        # ``kappa_95`` regardless of how ``Elongation 95%`` happens to be
+        # written, keeping ``Default elongation`` a true last resort.  The
+        # two-variable restriction is deliberate: it never reaches into
+        # rank-deficient multi-variable cycles (the f_D/f_T/n_D/n_i fuel split,
+        # advanced-fusion channels) that are structurally square but genuinely
+        # rely on their default being pinned.
+        def _forward_with_bijections(rels: list[Relation], extra_known: Iterable[str] = ()) -> set[str]:
+            seed = set(supplied) | set(extra_known)
+            decided = set(seed) | set(self._forward_decision_rounds(rels, extra_known=seed)[0])
+            changed_inv = True
+            while changed_inv:
+                changed_inv = False
+                for rel in rels:
+                    if len(rel.variables) != 2:
+                        continue
+                    unknown = [v for v in rel.variables if v not in decided]
+                    if len(unknown) == 1:
+                        decided.add(unknown[0])
+                        changed_inv = True
+            return decided
+
+        base_forward = _forward_with_bijections(non_default)
+        # Apply registry defaults to variables the user did not supply and that no
+        # real relation already forward-decides.  A default is one of two kinds:
+        #   * FREE core -- a default gated on a variable that is available
+        #     (``default_requires``, e.g. the composition fractions gated on
+        #     ``tau_p``).  The gate signals an active constraint (the steady-state
+        #     balance) that will move the variable; the default is only the x0
+        #     seed that breaks the n_X<->f_X cycle so the balance can activate.
+        #   * DERIVED CONSTANT -- any other default.  Nothing can move it, so it
+        #     is held at the default and never packed as a solver unknown (no
+        #     extra free dimension, so unconstrained defaults cost nothing).
+        # A supplied or forward-derivable value always wins over either.
+        candidate_vars = {name for rel in usable for name in rel.variables}
+        self.constant_default_values = {}
+        seeded: set[str] = set()
+        for name in sorted(candidate_vars):
+            if name in supplied or name in base_forward or name not in self.variable_registry:
+                continue
+            spec = self.variable_registry.get(name)
+            if spec.default is None or self.variables_by_name[name].fixed:
+                continue
+            gated_available = (
+                spec.default_requires is not None
+                and self.variable_registry.resolve(spec.default_requires) in (supplied | base_forward)
+            )
+            if gated_available:
+                seeded.add(name)
+            elif not isinstance(spec.default, str):
+                self.constant_default_values[name] = float(spec.default)
+        forward = _forward_with_bijections(non_default, extra_known=seeded | set(self.constant_default_values))
+        # Profile defaults seed the forward closure, but only for a profile that
+        # is neither supplied nor produced by a non-default relation.  Without
+        # the ``supplied`` guard a reactor that loads a profile (e.g. a fixed CSV
+        # T_i/T_e/n_e) would still activate the uniform-profile default, whose
+        # enforced residual then fights the supplied profile and fails.
         active_defaults: list[Relation] = [
             rel for rel in sorted(defaults, key=lambda item: (len(item.variables), item.name))
             if any(
                 out in self.variable_registry and self.variable_registry.get(out).shape == 1
                 and out not in non_default_profile_outputs
+                and out not in supplied
                 for out in rel.output_names
             )
         ]
+        known_defaults = seeded | set(self.constant_default_values)
         if active_defaults:
-            forward = set(self._forward_decision_rounds(non_default + active_defaults)[0])
+            forward = _forward_with_bijections(non_default + active_defaults, extra_known=known_defaults)
         changed = True
         while changed:
             changed = False
@@ -270,20 +317,37 @@ class RelationSystem:
                     continue
                 if any(out not in forward for out in rel.output_names) and all(inp in forward for inp in rel.input_names):
                     active_defaults.append(rel)
-                    forward = set(self._forward_decision_rounds(non_default + active_defaults)[0])
+                    forward = _forward_with_bijections(non_default + active_defaults, extra_known=known_defaults)
                     changed = True
+        # Only activated defaults are completion fallbacks.  A default whose
+        # output a non-default relation can determine (forward or by a
+        # two-variable inversion) is never registered as a provider, so it cannot
+        # overwrite that derived value in completion (verify) or in reconcile.
+        self.default_provider_by_output = {}
+        for rel in sorted(active_defaults, key=lambda item: item.name):
+            for out in rel.output_names:
+                self.default_provider_by_output.setdefault(out, rel)
         pool = non_default + active_defaults
         partition = self._structural_partition(pool, forward)
         block_decidable = set(partition["determined_variables"])
         decidable = supplied | forward | block_decidable
         undecidable = set(partition["underdetermined_variables"]) - decidable
-        self.underdetermined_requests = sorted(undecidable & requested)
+        # Variables a previous prune round found unevaluable are treated as
+        # undecidable so the relations that need them are deactivated.  Supplied
+        # values are never unevaluable, so they are never pruned.
+        unevaluable = self._unevaluable_names - supplied
+        undecidable |= unevaluable
+        self.underdetermined_requests = sorted((undecidable - unevaluable) & requested)
         self.structural_blocks = list(partition["blocks"])
         active: list[Relation] = []
         for rel in pool:
             undec = sorted(set(rel.variables) & undecidable)
             if undec:
-                inactive[rel.name] = "inactive_undecidable: cannot determine " + ", ".join(undec)
+                unev = sorted(set(rel.variables) & unevaluable)
+                if unev:
+                    inactive[rel.name] = "inactive_unevaluable: requires unevaluable " + ", ".join(unev)
+                else:
+                    inactive[rel.name] = "inactive_undecidable: cannot determine " + ", ".join(undec)
             else:
                 active.append(rel)
         for rel in defaults:
@@ -300,9 +364,20 @@ class RelationSystem:
             if name in decidable
             and name not in supplied
             and name not in produced
+            and name not in self.constant_default_values
             and not self.variables_by_name[name].fixed
+        } | {
+            # Free-core defaults are packed unknowns seeded with their default,
+            # never forward-derived, so an enforced relation (the balance) can
+            # move them off the seed.  This wins over any relation that could
+            # otherwise produce them (the redundant f_X = integral(n_X)/integral(n_i)),
+            # which then acts as a closure residual instead of a producer.
+            name for name in (seeded & self.active_variable_names)
+            if not self.variables_by_name[name].fixed
+            and self.variables_by_name[name].input_value is None
         }
-        _, forward_decider = self._forward_decision_rounds(active, extra_known=self.block_core_names)
+        known_cores = self.block_core_names | set(self.constant_default_values)
+        _, forward_decider = self._forward_decision_rounds(active, extra_known=known_cores)
         self.derived_provider_by_output = {}
         self.derived_variable_names = set()
         for name in sorted(self.active_variable_names):
@@ -314,6 +389,11 @@ class RelationSystem:
                 continue
             self.derived_provider_by_output[name] = selected
             self.derived_variable_names.add(name)
+        # Constant defaults are held at their default value and never packed: they
+        # are derived variables whose provider is the registry default itself.
+        self.derived_variable_names |= {
+            name for name in self.constant_default_values if name in self.active_variable_names
+        }
         self.blocked_relation_reasons = inactive
         self.compiler_report = {
             "activation_semantics": "decidability_closure",
@@ -333,13 +413,71 @@ class RelationSystem:
             },
         }
 
+    def _clear_runtime_caches(self) -> None:
+        """Clear caches derived from the current provider/active-relation plan."""
+        for attr in ("_provider_graph_cache", "_completion_plan_cache"):
+            if hasattr(self, attr):
+                delattr(self, attr)
+
+    def _compile_static(self) -> None:
+        """Compile active relations without runtime initialization/pruning."""
+        self._clear_runtime_caches()
+        self._unevaluable_names = set()
+        self._initial_guesses = {}
+        self._compile_active_relations()
+        self._register_profile_generators()
+        self._append_active_guards()
+        self._refresh_scales()
+        self.compiler_report["unevaluable_variables"] = ()
+
+    def _compile_with_pruning(self, max_rounds: int = 20) -> None:
+        """Compile the active system, pruning relations that need unevaluable variables.
+
+        Each round runs the full compile (active set, profile generators,
+        guards, scales) and then the initialization oracle.  A variable that is
+        active, non-fixed, unsupplied, not a forward-derived output and not a
+        determined block core, and for which initialization can produce no
+        value, cannot be evaluated; it is recorded and every relation that
+        references it is deactivated on the next round.  This repeats to a
+        fixpoint because removing a relation can orphan further variables.
+        """
+        self._unevaluable_names = set()
+        self._initial_guesses = {}
+        for _ in range(max_rounds):
+            self._clear_runtime_caches()
+            self._compile_active_relations()
+            self._register_profile_generators()
+            self._append_active_guards()
+            self._refresh_scales()
+            newly = self._detect_unevaluable_variables()
+            if newly <= self._unevaluable_names:
+                break
+            self._unevaluable_names |= newly
+        self.compiler_report["unevaluable_variables"] = tuple(sorted(self._unevaluable_names))
+
+    def _detect_unevaluable_variables(self) -> set[str]:
+        """Return active free variables that no initialization path can value.
+
+        Uses the same forward-propagation + anchored-block initialization the
+        modes use as a read-only oracle (it does not write ``Variable.value``).
+        A variable that ends up packed as a free solver unknown with no supplied
+        value and no initial guess is unevaluable.
+        """
+        try:
+            initial_values, _info = self._initial_values_from_graph()
+        except Exception:
+            initial_values = {}
+        self._initial_guesses = dict(initial_values)
+        self._pack_free_variables()
+        return set(getattr(self, "_uninitialized_free_variables", ()))
+
     def _register_profile_generators(self) -> None:
         """Register explicit lower-dimensional profile generators as providers.
 
         Activates any required scalar-average controls and refreshes the
         profile-related compiler report views.
         """
-        for rel in list(getattr(self, "relations", ())):
+        for rel in list(self.relations):
             profile_outputs = [
                 out for out in rel.output_names
                 if out in self.variable_registry and self.variable_registry.get(out).shape == 1 and out != "rho"
@@ -401,18 +539,47 @@ class RelationSystem:
             rel.name: rel for rel in [*self.candidate_primary_relations, *self.system_constraint_relations, *self.relations]
         }
 
-    def _incidence_views(self) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]:
-        """Return ``(relation_to_vars, var_to_relations)`` over candidate relations.
+    def _structural_graph(self) -> nx.DiGraph:
+        """The one bipartite incidence graph over candidate relations, computed once.
 
-        Derived on demand: the relations themselves are the single source of the
-        variable<->relation incidence, so these are kept only as report/graph
-        views rather than stored parallel dicts.
+        Variable and relation nodes, with ``input -> relation`` and
+        ``relation -> output`` edges carrying the declared direction; each
+        relation node also stores its ordered ``variables`` tuple.  This is the
+        single structural source: the report incidence (:meth:`_incidence_views`),
+        the Dulmage-Mendelsohn matching (:meth:`_structural_partition`) and the
+        oriented provider DAG (:meth:`_provider_graph`) are all views of it.
         """
-        relation_to_vars = {rel.name: rel.variables for rel in self.candidate_primary_relations}
-        var_to_relations: dict[str, list[str]] = {}
+        cached = getattr(self, "_structural_graph_cache", None)
+        if cached is not None:
+            return cached
+        graph = nx.DiGraph()
         for rel in self.candidate_primary_relations:
-            for var in rel.variables:
-                var_to_relations.setdefault(var, []).append(rel.name)
+            rnode = ("relation", rel.name)
+            graph.add_node(rnode, kind="relation", variables=rel.variables)
+            for name in rel.input_names:
+                graph.add_node(("variable", name), kind="variable")
+                graph.add_edge(("variable", name), rnode)
+            for name in rel.outputs:
+                graph.add_node(("variable", name), kind="variable")
+                graph.add_edge(rnode, ("variable", name))
+        self._structural_graph_cache = graph
+        return graph
+
+    def _incidence_views(self) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]:
+        """Return ``(relation_to_vars, var_to_relations)`` from the single graph.
+
+        The report view of :meth:`_structural_graph`; kept as derived dicts rather
+        than stored parallel state.
+        """
+        relation_to_vars: dict[str, tuple[str, ...]] = {}
+        var_to_relations: dict[str, list[str]] = {}
+        for node, data in self._structural_graph().nodes(data=True):
+            if data.get("kind") != "relation":
+                continue
+            variables = data["variables"]
+            relation_to_vars[node[1]] = variables
+            for var in variables:
+                var_to_relations.setdefault(var, []).append(node[1])
         return relation_to_vars, {name: tuple(rels) for name, rels in var_to_relations.items()}
 
     @property
@@ -435,7 +602,7 @@ class RelationSystem:
             "derived_provider_by_output": {name: rel.name for name, rel in self.derived_provider_by_output.items()},
             "derived_variables": tuple(sorted(self.derived_variable_names)),
             "active_variables": tuple(sorted(self.active_variable_names)),
-            "blocked_relations": dict(getattr(self, "blocked_relation_reasons", {})),
+            "blocked_relations": dict(self.blocked_relation_reasons),
         }
 
     def verify(self, **options: Any) -> dict[str, Any]:
@@ -451,26 +618,20 @@ class RelationSystem:
         return self.run("ordered", **options)
 
     def run(self, mode: str = "verify", **options: Any) -> dict[str, Any]:
-        """Dispatch to an isolated execution mode."""
+        """Prepare runtime initialization and dispatch to an isolated execution mode."""
         from .modes import get_mode
 
+        self._compile_with_pruning()
         return get_mode(mode)(self, **options)
 
     def _profile_average_name(self, name: str) -> str | None:
         """Return the scalar-average variable controlling a profile, or None.
 
-        Resolves the registry ``average_variable`` metadata, falling back to the
-        ``<name>_avg`` alias convention.
+        Thin delegate to :meth:`VariableRegistry.average_of`, which owns the
+        profile -> average mapping (``average_variable`` metadata plus the
+        ``<name>_avg`` alias convention).
         """
-        if name not in self.variable_registry:
-            return None
-        spec = self.variable_registry.get(name)
-        if getattr(spec, "average_variable", None):
-            return self.variable_registry.canonical(str(spec.average_variable))
-        alias = f"{name}_avg"
-        if alias in self.variable_registry:
-            return self.variable_registry.resolve(alias)
-        return None
+        return self.variable_registry.average_of(name)
 
     def _profile_average(self, value: Any) -> float:
         """Return the rho-weighted grid average of a profile-like value.
@@ -502,11 +663,11 @@ class RelationSystem:
         Returns:
             Namespace with shape-controlled profiles updated.
         """
-        if not getattr(self, "profile_shape_by_name", None):
+        if not self.profile_shape_by_name:
             return values
         out = dict(values)
         for name, shape in self.profile_shape_by_name.items():
-            if name in getattr(self, "fixed_supplied_profile_names", set()):
+            if name in self.fixed_supplied_profile_names:
                 fixed_var = self.variables_by_name.get(name)
                 if fixed_var is not None and fixed_var.input_value is not None:
                     out[name] = self._solver_value(name, fixed_var.input_value)
@@ -534,7 +695,7 @@ class RelationSystem:
         """
         if rel.implicit or not rel.output_names:
             return True
-        providers = getattr(self, "derived_provider_by_output", {})
+        providers = self.derived_provider_by_output
         if not providers:
             return True
         # A relation may have multiple outputs. It is structural only if every
@@ -569,6 +730,22 @@ class RelationSystem:
         decider: dict[str, Relation] = {}
         non_default = [rel for rel in relations if not self._is_default_relation(rel)]
         defaults = [rel for rel in relations if self._is_default_relation(rel)]
+        # Pure-input variables: produced by no relation here and referenced only
+        # by outputless (constraint) relations.  The acausal fallback must not
+        # solve such a variable as "the last unknown" of a constraint (e.g. an
+        # unsupplied tau_p that only the particle balances reference) -- it is a
+        # free parameter, not a value the constraint determines.  Leaving it
+        # undecided lets the structural partition mark it underdetermined and
+        # deactivate the constraints that need it.
+        produced_any = {out for rel in relations for out in rel.output_names}
+        ref_rels: dict[str, list[Relation]] = {}
+        for rel in relations:
+            for v in rel.variables:
+                ref_rels.setdefault(v, []).append(rel)
+        pure_input = {
+            v for v, rels in ref_rels.items()
+            if v not in produced_any and all((not r.outputs and r.op == "==") for r in rels)
+        }
         round_no = 0
         changed = True
         while changed:
@@ -599,7 +776,7 @@ class RelationSystem:
             for group in (non_default, defaults):
                 for rel in group:
                     undecided = [v for v in rel.variables if v not in rounds]
-                    if len(undecided) == 1 and undecided[0] not in rounds:
+                    if len(undecided) == 1 and undecided[0] not in rounds and undecided[0] not in pure_input:
                         v = undecided[0]
                         rounds[v] = round_no
                         if v in rel.output_names:
@@ -629,7 +806,13 @@ class RelationSystem:
             Mapping with ``determined_variables``, ``underdetermined_variables``
             and per-group ``deficiencies`` diagnostics.
         """
-        unknowns = sorted({name for rel in relations for name in rel.variables if name not in known})
+        graph = self._structural_graph()
+
+        def rel_vars(rel: Relation) -> tuple[str, ...]:
+            rnode = ("relation", rel.name)
+            return graph.nodes[rnode]["variables"] if graph.has_node(rnode) else rel.variables
+
+        unknowns = sorted({name for rel in relations for name in rel_vars(rel) if name not in known})
         for name in unknowns:
             self._ensure_variable_exists(name)
         result: dict[str, Any] = {
@@ -641,23 +824,25 @@ class RelationSystem:
         if not unknowns:
             return result
 
-        col_span: dict[str, tuple[int, int]] = {}
-        n_cols = 0
-        for name in unknowns:
-            dim = self._variable_dim(name)
-            col_span[name] = (n_cols, n_cols + dim)
-            n_cols += dim
+        # Variables are single-value graph nodes: one column each.  A profile's
+        # grid dimension is internal to relation evaluation, never expanded into
+        # the graph, so DM treats every variable as one structural unknown.
+        col_span: dict[str, tuple[int, int]] = {name: (index, index + 1) for index, name in enumerate(unknowns)}
+        n_cols = len(unknowns)
 
-        # One scalar row per residual dimension; inequalities determine nothing.
+        # One row per scalar equation; inequalities determine nothing.  Relations
+        # are adirectional, so outputs only count constraints here: one per
+        # declared output, or one for an outputless equality.
         row_adj: list[list[int]] = []
         row_relation: list[str] = []
         for rel in relations:
             if not rel.outputs and rel.op != "==":
                 continue
-            cols = [c for name in rel.variables if name in col_span for c in range(*col_span[name])]
+            cols = [c for name in rel_vars(rel) if name in col_span for c in range(*col_span[name])]
             if not cols:
                 continue
-            for _ in range(max(1, self._relation_row_dim(rel))):
+            scalar_rows = sum(1 for name in rel.output_names if name in self.variable_registry) if rel.output_names else 1
+            for _ in range(max(1, scalar_rows)):
                 row_adj.append(cols)
                 row_relation.append(rel.name)
 
@@ -691,6 +876,20 @@ class RelationSystem:
                     reached |= nx.descendants(reach, ("c", c))
         under_cols = {c for kind, c in reached if kind == "c"}
         under_rows = {r for kind, r in reached if kind == "r"}
+
+        # A column variable that no relation in this pool produces and that
+        # appears only in outputless (constraint) relations is a free parameter
+        # the constraints cannot pin (e.g. an unsupplied ``tau_p`` referenced
+        # only by the particle balances).  Force it underdetermined so those
+        # constraints deactivate, instead of letting the matching invent a value
+        # for it and activate a meaningless balance.
+        produced_names = {out for rel in relations for out in rel.output_names}
+        for name, (start, stop) in col_span.items():
+            if name in produced_names:
+                continue
+            refs = [rel for rel in relations if name in rel_vars(rel)]
+            if refs and all((not rel.outputs and rel.op == "==") for rel in refs):
+                under_cols.update(range(start, stop))
 
         name_of_col = {c: name for name, (start, stop) in col_span.items() for c in range(start, stop)}
         under_names = {name for name, (start, stop) in col_span.items() if any(c in under_cols for c in range(start, stop))}
@@ -800,6 +999,43 @@ class RelationSystem:
         original = set(values)
         info: dict[str, Any] = {}
         residual_tol = float(residual_tol)
+        # Constant defaults are known values from the start (they are held, not
+        # solved), so downstream propagation can use them.
+        for name, value in getattr(self, "constant_default_values", {}).items():
+            if values.get(name) is None:
+                try:
+                    values[name] = self._solver_value(name, value)
+                    info[name] = {"source": "constant_default", "relation": None, "block_size": 0, "enforced": False}
+                except Exception:
+                    pass
+        # Propagate everything derivable from the supplied values.
+        self._propagate_known(values, info, original, residual_tol, max_passes)
+        # Seed registry defaults for variables that supplied-propagation left
+        # missing, then re-propagate so downstream values (n_X = n_i * f_X, ...)
+        # fill in.  Defaults are pure x0 seeds -- never enforced -- applied to a
+        # fixpoint so variable-reference defaults (T_i = T_e) resolve once their
+        # source has a value.
+        for _ in range(max_passes):
+            if not self._seed_defaults(values, info, original):
+                break
+            self._propagate_known(values, info, original, residual_tol, max_passes)
+        initial_values = {name: values[name] for name in values if name in info}
+        return initial_values, info
+
+    def _propagate_known(
+        self,
+        values: dict[str, Any],
+        info: dict[str, Any],
+        original: set[str],
+        residual_tol: float,
+        max_passes: int,
+    ) -> None:
+        """Fill values derivable from the currently known namespace.
+
+        Stage 1 runs direct 1x1/acausal propagation to a fixed point; stage 2
+        solves the determined blocks (2x2 ... N x N) for their cores, with a
+        final merged-block sweep for variables left in no individual block.
+        """
         # Stage 1: direct 1x1/acausal propagation to a fixed point.
         for _direct_pass in range(max_passes):
             if not self._compute_direct_outputs(values, info, original):
@@ -808,7 +1044,7 @@ class RelationSystem:
         progress = True
         while progress:
             progress = False
-            for block in getattr(self, "structural_blocks", ()):
+            for block in self.structural_blocks:
                 if self._compute_planned_block(block, values, info, original, residual_tol=residual_tol):
                     progress = True
                     for _direct_pass in range(max_passes):
@@ -816,7 +1052,7 @@ class RelationSystem:
                             break
         merged = tuple(
             name
-            for block in getattr(self, "structural_blocks", ())
+            for block in self.structural_blocks
             for name in block
             if (name not in values or values[name] is None) and name not in original
         )
@@ -824,8 +1060,54 @@ class RelationSystem:
             for _direct_pass in range(max_passes):
                 if not self._compute_direct_outputs(values, info, original):
                     break
-        initial_values = {name: values[name] for name in values if name in info}
-        return initial_values, info
+
+    def _seed_defaults(self, values: dict[str, Any], info: dict[str, Any], original: set[str]) -> bool:
+        """Seed still-missing active variables from their registry default.
+
+        A default is either a number (a constant x0 seed) or the name of another
+        variable (copy that variable's current value).  Seeds are pure initial
+        points: a variable a relation determines is moved off its seed by the
+        global solve, and a variable no enforced relation touches keeps it
+        (zero-gradient).  A default is applied only when the variable is active,
+        not supplied/fixed and still missing; variable-reference defaults whose
+        source is not yet known are skipped (the caller iterates to a fixpoint).
+        """
+        progress = False
+        for name in sorted(self.active_variable_names):
+            if name in values and values[name] is not None:
+                continue
+            if name in original or name not in self.variable_registry:
+                continue
+            var = self.variables_by_name.get(name)
+            if var is not None and (var.fixed or var.input_value is not None):
+                continue
+            spec = self.variable_registry.get(name)
+            default = spec.default
+            if default is None:
+                continue
+            if spec.default_requires is not None:
+                required = self.variable_registry.resolve(spec.default_requires)
+                if values.get(required) is None:
+                    continue
+            if isinstance(default, str):
+                if default not in self.variable_registry:
+                    continue
+                source = self.variable_registry.get(default).canonical_name
+                if source not in values or values[source] is None:
+                    continue
+                raw: Any = values[source]
+            else:
+                raw = float(default)
+            try:
+                value = self._solver_value(name, raw)
+                if not self._candidate_value_is_valid(name, value):
+                    continue
+            except Exception:
+                continue
+            values[name] = value
+            info[name] = {"source": "default_seed", "relation": None, "block_size": 0, "enforced": False}
+            progress = True
+        return progress
 
 
     def _initial_direct_relation_pool(self) -> list[Relation]:
@@ -1305,7 +1587,7 @@ class RelationSystem:
         self._uninitialized_free_variables = []
         for name in sorted(self.active_variable_names):
             var = self.variables_by_name[name]
-            if name in getattr(self, "derived_variable_names", set()):
+            if name in self.derived_variable_names:
                 continue
             if var.fixed:
                 if var.input_value is None:
@@ -1419,7 +1701,7 @@ class RelationSystem:
         for name, var in self.variables_by_name.items():
             value = var.input_value if use_input_values else var.value
             if value is None:
-                if not skip_missing and name not in getattr(self, "derived_variable_names", set()):
+                if not skip_missing and name not in self.derived_variable_names:
                     values[name] = None
                 continue
             values[name] = self._solver_value(name, value) if for_solver else value
@@ -1452,13 +1734,22 @@ class RelationSystem:
         This lets optional branches such as minority-fuel reactions remain
         well-defined without inventing variables from names.
         """
-        explicit_providers = getattr(self, "derived_provider_by_output", {})
-        default_providers = getattr(self, "default_provider_by_output", {})
-        if not explicit_providers and not default_providers:
+        explicit_providers = self.derived_provider_by_output
+        default_providers = self.default_provider_by_output
+        constant_defaults = getattr(self, "constant_default_values", {})
+        if not explicit_providers and not default_providers and not constant_defaults:
             return values
 
         out = dict(values)
-        active_vars = set(getattr(self, "active_variable_names", ()))
+        active_vars = set(self.active_variable_names)
+        # Constant defaults are held at their registry value; fill only when the
+        # variable is still missing, so a real relation or supplied value wins.
+        for name, value in constant_defaults.items():
+            if out.get(name) is None:
+                try:
+                    out[name] = self._solver_value(name, value)
+                except Exception:
+                    pass
 
         def missing(name: str) -> bool:
             return name not in out or out[name] is None
@@ -1519,31 +1810,35 @@ class RelationSystem:
     def _provider_graph(self) -> nx.DiGraph:
         """Directed provider graph over variable names, computed once.
 
-        Each completed variable has one selected provider relation (an explicit
-        derived provider wins over a default), carried on the node together with
-        its ``only_missing`` flag, with an ``input -> output`` edge for every
-        provider input.  Profile variables also get an ``average -> profile``
-        edge so the scalar average control is a structural ancestor even for a
-        supplied profile that has no provider relation.  Both the completion
-        order (topological) and the Jacobian sparsity (ancestors) read this one
-        graph instead of re-walking the providers by hand.
+        The oriented view of :meth:`_structural_graph` restricted to one selected
+        provider per variable (an explicit derived provider wins over a default),
+        with the relation node contracted to ``input -> output`` edges.  Profile
+        variables also get an ``average -> profile`` edge so the scalar average
+        control is a structural ancestor even for a supplied profile that has no
+        provider relation.  Both the completion order (topological) and the
+        Jacobian sparsity (ancestors) read this one graph.
         """
         cached = getattr(self, "_provider_graph_cache", None)
         if cached is not None:
             return cached
+        structural = self._structural_graph()
         graph = nx.DiGraph()
         # One provider per variable; explicit ownership wins over a default.
         provider_of: dict[str, tuple[Relation, bool]] = {}
-        for name, rel in getattr(self, "default_provider_by_output", {}).items():
+        for name, rel in self.default_provider_by_output.items():
             provider_of[name] = (rel, True)
-        for name, rel in getattr(self, "derived_provider_by_output", {}).items():
+        for name, rel in self.derived_provider_by_output.items():
             provider_of[name] = (rel, False)
         for out, (rel, only_missing) in provider_of.items():
             graph.add_node(out, provider=rel, only_missing=only_missing)
-            for inp in rel.input_names:
+            # Provider inputs are the predecessors of the relation node in the
+            # single graph; fall back to the relation if it is not a candidate.
+            rnode = ("relation", rel.name)
+            inputs = [node[1] for node in structural.predecessors(rnode)] if structural.has_node(rnode) else list(rel.input_names)
+            for inp in inputs:
                 if inp != out:
                     graph.add_edge(inp, out)
-        for profile, avg in getattr(self, "profile_average_by_name", {}).items():
+        for profile, avg in self.profile_average_by_name.items():
             if avg != profile:
                 graph.add_edge(avg, profile)
         self._provider_graph_cache = graph
@@ -1719,7 +2014,7 @@ class RelationSystem:
         # outside them.  Derived outputs may violate domains even though they are
         # not packed directly, so dependencies recurse through structural
         # providers.
-        for name in sorted(getattr(self, "active_variable_names", set())):
+        for name in sorted(self.active_variable_names):
             if name not in values or values[name] is None or name not in self.variable_registry:
                 continue
             spec = self.variable_registry.get(name)
@@ -1743,7 +2038,7 @@ class RelationSystem:
             # Movement residuals for supplied variables derived from explicit
             # equations (for example profile fits) depend on the packed inputs
             # recursively reaching that derived variable.
-            for name in sorted(getattr(self, "derived_variable_names", set()) - packed_names):
+            for name in sorted(self.derived_variable_names - packed_names):
                 var = self.variables_by_name.get(name)
                 if var is None or var.input_value is None or name not in values or values[name] is None:
                     continue
@@ -1778,7 +2073,7 @@ class RelationSystem:
         canonical relation verification.
         """
         rows: list[np.ndarray] = []
-        for name in sorted(getattr(self, "active_variable_names", set())):
+        for name in sorted(self.active_variable_names):
             if name not in values or values[name] is None or name not in self.variable_registry:
                 continue
             spec = self.variable_registry.get(name)
@@ -1826,7 +2121,7 @@ class RelationSystem:
         # A supplied variable can be derived from an explicit output relation
         # instead of being packed directly, e.g. a profile generated from
         # average+peaking. Its original supplied value is still soft evidence.
-        for name in sorted(getattr(self, "derived_variable_names", set()) - packed):
+        for name in sorted(self.derived_variable_names - packed):
             var = self.variables_by_name.get(name)
             if var is None or var.input_value is None or name not in values or values[name] is None:
                 continue
@@ -2059,7 +2354,7 @@ class RelationSystem:
         try:
             spec = self.variable_registry.get(name)
             rel_tol = float(self.variables_by_name.get(name).rel_tol if name in self.variables_by_name else spec.rel_tol)
-            abs_tol = float(getattr(self.variables_by_name.get(name), "abs_tol", spec.abs_tol) if name in self.variables_by_name else spec.abs_tol)
+            abs_tol = float(self.variables_by_name.get(name).abs_tol if name in self.variables_by_name else spec.abs_tol)
         except Exception:
             rel_tol = float(self.variable_registry.rel_tol_default)
             abs_tol = 0.0
@@ -2150,7 +2445,7 @@ class RelationSystem:
         # an invented physical value, so a determined block converges to the
         # same unique answer regardless.  The magnitude comes from the variable
         # tolerance scale, which the log transform then explores.
-        if var.name in getattr(self, "block_core_names", set()):
+        if var.name in self.block_core_names:
             return float(self._tolerance_scale_floor(var.name))
 
         raise ValueError(
@@ -2176,23 +2471,18 @@ class RelationSystem:
         return int(self.variables_by_name.get(name).size or self.profile_size)
 
     def _resolve_relation_names(self, rel: Relation) -> Relation:
-        canonical = self.variable_registry.canonical
-        inputs = tuple(canonical(name) for name in rel.input_names)
-        outputs = tuple(canonical(name) for name in rel.output_names)
-        if inputs == rel.input_names and outputs == rel.output_names:
-            return rel
-        return Relation(name=rel.name, func=rel.func, input_names=inputs, outputs=outputs, op=rel.op, rhs=rel.rhs, tags=rel.tags, enforce=rel.enforce, constraints=rel.constraints, source_kind=rel.source_kind, source_name=rel.source_name, constant_names=rel.constant_names, dependency=rel.dependency, function_name=rel.function_name, argument_names=rel.argument_names)
+        return canonicalize_relation_names(rel, self.variable_registry)
 
     def _resolve_names(self, names: Iterable[str]) -> set[str]:
-        return {self.variable_registry.canonical(str(name)) for name in names}
+        return {self.variable_registry.get(name).canonical_name for name in names}
 
     def _ensure_variable_exists(self, raw_name: str) -> Variable:
-        name = self.variable_registry.canonical(str(raw_name))
+        if str(raw_name) not in self.variable_registry:
+            raise ValueError(f"Relation requires unknown variable {str(raw_name)!r}.")
+        spec = self.variable_registry.get(raw_name)
+        name = spec.canonical_name
         if name in self.variables_by_name:
             return self.variables_by_name[name]
-        if name not in self.variable_registry:
-            raise ValueError(f"Relation requires unknown variable {name!r}.")
-        spec = self.variable_registry.get(name)
         var = Variable(name, size=self.profile_size if spec.shape == 1 else None)
         self.variables.append(var)
         self.variables_by_name[name] = var
@@ -2200,6 +2490,8 @@ class RelationSystem:
 
     def _is_default_relation(self, rel: Relation) -> bool:
         return "default" in set(rel.tags) or str(rel.source_kind).startswith("default")
+
+
 
     def _ordered_single_relation(self, item: Any) -> Relation:
         if isinstance(item, Relation):
@@ -2315,7 +2607,7 @@ class RelationSystem:
             return []
         out = [
             f"requested variable {name!r} is structurally underdetermined"
-            for name in getattr(self, "underdetermined_requests", ())
+            for name in self.underdetermined_requests
         ]
         # Benign inactivations (the relation was a fallback that was not needed,
         # or an authoritative supplied-profile measurement) never block.  Any
@@ -2352,7 +2644,7 @@ class RelationSystem:
         return [{"name": name, "count": count} for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))]
 
     def _new_result(self, mode: str) -> dict[str, Any]:
-        return {"mode": mode, "success": False, "termination": "not run", "errors": [], "warnings": [], "compiler_report": getattr(self, "compiler_report", {})}
+        return {"mode": mode, "success": False, "termination": "not run", "errors": [], "warnings": [], "compiler_report": self.compiler_report}
 
     def _result_from_certificate(
         self,

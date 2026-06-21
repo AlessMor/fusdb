@@ -21,7 +21,7 @@ Generated pages:
   * ``code_docs/api/fusdb/registry/*``         -- tables for the registry YAML files
   * ``code_docs/reactors/**``                  -- tables for the reactor input YAML files
   * ``code_docs/reactivity_plotter.html``      -- reactivity figure widget
-  * ``code_docs/relations_variables_graph.html`` -- relation/variable graph widget
+  * ``code_docs/relations_variables_graph.html`` -- variable/relation graph widget
 
 To extend: drop files into ``examples/``, ``src/fusdb``, ``reactors/`` or
 ``src/fusdb/registry`` -- the example, API, reactor and registry pages are
@@ -524,7 +524,7 @@ def build_figure_widgets() -> None:
         "reactivity_plotter.html": ("reactivity", "Fusion reactivities", _render_reactivity_widget),
         "relations_variables_graph.html": (
             "relation graph",
-            "Relation–variable graph",
+            "Relation-variable graph from current registries",
             _render_relation_graph_widget,
         ),
     }
@@ -544,20 +544,10 @@ def _render_reactivity_widget(title: str) -> str:
 
 
 def _render_relation_graph_widget(title: str) -> str:
-    """Render the relation/variable graph as embeddable HTML."""
-    import matplotlib
+    """Render the relation/variable graph as embeddable interactive HTML."""
+    from fusdb.plotting import relation_graph_html
 
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    from fusdb.plotting import figure_to_html, plot_relation_graph
-
-    fig, ax = plt.subplots(figsize=(16, 10))
-    plot_relation_graph(ax=ax)
-    ax.set_title(title)
-    html = figure_to_html(fig, fmt="svg", title=title)
-    plt.close(fig)
-    return html
+    return relation_graph_html(title=title)
 
 
 build_getting_started_index()

@@ -21,7 +21,3 @@ confinement_mode:
   - h_mode
   - l_mode
   - i_mode
-
-operation:
-  - steady_state
-  - pulsed

@@ -63,6 +63,7 @@ class Variable:
         self.value = coerce_numeric_value(self.value)
         if self.value is not None:
             self.value = convert_value(self.value, from_unit=self.unit or spec.unit, to_unit=spec.unit)
+        self.unit = spec.unit  # value is now in canonical units
         self.input_value = self._copy_value(self.value)
 
         # Validate profile shape and physical domain.
