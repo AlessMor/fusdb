@@ -44,10 +44,11 @@ def run(
 
     if x0.size == 0:
         return verify_mode.run(self)
+    self._prepare_runtime(spans)
     reference = self._values_from_variables(for_solver=True, skip_missing=True, use_input_values=True)
 
     def objective_value(x: np.ndarray) -> float:
-        values = self._values_from_vector(x, spans)
+        values = self._values_from_vector(x)
         if callable(objective):
             raw = objective(values)
         else:
@@ -61,7 +62,7 @@ def run(
         return val
 
     def equality_residual(x: np.ndarray) -> np.ndarray:
-        values = self._values_from_vector(x, spans)
+        values = self._values_from_vector(x)
         _status, residuals, errors, _warnings = self._evaluate_relation_residuals(values, strict=True, solver_residuals=True)
         if errors:
             return np.full(max(1, residuals.size), 1.0e6, dtype=float)
@@ -81,7 +82,7 @@ def run(
         result["errors"].append(f"SciPy minimize failed: {exc}")
         result["termination"] = "solver error"
         return result
-    values = self._values_from_vector(sol.x, spans)
+    values = self._values_from_vector(sol.x)
     completed_values = self._complete_values(dict(values))
     self._store_solved_values(completed_values)
     validation = verify_mode.run(self)

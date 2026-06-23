@@ -1,3 +1,5 @@
+# TODO: include aliases from cfspopcon and PROCESS
+
 defaults:
   rel_tol: 0.01
   abs_tol: 0.0
@@ -327,9 +329,9 @@ W_th:
   - Thermal stored energy.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-T_avg:
+T_e_avg:
   aliases:
-  - T_e_avg
+  - T_avg
   - average_electron_temp
   - ten
   default_unit: keV
@@ -404,9 +406,9 @@ ion_to_electron_temp_ratio:
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
-n_avg:
+n_e_avg:
   aliases:
-  - n_e_avg
+  - n_avg
   - average_electron_density
   default_unit: 1/m^3
   description:

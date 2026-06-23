@@ -71,6 +71,15 @@ class Relation:
     constraint_relations: tuple["Relation", ...] = field(default_factory=tuple, init=False)
     _signature: inspect.Signature = field(init=False, repr=False)
     _constant_defaults: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
+    # Derived metadata cached once at construction.  ``input_names``/``outputs``
+    # are normalized in ``__post_init__`` and never mutated afterwards (alias
+    # canonicalization builds new Relation objects), so these stay valid for the
+    # object's whole life.  Both are pure functions of those immutable fields, so
+    # a Relation shared across RelationSystems (the registry singletons) yields
+    # identical values everywhere -- caching them adds no cross-system state and
+    # is safe under parallel runs.
+    _variables: tuple[str, ...] = field(init=False, repr=False, compare=False)
+    _implicit: bool = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Normalize metadata and build local constraint relations."""
@@ -97,6 +106,8 @@ class Relation:
             parameter = self._signature.parameters.get(name)
             if parameter is not None and parameter.default is not inspect.Parameter.empty:
                 self._constant_defaults[name] = parameter.default
+        self._variables = unique_preserve_order((*self.input_names, *self.outputs))
+        self._implicit = bool(set(self.outputs) & set(self.input_names))
 
         # Local constraints are themselves relations. enforce=False means checked-only applicability.
         built: list[Relation] = []
@@ -119,13 +130,13 @@ class Relation:
 
     @property
     def variables(self) -> tuple[str, ...]:
-        """Variables touched by the relation."""
-        return unique_preserve_order((*self.input_names, *self.outputs))
+        """Variables touched by the relation (cached at construction)."""
+        return self._variables
 
     @property
     def implicit(self) -> bool:
-        """Whether an output also appears as an input."""
-        return bool(set(self.outputs) & set(self.input_names))
+        """Whether an output also appears as an input (cached at construction)."""
+        return self._implicit
 
     def __call__(self, **kwargs: Any) -> Any:
         """Use the relation with strict standalone acausal semantics.
@@ -381,6 +392,85 @@ class Relation:
             "max_physical_violation": max_violation,
         }
 
+    def status_and_residual(
+        self,
+        ns: Mapping[str, Any],
+        *,
+        scales: Mapping[str, Any] | None = None,
+        rel_tols: Mapping[str, float] | None = None,
+        abs_tols: Mapping[str, float] | None = None,
+    ) -> tuple[dict[str, Any], np.ndarray]:
+        """Verify the relation and build its residual vector from one evaluation.
+
+        Final certification needs both the diagnostic status dict and the scaled
+        residual vector for each enforced relation.  Computing them separately
+        evaluates the implementation function (and its comparisons) twice; this
+        method walks :meth:`comparisons` once and derives both, returning
+        ``(status, residual_vector)``.
+
+        The residual vector contains only the relation's own comparison
+        residuals (local guards are verified for the status but never contribute
+        residual rows, matching :meth:`residual_vector`).  Evaluation failures or
+        non-finite residuals are folded into a large finite residual and a
+        ``verified=False`` status rather than raised, so a single broken relation
+        certifies cleanly as failed instead of aborting the whole certificate.
+        """
+        errors: list[str] = []
+        warnings: list[str] = []
+        residuals: list[float] = []
+        rows: list[np.ndarray] = []
+        max_violation = 0.0
+        ok = True
+        eval_failed = False
+        try:
+            for lhs, op, rhs, out in self.comparisons(ns):
+                passed, residual, violation = self._scaled_comparison(
+                    lhs, op, rhs, out, scales=scales, rel_tols=rel_tols, abs_tols=abs_tols
+                )
+                rows.append(residual.reshape(-1))
+                residuals.extend(float(item) for item in residual)
+                if violation.size:
+                    max_violation = max(max_violation, float(np.max(violation)))
+                ok = ok and passed
+        except Exception as exc:
+            ok = False
+            eval_failed = True
+            errors.append(str(exc))
+        if eval_failed:
+            residual_vector = np.asarray([1.0e12], dtype=float)
+        else:
+            residual_vector = np.concatenate(rows) if rows else np.empty(0, dtype=float)
+            if not np.all(np.isfinite(residual_vector)):
+                ok = False
+                residual_vector = np.asarray([1.0e12], dtype=float)
+        for guard in self.constraint_relations:
+            try:
+                status = guard.verify_status(ns, scales=scales, rel_tols=rel_tols, abs_tols=abs_tols)
+                if not status["verified"]:
+                    ok = False
+                    message = f"{guard.name}: {status.get('errors') or 'constraint failed'}"
+                    if guard.enforce:
+                        errors.append(message)
+                    else:
+                        warnings.append(f"applicability failed: {message}")
+            except Exception as exc:
+                ok = False
+                if guard.enforce:
+                    errors.append(str(exc))
+                else:
+                    warnings.append(f"applicability failed: {exc}")
+        status = {
+            "relation": self.name,
+            "verified": bool(ok),
+            "enforced": bool(self.enforce),
+            "errors": errors,
+            "warnings": warnings,
+            "residuals": residuals,
+            "max_abs_scaled_residual": max((abs(item) for item in residuals), default=0.0),
+            "max_physical_violation": max_violation,
+        }
+        return status, residual_vector
+
     def _default_registry(self):
         """Return the shared variable registry without making it relation-owned."""
         try:
@@ -415,12 +505,19 @@ class Relation:
         return registry.get(name)
 
     def _variable_tolerance(self, name: str | None) -> tuple[float, float]:
-        if name is None:
-            return 1.0e-8, 0.0
-        spec = self._variable_spec(str(name))
-        if spec is None:
-            return 1.0e-8, 0.0
-        return float(spec.rel_tol), float(spec.abs_tol)
+        if name is not None:
+            spec = self._variable_spec(str(name))
+            if spec is not None:
+                return float(spec.rel_tol), float(spec.abs_tol)
+        # Outputless relations (steady-state balances, inequality guards) have no
+        # output variable to borrow a tolerance from.  Normalise them by the
+        # registry's default relative tolerance rather than a machine-tight
+        # 1e-8: at 1e-8 a small physical imbalance becomes a residual ~1e6x
+        # larger than every output relation (which use ~0.01), which dominates
+        # the least-squares cost and stalls the solve.
+        registry = self._default_registry()
+        rel_tol = float(getattr(registry, "rel_tol_default", 0.01)) if registry is not None else 0.01
+        return rel_tol, 0.0
 
     def _check_all_domains(self, ns: Mapping[str, Any], *, names: Iterable[str], use_solver_domain: bool) -> None:
         for name in names:

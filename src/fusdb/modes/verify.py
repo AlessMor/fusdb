@@ -24,8 +24,7 @@ def verify_values(system: Any, values: Mapping[str, Any], *, complete: bool = Tr
     )
     fixed_errors = self._fixed_value_errors(check_values)
     domain_errors = self._domain_errors(check_values)
-    compiler_errors = self._blocking_compiler_issues()
-    all_errors = [*errors, *fixed_errors, *domain_errors, *compiler_errors]
+    all_errors = [*errors, *fixed_errors, *domain_errors]
     failed_relations = [
         name for name, status in relation_status.items()
         if status.get("enforced", True) and not status.get("verified", False)

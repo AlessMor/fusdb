@@ -129,7 +129,6 @@ class Reactor:
     relation_order: tuple[Any, ...] = field(default_factory=tuple)
     constraints: Any = None
     grid_size: int | None = None
-    verbose: bool = False
 
     def __post_init__(self) -> None:
         """Normalize simple user-facing fields."""
@@ -180,7 +179,6 @@ class Reactor:
             relation_order=tuple(relation_spec.get("order", ()) or ()) if isinstance(relation_spec, Mapping) else (),
             constraints=raw.get("constraints"),
             grid_size=grid_size,
-            verbose=bool(solver_tags.get("verbosity", raw.get("verbose", False))),
         )
 
     def add_variable(self, var: Variable) -> None:
@@ -221,12 +219,8 @@ class Reactor:
         """
         return RELATIONS.get_filtered_relations(names=self.relation_include, tags=TAGS.expand(self.tags), exclude=self.relation_exclude, order=None)
 
-    def relation_system(self, *, targets: Iterable[str] | None = None, solve_for: Iterable[str] | None = None) -> RelationSystem:
+    def relation_system(self) -> RelationSystem:
         """Build a RelationSystem for this reactor.
-
-        Args:
-            targets: Optional target variables that anchor graph components.
-            solve_for: Optional variables requested as solution outputs.
 
         Returns:
             RelationSystem instance.
@@ -236,9 +230,6 @@ class Reactor:
             self.relations(),
             constraints=self.constraints,
             name=self.name,
-            verbose=self.verbose,
-            targets=targets,
-            solve_for=solve_for,
         )
 
     def run(self, mode: str | None = None, **options: Any) -> dict[str, Any]:

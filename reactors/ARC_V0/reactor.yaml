@@ -69,7 +69,6 @@ variables:
     fixed: true
   TBR: 1.1
   tau_E: 0.64
-  tau_p: 1.0
   H89: 2.8
   H98_y2: 1.8
   G89: 0.14

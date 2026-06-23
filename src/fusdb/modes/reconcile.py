@@ -23,6 +23,8 @@ def run(
     *,
     max_nfev: int | None = None,
     movement_weight: float = 1.0,
+    irls_iterations: int = 3,
+    movement_eps: float = 0.1,
     relation_weight: float = 1.0,
     relation_weight_schedule: Iterable[float] | None = None,
     verbose: int = 0,
@@ -30,23 +32,38 @@ def run(
     initial_residual_tol: float = 1.0,
     **_unused: Any,
 ) -> dict[str, Any]:
-    """Run structural simultaneous reconciliation."""
+    """Run structural simultaneous reconciliation.
+
+    The objective changes the fewest non-fixed inputs *beyond their tolerance*.
+    Input movement is free within tolerance (a deadzone) and penalised by a
+    reweighted-L1 term beyond it; after the relation-weight continuation reaches
+    a solution, ``irls_iterations`` iteratively-reweighted-L1 passes re-solve
+    with weights ``1/(excess + movement_eps)`` so marginal inputs are pushed back
+    inside tolerance and only a sparse set is left changed.  ``movement_eps``
+    controls aggressiveness (smaller = sparser, less stable); ``movement_weight``
+    scales the movement term.  The solved-state input deviations are returned as
+    ``inputs_beyond_tolerance``.
+    """
     self = system
     mode = "reconcile"
+    # IRLS movement weights; reset so each reconcile starts from plain L1.
+    self._movement_weights = {}
     result = self._new_result(mode)
     if self._reject_unknown_options(result, _unused):
         return result
     initial_values: dict[str, Any] = {}
-    self._initial_guesses = {}
     if compute_missing:
-        try:
-            initial_values, _initial_info = self._initial_values_from_graph(
-                residual_tol=float(initial_residual_tol),
-            )
-            self._initial_guesses = dict(initial_values)
-        except Exception as exc:
-            result["warnings"].append(f"initial graph computation failed: {exc}")
-            initial_values = {}
+        if getattr(self, "_runtime_initial_values_ready", False):
+            initial_values = dict(getattr(self, "_initial_guesses", {}))
+        else:
+            try:
+                initial_values, _initial_info = self._initial_values_from_graph(
+                    residual_tol=float(initial_residual_tol),
+                )
+                self._initial_guesses = dict(initial_values)
+            except Exception as exc:
+                result["warnings"].append(f"initial graph computation failed: {exc}")
+                initial_values = {}
     # If the current variable state already satisfies the compiled
     # active graph, reconcile is a no-op.  This makes ordered/reconcile
     # adapter blocks idempotent and avoids tiny least-squares drift when the
@@ -100,6 +117,13 @@ def run(
         validation["termination"] = "no free variables; validation only"
         return validation
 
+    self._prepare_runtime(spans)
+    profile_spans = [
+        {"name": span.name, "size": int(span.stop - span.start)}
+        for span in spans
+        if self.variables_by_name[span.name].shape == 1
+    ]
+
     # Movement residuals anchor only immutable input values, not initial
     # guesses or relation-completed derived values.
     reference = self._values_from_variables(for_solver=True, skip_missing=True, complete=False, use_input_values=True)
@@ -114,7 +138,7 @@ def run(
         t0 = time.perf_counter()
         residual_calls += 1
         try:
-            values = self._values_from_vector(x, spans)
+            values = self._values_from_vector(x)
             _status, relation_residuals, errors, _warnings = self._evaluate_relation_residuals(
                 values,
                 strict=True,
@@ -140,8 +164,8 @@ def run(
             residual_eval_time_s += time.perf_counter() - t0
 
     def verify_candidate(x: np.ndarray) -> tuple[dict[str, Any], np.ndarray, list[str], list[str], bool, dict[str, Any], dict[str, Any]]:
-        solved = self._values_from_vector(x, spans)
-        certificate = verify_values(self, solved, complete=True)
+        solved = self._values_from_vector(x)
+        certificate = verify_values(self, solved, complete=False)
         return (
             certificate["relation_status"],
             certificate["residuals"],
@@ -198,6 +222,12 @@ def run(
             "x_scale": x_scale,
             "method": "trf",
             "max_nfev": max_nfev,
+            # SciPy's default ftol=1e-8 reads a conservative first trust-region
+            # step as convergence and quits after one iteration on these stiff
+            # systems (e.g. STELLARIS stalled at nfev=2 with the steady-state
+            # balances grossly unsatisfied).  Tightening ftol lets the solve keep
+            # making progress; it still terminates on gtol/xtol once converged.
+            "ftol": 1.0e-12,
             "verbose": int(verbose),
         }
         for stage_index, (weight, move_weight) in enumerate(phase_schedule):
@@ -210,11 +240,13 @@ def run(
             final_probe_size = int(stage_probe.size)
             stage_kwargs = dict(base_common_kwargs)
             # Sparse finite-difference Jacobian.  The structural pattern follows
-            # the completion DAG and is conservative (it never omits a real
-            # dependency).  It is accepted only when its shape exactly matches
-            # the live residual/variable sizes for this stage; any mismatch
-            # falls back to dense differences, so a stale pattern can never make
-            # the solve wrong -- only slower.
+            # the completion-dependency graph and is conservative: it has an edge
+            # for every output of every completion relation, so it never omits a
+            # real dependency (including ones that flow through a relation's side
+            # outputs, e.g. ARC_V0's n_i/fusion power vs f_He).  It is accepted
+            # only when its shape exactly matches the live residual/variable sizes
+            # for this stage; any mismatch falls back to dense differences, so a
+            # stale pattern can never make the solve wrong -- only slower.
             stage_jac_used = False
             try:
                 reference_map = reference if current_movement_weight else None
@@ -253,6 +285,73 @@ def run(
             # as all enforced relations are simultaneously satisfied.
             if verified:
                 break
+
+        # Iteratively-reweighted-L1 sparsification.  Holding the relation weight
+        # at the continuation's final (high) value keeps relations satisfied
+        # while the movement L1 is reweighted from the current solution, so each
+        # pass pushes inputs that are only marginally past tolerance back inside
+        # and leaves a sparse set changed.  Only run once the relations actually
+        # verify: on an inconsistent system the inputs cannot be pushed back
+        # without breaking a relation, so reweighting cannot lower the count and
+        # the extra re-solve would just be wasted (and expensive).
+        if verified and movement_weight and int(irls_iterations) > 0:
+            current_relation_weight = float(phase_schedule[-1][0])
+            current_movement_weight = float(movement_weight)
+            # Warm-started reweighting needs only a few steps; cap it so a hard
+            # (inconsistent) re-solve cannot burn the full budget per pass.
+            irls_max_nfev = int(min(max_nfev, max(40, 15 * int(x0.size))))
+            prev_beyond = len(self._inputs_beyond_tolerance(completed_values))
+            for irls_index in range(int(irls_iterations)):
+                if prev_beyond == 0:
+                    break
+                # Reweight from the latest solution, then re-solve warm-started.
+                self._update_movement_weights(completed_values, reference, spans, eps=float(movement_eps))
+                t_stage = time.perf_counter()
+                stage_probe = residual_function(current_x)
+                final_probe_size = int(stage_probe.size)
+                stage_kwargs = dict(base_common_kwargs)
+                stage_kwargs["max_nfev"] = irls_max_nfev
+                # Conservative structural sparsity here too (see the stage loop above).
+                stage_jac_used = False
+                try:
+                    sparsity = self._build_jac_sparsity(spans, reference=reference)
+                except Exception:
+                    sparsity = None
+                if sparsity is not None and sparsity.shape == (int(stage_probe.size), int(current_x.size)):
+                    stage_kwargs["jac_sparsity"] = sparsity
+                    stage_jac_used = True
+                    jac_sparsity_used = True
+                    jac_sparsity = sparsity
+                solve_result = least_squares(residual_function, current_x, **stage_kwargs)
+                current_x = np.asarray(solve_result.x, dtype=float)
+                relation_status, _residuals, _errors, _warnings, verified, completed_values, certificate = verify_candidate(current_x)
+                failed_count = sum(
+                    1
+                    for item in relation_status.values()
+                    if item.get("enforced", True) and not item.get("verified", False)
+                )
+                stage_history.append(
+                    {
+                        "stage": f"irls_{irls_index}",
+                        "relation_weight": float(current_relation_weight),
+                        "movement_weight": float(current_movement_weight),
+                        "nfev": int(getattr(solve_result, "nfev", -1)),
+                        "cost": float(getattr(solve_result, "cost", np.nan)),
+                        "termination": str(getattr(solve_result, "message", "")),
+                        "verified": bool(verified),
+                        "failed_relations": int(failed_count),
+                        "jac_sparsity_used": bool(stage_jac_used),
+                        "residual_size": int(stage_probe.size),
+                        "inputs_beyond_tolerance": len(self._inputs_beyond_tolerance(completed_values)),
+                        "elapsed_s": float(time.perf_counter() - t_stage),
+                    }
+                )
+                # Stop once a pass stops reducing the number beyond tolerance:
+                # further reweighting only churns (common for inconsistent data).
+                new_beyond = len(self._inputs_beyond_tolerance(completed_values))
+                if new_beyond >= prev_beyond:
+                    break
+                prev_beyond = new_beyond
     except Exception as exc:
         result["errors"].append(f"SciPy least_squares failed: {exc}")
         result["termination"] = "solver error"
@@ -283,6 +382,7 @@ def run(
         stage_history=stage_history,
         movement_weight=float(current_movement_weight),
         initial_guess_variables=int(len(initial_values)),
+        profile_solver_spans=profile_spans,
     )
     validation = self._result_from_certificate(
         mode,
@@ -301,5 +401,8 @@ def run(
     if bool(stored_validation.get("success", False)) != bool(verified):
         validation["warnings"].append("stored values verify differently after public conversion")
     validation["variables"] = self.variables_by_name
-    validation["likely_culprits"] = self._rank_input_culprits(validation.get("relation_status", {}), validation.get("variable_status", {}))
+    validation["likely_culprits"] = self._rank_input_culprits(validation.get("relation_status", {}))
+    # The objective minimises this set: non-fixed inputs whose solved value left
+    # their tolerance band, worst deviation first.
+    validation["inputs_beyond_tolerance"] = self._inputs_beyond_tolerance(completed_values)
     return validation
