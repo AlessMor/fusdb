@@ -1,1 +1,0 @@
-"""ELM stability placeholders."""

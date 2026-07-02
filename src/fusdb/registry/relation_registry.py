@@ -24,17 +24,33 @@ class RelationRegistry:
 
     def __init__(self, relations: Iterable[Relation] = (), *, variable_registry: VariableRegistry = VARIABLES) -> None:
         by_name: dict[str, Relation] = {}
+        by_function: dict[str, Relation] = {}
+        # A relation is addressable by either its user-facing ``name`` or its
+        # decorated ``function_name``.  For that dual addressing to be
+        # unambiguous, every identifier must resolve to exactly one relation:
+        # names unique, function names unique, and no name colliding with a
+        # different relation's function name.  (A relation decorated without an
+        # explicit name has ``name == function_name``; that is the same owner
+        # registering both identifiers, not a collision.)
+        owners: dict[str, Relation] = {}
         for rel in relations:
-            if rel.name in by_name:
-                raise ValueError(f"Duplicate relation {rel.name!r}.")
+            for identifier, kind in ((rel.name, "name"), (rel.function_name, "function name")):
+                owner = owners.get(identifier)
+                if owner is not None and owner is not rel:
+                    raise ValueError(
+                        f"Relation identifier {identifier!r} ({kind} of {rel.name!r}) collides with "
+                        f"relation {owner.name!r}; relation names and function names must be unique."
+                    )
+                owners[identifier] = rel
             # Validate against the variable registry (rejects alias-degenerate
             # relations) but keep the original relation: name canonicalization is
             # left to RelationSystem, so registry-level filtering semantics are
             # unchanged.
             canonicalize_relation(rel, variable_registry)
             by_name[rel.name] = rel
+            by_function[rel.function_name] = rel
         self._relations = MappingProxyType(by_name)
-        self._by_function = MappingProxyType({rel.function_name: rel for rel in by_name.values()})
+        self._by_function = MappingProxyType(by_function)
 
     @classmethod
     def discover(cls, *, variable_registry: VariableRegistry = VARIABLES) -> "RelationRegistry":
@@ -62,6 +78,18 @@ class RelationRegistry:
             return self._by_function[text]
         raise KeyError(f"Unknown relation {name!r}.")
 
+    def _canonical_name(self, name: Any) -> str:
+        """Return the user-facing name for an identifier (name or function name).
+
+        Unknown identifiers are returned unchanged so callers keep their own
+        not-found handling (``exclude`` silently ignores misses; ``order``
+        raises an inactive-relation error).
+        """
+        try:
+            return self._resolve(name).name
+        except KeyError:
+            return str(name)
+
     def get_filtered_relations(
         self,
         *,
@@ -78,7 +106,7 @@ class RelationRegistry:
         Selection order is deterministic: tag/default filtering, explicit includes,
         explicit excludes, then explicit ordering. Exclusion always wins.
         """
-        exclude_set = {str(item) for item in (exclude or ())}
+        exclude_set = {self._canonical_name(item) for item in (exclude or ())}
         include_names = [str(item) for item in (names or ())]
         reactor_tags = normalize_tags(tags)
 
@@ -121,10 +149,10 @@ class RelationRegistry:
             ordered: list[Relation] = []
             remaining = {rel.name: rel for rel in selected}
             for name in order:
-                text = str(name)
-                if text not in remaining:
-                    raise ValueError(f"relations.order references inactive relation {text!r}.")
-                ordered.append(remaining.pop(text))
+                canonical = self._canonical_name(name)
+                if canonical not in remaining:
+                    raise ValueError(f"relations.order references inactive relation {str(name)!r}.")
+                ordered.append(remaining.pop(canonical))
             ordered.extend(remaining.values())
             selected = ordered
         return tuple(selected)
@@ -135,7 +163,8 @@ class RelationRegistry:
         return tuple(rel for rel in self._relations.values() if name in rel.output_names)
 
     def __contains__(self, name: object) -> bool:
-        return str(name) in self._relations
+        text = str(name)
+        return text in self._relations or text in self._by_function
 
     def __iter__(self):
         return iter(self._relations.values())

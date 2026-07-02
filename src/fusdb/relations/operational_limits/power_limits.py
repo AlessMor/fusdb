@@ -1,1 +1,0 @@
-"""Operational power limit placeholders."""

@@ -2,12 +2,8 @@
 
 from .auxiliary import *
 from .bootstrap import *
-from .deposition import *
-from .eccd import *
 from .ecrh import *
 from .icrf import *
-from .inductive_flux import *
-from .lhcd import *
 from .nbi import *
 from .ohmic import *
 

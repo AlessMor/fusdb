@@ -36,5 +36,68 @@ Imp:
   atomic_mass: 12
   isotopic_mass_u: 12.0
 
+# Named radiating impurity species (Mavrin 2018 / Post-Jensen cooling-curve set).
+# CHECK added for impurity radiated power; coefficients in registry/atomic_radiation/.
+Li:
+  full_name: lithium
+  atomic_symbol: "Li"
+  atomic_number: 3
+  atomic_mass: 7
+  isotopic_mass_u: 6.941
+Be:
+  full_name: beryllium
+  atomic_symbol: "Be"
+  atomic_number: 4
+  atomic_mass: 9
+  isotopic_mass_u: 9.012
+C:
+  full_name: carbon
+  atomic_symbol: "C"
+  atomic_number: 6
+  atomic_mass: 12
+  isotopic_mass_u: 12.011
+N:
+  full_name: nitrogen
+  atomic_symbol: "N"
+  atomic_number: 7
+  atomic_mass: 14
+  isotopic_mass_u: 14.007
+O:
+  full_name: oxygen
+  atomic_symbol: "O"
+  atomic_number: 8
+  atomic_mass: 16
+  isotopic_mass_u: 15.999
+Ne:
+  full_name: neon
+  atomic_symbol: "Ne"
+  atomic_number: 10
+  atomic_mass: 20
+  isotopic_mass_u: 20.180
+Ar:
+  full_name: argon
+  atomic_symbol: "Ar"
+  atomic_number: 18
+  atomic_mass: 40
+  isotopic_mass_u: 39.948
+Kr:
+  full_name: krypton
+  atomic_symbol: "Kr"
+  atomic_number: 36
+  atomic_mass: 84
+  isotopic_mass_u: 83.798
+Xe:
+  full_name: xenon
+  atomic_symbol: "Xe"
+  atomic_number: 54
+  atomic_mass: 131
+  isotopic_mass_u: 131.293
+W:
+  full_name: tungsten
+  atomic_symbol: "W"
+  atomic_number: 74
+  atomic_mass: 184
+  isotopic_mass_u: 183.84
+
 # TODO(low): add specific data for each species (radas data as in cfspopcon?)
 # TODO(high): include mass in kg

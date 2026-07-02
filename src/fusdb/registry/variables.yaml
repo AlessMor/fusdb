@@ -56,9 +56,17 @@ kappa:
   solver_domain: '[0.1, 10]'
   abs_tol: 0.001
   default: 1.0
+separatrix_elongation:  # CHECK imported from cfspopcon (radiated_power/synchrotron); supplied or set from geometry
+  default_unit: dimensionless
+  description:
+  - Plasma elongation at the separatrix.
+  domain: (0, inf)
+  solver_domain: '[0.1, 10]'
+  abs_tol: 0.001
 kappa_95:
   aliases:
   - kappa95
+  - elongation_psi95
   default_unit: dimensionless
   description:
   - Elongation at 95% flux surface.
@@ -77,6 +85,8 @@ delta:
   default: 0.0
 delta_95:
   default_unit: dimensionless
+  aliases:
+  - triangularity_psi95
   description:
   - Triangularity at 95% flux surface.
   domain: '[0, 1]'
@@ -101,6 +111,16 @@ A_p:
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
+S_fw:
+  default_unit: m^2
+  aliases:
+  - A_fw
+  description:
+  - First wall surface area.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.1
+  default: A_p
 S_phi:
   default_unit: m^2
   aliases:
@@ -113,6 +133,8 @@ S_phi:
   abs_tol: 0.1
 L_p:
   default_unit: m
+  aliases:
+  - poloidal_circumference
   description:
   - Poloidal length around the plasma cross-section.
   domain: (0, inf)
@@ -195,6 +217,8 @@ I_p:
   abs_tol: 10000.0
 f_BS:
   default_unit: dimensionless
+  aliases:
+  - bootstrap_fraction
   description:
   - Bootstrap current fraction.
   domain: '[0, 1]'
@@ -240,6 +264,13 @@ qstar:
   - Equivalent cylindrical edge safety factor.
   domain: (0, inf)
   solver_domain: '[1e-12, 50]'
+  abs_tol: 0.001
+f_shaping:  # CHECK imported from cfspopcon (plasma_current/safety_factor)
+  default_unit: dimensionless
+  description:
+  - Plasma shaping function used in the q_star/plasma-current relation (ITER Physics Basis Ch.1 Eq. A-11).
+  domain: (0, inf)
+  solver_domain: '[1e-12, 100]'
   abs_tol: 0.001
 q_a:
   default_unit: dimensionless
@@ -425,6 +456,13 @@ n_sep:
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
+nesep_over_nebar:  # CHECK imported from cfspopcon (scrape_off_layer/separatrix_density)
+  default_unit: dimensionless
+  description:
+  - Ratio of separatrix electron density to volume-averaged electron density.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
 n_i_avg:
   aliases:
   - average_ion_density
@@ -632,6 +670,74 @@ f_Imp:
   solver_domain: '[0, 1]'
   default: 0.0
   default_requires: tau_p
+# Per-species impurity concentrations (n_imp/n_e) for line radiation.
+# CHECK imported from cfspopcon (Mavrin/Post-Jensen impurity radiated power).
+c_He:
+  default_unit: dimensionless
+  description: ['Helium concentration n_He/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+c_Li:
+  default_unit: dimensionless
+  description: ['Lithium concentration n_Li/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+c_Be:
+  default_unit: dimensionless
+  description: ['Beryllium concentration n_Be/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+c_C:
+  default_unit: dimensionless
+  description: ['Carbon concentration n_C/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+c_N:
+  default_unit: dimensionless
+  description: ['Nitrogen concentration n_N/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+c_O:
+  default_unit: dimensionless
+  description: ['Oxygen concentration n_O/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+c_Ne:
+  default_unit: dimensionless
+  description: ['Neon concentration n_Ne/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+c_Ar:
+  default_unit: dimensionless
+  description: ['Argon concentration n_Ar/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+c_Kr:
+  default_unit: dimensionless
+  description: ['Krypton concentration n_Kr/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+c_Xe:
+  default_unit: dimensionless
+  description: ['Xenon concentration n_Xe/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+c_W:
+  default_unit: dimensionless
+  description: ['Tungsten concentration n_W/n_e for line radiation.']
+  domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
 TBR:
   default_unit: dimensionless
   description:
@@ -1205,6 +1311,161 @@ P_ohmic:
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
+inductive_plasma_current:  # CHECK imported from cfspopcon (plasma_current); cfspopcon uses MA, fusdb uses A
+  default_unit: A
+  aliases:
+  - I_inductive
+  description:
+  - Inductively-driven plasma current.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 10000.0
+spitzer_resistivity:  # CHECK imported from cfspopcon (plasma_current/resistive_heating)
+  default_unit: ohm*m
+  description:
+  - Parallel Spitzer loop resistivity.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 1.0e-12
+neoclassical_loop_resistivity:  # CHECK imported from cfspopcon (plasma_current/resistive_heating)
+  default_unit: ohm*m
+  description:
+  - Neoclassical loop resistivity including impurity ions and trapped-particle enhancement.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 1.0e-12
+trapped_particle_fraction:  # CHECK imported from cfspopcon (plasma_current/resistive_heating)
+  default_unit: dimensionless
+  description:
+  - Resistivity enhancement factor due to trapped particles.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
+resistivity_trapped_enhancement_method:  # CHECK imported from cfspopcon (plasma_current/resistive_heating); method selector 1/2/3
+  default_unit: dimensionless
+  description:
+  - Selector for the trapped-particle resistivity-enhancement model (1, 2, or 3).
+  default: 3
+  abs_tol: 0.001
+current_relaxation_time:  # CHECK imported from cfspopcon (plasma_current/resistive_heating)
+  default_unit: s
+  description:
+  - Current relaxation (resistive diffusion) time.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+loop_voltage:  # CHECK imported from cfspopcon (plasma_current/resistive_heating)
+  default_unit: V
+  aliases:
+  - V_loop
+  description:
+  - Toroidal loop voltage at flat-top.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+# --- Flux consumption (cfspopcon plasma_current/flux_consumption) -------------
+internal_inductivity:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: dimensionless
+  description:
+  - Normalised internal inductance of the plasma.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
+safety_factor_on_axis:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: dimensionless
+  aliases:
+  - q0
+  description:
+  - Safety factor on the magnetic axis.
+  domain: (0, inf)
+  default: 1.0
+  abs_tol: 0.001
+internal_inductance:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: H
+  description:
+  - Internal self-inductance of the plasma.
+  domain: (0, inf)
+  solver_domain: '[1e-30, inf)'
+  abs_tol: 1.0e-9
+  # CHECK gate: cylindrical (circular cross-section) form is the default; the
+  # non-cylindrical (volume/poloidal-circumference) form is opt-in.
+  default_relation:
+  - Internal inductance (cylindrical)
+external_inductance:  # CHECK imported from cfspopcon (plasma_current/flux_consumption); producer in the Barr sub-model
+  default_unit: H
+  description:
+  - External self-inductance of the plasma.
+  domain: (0, inf)
+  solver_domain: '[1e-30, inf)'
+  abs_tol: 1.0e-9
+vertical_field_mutual_inductance:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: dimensionless
+  description:
+  - Mutual inductance linking the plasma surface to the vertical field.
+  domain: (0, inf)
+  abs_tol: 0.001
+invmu_0_dLedR:  # CHECK imported from cfspopcon (plasma_current/flux_consumption); Barr 2018 eq.21
+  default_unit: dimensionless
+  description:
+  - (1/mu_0) d(external inductance)/dR term in the Barr vertical-field model.
+  abs_tol: 0.001
+vertical_magnetic_field:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: T
+  description:
+  - Vertical magnetic field required for radial force balance.
+  abs_tol: 0.001
+ejima_coefficient:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: dimensionless
+  description:
+  - Ejima coefficient for resistive flux consumption during ramp-up.
+  domain: (0, inf)
+  default: 0.4
+  abs_tol: 0.001
+internal_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: Wb
+  description:
+  - Flux due to the plasma current and internal inductance.
+  domain: '[0, inf)'
+  abs_tol: 0.01
+external_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: Wb
+  description:
+  - Surface flux generated by the plasma current (external inductance).
+  domain: '[0, inf)'
+  abs_tol: 0.01
+resistive_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: Wb
+  description:
+  - Resistive flux consumed over the current ramp-up (Ejima).
+  domain: '[0, inf)'
+  abs_tol: 0.01
+poloidal_field_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: Wb
+  description:
+  - Surface flux contribution from the vertical (poloidal-field-coil) field.
+  abs_tol: 0.01
+flux_needed_from_CS_over_rampup:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: Wb
+  description:
+  - Total flux needed from the central solenoid over the ramp-up.
+  abs_tol: 0.01
+total_flux_available_from_CS:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: Wb
+  description:
+  - Total flux available from the central solenoid.
+  domain: '[0, inf)'
+  abs_tol: 0.01
+max_flattop_duration:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: s
+  description:
+  - Maximum flat-top duration that can be driven by the central solenoid.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+breakdown_flux_consumption:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  default_unit: Wb
+  description:
+  - Resistive flux required for plasma breakdown.
+  abs_tol: 0.01
 P_heating:
   default_unit: W
   description:
@@ -1260,6 +1521,13 @@ P_ICRF:
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
+P_ECRH:
+  default_unit: W
+  description:
+  - ECRH coupled power.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
 P_LH:
   default_unit: W
   aliases:
@@ -1269,6 +1537,41 @@ P_LH:
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
+  # CHECK gate: keep fusdb's simplified relation as the default producer; the full
+  # cfspopcon Martin+Ryter version is off unless explicitly included.
+  default_relation:
+  - L-H transition threshold power
+P_LI_thresh:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power)
+  default_unit: W
+  description:
+  - L-I transition threshold power.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+  # CHECK gate: HubbardNF17 is the default I-mode threshold scaling; AUG and
+  # HubbardNF12 are off unless explicitly included.
+  default_relation:
+  - L-I transition threshold power HubbardNF17
+ratio_of_P_SOL_to_P_LH:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power)
+  default_unit: dimensionless
+  description:
+  - Ratio of power crossing the separatrix to the L-H threshold power.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+ratio_of_P_SOL_to_P_LI:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power)
+  default_unit: dimensionless
+  description:
+  - Ratio of power crossing the separatrix to the L-I threshold power.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+confinement_threshold_scalar:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power)
+  default_unit: dimensionless
+  description:
+  - Multiplicative tuning factor applied to the L-H / L-I threshold power scalings.
+  default: 1.0
+  abs_tol: 0.001
 P_sep:
   aliases:
   - P_SOL
@@ -1279,6 +1582,383 @@ P_sep:
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
+lambda_q:  # CHECK imported from cfspopcon (scrape_off_layer/lambda_q); cfspopcon uses mm, fusdb uses m
+  default_unit: m
+  aliases:
+  - heat_flux_decay_length
+  description:
+  - Scrape-off-layer heat-flux decay length.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 1.0e-5
+  # CHECK gate: Eich regression 15 is the default (cfspopcon's SPARC choice); the
+  # Brunner / Eich-9 / Eich-14 scalings are off unless explicitly included.
+  default_relation:
+  - SOL lambda_q Eich regression 15
+B_pol_out_mid:  # CHECK imported from cfspopcon (scrape_off_layer)
+  default_unit: T
+  aliases:
+  - B_pol_omp
+  description:
+  - Poloidal magnetic field at the outboard midplane.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
+lambda_q_factor:  # CHECK imported from cfspopcon (scrape_off_layer/lambda_q)
+  default_unit: dimensionless
+  description:
+  - Multiplicative tuning factor applied to the lambda_q scalings.
+  domain: (0, inf)
+  default: 1.0
+  abs_tol: 0.001
+B_t_out_mid:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_density)
+  default_unit: T
+  aliases:
+  - B_tor_omp
+  description:
+  - Toroidal magnetic field at the outboard midplane.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
+fieldline_pitch_at_omp:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_density)
+  default_unit: dimensionless
+  description:
+  - Ratio of total to poloidal field (B_total / B_poloidal) at the outboard midplane.
+  domain: (0, inf)
+  solver_domain: '[1, inf)'
+  abs_tol: 0.001
+fraction_of_P_SOL_to_divertor:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_density)
+  default_unit: dimensionless
+  description:
+  - Fraction of the scrape-off-layer power directed to the divertor target considered.
+  domain: '[0, 1]'
+  abs_tol: 0.001
+q_parallel:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_density); cfspopcon displays GW/m^2
+  default_unit: W/m^2
+  aliases:
+  - parallel_heat_flux_density
+  description:
+  - Parallel heat-flux density entering the flux tube at the outboard midplane.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1000.0
+q_perp:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_density); cfspopcon displays MW/m^2
+  default_unit: W/m^2
+  aliases:
+  - perpendicular_heat_flux_density
+  description:
+  - Perpendicular heat-flux density at the outboard midplane.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1000.0
+PB_over_R:  # CHECK imported from cfspopcon (metrics/heat_exhaust_metrics)
+  default_unit: W*T/m
+  description:
+  - Heat-exhaust proxy P_sep * B0 / R0 (scales like the parallel heat flux into the SOL).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0
+PBpRnSq:  # CHECK imported from cfspopcon (metrics/heat_exhaust_metrics)
+  default_unit: W*T*m^5
+  description:
+  - Heat-exhaust proxy P_sep * (B0/q_star) / R0 / n_e^2 (scales like the detachment impurity fraction).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+# --- SOL two-point model (cfspopcon scrape_off_layer/two_point_model) ---------
+parallel_connection_length:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: m
+  description:
+  - Parallel connection length from the outboard midplane to the target.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
+kappa_e0:  # CHECK imported from cfspopcon (two_point_model); eV-based Spitzer-Harm constant
+  default_unit: W/(eV^3.5*m)
+  description:
+  - Electron heat-conductivity constant (Spitzer-Harm), q_par = kappa_e0 T_e^2.5 dT/dx.
+  domain: (0, inf)
+  default: 2600.0
+  abs_tol: 1.0
+toroidal_flux_expansion:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Toroidal flux expansion R_target / R_upstream.
+  domain: (0, inf)
+  abs_tol: 0.001
+sheath_heat_transmission_factor:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Sheath heat transmission coefficient (gamma).
+  domain: (0, inf)
+  default: 7.5
+  abs_tol: 0.001
+SOL_conduction_fraction:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Fraction of the SOL power transported by electron conduction.
+  domain: '[0, 1]'
+  default: 1.0
+  abs_tol: 0.001
+SOL_power_loss_fraction:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Fraction of the parallel heat flux lost (cooled) along the SOL (f_cooling).
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  abs_tol: 0.001
+SOL_momentum_loss_fraction:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Fraction of momentum lost along the SOL (f_mom-loss).
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  abs_tol: 0.001
+  # CHECK gate: KotovReiter is the default (cfspopcon's SPARC choice); the Sang /
+  # Jarvinen / Moulton / PerezH / PerezL fits are off unless explicitly included.
+  default_relation:
+  - SOL momentum loss fraction KotovReiter
+upstream_total_pressure:  # CHECK imported from cfspopcon (two_point_model); cfspopcon uses atm, fusdb uses Pa
+  default_unit: Pa
+  description:
+  - Total (electron + ion) upstream SOL pressure.
+  domain: '[0, inf)'
+  abs_tol: 1.0
+target_q_parallel:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: W/m^2
+  description:
+  - Parallel heat-flux density reaching the divertor target.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1000.0
+target_electron_temp:  # CHECK imported from cfspopcon (two_point_model); cfspopcon uses eV, fusdb uses keV
+  default_unit: keV
+  description:
+  - Electron temperature at the divertor target.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, 300]'
+  abs_tol: 1.0e-4
+target_electron_temp_basic:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: keV
+  description:
+  - Target electron temperature from the basic two-point model (before corrections).
+  domain: '[0, inf)'
+  abs_tol: 1.0e-4
+target_electron_density:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: 1/m^3
+  description:
+  - Electron density at the divertor target.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+target_electron_density_basic:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: 1/m^3
+  description:
+  - Target electron density from the basic two-point model (before corrections).
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+target_electron_flux:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: 1/(m^2*s)
+  description:
+  - Electron flux to the divertor target.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+target_electron_flux_basic:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: 1/(m^2*s)
+  description:
+  - Target electron flux from the basic two-point model (before corrections).
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+f_vol_loss_target_electron_temp:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Volume-loss correction factor for the target electron temperature.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+f_vol_loss_target_electron_density:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Volume-loss correction factor for the target electron density.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+f_vol_loss_target_electron_flux:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Volume-loss correction factor for the target electron flux.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+f_other_target_electron_temp:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Non-volume-loss correction factor for the target electron temperature.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+f_other_target_electron_density:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Non-volume-loss correction factor for the target electron density.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+f_other_target_electron_flux:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Non-volume-loss correction factor for the target electron flux.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+target_ratio_of_ion_to_electron_temp:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Ratio of ion to electron temperature at the target (tau_t).
+  domain: (0, inf)
+  default: 1.0
+  abs_tol: 0.001
+target_ratio_of_electron_to_ion_density:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Ratio of electron to total-ion density at the target (z_t).
+  domain: (0, inf)
+  default: 1.0
+  abs_tol: 0.001
+target_mach_number:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Parallel ion Mach number at the target.
+  domain: (0, inf)
+  default: 1.0
+  abs_tol: 0.001
+upstream_ratio_of_ion_to_electron_temp:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Ratio of ion to electron temperature upstream.
+  domain: (0, inf)
+  default: 1.0
+  abs_tol: 0.001
+upstream_ratio_of_electron_to_ion_density:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Ratio of electron to total-ion density upstream.
+  domain: (0, inf)
+  default: 1.0
+  abs_tol: 0.001
+upstream_mach_number:  # CHECK imported from cfspopcon (two_point_model)
+  default_unit: dimensionless
+  description:
+  - Parallel ion Mach number upstream.
+  domain: '[0, inf)'
+  default: 0.0
+  abs_tol: 0.001
+required_target_electron_temp:  # CHECK imported from cfspopcon (two_point_model/required_power_loss_fraction)
+  default_unit: keV
+  description:
+  - Desired electron temperature at the divertor target.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, 300]'
+  abs_tol: 1.0e-4
+ionization_volume:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
+  default_unit: m^3
+  description:
+  - Divertor ionization volume.
+  domain: (0, inf)
+  abs_tol: 0.001
+wall_temperature:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
+  default_unit: K
+  description:
+  - First-wall temperature (sets the neutral thermal velocity).
+  domain: (0, inf)
+  default: 300.0
+  abs_tol: 1.0
+ratio_of_molecular_to_ion_mass:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
+  default_unit: dimensionless
+  description:
+  - Ratio of neutral molecular mass to average ion mass.
+  domain: (0, inf)
+  default: 2.0
+  abs_tol: 0.001
+neutral_flux_density_factor:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
+  default_unit: 1/(m^2*s*Pa)
+  description:
+  - Conversion factor from neutral flux density to neutral pressure.
+  domain: (0, inf)
+  abs_tol: 1.0e15
+target_neutral_pressure:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models); kallenbach producer deferred
+  default_unit: Pa
+  description:
+  - Neutral pressure at the divertor target.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+separatrix_power_transient:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
+  default_unit: W
+  description:
+  - Transient power step across the separatrix driving reattachment.
+  domain: (0, inf)
+  abs_tol: 1000000.0
+ionization_volume_density_factor:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
+  default_unit: dimensionless
+  description:
+  - Ratio of the ionization-volume-averaged density to the target electron density.
+  domain: (0, inf)
+  abs_tol: 0.001
+reattachment_time:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
+  default_unit: s
+  description:
+  - Time for a detachment front to reattach toward the target after a power transient.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+# --- Separatrix operational space (cfspopcon separatrix_operational_space) -----
+critical_alpha_MHD:  # CHECK imported from cfspopcon (separatrix_operational_space)
+  default_unit: dimensionless
+  description:
+  - Critical normalized pressure-gradient (alpha_MHD) for the SepOS model.
+  domain: (0, inf)
+  abs_tol: 0.001
+poloidal_sound_larmor_radius:  # CHECK imported from cfspopcon (separatrix_operational_space)
+  default_unit: m
+  description:
+  - Poloidally-averaged ion sound Larmor radius (rho_s_pol).
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 1.0e-6
+SepOS_LH_transition:  # CHECK imported from cfspopcon (separatrix_operational_space)
+  default_unit: dimensionless
+  description:
+  - SepOS L-H transition condition (>1 H-mode, <1 L-mode).
+  domain: '[0, inf)'
+  abs_tol: 0.001
+SepOS_MHD_limit:  # CHECK imported from cfspopcon (separatrix_operational_space)
+  default_unit: dimensionless
+  description:
+  - SepOS ideal-MHD limit condition (>1 above the soft limit).
+  domain: '[0, inf)'
+  abs_tol: 0.001
+SepOS_density_limit:  # CHECK imported from cfspopcon (separatrix_operational_space)
+  default_unit: dimensionless
+  description:
+  - SepOS L-mode density-limit condition (>1 disrupts unless above the L-H transition).
+  domain: '[0, inf)'
+  abs_tol: 0.001
+ion_heat_diffusivity:  # CHECK imported from cfspopcon (separatrix_operational_space)
+  default_unit: m^2/s
+  description:
+  - Ion heat diffusivity at the separatrix.
+  domain: (0, inf)
+  abs_tol: 0.001
+temp_scale_length_ratio:  # CHECK imported from cfspopcon (separatrix_operational_space)
+  default_unit: dimensionless
+  description:
+  - Ratio of electron to ion temperature gradient scale lengths (L_Te / L_Ti).
+  domain: (0, inf)
+  default: 1.0
+  abs_tol: 0.001
+sustainment_power_in_ion_channel:  # CHECK imported from cfspopcon (separatrix_operational_space)
+  default_unit: W
+  description:
+  - Power crossing the separatrix carried by the ion channel.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+sustainment_power_in_electron_channel:  # CHECK imported from cfspopcon (separatrix_operational_space)
+  default_unit: W
+  description:
+  - Power crossing the separatrix carried by the electron channel.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
 P_sep_over_R:
   default_unit: W/m
   description:
@@ -1321,11 +2001,57 @@ P_line:
   default_unit: W
   aliases:
   - P_rad_line
+  - P_rad_impurity
   description:
   - Line radiated power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
+  # CHECK gate: Mavrin coronal is the default impurity-radiation method; the
+  # noncoronal and Post-Jensen fits are off unless explicitly included.
+  default_relation:
+  - Impurity line radiation (Mavrin coronal)
+impurity_residence_time:  # CHECK imported from cfspopcon (Mavrin noncoronal radiated power)
+  default_unit: s
+  description:
+  - Impurity residence time (sets ne*tau for the non-coronal cooling curves).
+  domain: (0, inf)
+  abs_tol: 0.001
+L_int:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc); Lengyel cooling integral
+  default_unit: W*m^3*eV^1.5
+  description:
+  - Cooling-curve integral int(Lz*sqrt(Te) dTe) between target and separatrix temperature.
+  domain: (0, inf)
+  abs_tol: 1.0e-40
+  # CHECK gate: Neon is the default edge radiator; N and Ar are off unless included.
+  default_relation:
+  - L_int cooling integral Ne
+edge_impurity_concentration:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc)
+  default_unit: dimensionless
+  description:
+  - Edge impurity concentration required to cool the SOL (Lengyel model).
+  domain: '[0, inf)'
+  abs_tol: 0.001
+edge_impurity_concentration_in_core:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc)
+  default_unit: dimensionless
+  description:
+  - Edge impurity concentration referred to the core (edge concentration / enrichment).
+  domain: '[0, inf)'
+  abs_tol: 0.001
+edge_impurity_enrichment:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc)
+  default_unit: dimensionless
+  description:
+  - Edge-to-core enrichment factor of the seeded edge impurity.
+  domain: (0, inf)
+  default: 1.0
+  abs_tol: 0.001
+lengyel_overestimation_factor:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc)
+  default_unit: dimensionless
+  description:
+  - Empirical correction dividing the Lengyel edge-impurity concentration (Moulton 2021).
+  domain: (0, inf)
+  default: 1.0
+  abs_tol: 0.001
 P_sync:
   aliases:
   - P_synchrotron
@@ -1343,6 +2069,37 @@ P_rad:
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
+f_rad:  # CHECK imported from cfspopcon (radiated_power/basic_algorithms)
+  default_unit: dimensionless
+  aliases:
+  - core_radiated_power_fraction
+  description:
+  - Core radiated power fraction (P_rad / P_in).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+min_P_radiation:  # CHECK imported from cfspopcon (impurities/core_radiator_conc)
+  default_unit: W
+  description:
+  - Minimum required core radiated power (target for core impurity seeding).
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+  # CHECK gate: fraction-based target is the default; the LH-factor target is opt-in.
+  default_relation:
+  - Minimum radiated power from fraction
+minimum_core_radiated_fraction:  # CHECK imported from cfspopcon (impurities/core_radiator_conc)
+  default_unit: dimensionless
+  description:
+  - Minimum core radiated power expressed as a fraction of the input power.
+  domain: '[0, 1]'
+  abs_tol: 0.001
+maximum_P_LH_factor_for_P_SOL:  # CHECK imported from cfspopcon (impurities/core_radiator_conc)
+  default_unit: dimensionless
+  description:
+  - Maximum allowed ratio of power crossing the separatrix to the L-H threshold power.
+  domain: (0, inf)
+  abs_tol: 0.001
 Q_sci:
   aliases:
   - Q
@@ -1398,18 +2155,78 @@ rho:
 temperature_peaking:
   default_unit: dimensionless
   description:
-  - Peak-to-average temperature profile peaking factor used by generated profile relations.
+  - Peak-to-average electron-temperature profile peaking factor. Sets the electron
+    temperature profile; the ion profile uses ion_temperature_peaking (which
+    defaults to this value).
   domain: '[1, inf)'
   solver_domain: '[1, inf)'
   rel_tol: 0.05
   abs_tol: 0.001
-density_peaking:
+ion_temperature_peaking:  # ion temperature peaking; defaults to temperature_peaking unless set
   default_unit: dimensionless
   description:
-  - Peak-to-average density profile peaking factor used by generated profile relations.
+  - Peak-to-average ion-temperature profile peaking factor. Defaults to the
+    (electron) temperature_peaking; supply it for an independent ion temperature
+    profile.
   domain: '[1, inf)'
   solver_domain: '[1, inf)'
   rel_tol: 0.05
+  abs_tol: 0.001
+density_peaking:  # electron density peaking; alias electron_density_peaking (cfspopcon name)
+  aliases:
+  - electron_density_peaking
+  default_unit: dimensionless
+  description:
+  - Peak-to-average electron-density profile peaking factor. Sets the electron
+    density profile; the ion profile uses ion_density_peaking (which defaults to
+    this value).
+  domain: '[1, inf)'
+  solver_domain: '[1, inf)'
+  rel_tol: 0.05
+  abs_tol: 0.001
+  # Gates the duplicate producers of density_peaking: the Angioni electron variant
+  # is the default. The ion Angioni variant now produces ion_density_peaking.
+  default_relation:
+  - Electron density peaking (Angioni)
+ion_density_peaking:  # ion density peaking; defaults to density_peaking unless set
+  default_unit: dimensionless
+  description:
+  - Peak-to-average ion-density profile peaking factor. Defaults to the electron
+    density_peaking; supply it (or include the Angioni ion variant) for an
+    independent ion density profile.
+  domain: '[1, inf)'
+  solver_domain: '[1, inf)'
+  rel_tol: 0.05
+  abs_tol: 0.001
+  # Gates producers: the equality-to-electron default; the Angioni ion variant
+  # ("Ion density peaking (Angioni)") is off unless explicitly included.
+  default_relation:
+  - Default ion density peaking from electron density peaking
+effective_collisionality:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking)
+  default_unit: dimensionless
+  description:
+  - Effective collisionality used in the Angioni density-peaking scaling.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
+electron_density_peaking_offset:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking)
+  default_unit: dimensionless
+  description:
+  - Scalar offset added to the Angioni electron density-peaking scaling.
+  default: 0.0
+  abs_tol: 0.001
+ion_density_peaking_offset:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking)
+  default_unit: dimensionless
+  description:
+  - Scalar offset added to the Angioni ion density-peaking scaling.
+  default: 0.0
+  abs_tol: 0.001
+dilution:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking); n_i/n_e, supplied or set by composition
+  default_unit: dimensionless
+  description:
+  - Fuel-ion dilution, the ratio of fuel-ion to electron density (n_i / n_e).
+  domain: (0, 1]
+  solver_domain: '[1e-12, 1]'
   abs_tol: 0.001
 P_in:
   default_unit: W

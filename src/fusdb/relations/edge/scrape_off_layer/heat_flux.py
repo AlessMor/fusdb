@@ -1,47 +1,132 @@
-"""Scrape-off-layer heat-flux relations."""
+"""Scrape-off-layer heat-flux relations.
+
+cfspopcon displays q_parallel in GW/m^2 and q_perp in MW/m^2; fusdb stores both
+in SI (W/m^2). The formulas are unit-consistent in SI, so no rescaling is needed.
+"""
 
 import numpy as np
 
-_MU_0 = 1.25663706212e-6
-
-def calc_B_pol_omp(plasma_current, minor_radius):
-    """cfspopcon: poloidal field at the outboard midplane."""
-    return _MU_0 * plasma_current / (2.0 * np.pi * minor_radius)
+from fusdb import relation
+from fusdb.registry import MU0
 
 
-def calc_B_tor_omp(magnetic_field_on_axis, major_radius, minor_radius):
-    """cfspopcon: toroidal field at the outboard midplane."""
-    return magnetic_field_on_axis * (major_radius / (major_radius + minor_radius))
+@relation(
+    name="Poloidal field at outboard midplane",
+    tags=("power_exhaust", "tokamak"),
+    outputs="B_pol_out_mid",
+)
+def calc_B_pol_omp(I_p, a):
+    """Calculate the poloidal magnetic field at the outboard midplane.
+
+    Adapted from cfspopcon; see README.md section "Third-party Notices".
+
+    Args:
+        I_p: [A] :term:`glossary link<plasma_current>`
+        a: [m] :term:`glossary link<minor_radius>`
+
+    Returns:
+         B_pol_out_mid [T]
+    """
+    # CHECK
+    return MU0 * I_p / (2.0 * np.pi * a)
 
 
+@relation(
+    name="Toroidal field at outboard midplane",
+    tags=("power_exhaust", "tokamak"),
+    outputs="B_t_out_mid",
+)
+def calc_B_tor_omp(B0, R, a):
+    """Calculate the toroidal magnetic field at the outboard midplane.
+
+    Adapted from cfspopcon; see README.md section "Third-party Notices".
+
+    Args:
+        B0: [T] :term:`glossary link<magnetic_field_on_axis>`
+        R: [m] :term:`glossary link<major_radius>`
+        a: [m] :term:`glossary link<minor_radius>`
+
+    Returns:
+         B_t_out_mid [T]
+    """
+    # CHECK
+    return B0 * (R / (R + a))
+
+
+@relation(
+    name="Fieldline pitch at outboard midplane",
+    tags=("power_exhaust", "tokamak"),
+    outputs="fieldline_pitch_at_omp",
+)
 def calc_fieldline_pitch_at_omp(B_t_out_mid, B_pol_out_mid):
-    """cfspopcon: B_total / B_poloidal at the outboard midplane."""
+    """Calculate the pitch of the magnetic field at the outboard midplane.
+
+    Adapted from cfspopcon; see README.md section "Third-party Notices".
+
+    Args:
+        B_t_out_mid: [T] :term:`glossary link<B_t_out_mid>`
+        B_pol_out_mid: [T] :term:`glossary link<B_pol_out_mid>`
+
+    Returns:
+         fieldline_pitch_at_omp [~]
+    """
+    # CHECK
     return np.sqrt(B_t_out_mid**2 + B_pol_out_mid**2) / B_pol_out_mid
 
 
-def calc_parallel_heat_flux_density(
-    power_crossing_separatrix, fraction_of_P_SOL_to_divertor, major_radius, minor_radius, lambda_q, fieldline_pitch_at_omp
-):
-    """cfspopcon: parallel heat flux density entering the flux tube at the outboard midplane."""
-    upstream_major_radius = major_radius + minor_radius
+@relation(
+    name="Parallel heat flux density",
+    tags=("power_exhaust", "tokamak"),
+    outputs="q_parallel",
+)
+def calc_parallel_heat_flux_density(P_sep, fraction_of_P_SOL_to_divertor, R, a, lambda_q, fieldline_pitch_at_omp):
+    """Calculate the parallel heat flux density entering a flux tube (q_par) at the outboard midplane.
+
+    Adapted from cfspopcon; see README.md section "Third-party Notices".
+
+    This expression is power to target divided by the area perpendicular to the flux tube.
+    The poloidal area of a ring at the outboard midplane is 2 * pi * (R + a) * lambda_q;
+    projecting the poloidal heat flux density to parallel divides by the field-line pitch.
+
+    Args:
+      P_sep: [W] :term:`glossary link<power_crossing_separatrix>`
+      fraction_of_P_SOL_to_divertor: [~] :term:`glossary link<fraction_of_P_SOL_to_divertor>`
+      R: [m] :term:`glossary link<major_radius>`
+      a: [m] :term:`glossary link<minor_radius>`
+      lambda_q: [m] :term:`glossary link<lambda_q>`
+      fieldline_pitch_at_omp: [~] :term:`glossary link<fieldline_pitch_at_omp>`
+
+    Returns:
+      q_parallel [W/m^2]
+    """
+    # CHECK
+    upstream_major_radius = R + a
     return (
-        power_crossing_separatrix
+        P_sep
         * fraction_of_P_SOL_to_divertor
         / (2.0 * np.pi * upstream_major_radius * lambda_q)
         * fieldline_pitch_at_omp
     )
 
 
-def calc_q_perp(power_crossing_separatrix, major_radius, minor_radius, lambda_q):
-    """cfspopcon: perpendicular heat flux at the outboard midplane."""
-    return power_crossing_separatrix / (2.0 * np.pi * (major_radius + minor_radius) * lambda_q)
+@relation(
+    name="Perpendicular heat flux density",
+    tags=("power_exhaust", "tokamak"),
+    outputs="q_perp",
+)
+def calc_q_perp(P_sep, R, a, lambda_q):
+    """Calculate the perpendicular heat flux at the outboard midplane.
 
+    Adapted from cfspopcon; see README.md section "Third-party Notices".
 
-def calc_PB_over_R(power_crossing_separatrix, magnetic_field_on_axis, major_radius):
-    """cfspopcon: P_sep * B0 / R0 (scales like parallel heat flux entering the SOL)."""
-    return power_crossing_separatrix * magnetic_field_on_axis / major_radius
+    Args:
+      P_sep: [W] :term:`glossary link<power_crossing_separatrix>`
+      R: [m] :term:`glossary link<major_radius>`
+      a: [m] :term:`glossary link<minor_radius>`
+      lambda_q: [m] :term:`glossary link<lambda_q>`
 
-
-def calc_PBpRnSq(power_crossing_separatrix, magnetic_field_on_axis, q_star, major_radius, average_electron_density):
-    """cfspopcon: P_sep * B_pol / (R * n^2) (scales like impurity fraction for detachment)."""
-    return (power_crossing_separatrix * (magnetic_field_on_axis / q_star) / major_radius) / (average_electron_density**2.0)
+    Returns:
+      q_perp [W/m^2]
+    """
+    # CHECK
+    return P_sep / (2.0 * np.pi * (R + a) * lambda_q)

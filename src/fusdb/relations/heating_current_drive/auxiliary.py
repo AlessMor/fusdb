@@ -10,11 +10,21 @@ from fusdb import relation
     tags=('auxiliary_power',),
     outputs='P_aux',
 )
-def auxiliary_power_from_sources(P_NBI: float, P_ICRF: float, P_LHCD: float) -> Any:
+def auxiliary_power_from_sources(P_NBI: float, P_ICRF: float, P_LHCD: float, P_ECRH: float) -> Any:
     """Return total auxiliary power from injected sources.
     # TODO: check if additional power sources should be included here (e.g. ECRH, EBW,...).
     """
-    return P_NBI + P_ICRF + P_LHCD
+    return P_NBI + P_ICRF + P_LHCD + P_ECRH
+
+
+@relation(
+    name='Plasma loss power',
+    tags=('auxiliary_power', 'power_balance', 'plasma'),
+    outputs='P_loss',
+)
+def plasma_loss_power(P_charged: float, P_aux: float) -> Any:
+    """Return steady-state plasma loss power from charged fusion and auxiliary heating."""
+    return P_charged + P_aux
 
 
 @relation(

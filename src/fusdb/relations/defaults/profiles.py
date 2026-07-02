@@ -72,3 +72,23 @@ def default_ion_temperature_average_from_plasma_average_temperature(T_avg: float
 )
 def default_ion_density_average_from_plasma_average_density(n_avg: float) -> float:
     return n_avg
+
+
+@relation(
+    name="Default ion density peaking from electron density peaking",
+    tags=("default", "plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="ion_density_peaking",
+)
+def default_ion_density_peaking_from_electron(density_peaking: float) -> float:
+    """Fallback: ion density profile shares the electron density peaking."""
+    return density_peaking
+
+
+@relation(
+    name="Default ion temperature peaking from electron temperature peaking",
+    tags=("default", "plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="ion_temperature_peaking",
+)
+def default_ion_temperature_peaking_from_electron(temperature_peaking: float) -> float:
+    """Fallback: ion temperature profile shares the electron temperature peaking."""
+    return temperature_peaking

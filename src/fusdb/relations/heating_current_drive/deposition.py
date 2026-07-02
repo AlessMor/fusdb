@@ -1,1 +1,0 @@
-"""Power deposition relation placeholders."""

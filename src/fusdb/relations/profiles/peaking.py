@@ -72,9 +72,9 @@ def _parabolic_profile(average: Any, peaking: Any, rho: Any) -> np.ndarray:
     outputs="T_i",
     dependency="generated_profile",
 )
-def parabolic_ion_temperature_profile(T_i_avg: float, temperature_peaking: float, rho: Any) -> Any:
+def parabolic_ion_temperature_profile(T_i_avg: float, ion_temperature_peaking: float, rho: Any) -> Any:
     """Generate an ion-temperature profile from average and peaking factor."""
-    return _parabolic_profile(T_i_avg, temperature_peaking, rho)
+    return _parabolic_profile(T_i_avg, ion_temperature_peaking, rho)
 
 
 @relation(
@@ -94,9 +94,9 @@ def parabolic_electron_temperature_profile(T_e_avg: float, temperature_peaking: 
     outputs="n_i",
     dependency="generated_profile",
 )
-def parabolic_ion_density_profile(n_i_avg: float, density_peaking: float, rho: Any) -> Any:
+def parabolic_ion_density_profile(n_i_avg: float, ion_density_peaking: float, rho: Any) -> Any:
     """Generate an ion-density profile from average and peaking factor."""
-    return _parabolic_profile(n_i_avg, density_peaking, rho)
+    return _parabolic_profile(n_i_avg, ion_density_peaking, rho)
 
 
 @relation(
@@ -108,3 +108,35 @@ def parabolic_ion_density_profile(n_i_avg: float, density_peaking: float, rho: A
 def parabolic_electron_density_profile(n_e_avg: float, density_peaking: float, rho: Any) -> Any:
     """Generate an electron-density profile from average and peaking factor."""
     return _parabolic_profile(n_e_avg, density_peaking, rho)
+
+
+@relation(
+    name="Peak temperatures from average and peaking",
+    tags=("plasma", "profile", "tokamak", "stellarator"),
+    outputs=("T0", "T_i_peak"),
+)
+def calc_temperature_peaking(
+    T_e_avg: float, T_i_avg: float, temperature_peaking: float, ion_temperature_peaking: float
+) -> tuple[float, float]:
+    """Apply the temperature peaking to obtain on-axis (peak) temperatures.
+
+    Adapted from cfspopcon; see README.md section "Third-party Notices".
+
+    fusdb allows the ion temperature profile to peak independently of the
+    electron profile; ``ion_temperature_peaking`` defaults to
+    ``temperature_peaking`` (the electron value), which recovers cfspopcon's
+    single shared peaking.
+
+    Args:
+        T_e_avg: :term:`glossary link<average_electron_temp>`
+        T_i_avg: :term:`glossary link<average_ion_temp>`
+        temperature_peaking: :term:`glossary link<temperature_peaking>`
+        ion_temperature_peaking: :term:`glossary link<ion_temperature_peaking>`
+
+    Returns:
+        peak_electron_temp (T0), peak_ion_temp (T_i_peak)
+    """
+    # CHECK
+    peak_electron_temp = T_e_avg * temperature_peaking
+    peak_ion_temp = T_i_avg * ion_temperature_peaking
+    return peak_electron_temp, peak_ion_temp

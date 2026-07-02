@@ -1,1 +1,0 @@
-"""Kink stability placeholders."""
