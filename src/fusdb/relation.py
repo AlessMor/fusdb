@@ -339,6 +339,8 @@ class Relation:
     ) -> dict[str, Any]:
         """Verify one relation and its local constraints.
 
+        The status half of :meth:`status_and_residual`.
+
         Args:
             ns: Variable namespace.
             scales: Optional variable scale mapping.
@@ -348,49 +350,8 @@ class Relation:
         Returns:
             Diagnostic dictionary.
         """
-        errors: list[str] = []
-        warnings: list[str] = []
-        residuals: list[float] = []
-        max_violation = 0.0
-        ok = True
-        try:
-            for lhs, op, rhs, out in self.comparisons(ns):
-                passed, residual, violation = self._scaled_comparison(
-                    lhs, op, rhs, out, scales=scales, rel_tols=rel_tols, abs_tols=abs_tols
-                )
-                residuals.extend(float(item) for item in residual)
-                if violation.size:
-                    max_violation = max(max_violation, float(np.max(violation)))
-                ok = ok and passed
-        except Exception as exc:
-            ok = False
-            errors.append(str(exc))
-        for guard in self.constraint_relations:
-            try:
-                status = guard.verify_status(ns, scales=scales, rel_tols=rel_tols, abs_tols=abs_tols)
-                if not status["verified"]:
-                    ok = False
-                    message = f"{guard.name}: {status.get('errors') or 'constraint failed'}"
-                    if guard.enforce:
-                        errors.append(message)
-                    else:
-                        warnings.append(f"applicability failed: {message}")
-            except Exception as exc:
-                ok = False
-                if guard.enforce:
-                    errors.append(str(exc))
-                else:
-                    warnings.append(f"applicability failed: {exc}")
-        return {
-            "relation": self.name,
-            "verified": bool(ok),
-            "enforced": bool(self.enforce),
-            "errors": errors,
-            "warnings": warnings,
-            "residuals": residuals,
-            "max_abs_scaled_residual": max((abs(item) for item in residuals), default=0.0),
-            "max_physical_violation": max_violation,
-        }
+        status, _residual = self.status_and_residual(ns, scales=scales, rel_tols=rel_tols, abs_tols=abs_tols)
+        return status
 
     def status_and_residual(
         self,

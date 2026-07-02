@@ -8,6 +8,7 @@ import numpy as np
 from scipy.optimize import Bounds, NonlinearConstraint, minimize
 
 from . import verify as verify_mode
+from ._common import new_result, record_uninitialized_failure, reject_unknown_options
 
 
 def run(
@@ -21,8 +22,8 @@ def run(
 ) -> dict[str, Any]:
     """Run constrained optimization."""
     self = system
-    result = self._new_result("optimize")
-    if self._reject_unknown_options(result, _unused):
+    result = new_result(self, "optimize")
+    if reject_unknown_options(result, _unused):
         return result
     if sense not in {"minimize", "maximize"}:
         result["errors"].append(f"optimize sense must be 'minimize' or 'maximize', got {sense!r}.")
@@ -33,22 +34,21 @@ def run(
         result["termination"] = "missing objective"
         return result
     try:
-        x0, lower, upper, _x_scale, spans = self._pack_free_variables()
+        x0, lower, upper = self.pack()
     except Exception as exc:
         result["errors"].append(str(exc))
         result["termination"] = "initialization failed"
         return result
 
-    if self._record_uninitialized_failure(result):
+    if record_uninitialized_failure(self, result):
         return result
 
     if x0.size == 0:
         return verify_mode.run(self)
-    self._prepare_runtime(spans)
-    reference = self._values_from_variables(for_solver=True, skip_missing=True, use_input_values=True)
+    reference = self.input_values()
 
     def objective_value(x: np.ndarray) -> float:
-        values = self._values_from_vector(x)
+        values = self.unpack(x)
         if callable(objective):
             raw = objective(values)
         else:
@@ -57,13 +57,13 @@ def run(
         if sense == "maximize":
             val = -val
         if movement_weight:
-            move = self._movement_residuals(values, reference, spans)
+            move = self.movement_residuals(values, reference)
             val += float(movement_weight) * float(np.dot(move, move))
         return val
 
     def equality_residual(x: np.ndarray) -> np.ndarray:
-        values = self._values_from_vector(x)
-        _status, residuals, errors, _warnings = self._evaluate_relation_residuals(values, strict=True, solver_residuals=True)
+        values = self.unpack(x)
+        residuals, errors = self.solver_residual_vector(values)
         if errors:
             return np.full(max(1, residuals.size), 1.0e6, dtype=float)
         return residuals
@@ -82,9 +82,9 @@ def run(
         result["errors"].append(f"SciPy minimize failed: {exc}")
         result["termination"] = "solver error"
         return result
-    values = self._values_from_vector(sol.x)
-    completed_values = self._complete_values(dict(values))
-    self._store_solved_values(completed_values)
+    values = self.unpack(sol.x)
+    completed_values = self.complete(dict(values))
+    self.store(completed_values)
     validation = verify_mode.run(self)
     validation.update({"mode": "optimize", "termination": str(sol.message), "solver": {"backend": "scipy.optimize.minimize", "success": bool(sol.success), "niter": int(getattr(sol, "nit", -1))}})
     return validation

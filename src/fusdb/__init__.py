@@ -5,7 +5,7 @@ from __future__ import annotations
 from .relation import Relation, RelationSolveError, RelationUnderdeterminedError, RelationVerificationError, constraint_from_expression, relation
 from .relationsystem import RelationSystem
 from .variable import Variable
-from .reactor import Reactor
+from .reactor import Reactor, SolvedColumn, solve_reactors, variables_table
 from .registry import RELATIONS, SPECIES, TAGS, VARIABLES, RelationRegistry, SpeciesRegistry, TagRegistry, VariableRegistry
 
 
@@ -32,6 +32,9 @@ __all__ = [
     "RelationSystem",
     "Reactor",
     "Variable",
+    "SolvedColumn",
+    "solve_reactors",
+    "variables_table",
     "constraint_from_expression",
     "relation",
     "RELATIONS",

@@ -9,8 +9,9 @@ import numpy as np
 from scipy.optimize import least_squares
 
 from fusdb.relation import Relation
-from fusdb.relationsystem import Span
-from fusdb.utils import scipy_bounds
+from fusdb.utils import ZERO_TOL, scipy_bounds
+
+from ._common import new_result
 
 
 def run(system: Any, order: Iterable[Any] | None = None, *, passes: int = 1, **_options: Any) -> dict[str, Any]:
@@ -25,17 +26,13 @@ def run(system: Any, order: Iterable[Any] | None = None, *, passes: int = 1, **_
     values and are not required to keep earlier relations satisfied.
     """
     self = system
-    result = self._new_result("ordered")
+    result = new_result(self, "ordered")
     sequence = list(self.primary_relations if order is None else order)
 
     # Ordered mode operates on the current procedural state.  Current values
     # count as available values; completion/closure is deliberately disabled so
     # each ordered step is responsible for producing its own missing value.
-    values = self._values_from_variables(
-        for_solver=True,
-        skip_missing=True,
-        complete=False,
-    )
+    values = self.solver_values()
 
     executed: list[str] = []
     step_status: list[dict[str, Any]] = []
@@ -101,11 +98,7 @@ def run(system: Any, order: Iterable[Any] | None = None, *, passes: int = 1, **_
             "step_status": step_status,
             "termination": "ordered evaluation completed",
             "variables": self.variables_by_name,
-            "values": self._values_from_variables(
-                for_solver=False,
-                skip_missing=True,
-                complete=False,
-            ),
+            "values": self.public_values(),
         }
     )
     return result
@@ -115,9 +108,10 @@ def _ordered_single_relation(self: Any, item: Any) -> Relation:
     if isinstance(item, Relation):
         return item
     name = str(item)
-    if name not in self.relations_by_name:
+    rel = self.relation_by_identifier(name)
+    if rel is None:
         raise KeyError(f"Unknown ordered relation {name!r}.")
-    return self.relations_by_name[name]
+    return rel
 
 
 def _solve_ordered_block(self: Any, rels: list[Relation], values: dict[str, Any], result: dict[str, Any]) -> bool:
@@ -144,7 +138,7 @@ def _solve_ordered_block(self: Any, rels: list[Relation], values: dict[str, Any]
     # cases the shared solver declines (e.g. a profile-valued numerical core).
     block = self._solve_initial_block(tuple(unknowns), rels, values, residual_tol=1.0)
     if block is not None:
-        for name, value in block["values"].items():
+        for name, value in block.items():
             values[name] = value
             self.variables_by_name[name].set_value(self._public_value(name, value))
         if all(self._verify_status(rel, self._relation_evaluation_values(rel, values))["verified"] for rel in rels):
@@ -152,13 +146,15 @@ def _solve_ordered_block(self: Any, rels: list[Relation], values: dict[str, Any]
         result["errors"].append("Ordered solve block did not verify.")
         return False
 
-    spans: list[Span] = []
+    # Local affine packing records ``(name, start, stop, offsets, scales)`` for
+    # this block only; the fallback never touches the system's packed layout.
+    spans: list[tuple[str, int, int, np.ndarray, np.ndarray]] = []
     x0: list[float] = []
     lower: list[float] = []
     upper: list[float] = []
     for name in unknowns:
         var = self.variables_by_name[name]
-        lb, ub = scipy_bounds(self.variable_registry.get(name).solver_domain, zero_tol=self.zero_tol)
+        lb, ub = scipy_bounds(self.variable_registry.get(name).solver_domain, zero_tol=ZERO_TOL)
         size = self._variable_dim(name)
         start = len(x0)
         offsets = []
@@ -172,14 +168,14 @@ def _solve_ordered_block(self: Any, rels: list[Relation], values: dict[str, Any]
                     result["errors"].append(f"No initial value available for {name!r} in ordered block.")
                     return False
                 init = known_start
-            ref = self._reference_for_movement(var, init, index=i if var.shape == 1 else None)
-            scale, offset, lo, hi, _transform = self._pack_scalar(name, var, init, lb, ub, scale_ref=ref, allow_log=False)
+            ref = var.movement_reference(init, index=i if var.shape == 1 else None)
+            scale, offset, lo, hi, _transform = self._pack_scalar(var, init, lb, ub, scale_ref=ref, allow_log=False)
             x0.append(0.0)
             lower.append(lo)
             upper.append(hi)
             offsets.append(offset)
             scales.append(scale)
-        spans.append(Span(name, start, len(x0), np.asarray(offsets), np.asarray(scales)))
+        spans.append((name, start, len(x0), np.asarray(offsets), np.asarray(scales)))
 
     def block_values(x: np.ndarray) -> dict[str, Any]:
         out = dict(values)

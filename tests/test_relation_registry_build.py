@@ -9,10 +9,13 @@ being silently dropped when a RelationSystem is later compiled.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from fusdb.registry import RELATIONS, RelationRegistry
 from fusdb.relation import Relation, canonicalize_relation
+from fusdb.relationsystem import RelationSystem
+from fusdb.variable import Variable
 
 
 def test_shipped_relations_build_without_degenerate_relations():
@@ -70,3 +73,93 @@ def test_registry_build_rejects_alias_degenerate_relation():
     registry = _AliasRegistry({"x": "x", "y": "x"})
     with pytest.raises(ValueError, match="alias-degenerate"):
         RelationRegistry([_degenerate_relation()], variable_registry=registry)
+
+
+# ── Dual identification (name + function name) and identifier uniqueness ──────
+
+_PASSTHROUGH_REGISTRY = _AliasRegistry({})
+
+
+def _named_relation(name: str, function_name: str) -> Relation:
+    """A trivial ``y = x`` relation with explicit name and function name."""
+    return Relation(
+        name=name,
+        func=lambda x: x,
+        input_names=("x",),
+        outputs=("y",),
+        function_name=function_name,
+        argument_names=("x",),
+    )
+
+
+def test_registry_rejects_duplicate_name():
+    rels = [_named_relation("A", "f1"), _named_relation("A", "f2")]
+    with pytest.raises(ValueError, match="must be unique"):
+        RelationRegistry(rels, variable_registry=_PASSTHROUGH_REGISTRY)
+
+
+def test_registry_rejects_duplicate_function_name():
+    rels = [_named_relation("A", "f1"), _named_relation("B", "f1")]
+    with pytest.raises(ValueError, match="must be unique"):
+        RelationRegistry(rels, variable_registry=_PASSTHROUGH_REGISTRY)
+
+
+def test_registry_rejects_name_function_cross_collision():
+    # B's user-facing name equals A's function name: addressing "f1" would be
+    # ambiguous, so it must be rejected even though no name and no function name
+    # is duplicated on its own.
+    rels = [_named_relation("A", "f1"), _named_relation("f1", "f2")]
+    with pytest.raises(ValueError, match="must be unique"):
+        RelationRegistry(rels, variable_registry=_PASSTHROUGH_REGISTRY)
+
+
+def test_registry_allows_name_equal_to_own_function_name():
+    # A relation decorated without an explicit name has name == function_name;
+    # that is one owner registering both identifiers, not a collision.
+    registry = RelationRegistry([_named_relation("same", "same")], variable_registry=_PASSTHROUGH_REGISTRY)
+    assert len(registry) == 1
+
+
+def test_registry_resolves_and_contains_by_name_and_function():
+    reg = RelationRegistry.discover()
+    name = "Parabolic electron temperature profile"
+    function = "parabolic_electron_temperature_profile"
+    assert reg.get(name) is reg.get(function)
+    assert name in reg
+    assert function in reg
+    assert "definitely-not-a-relation" not in reg
+
+
+def test_get_filtered_relations_exclude_and_order_accept_function_name():
+    name = "Parabolic electron temperature profile"
+    function = "parabolic_electron_temperature_profile"
+    # include by function name, then exclude by function name removes it.
+    included = RELATIONS.get_filtered_relations(names=[function])
+    assert any(rel.name == name for rel in included)
+    excluded = RELATIONS.get_filtered_relations(names=[function], exclude=[function])
+    assert not any(rel.name == name for rel in excluded)
+    # order by function name puts it first.
+    ordered = RELATIONS.get_filtered_relations(names=[function], order=[function])
+    assert ordered[0].name == name
+    # order referencing an inactive (unselected) relation still errors.
+    with pytest.raises(ValueError, match="inactive relation"):
+        RELATIONS.get_filtered_relations(order=[function])
+
+
+def test_ordered_mode_resolves_step_by_function_name():
+    rho = np.linspace(0.0, 1.0, 11)
+    system = RelationSystem(
+        [
+            Variable("rho", value=rho, fixed=True),
+            Variable("T_e_avg", value=5.0, fixed=True),
+            Variable("temperature_peaking", value=2.5, fixed=True),
+        ],
+        list(RELATIONS),
+        name="ordered_by_function",
+    )
+    assert system.relation_by_identifier("parabolic_electron_temperature_profile").name == (
+        "Parabolic electron temperature profile"
+    )
+    result = system.ordered(order=["parabolic_electron_temperature_profile"])
+    assert not result["errors"]
+    assert result["executed_relations"] == ["Parabolic electron temperature profile"]

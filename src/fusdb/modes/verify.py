@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from ._common import result_from_certificate
+
 
 def verify_values(system: Any, values: Mapping[str, Any], *, complete: bool = True) -> dict[str, Any]:
     """Verify one value map against every compiled enforced relation.
@@ -18,10 +20,8 @@ def verify_values(system: Any, values: Mapping[str, Any], *, complete: bool = Tr
     self = system
     check_values = dict(values)
     if complete:
-        check_values = self._complete_values(check_values)
-    relation_status, residuals, errors, warnings = self._evaluate_relation_residuals(
-        check_values, strict=False, solver_residuals=False
-    )
+        check_values = self.complete(check_values)
+    relation_status, residuals, errors, warnings = self.certify_relations(check_values)
     fixed_errors = self._fixed_value_errors(check_values)
     domain_errors = self._domain_errors(check_values)
     all_errors = [*errors, *fixed_errors, *domain_errors]
@@ -62,6 +62,6 @@ def verify_values(system: Any, values: Mapping[str, Any], *, complete: bool = Tr
 def run(system: Any, **_options: Any) -> dict[str, Any]:
     """Verify current public values against all compiled enforced relations."""
     self = system
-    values = self._values_from_variables(for_solver=True, skip_missing=False)
+    values = self.solver_values()
     certificate = verify_values(self, values, complete=True)
-    return self._result_from_certificate("verify", certificate, termination="verification evaluated")
+    return result_from_certificate(self, "verify", certificate, termination="verification evaluated")

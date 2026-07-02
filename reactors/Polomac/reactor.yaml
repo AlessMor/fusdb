@@ -1,0 +1,20 @@
+metadata:
+  id: Polomac2024
+  name: Polomac 2024
+  organization: Deutelio
+  year: 2024
+  doi: 10.31281/med9bh43
+tags:
+- polomac
+variables:
+  V_p: 
+    value: 150
+    unit: dm^3
+  T_avg:
+    value: 100
+    unit: eV
+  n_avg: 1e20
+  B: 
+    value: 0.25 # paper says 0.2-0.3 T
+    unit: T
+  P_ECRH: 7.5e3 # paper says 5-10 kW

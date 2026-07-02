@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any, NamedTuple
+from typing import Any
 
 import networkx as nx
 import numpy as np
@@ -12,35 +12,195 @@ from scipy.optimize import least_squares
 from scipy.sparse import lil_matrix
 
 from .relation import Relation, canonicalize_relation, canonicalize_relation_names, constraint_from_expression
-from .registry import VARIABLES, VariableRegistry
-from .utils import coerce_to_shape, domain_bounds_for_solver, parse_constraint_specs, scipy_bounds, value_in_domain
+from .registry import VARIABLES
+from .utils import ZERO_TOL, parse_constraint_specs, scipy_bounds, value_in_domain
 from .variable import Variable
 
 
-class Span(NamedTuple):
-    """Packing span for one free variable in the solver vector.
+# ── Pure structural helpers ────────────────────────────────────────────────
+# Module-level functions with explicit inputs: they read nothing off a
+# RelationSystem, so the compile pass's dataflow stays visible at call sites.
 
-    ``[start:stop)`` is the variable's slice of the packed vector; ``offsets``
-    and ``scales`` map that slice back to physical values.  A ``NamedTuple`` so
-    spans support both positional unpacking and named access (``span.offsets``).
+
+def _is_default_relation(rel: Relation) -> bool:
+    """Whether a relation is a weak default (fallback provider / x0 seed)."""
+    return "default" in set(rel.tags) or str(rel.source_kind).startswith("default")
+
+
+def _scalar_start_grid(lb: float, ub: float) -> list[float]:
+    """Return signed log-spaced start candidates inside the solver interval."""
+    points: set[float] = set()
+    for exponent in range(-30, 31, 2):
+        for sign in (1.0, -1.0):
+            value = sign * 10.0**exponent
+            if (not np.isfinite(lb) or value >= lb) and (not np.isfinite(ub) or value <= ub):
+                points.add(value)
+    return sorted(points)
+
+
+def _forward_decision_rounds(
+    relations: list[Relation], supplied: Iterable[str], extra_known: Iterable[str] = ()
+) -> tuple[dict[str, int], dict[str, Relation]]:
+    """Return forward-closure rounds and per-variable forward providers.
+
+    ``supplied`` names are decided at round 0; ``extra_known`` seeds additional
+    variables as decided at round 0 -- used to treat block cores as available
+    so the block-downstream variables get forward providers.
+
+    Each round, real relations are exhausted before defaults, so a variable is
+    owned by a default only when no real relation can decide it.  A relation
+    decides a variable either forward (all inputs known, every output decided)
+    or acausally (a single remaining variable from the rest).  The returned
+    ``decider`` maps a variable to the relation that first decided it as one of
+    its declared outputs -- the forward provider for completion.  Variables
+    decided only acausally (as an input, e.g. ``a`` from ``A = R/a``) or never
+    reached have no ``decider`` entry and are packed as free variables for the
+    global solve.
     """
+    rounds: dict[str, int] = {name: 0 for name in supplied}
+    for name in extra_known:
+        rounds.setdefault(name, 0)
+    decider: dict[str, Relation] = {}
+    non_default = [rel for rel in relations if not _is_default_relation(rel)]
+    defaults = [rel for rel in relations if _is_default_relation(rel)]
+    # Pure-input variables: produced by no relation here and referenced only
+    # by outputless (constraint) relations.  The acausal fallback must not
+    # solve such a variable as "the last unknown" of a constraint (e.g. an
+    # unsupplied tau_p that only the particle balances reference) -- it is a
+    # free parameter, not a value the constraint determines.  Leaving it
+    # undecided lets the structural partition mark it underdetermined and
+    # deactivate the constraints that need it.
+    produced_any = {out for rel in relations for out in rel.output_names}
+    ref_rels: dict[str, list[Relation]] = {}
+    for rel in relations:
+        for v in rel.variables:
+            ref_rels.setdefault(v, []).append(rel)
+    pure_input = {
+        v for v, rels in ref_rels.items()
+        if v not in produced_any and all((not r.outputs and r.op == "==") for r in rels)
+    }
+    round_no = 0
+    changed = True
+    while changed:
+        changed = False
+        round_no += 1
 
-    name: str
-    start: int
-    stop: int
-    offsets: np.ndarray
-    scales: np.ndarray
+        # Forward decisions take priority and run to a fixed point first, so
+        # a variable that some relation can compute as an output (n_D from
+        # n_i and f_D) is owned by that producer rather than being decided
+        # acausally as an input of another relation (Integrated D fraction).
+        # Real relations are exhausted before defaults within each sweep.
+        forward_changed = True
+        while forward_changed:
+            forward_changed = False
+            for group in (non_default, defaults):
+                for rel in group:
+                    if rel.output_names and all(inp in rounds for inp in rel.input_names):
+                        for out in rel.output_names:
+                            if out not in rounds:
+                                rounds[out] = round_no
+                                decider.setdefault(out, rel)
+                                forward_changed = changed = True
+
+        # Acausal fallback: a single remaining variable is decided from the
+        # rest.  Applied only after forward decisions stall; control returns
+        # to the forward sweep so any newly available output is owned by its
+        # producer.
+        for group in (non_default, defaults):
+            for rel in group:
+                undecided = [v for v in rel.variables if v not in rounds]
+                if len(undecided) == 1 and undecided[0] not in rounds and undecided[0] not in pure_input:
+                    v = undecided[0]
+                    rounds[v] = round_no
+                    if v in rel.output_names:
+                        decider.setdefault(v, rel)
+                    changed = True
+    return rounds, decider
+
+
+def _structural_block_plan(
+    row_adj: list[list[int]],
+    match_row: np.ndarray,
+    under_cols: set[int],
+    name_of_col: Mapping[int, str],
+) -> list[tuple[str, ...]]:
+    """Return determined-variable blocks in dependency order.
+
+    The strongly connected components of the matched dependency digraph
+    are the simultaneous solve blocks (1x1 direct steps, 2x2, 3x3, ...),
+    and their topological order is the solve order.  Components that share
+    a variable (profile columns can split across components) are merged
+    and keep the earliest position.
+    """
+    determined = [c for c in range(len(match_row)) if c not in under_cols and match_row[c] >= 0]
+    if not determined:
+        return []
+    determined_set = set(determined)
+    # Dependency digraph over determined columns: c2 -> c when c2 appears in
+    # the relation matched to c (so c depends on c2).  Strongly connected
+    # components are the simultaneous solve blocks; the condensation gives
+    # their dependency order.
+    digraph = nx.DiGraph()
+    digraph.add_nodes_from(determined)
+    for c in determined:
+        for c2 in row_adj[int(match_row[c])]:
+            if c2 != c and c2 in determined_set:
+                digraph.add_edge(c2, c)
+    condensation = nx.condensation(digraph)
+
+    # Components -> variable-name groups, merging groups that share a name
+    # (profile columns can split across components) and ordering by first
+    # topological appearance.
+    parent: dict[str, str] = {}
+
+    def find(name: str) -> str:
+        while parent[name] != name:
+            parent[name] = parent[parent[name]]
+            name = parent[name]
+        return name
+
+    def component_names(comp: int) -> list[str]:
+        return sorted({name_of_col[col] for col in condensation.nodes[comp]["members"]})
+
+    first_rank: dict[str, int] = {}
+    for rank, comp in enumerate(nx.lexicographical_topological_sort(condensation, key=component_names)):
+        names = component_names(comp)
+        for name in names:
+            parent.setdefault(name, name)
+            first_rank.setdefault(name, rank)
+        for left, right in zip(names, names[1:]):
+            parent[find(right)] = find(left)
+    groups: dict[str, set[str]] = {}
+    for name in parent:
+        groups.setdefault(find(name), set()).add(name)
+    ordered = sorted(groups.values(), key=lambda group: min(first_rank[name] for name in group))
+    return [tuple(sorted(group)) for group in ordered]
 
 
 class RelationSystem:
     """Variables and relations compiled into one numeric system.
+
+    Execution modes (:mod:`fusdb.modes`) drive a compiled system through this
+    public interface and own their own algorithm and result shape:
+
+    - :meth:`compile` -- build/prune the active system (``run`` calls this).
+    - :meth:`pack` / :meth:`unpack` -- free variables <-> solver vector.
+      ``pack`` stores the packed layout (``packed_specs``); the residual
+      helpers read it.
+    - :meth:`values` / :meth:`complete` -- read the value namespace; close it.
+    - :meth:`solver_residual_vector` / :meth:`domain_residuals` /
+      :meth:`movement_residuals` -- the residual blocks (modes weight them);
+      :meth:`certify_relations` -- the certification statuses.
+    - :meth:`store` -- write solved values back into the variables.
+    - :meth:`initial_values_from_graph`, :meth:`build_jac_sparsity`,
+      :meth:`movement_weights`, :meth:`refresh_scales` -- solve
+      setup/initialization helpers.
 
     Args:
         variables: Scenario variables.
         relations: Post-filter relation candidates.
         constraints: System-level constraints.
         name: Diagnostic system name.
-        variable_registry: Variable registry.
     """
 
     def __init__(
@@ -50,32 +210,84 @@ class RelationSystem:
         *,
         constraints: Any = None,
         name: str | None = None,
-        variable_registry: VariableRegistry = VARIABLES,
     ) -> None:
         self.name = str(name or "relation_system")
-        # Injected so tests and user-defined registries can override it; defaults
-        # to the shared global VARIABLES, which is what every caller uses today.
-        self.variable_registry = variable_registry
-        self.zero_tol = 1e-12
+        # Result of the most recent run(); read by variables_table for header
+        # colouring. None until a mode has been dispatched.
+        self.last_result: dict[str, Any] | None = None
+        # Single read point for registry metadata; Variable/Relation are bound
+        # to the same shared global registry.
+        self.variable_registry = VARIABLES
         # Variables found unevaluable by the prune pass (no value, no producer,
         # no anchored block); relations that need them are deactivated.
         self._unevaluable_names: set[str] = set()
-        self.variables = list(variables)
+        # Packed free-variable layout, one record per packed variable
+        # ``(name, start, stop, offsets, scales, shape, transform)``; written by
+        # pack() together with the runtime completion plan it caches.
+        self.packed_specs: list[tuple[str, int, int, np.ndarray, np.ndarray, int, str | None]] = []
+        self.packed_dim: int = 0
 
+        # The single variable container; insertion-ordered.
         self.variables_by_name: dict[str, Variable] = {}
-        for var in self.variables:
+        for var in variables:
             if var.name in self.variables_by_name:
                 raise ValueError(f"Duplicate variable {var.name!r}.")
             self.variables_by_name[var.name] = var
 
-        # Compilation runs as an ordered sequence of phases; each reads the
-        # state left by earlier phases and writes its own attributes onto self.
+        # Construction phases: each reads the state left by earlier phases
+        # and writes its own attributes onto self.
+        self._canonicalize_candidates(relations, constraints)
+        self._infer_profile_size()
+        self._materialize_rho_grid()
+        self._broadcast_profile_values()
+        self._split_supplied_profiles()
 
-        # Phase 1 -- Canonicalize/validate the candidate relations and build the
-        # system constraint relations.  canonicalize_relation rejects
-        # alias-degenerate relations (a declared output that resolves to one of
-        # its own inputs); registry relations are already validated at build
-        # time, but re-validating here keeps ad-hoc relations equally safe.
+        # Declare the remaining lifecycle state, then build the static
+        # active set only (no runtime initialization/pruning).  run()
+        # dispatches the default seeding and the initial-value computation used
+        # to prune unevaluable variables, so constructing a RelationSystem does
+        # no solve-oriented initialization and writes no relation-derived
+        # outputs into Variable.value; missing outputs are completed in local
+        # value maps during residual evaluation and stored only after a
+        # solve/ordered run finishes.
+        #
+        # Attribute lifecycle from here on:
+        #   * compile products -- written by every _run_compile_pass:
+        #     constant_default_values, default_provider_by_output,
+        #     structural_blocks, primary_relations, relations,
+        #     active_variable_names, block_core_names,
+        #     derived_provider_by_output, derived_variable_names,
+        #     blocked_relation_reasons, relations_by_name,
+        #     relations_by_function, variable_scales/tolerances,
+        #     _partition_diagnostics, plus the None-reset caches below;
+        #   * seeding oracle -- _initial_guesses, _unevaluable_names (compile()),
+        #   * completion plan -- _profile_specs, _constant_defaults_solver,
+        #     _provider_plan, _completion_passes (every _run_compile_pass);
+        #   * packed layout -- packed_specs, packed_dim, _packed_base_values,
+        #     _uninitialized_free_variables (pack()).
+        self._initial_guesses: dict[str, Any] = {}
+        self._uninitialized_free_variables: list[str] = []
+        # The canonical bipartite structural graph over the (immutable)
+        # candidate relations; built once on first use.
+        self._graph: nx.DiGraph | None = None
+        # Caches derived from the compiled provider/active-relation plan;
+        # reset to None by every _run_compile_pass.
+        self._completion_plan_cache: list[tuple[Relation, bool]] | None = None
+        self._sparsity_graph_cache: nx.DiGraph | None = None
+        self._compiler_report_cache: dict[str, Any] | None = None
+        self._completion_acyclic = False
+        self._run_compile_pass()
+
+
+    def _canonicalize_candidates(self, relations: Iterable[Relation], constraints: Any) -> None:
+        """Canonicalize/validate the candidate relations and build the system
+        constraint relations.
+
+        ``canonicalize_relation`` rejects alias-degenerate relations (a declared
+        output that resolves to one of its own inputs); registry relations are
+        already validated at build time, but re-validating here keeps ad-hoc
+        relations equally safe.
+        """
         self.candidate_primary_relations = [canonicalize_relation(rel, self.variable_registry) for rel in relations]
         self.system_constraint_relations = [
             self._resolve_relation_names(
@@ -84,10 +296,11 @@ class RelationSystem:
             for index, (text, enforce) in enumerate(parse_constraint_specs(constraints))
         ]
 
-        # Phase 2 -- Infer the single profile grid size shared by every 1-D
-        # variable; incompatible explicit sizes are an error.
+    def _infer_profile_size(self) -> None:
+        """Infer the single profile grid size shared by every 1-D variable;
+        incompatible explicit sizes are an error."""
         profile_sizes: set[int] = set()
-        for var in self.variables:
+        for var in self.variables_by_name.values():
             if var.shape != 1:
                 continue
             if var.size is not None:
@@ -98,8 +311,9 @@ class RelationSystem:
             raise ValueError(f"Profile sizes are incompatible: {sorted(profile_sizes)}.")
         self.profile_size = next(iter(profile_sizes), self.variable_registry.profile_size_default)
 
-        # Phase 3 -- Materialize the canonical fixed ``rho`` grid whenever
-        # profiles or rho-dependent relations are present.
+    def _materialize_rho_grid(self) -> None:
+        """Materialize the canonical fixed ``rho`` grid whenever profiles or
+        rho-dependent relations are present."""
         if "rho" in self.variable_registry:
             uses_rho = any("rho" in rel.variables for rel in self.candidate_primary_relations)
             has_profile = any(var.shape == 1 for var in self.variables_by_name.values())
@@ -107,7 +321,6 @@ class RelationSystem:
                 rho_value = self.variable_registry.uniform_profile_grid(self.profile_size)
                 if "rho" not in self.variables_by_name:
                     rho = Variable("rho", value=rho_value, size=self.profile_size, fixed=True)
-                    self.variables.append(rho)
                     self.variables_by_name["rho"] = rho
                 else:
                     rho = self.variables_by_name["rho"]
@@ -116,8 +329,9 @@ class RelationSystem:
                         rho.set_input(rho_value)
                     rho.fixed = True
 
-        # Phase 4 -- Broadcast scalar profile data onto the shared grid and
-        # validate explicitly supplied profile lengths.
+    def _broadcast_profile_values(self) -> None:
+        """Broadcast scalar profile data onto the shared grid and validate
+        explicitly supplied profile lengths."""
         for var in self.variables_by_name.values():
             if var.shape != 1:
                 continue
@@ -136,13 +350,25 @@ class RelationSystem:
                 elif arr.ndim == 1 and arr.shape[0] != var.size:
                     raise ValueError(f"Profile {var.name!r} current length {arr.shape[0]}, expected {var.size}.")
 
-        # Phase 5 -- Convert supplied fixed profiles into a fixed shape plus a
-        # scalar average, so the solver works on scalar averages rather than
-        # full profiles when the registry exposes an average variable.
-        self.profile_shape_by_name: dict[str, np.ndarray] = {}
+    def _split_supplied_profiles(self) -> None:
+        """Split every supplied profile into a fixed shape plus a scalar
+        average, kept linked by construction so ``mean(profile) == average``
+        always holds (they can never diverge):
+
+        * ``fixed`` profile -> shape AND level pinned.  The profile is
+          authoritative, so its own volume-average defines the (also fixed)
+          scalar average; a separately supplied scalar that disagrees is a
+          contradiction, so the profile average wins and we warn.
+        * supplied profile -> shape pinned, level free.  The average is a
+          free solver DOF (referenced to the supplied scalar when given, else
+          the profile's own average) and the profile is reconstructed as
+          ``average * shape``, so it slides up and down with the level.
+        """
+        # One record per supplied profile: ``name -> (unit shape, fixed)``.
+        # ``fixed`` profiles pin shape AND level; unfixed ones are shape-locked
+        # (level controlled by the packed scalar average).
+        self.supplied_profiles: dict[str, tuple[np.ndarray, bool]] = {}
         self.profile_average_by_name: dict[str, str] = {}
-        self.profile_source_by_name: dict[str, str] = {}
-        self.fixed_supplied_profile_names: set[str] = set()
         for name, var in list(self.variables_by_name.items()):
             if name == "rho" or var.shape != 1 or var.input_value is None:
                 continue
@@ -165,46 +391,127 @@ class RelationSystem:
                 if np.isfinite(shape_avg) and abs(shape_avg) > 1.0e-300:
                     shape = shape / shape_avg
             self.profile_average_by_name[name] = avg_name
-            self.profile_source_by_name[name] = "fixed_supplied_profile" if var.fixed else "supplied_profile"
-            created_average_input = avg_var.input_value is None
-            if created_average_input:
-                avg_var.set_input(self._public_value(avg_name, avg))
-            if var.fixed:
-                self.profile_shape_by_name[name] = shape.astype(float, copy=False)
-                self.fixed_supplied_profile_names.add(name)
-                if created_average_input:
-                    avg_var.fixed = True
+            self.supplied_profiles[name] = (shape.astype(float, copy=False), bool(var.fixed))
+            supplied_average = avg_var.input_value
+            profile_average = self._public_value(avg_name, avg)
+            # The profile <-> average link is enforced by the
+            # ``<x>_avg == volume_average(<x>)`` consistency relation, not by
+            # pinning here: a fixed profile's average is seeded from the profile
+            # (so it stays known/decidable) but left free, so a separately supplied
+            # scalar that disagrees is surfaced and reconciled by the mode instead
+            # of being silently overwritten.  A supplied average always wins the
+            # seed; the residual then measures any disagreement with the profile.
+            if supplied_average is None:
+                avg_var.set_input(profile_average)
 
-        # Phase 6 -- Build the static active set only (no runtime
-        # initialization/pruning).  run() dispatches the default seeding and the
-        # initial-value computation used to prune unevaluable variables, so
-        # constructing a RelationSystem does no solve-oriented initialization
-        # and writes no relation-derived outputs into Variable.value; missing
-        # outputs are completed in local value maps during residual evaluation
-        # and stored only after a solve/ordered run finishes.
-        self._initial_guesses = {}
-        self._runtime_initial_values_ready = False
-        self._run_compile_pass()
+    # ── Public entry points and mode dispatch ────────────────────────────
+
+    def verify(self, **options: Any) -> dict[str, Any]:
+        return self.run("verify", **options)
+
+    def reconcile(self, **options: Any) -> dict[str, Any]:
+        return self.run("reconcile", **options)
+
+    def optimize(self, **options: Any) -> dict[str, Any]:
+        return self.run("optimize", **options)
+
+    def ordered(self, **options: Any) -> dict[str, Any]:
+        return self.run("ordered", **options)
+
+    def relation_by_identifier(self, identifier: str) -> Relation | None:
+        """Resolve a relation by user-facing name or decorated function name.
+
+        Name is tried first to preserve existing semantics; the function-name
+        index is the fallback.  Returns ``None`` when neither matches.
+        """
+        text = str(identifier)
+        rel = self.relations_by_name.get(text)
+        if rel is not None:
+            return rel
+        return self.relations_by_function.get(text)
+
+    def compile(self) -> None:
+        """Compile the active system, pruning relations needing unevaluable variables.
+
+        Public entry to the compiled-execution interface; modes assume it has
+        run.  ``run`` calls it before dispatch, so modes reached through ``run``
+        need not call it; a caller invoking a mode function directly should call
+        ``compile`` first.  It is not cheap (it re-runs the prune-to-fixpoint
+        loop), so it is not called redundantly per mode.
+        """
+        self._compile_with_pruning()
+
+    def run(self, mode: str = "verify", **options: Any) -> dict[str, Any]:
+        """Prepare runtime initialization and dispatch to an isolated execution mode."""
+        from .modes import get_mode
+
+        self.compile()
+        self.last_result = get_mode(mode)(self, **options)
+        return self.last_result
+
+    def _repr_html_(self) -> str:
+        """Rich Jupyter table of this system's current variables."""
+        from .reactor import variables_table
+
+        return variables_table(self)
+
+    # ── Compilation: active set, defaults activation, pruning ────────────
 
     def _run_compile_pass(self) -> None:
-        """Run one full structural compile pass (active set, profile generators,
-        guards, scales) over the current candidate relations.
+        """Run one full structural compile pass over the current candidates.
 
         Shared by the static compile in ``__init__`` and each round of
-        :meth:`_compile_with_pruning`; it performs no pruning or initialization.
+        :meth:`_compile_with_pruning`; it performs no pruning or
+        initialization.  Stages, in order: filter usable candidates, activate
+        registry defaults (bijection-closed forward decidability), select the
+        active relation set (Dulmage-Mendelsohn pruning of undecidables),
+        select block cores and derived providers, register profile
+        generators, append guard relations, then refresh scales and freeze
+        the completion plan.
         """
-
         # ── Clear caches derived from the previous provider/active-relation plan.
-        for attr in ("_provider_graph_cache", "_completion_plan_cache", "_sparsity_graph_cache", "_compiler_report_cache"):
-            if hasattr(self, attr):
-                delattr(self, attr)
+        self._completion_plan_cache = None
+        self._sparsity_graph_cache = None
+        self._compiler_report_cache = None
 
-        # ── Classify usable relations and compute the block/derived-variable plan:
-        # activate required defaults, partition the system into decidable and
-        # undecidable variables, and write the active relation set, block cores,
-        # derived providers and compiler report consumed by modes.
         supplied = {name for name, var in self.variables_by_name.items() if var.input_value is not None}
         inactive: dict[str, str] = {}
+        usable = self._usable_candidates(inactive)
+        pool, forward, seeded = self._activate_defaults(usable, supplied, inactive)
+        active, decidable = self._select_active_relations(pool, forward, supplied, inactive)
+        self._select_cores_and_providers(active, decidable, supplied, seeded)
+        self._register_profile_generators()
+        self._append_guard_relations()
+
+        # ── Refresh variable scales and tolerances used by residuals.  Kept as a
+        # method because reconcile also calls it post-solve to rescale around
+        # stored values.
+        self.refresh_scales()
+
+        # ── Freeze the completion plan for this compiled structure: profile
+        # reconstruction specs, held-constant defaults in solver form, and the
+        # provider evaluation order.  complete() reads exactly these, so the
+        # solve loop and the certification path share one completion.
+        self._profile_specs = self._build_profile_specs()
+        constant_defaults_solver: dict[str, Any] = {}
+        for name, value in self.constant_default_values.items():
+            try:
+                constant_defaults_solver[name] = self._solver_value(name, value)
+            except Exception:
+                pass
+        self._constant_defaults_solver = constant_defaults_solver
+        self._provider_plan = self._completion_plan()
+        # One completion pass is exact for an acyclic provider graph (the plan
+        # is topologically ordered); only genuine provider cycles need iteration.
+        self._completion_passes = 1 if self._completion_acyclic else 6
+
+
+    def _usable_candidates(self, inactive: dict[str, str]) -> list[Relation]:
+        """Return candidate relations usable this pass, ensuring their variables.
+
+        A ``generated_profile`` relation whose outputs are all supplied and
+        fixed is inactive: the supplied profile is authoritative.
+        """
         usable: list[Relation] = []
         for rel in self.candidate_primary_relations:
             if rel.dependency == "generated_profile" and rel.output_names and all(
@@ -216,8 +523,19 @@ class RelationSystem:
             usable.append(rel)
             for rel_name in rel.variables:
                 self._ensure_variable_exists(rel_name)
-        non_default = [rel for rel in usable if not self._is_default_relation(rel)]
-        defaults = [rel for rel in usable if self._is_default_relation(rel)]
+        return usable
+
+    def _activate_defaults(self, usable: list[Relation], supplied: set[str], inactive: dict[str, str]) -> tuple[list[Relation], set[str], set[str]]:
+        """Activate registry and relation defaults against forward decidability.
+
+        Writes ``constant_default_values`` and ``default_provider_by_output``;
+        marks never-activated defaults inactive.  Returns ``(pool, forward,
+        seeded)``: the non-default + activated-default relation pool, the
+        bijection-closed forward-decidable set, and the free-core default
+        seeds.
+        """
+        non_default = [rel for rel in usable if not _is_default_relation(rel)]
+        defaults = [rel for rel in usable if _is_default_relation(rel)]
         non_default_profile_outputs = {
             out for rel in non_default for out in rel.output_names
             if out in self.variable_registry and self.variable_registry.get(out).shape == 1
@@ -234,7 +552,7 @@ class RelationSystem:
         # rely on their default being pinned.
         def _forward_with_bijections(rels: list[Relation], extra_known: Iterable[str] = ()) -> set[str]:
             seed = set(supplied) | set(extra_known)
-            decided = set(seed) | set(self._forward_decision_rounds(rels, extra_known=seed)[0])
+            decided = set(seed) | set(_forward_decision_rounds(rels, supplied, extra_known=seed)[0])
             changed_inv = True
             while changed_inv:
                 changed_inv = False
@@ -313,6 +631,18 @@ class RelationSystem:
             for out in rel.output_names:
                 self.default_provider_by_output.setdefault(out, rel)
         pool = non_default + active_defaults
+        for rel in defaults:
+            if rel not in active_defaults and rel.name not in inactive:
+                inactive.setdefault(rel.name, "inactive_default_not_needed")
+        return pool, forward, seeded
+
+    def _select_active_relations(self, pool: list[Relation], forward: set[str], supplied: set[str], inactive: dict[str, str]) -> tuple[list[Relation], set[str]]:
+        """Partition unknowns by structural determinacy and select active relations.
+
+        Deactivates relations touching undecidable (or previously unevaluable)
+        variables, writes the active relation/variable sets, the structural
+        blocks and the partition diagnostics.  Returns ``(active, decidable)``.
+        """
         partition = self._structural_partition(pool, forward)
         block_decidable = set(partition["determined_variables"])
         decidable = supplied | forward | block_decidable
@@ -334,14 +664,24 @@ class RelationSystem:
                     inactive[rel.name] = "inactive_undecidable: cannot determine " + ", ".join(undec)
             else:
                 active.append(rel)
-        for rel in defaults:
-            if rel not in active_defaults and rel.name not in inactive:
-                inactive.setdefault(rel.name, "inactive_default_not_needed")
         self.primary_relations = active
         self.relations = list(active)
         self.active_variable_names = {name for rel in active for name in rel.variables}
         for name in sorted(self.active_variable_names):
             self._ensure_variable_exists(name)
+        self.blocked_relation_reasons = inactive
+        # Structural-partition locals captured for the lazy ``compiler_report``
+        # property -- the only place these diagnostics are exposed.
+        self._partition_diagnostics = {
+            "determined_missing_variables": tuple(sorted(partition["determined_variables"])),
+            "undecidable_variables": tuple(sorted(undecidable)),
+            "deficiencies": partition["deficiencies"],
+        }
+
+        return active, decidable
+
+    def _select_cores_and_providers(self, active: list[Relation], decidable: set[str], supplied: set[str], seeded: set[str]) -> None:
+        """Select packed block cores and the derived-variable providers."""
         produced = {out for rel in active for out in rel.output_names if not rel.implicit}
         self.block_core_names = {
             name for name in self.active_variable_names
@@ -361,7 +701,7 @@ class RelationSystem:
             and self.variables_by_name[name].input_value is None
         }
         known_cores = self.block_core_names | set(self.constant_default_values)
-        _, forward_decider = self._forward_decision_rounds(active, extra_known=known_cores)
+        _, forward_decider = _forward_decision_rounds(active, supplied, extra_known=known_cores)
         self.derived_provider_by_output = {}
         self.derived_variable_names = set()
         for name in sorted(self.active_variable_names):
@@ -378,15 +718,25 @@ class RelationSystem:
         self.derived_variable_names |= {
             name for name in self.constant_default_values if name in self.active_variable_names
         }
-        self.blocked_relation_reasons = inactive
-        # Structural-partition locals captured for the lazy ``compiler_report``
-        # property -- the only place these diagnostics are exposed.
-        self._structural_determined_missing = tuple(sorted(partition["determined_variables"]))
-        self._structural_undecidable = tuple(sorted(undecidable))
-        self._structural_deficiencies = partition["deficiencies"]
+        # Shape-locked supplied profiles are reconstructed from their scalar
+        # average (``average * shape``): the profile is a derived variable (never
+        # packed as a full-profile DOF), while its average is the packed level
+        # control.  Registered after the derived set is built above so the reset
+        # at the top of this phase does not drop them.
+        for name, (_shape, fixed) in self.supplied_profiles.items():
+            if fixed:
+                continue
+            avg_name = self.profile_average_by_name[name]
+            self._ensure_variable_exists(avg_name)
+            self.active_variable_names.add(name)
+            self.active_variable_names.add(avg_name)
+            self.derived_variable_names.add(name)
+            self.derived_variable_names.discard(avg_name)
+            self.block_core_names.discard(name)
 
-        # ── Register explicit lower-dimensional profile generators as providers,
-        # activating scalar-average controls and refreshing profile report views.
+    def _register_profile_generators(self) -> None:
+        """Register explicit lower-dimensional profile generators as providers,
+        activating their scalar-average controls."""
         for rel in list(self.relations):
             profile_outputs = [
                 out for out in rel.output_names
@@ -417,8 +767,9 @@ class RelationSystem:
                 self.derived_provider_by_output[out] = rel
                 self.derived_variable_names.add(out)
 
-        # ── Append active relation/variable/system guards whose variables are all
-        # active, and build the relation-name index.
+    def _append_guard_relations(self) -> None:
+        """Append active relation/variable/system guards whose variables are
+        all active, and build the relation-name indexes."""
         active_names = {rel.name for rel in self.relations}
         active_vars = set(self.active_variable_names)
         for rel in list(self.primary_relations):
@@ -437,14 +788,9 @@ class RelationSystem:
             if guard.name not in active_names and set(guard.variables) <= active_vars:
                 self.relations.append(guard)
                 active_names.add(guard.name)
-        self.relations_by_name = {
-            rel.name: rel for rel in [*self.candidate_primary_relations, *self.system_constraint_relations, *self.relations]
-        }
-
-        # ── Refresh variable scales and tolerances used by residuals.  Kept as a
-        # method because reconcile also calls it post-solve to rescale around
-        # stored values.
-        self._refresh_scales()
+        all_relations = [*self.candidate_primary_relations, *self.system_constraint_relations, *self.relations]
+        self.relations_by_name = {rel.name: rel for rel in all_relations}
+        self.relations_by_function = {rel.function_name: rel for rel in all_relations}
 
     def _compile_with_pruning(self, max_rounds: int = 20) -> None:
         """Compile the active system, pruning relations that need unevaluable variables.
@@ -459,7 +805,6 @@ class RelationSystem:
         """
         self._unevaluable_names = set()
         self._initial_guesses = {}
-        self._runtime_initial_values_ready = False
         for _ in range(max_rounds):
             self._run_compile_pass()
             newly = self._detect_unevaluable_variables()
@@ -476,13 +821,14 @@ class RelationSystem:
         value and no initial guess is unevaluable.
         """
         try:
-            initial_values, _info = self._initial_values_from_graph()
+            initial_values = self.initial_values_from_graph()
         except Exception:
             initial_values = {}
         self._initial_guesses = dict(initial_values)
-        self._runtime_initial_values_ready = True
-        self._pack_free_variables()
-        return set(getattr(self, "_uninitialized_free_variables", ()))
+        self.pack()
+        return set(self._uninitialized_free_variables)
+
+    # ── Structural graph views and compiler report ───────────────────────
 
     def _structural_graph(self) -> nx.DiGraph:
         """Return the one canonical annotated bipartite graph ``self._graph``.
@@ -491,9 +837,8 @@ class RelationSystem:
         node per variable and per candidate relation, with ``input -> relation``
         and ``relation -> output`` edges carrying each relation's declared
         direction.  Every other structural view is computed from it: the report
-        incidence (:meth:`_incidence_views`), the Dulmage-Mendelsohn partition
-        (:meth:`_structural_partition`), the oriented provider graph
-        (:meth:`_provider_graph`) and the Jacobian sparsity
+        incidence (:meth:`compiler_report`), the Dulmage-Mendelsohn partition
+        (:meth:`_structural_partition`) and the Jacobian sparsity
         (:meth:`_sparsity_variable_names`).
 
         Nodes are annotated so consumers read state off the graph instead of
@@ -507,7 +852,7 @@ class RelationSystem:
         Returns:
             The cached :class:`networkx.DiGraph` held on ``self._graph``.
         """
-        cached = getattr(self, "_graph", None)
+        cached = self._graph
         if cached is not None:
             return cached
         graph = nx.DiGraph()
@@ -520,7 +865,7 @@ class RelationSystem:
                 relation=rel,
                 variables=rel.variables,
                 enforce=bool(rel.enforce),
-                is_default=self._is_default_relation(rel),
+                is_default=_is_default_relation(rel),
             )
             # Edges encode the declared direction: inputs feed the relation, the
             # relation feeds its outputs.
@@ -549,23 +894,6 @@ class RelationSystem:
             fixed=bool(var is not None and var.fixed),
         )
 
-    def _incidence_views(self) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]:
-        """Return ``(relation_to_vars, var_to_relations)`` from the single graph.
-
-        The report view of :meth:`_structural_graph`; kept as derived dicts rather
-        than stored parallel state.
-        """
-        relation_to_vars: dict[str, tuple[str, ...]] = {}
-        var_to_relations: dict[str, list[str]] = {}
-        for node, data in self._structural_graph().nodes(data=True):
-            if data.get("kind") != "relation":
-                continue
-            variables = data["variables"]
-            relation_to_vars[node[1]] = variables
-            for var in variables:
-                var_to_relations.setdefault(var, []).append(node[1])
-        return relation_to_vars, {name: tuple(rels) for name, rels in var_to_relations.items()}
-
     @property
     def compiler_report(self) -> dict[str, Any]:
         """Diagnostic view of the compiled system, built on first access.
@@ -578,10 +906,19 @@ class RelationSystem:
         runs once instead of per result; the cache is cleared by
         :meth:`_run_compile_pass` whenever the structure is recompiled.
         """
-        cached = getattr(self, "_compiler_report_cache", None)
+        cached = self._compiler_report_cache
         if cached is not None:
             return cached
-        relation_to_vars, var_to_relations = self._incidence_views()
+        # Incidence views of the single structural graph, derived on the fly.
+        relation_to_vars: dict[str, tuple[str, ...]] = {}
+        var_to_rel_names: dict[str, list[str]] = {}
+        for node, data in self._structural_graph().nodes(data=True):
+            if data.get("kind") != "relation":
+                continue
+            relation_to_vars[node[1]] = data["variables"]
+            for var in data["variables"]:
+                var_to_rel_names.setdefault(var, []).append(node[1])
+        var_to_relations = {name: tuple(rels) for name, rels in var_to_rel_names.items()}
         supplied = tuple(sorted(name for name, var in self.variables_by_name.items() if var.input_value is not None))
         report = {
             "activation_semantics": "decidability_closure",
@@ -598,36 +935,20 @@ class RelationSystem:
             "relation_to_vars": relation_to_vars,
             "var_to_relations": var_to_relations,
             "profile_average_by_name": dict(sorted(self.profile_average_by_name.items())),
-            "profile_source_by_name": dict(sorted(self.profile_source_by_name.items())),
+            "profile_source_by_name": {
+                name: "fixed_supplied_profile" if self.supplied_profiles[name][1] else "supplied_profile"
+                for name in sorted(self.supplied_profiles)
+            },
             "unevaluable_variables": tuple(sorted(self._unevaluable_names)),
             "structural_determinacy": {
-                "determined_missing_variables": self._structural_determined_missing,
-                "undecidable_variables": self._structural_undecidable,
-                "deficiencies": self._structural_deficiencies,
+                **self._partition_diagnostics,
                 "blocks": tuple(self.structural_blocks),
             },
         }
         self._compiler_report_cache = report
         return report
 
-    def verify(self, **options: Any) -> dict[str, Any]:
-        return self.run("verify", **options)
-
-    def reconcile(self, **options: Any) -> dict[str, Any]:
-        return self.run("reconcile", **options)
-
-    def optimize(self, **options: Any) -> dict[str, Any]:
-        return self.run("optimize", **options)
-
-    def ordered(self, **options: Any) -> dict[str, Any]:
-        return self.run("ordered", **options)
-
-    def run(self, mode: str = "verify", **options: Any) -> dict[str, Any]:
-        """Prepare runtime initialization and dispatch to an isolated execution mode."""
-        from .modes import get_mode
-
-        self._compile_with_pruning()
-        return get_mode(mode)(self, **options)
+    # ── Profile/average split helpers ─────────────────────────────────────
 
     def _profile_average_name(self, name: str) -> str | None:
         """Return the scalar-average variable controlling a profile, or None.
@@ -659,26 +980,11 @@ class RelationSystem:
                     return float(trapezoid(arr, x=rho) / width)
         return float(np.mean(arr))
 
-    def _with_profile_values(self, values: dict[str, Any]) -> dict[str, Any]:
-        """Rebuild profile arrays from scalar averages and stored shapes.
-
-        Args:
-            values: Current scalar/profile namespace.
-
-        Returns:
-            Namespace with shape-controlled profiles updated.
-        """
-        if not self.profile_shape_by_name:
-            return values
-        out = dict(values)
-        self._apply_profile_specs(out, self._build_profile_specs())
-        return out
-
     def _relation_is_residual_relation(self, rel: Relation) -> bool:
         """Return whether a relation belongs in the nonlinear residual core.
 
         Explicit-output relations whose outputs are uniquely owned non-fixed
-        derived variables are evaluated structurally by ``_with_derived_values``
+        derived variables are evaluated structurally by :meth:`complete`
         on every candidate value map.  They are still verified during final
         certification, but they are not soft least-squares residuals.
 
@@ -697,85 +1003,7 @@ class RelationSystem:
         # side of the equation.
         return not all(providers.get(out) is rel for out in rel.output_names)
 
-    def _forward_decision_rounds(self, relations: list[Relation], extra_known: Iterable[str] = ()) -> tuple[dict[str, int], dict[str, "Relation"]]:
-        """Return forward-closure rounds and per-variable forward providers.
-
-        ``extra_known`` seeds additional variables as decided at round 0 -- used
-        to treat block cores as available so the block-downstream variables get
-        forward providers.
-
-        Supplied variables are decided at round 0.  Each round, real relations
-        are exhausted before defaults, so a variable is owned by a default only
-        when no real relation can decide it.  A relation decides a variable
-        either forward (all inputs known, every output decided) or acausally
-        (a single remaining variable from the rest).  The returned ``decider``
-        maps a variable to the relation that first decided it as one of its
-        declared outputs -- the forward provider for completion.  Variables
-        decided only acausally (as an input, e.g. ``a`` from ``A = R/a``) or
-        never reached have no ``decider`` entry and are packed as free
-        variables for the global solve.
-        """
-        rounds: dict[str, int] = {
-            name: 0 for name, var in self.variables_by_name.items() if var.input_value is not None
-        }
-        for name in extra_known:
-            rounds.setdefault(name, 0)
-        decider: dict[str, Relation] = {}
-        non_default = [rel for rel in relations if not self._is_default_relation(rel)]
-        defaults = [rel for rel in relations if self._is_default_relation(rel)]
-        # Pure-input variables: produced by no relation here and referenced only
-        # by outputless (constraint) relations.  The acausal fallback must not
-        # solve such a variable as "the last unknown" of a constraint (e.g. an
-        # unsupplied tau_p that only the particle balances reference) -- it is a
-        # free parameter, not a value the constraint determines.  Leaving it
-        # undecided lets the structural partition mark it underdetermined and
-        # deactivate the constraints that need it.
-        produced_any = {out for rel in relations for out in rel.output_names}
-        ref_rels: dict[str, list[Relation]] = {}
-        for rel in relations:
-            for v in rel.variables:
-                ref_rels.setdefault(v, []).append(rel)
-        pure_input = {
-            v for v, rels in ref_rels.items()
-            if v not in produced_any and all((not r.outputs and r.op == "==") for r in rels)
-        }
-        round_no = 0
-        changed = True
-        while changed:
-            changed = False
-            round_no += 1
-
-            # Forward decisions take priority and run to a fixed point first, so
-            # a variable that some relation can compute as an output (n_D from
-            # n_i and f_D) is owned by that producer rather than being decided
-            # acausally as an input of another relation (Integrated D fraction).
-            # Real relations are exhausted before defaults within each sweep.
-            forward_changed = True
-            while forward_changed:
-                forward_changed = False
-                for group in (non_default, defaults):
-                    for rel in group:
-                        if rel.output_names and all(inp in rounds for inp in rel.input_names):
-                            for out in rel.output_names:
-                                if out not in rounds:
-                                    rounds[out] = round_no
-                                    decider.setdefault(out, rel)
-                                    forward_changed = changed = True
-
-            # Acausal fallback: a single remaining variable is decided from the
-            # rest.  Applied only after forward decisions stall; control returns
-            # to the forward sweep so any newly available output is owned by its
-            # producer.
-            for group in (non_default, defaults):
-                for rel in group:
-                    undecided = [v for v in rel.variables if v not in rounds]
-                    if len(undecided) == 1 and undecided[0] not in rounds and undecided[0] not in pure_input:
-                        v = undecided[0]
-                        rounds[v] = round_no
-                        if v in rel.output_names:
-                            decider.setdefault(v, rel)
-                        changed = True
-        return rounds, decider
+    # ── Structural determinacy (Dulmage-Mendelsohn) ──────────────────────
 
     def _structural_partition(self, relations: list[Relation], known: set[str]) -> dict[str, Any]:
         """Split missing variables by structural determinacy (Dulmage-Mendelsohn).
@@ -904,7 +1132,7 @@ class RelationSystem:
         under_names = {name for name, (start, stop) in col_span.items() if any(c in under_cols for c in range(start, stop))}
         result["determined_variables"] = set(unknowns) - under_names
         result["underdetermined_variables"] = under_names
-        result["blocks"] = self._structural_block_plan(row_adj, match_row, under_cols, name_of_col)
+        result["blocks"] = _structural_block_plan(row_adj, match_row, under_cols, name_of_col)
 
         # Group the underdetermined part into connected deficiencies on the
         # bipartite (column, row) incidence; each group needs (cols - rows) more
@@ -929,71 +1157,9 @@ class RelationSystem:
         result["deficiencies"] = sorted(deficiencies, key=lambda item: tuple(item["variables"]))
         return result
 
-    def _structural_block_plan(
-        self,
-        row_adj: list[list[int]],
-        match_row: np.ndarray,
-        under_cols: set[int],
-        name_of_col: Mapping[int, str],
-    ) -> list[tuple[str, ...]]:
-        """Return determined-variable blocks in dependency order.
+    # ── Seeding: initial values from the graph (the x0 oracle) ───────────
 
-        The strongly connected components of the matched dependency digraph
-        are the simultaneous solve blocks (1x1 direct steps, 2x2, 3x3, ...),
-        and their topological order is the solve order.  Components that share
-        a variable (profile columns can split across components) are merged
-        and keep the earliest position.
-        """
-        determined = [c for c in range(len(match_row)) if c not in under_cols and match_row[c] >= 0]
-        if not determined:
-            return []
-        determined_set = set(determined)
-        # Dependency digraph over determined columns: c2 -> c when c2 appears in
-        # the relation matched to c (so c depends on c2).  Strongly connected
-        # components are the simultaneous solve blocks; the condensation gives
-        # their dependency order.
-        digraph = nx.DiGraph()
-        digraph.add_nodes_from(determined)
-        for c in determined:
-            for c2 in row_adj[int(match_row[c])]:
-                if c2 != c and c2 in determined_set:
-                    digraph.add_edge(c2, c)
-        condensation = nx.condensation(digraph)
-
-        # Components -> variable-name groups, merging groups that share a name
-        # (profile columns can split across components) and ordering by first
-        # topological appearance.
-        parent: dict[str, str] = {}
-
-        def find(name: str) -> str:
-            while parent[name] != name:
-                parent[name] = parent[parent[name]]
-                name = parent[name]
-            return name
-
-        def component_names(comp: int) -> list[str]:
-            return sorted({name_of_col[col] for col in condensation.nodes[comp]["members"]})
-
-        first_rank: dict[str, int] = {}
-        for rank, comp in enumerate(nx.lexicographical_topological_sort(condensation, key=component_names)):
-            names = component_names(comp)
-            for name in names:
-                parent.setdefault(name, name)
-                first_rank.setdefault(name, rank)
-            for left, right in zip(names, names[1:]):
-                parent[find(right)] = find(left)
-        groups: dict[str, set[str]] = {}
-        for name in parent:
-            groups.setdefault(find(name), set()).add(name)
-        ordered = sorted(groups.values(), key=lambda group: min(first_rank[name] for name in group))
-        return [tuple(sorted(group)) for group in ordered]
-
-    def _initial_values_from_graph(
-        self,
-        *,
-        residual_tol: float = 1.0,
-        max_passes: int = 50,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
+    def initial_values_from_graph(self) -> dict[str, Any]:
         """Fill solver start values by direct propagation from supplied values.
 
         Iteratively solves every relation that has exactly one missing variable
@@ -1002,43 +1168,38 @@ class RelationSystem:
         of larger coupled blocks (block cores); they are packed directly and
         determined by the simultaneous reconcile against their block's supplied
         anchor, so no separate block solver is needed here.
+
+        Returns:
+            ``{name: value}`` for every variable the oracle seeded (supplied
+            values are never included).
         """
-        values = self._values_from_variables(for_solver=True, skip_missing=True, complete=False, use_input_values=True)
-        values = self._with_profile_values(dict(values))
+        values = self.input_values()
+        self._apply_profile_specs(values)
         original = set(values)
-        info: dict[str, Any] = {}
-        residual_tol = float(residual_tol)
+        seeded: set[str] = set()
         # Constant defaults are known values from the start (they are held, not
         # solved), so downstream propagation can use them.
-        for name, value in getattr(self, "constant_default_values", {}).items():
+        for name, value in self.constant_default_values.items():
             if values.get(name) is None:
                 try:
                     values[name] = self._solver_value(name, value)
-                    info[name] = {"source": "constant_default", "relation": None, "block_size": 0, "enforced": False}
+                    seeded.add(name)
                 except Exception:
                     pass
         # Propagate everything derivable from the supplied values.
-        self._propagate_known(values, info, original, residual_tol, max_passes)
+        self._propagate_known(values, seeded, original)
         # Seed registry defaults for variables that supplied-propagation left
         # missing, then re-propagate so downstream values (n_X = n_i * f_X, ...)
         # fill in.  Defaults are pure x0 seeds -- never enforced -- applied to a
         # fixpoint so variable-reference defaults (T_i = T_e) resolve once their
         # source has a value.
-        for _ in range(max_passes):
-            if not self._seed_defaults(values, info, original):
+        for _ in range(50):
+            if not self._seed_defaults(values, seeded, original):
                 break
-            self._propagate_known(values, info, original, residual_tol, max_passes)
-        initial_values = {name: values[name] for name in values if name in info}
-        return initial_values, info
+            self._propagate_known(values, seeded, original)
+        return {name: values[name] for name in values if name in seeded}
 
-    def _propagate_known(
-        self,
-        values: dict[str, Any],
-        info: dict[str, Any],
-        original: set[str],
-        residual_tol: float,
-        max_passes: int,
-    ) -> None:
+    def _propagate_known(self, values: dict[str, Any], seeded: set[str], original: set[str]) -> None:
         """Fill values derivable from the currently known namespace.
 
         Stage 1 runs direct 1x1/acausal propagation to a fixed point; stage 2
@@ -1046,18 +1207,18 @@ class RelationSystem:
         final merged-block sweep for variables left in no individual block.
         """
         # Stage 1: direct 1x1/acausal propagation to a fixed point.
-        for _direct_pass in range(max_passes):
-            if not self._compute_direct_outputs(values, info, original):
+        for _direct_pass in range(50):
+            if not self._compute_direct_outputs(values, seeded, original):
                 break
         # Stage 2: solve the determined blocks (2x2 ... N x N) for their cores.
         progress = True
         while progress:
             progress = False
             for block in self.structural_blocks:
-                if self._compute_planned_block(block, values, info, original, residual_tol=residual_tol):
+                if self._compute_planned_block(block, values, seeded, original):
                     progress = True
-                    for _direct_pass in range(max_passes):
-                        if not self._compute_direct_outputs(values, info, original):
+                    for _direct_pass in range(50):
+                        if not self._compute_direct_outputs(values, seeded, original):
                             break
         merged = tuple(
             name
@@ -1065,12 +1226,12 @@ class RelationSystem:
             for name in block
             if (name not in values or values[name] is None) and name not in original
         )
-        if merged and self._compute_planned_block(merged, values, info, original, residual_tol=residual_tol):
-            for _direct_pass in range(max_passes):
-                if not self._compute_direct_outputs(values, info, original):
+        if merged and self._compute_planned_block(merged, values, seeded, original):
+            for _direct_pass in range(50):
+                if not self._compute_direct_outputs(values, seeded, original):
                     break
 
-    def _seed_defaults(self, values: dict[str, Any], info: dict[str, Any], original: set[str]) -> bool:
+    def _seed_defaults(self, values: dict[str, Any], seeded: set[str], original: set[str]) -> bool:
         """Seed still-missing active variables from their registry default.
 
         A default is either a number (a constant x0 seed) or the name of another
@@ -1114,7 +1275,7 @@ class RelationSystem:
             except Exception:
                 continue
             values[name] = value
-            info[name] = {"source": "default_seed", "relation": None, "block_size": 0, "enforced": False}
+            seeded.add(name)
             progress = True
         return progress
 
@@ -1131,7 +1292,7 @@ class RelationSystem:
         for rel in self.candidate_primary_relations:
             if rel.name in by_name:
                 continue
-            if self._is_default_relation(rel):
+            if _is_default_relation(rel):
                 by_name[rel.name] = rel
         return list(by_name.values())
 
@@ -1154,7 +1315,7 @@ class RelationSystem:
         var = self.variables_by_name.get(name)
         return not (var is not None and var.fixed)
 
-    def _compute_direct_outputs(self, values: dict[str, Any], info: dict[str, Any], original: set[str]) -> bool:
+    def _compute_direct_outputs(self, values: dict[str, Any], seeded: set[str], original: set[str]) -> bool:
         """Seed values by solving every relation that has exactly one unknown.
 
         Seeding is *adirectional*: a relation is an equation, so whenever all but
@@ -1171,11 +1332,11 @@ class RelationSystem:
         assumption).  Implicit relations are skipped: a variable appearing on
         both sides cannot be trusted to a blind inverse.  Only missing, non-fixed,
         non-supplied variables are written, and every value must be finite and
-        in-domain, so ``info`` stays a pure provenance record of seeded values.
+        in-domain, so ``seeded`` stays a pure record of seeded names.
 
         Args:
             values: Working solver-unit namespace, mutated in place.
-            info: Per-variable provenance record, mutated in place.
+            seeded: Names seeded so far, mutated in place.
             original: Names supplied before seeding (never overwritten).
 
         Returns:
@@ -1194,7 +1355,7 @@ class RelationSystem:
                         value = self._solver_value(name, rel(**known))
                         if self._candidate_value_is_valid(name, value):
                             values[name] = value
-                            info[name] = {"source": "seed_solve", "relation": rel.name, "block_size": 1, "enforced": bool(rel.enforce)}
+                            seeded.add(name)
                             progress = True
                             continue
                     except Exception:
@@ -1217,7 +1378,7 @@ class RelationSystem:
                     except Exception:
                         continue
                     values[name] = value
-                    info[name] = {"source": "seed_forward", "relation": rel.name, "block_size": 0, "enforced": bool(rel.enforce)}
+                    seeded.add(name)
                     progress = True
         return progress
 
@@ -1225,10 +1386,8 @@ class RelationSystem:
         self,
         block: tuple[str, ...],
         values: dict[str, Any],
-        info: dict[str, Any],
+        seeded: set[str],
         original: set[str],
-        *,
-        residual_tol: float,
     ) -> bool:
         """Solve one structurally planned block as initial guesses.
 
@@ -1246,18 +1405,12 @@ class RelationSystem:
         extended, rels = self._block_closure(unknowns, values)
         if not rels:
             return False
-        solved = self._solve_initial_block(extended, rels, values, residual_tol=residual_tol)
+        solved = self._solve_initial_block(extended, rels, values, residual_tol=1.0)
         if solved is None:
             return False
-        for name, value in solved["values"].items():
+        for name, value in solved.items():
             values[name] = value
-            info[name] = {
-                "source": "scalar_block",
-                "relations": [rel.name for rel in rels if rel.enforce],
-                "block_size": len(unknowns),
-                "max_abs_residual": solved["max_abs_residual"],
-                "nfev": solved["nfev"],
-            }
+            seeded.add(name)
         return True
 
     def _block_closure(self, unknowns: tuple[str, ...], values: Mapping[str, Any]) -> tuple[tuple[str, ...], list[Relation]]:
@@ -1302,7 +1455,7 @@ class RelationSystem:
         *,
         residual_tol: float,
     ) -> dict[str, Any] | None:
-        """Solve one small scalar initial-computation block.
+        """Solve one small scalar initial-computation block; returns ``{name: value}`` or None.
 
         Unknowns that are declared outputs of a block relation are recomputed
         from that relation inside the residual, so the numerical search runs
@@ -1343,7 +1496,7 @@ class RelationSystem:
                         ns[produced] = self._solver_value(produced, mapped[produced])
                 except Exception:
                     continue
-            return self._complete_values(ns)
+            return self.complete(ns)
 
         def residual_from(core_values: Mapping[str, float]) -> np.ndarray:
             ns = namespace_from(core_values)
@@ -1370,7 +1523,7 @@ class RelationSystem:
         starts: dict[str, float] = {}
         for name in core:
             var = self.variables_by_name[name]
-            lb, ub = scipy_bounds(self.variable_registry.get(name).solver_domain, zero_tol=self.zero_tol)
+            lb, ub = scipy_bounds(self.variable_registry.get(name).solver_domain, zero_tol=ZERO_TOL)
             bounds_by_name[name] = (lb, ub)
             try:
                 starts[name] = float(self._initial_value(var))
@@ -1386,7 +1539,7 @@ class RelationSystem:
             for name in core:
                 lb, ub = bounds_by_name[name]
                 best, best_score = starts[name], score(starts)
-                for point in self._scalar_start_grid(lb, ub):
+                for point in _scalar_start_grid(lb, ub):
                     point_score = score({**starts, name: point})
                     if point_score < best_score:
                         best, best_score = point, point_score
@@ -1398,7 +1551,7 @@ class RelationSystem:
         # same in-tolerance score; weak but nonzero dependence is kept.
         for name in core:
             lb, ub = bounds_by_name[name]
-            grid = self._scalar_start_grid(lb, ub)
+            grid = _scalar_start_grid(lb, ub)
             if len(grid) < 3:
                 continue
             probes = [score({**starts, name: point}) for point in (grid[0], grid[len(grid) // 2], grid[-1])]
@@ -1414,7 +1567,7 @@ class RelationSystem:
             var = self.variables_by_name[name]
             lb, ub = bounds_by_name[name]
             init = min(max(starts[name], lb), ub) if np.isfinite(lb) or np.isfinite(ub) else starts[name]
-            scale, offset, lo, hi, transform = self._pack_scalar(name, var, init, lb, ub, scale_ref=init)
+            scale, offset, lo, hi, transform = self._pack_scalar(var, init, lb, ub, scale_ref=init)
             offsets.append(offset)
             scales.append(scale)
             lower.append(lo)
@@ -1465,7 +1618,7 @@ class RelationSystem:
             if not self._candidate_value_is_valid(name, value):
                 return None
             solved[name] = self._solver_value(name, value)
-        return {"values": solved, "max_abs_residual": max_abs, "nfev": int(getattr(sol, "nfev", -1))}
+        return solved
 
     def _block_producers(self, unknowns: tuple[str, ...], rels: list[Relation], values: Mapping[str, Any]) -> dict[str, Relation]:
         """Return produced-unknown -> relation, in evaluation order.
@@ -1490,7 +1643,7 @@ class RelationSystem:
         # alternatives (for example quasineutrality pairs) never deadlock the
         # ordering.  Defaults come first: they carry the weak-assumption
         # value, while enforced alternatives stay in the residual rows.
-        ordered_rels = sorted(rels, key=lambda rel: not self._is_default_relation(rel))
+        ordered_rels = sorted(rels, key=lambda rel: not _is_default_relation(rel))
         ordered: dict[str, Relation] = {}
         changed = True
         while changed:
@@ -1532,27 +1685,14 @@ class RelationSystem:
             start = float(ub)
         return start
 
-    def _scalar_start_grid(self, lb: float, ub: float) -> list[float]:
-        """Return signed log-spaced start candidates inside the solver interval."""
-        points: set[float] = set()
-        for exponent in range(-30, 31, 2):
-            for sign in (1.0, -1.0):
-                value = sign * 10.0**exponent
-                if (not np.isfinite(lb) or value >= lb) and (not np.isfinite(ub) or value <= ub):
-                    points.add(value)
-        return sorted(points)
-
     def _candidate_value_is_valid(self, name: str, value: Any) -> bool:
-        """Return whether a prospective candidate value is finite and inside bounds."""
+        """Whether a candidate value is finite and in-domain (see :meth:`Variable.candidate_valid`)."""
         try:
-            arr = np.asarray(value, dtype=float)
-            if arr.size == 0 or not np.all(np.isfinite(arr)):
-                return False
-            public = self._public_value(name, value)
-            spec = self.variable_registry.get(name)
-            return value_in_domain(public, spec.domain, zero_tol=0.0)
+            return self._variable_for(name).candidate_valid(value)
         except Exception:
             return False
+
+    # ── Packing and the per-solve runtime plan ────────────────────────────
 
     def _use_log_transform(self, var: Variable, init: float, lower: float) -> bool:
         """Return whether to pack a scalar variable logarithmically.
@@ -1570,14 +1710,14 @@ class RelationSystem:
         )
 
     def _pack_scalar(
-        self, name: str, var: Variable, init: float, lb: float, ub: float, *, scale_ref: Any, allow_log: bool = True
+        self, var: Variable, init: float, lb: float, ub: float, *, scale_ref: Any, allow_log: bool = True
     ) -> tuple[float, float, float, float, str]:
         """Map one scalar to a solver coordinate ``(scale, offset, lower, upper, transform)``.
 
         Positive-bounded scalars pack logarithmically; others linearly with a
         tolerance/reference ``scale``.  ``allow_log=False`` forces linear packing.
         """
-        scale = self._variable_scale(name, scale_ref)
+        scale = var.scale(scale_ref)
         if allow_log and self._use_log_transform(var, init, lb):
             lower = np.log(lb / init) if np.isfinite(lb) and lb > 0.0 else -np.inf
             upper = np.log(ub / init) if np.isfinite(ub) and ub > 0.0 else np.inf
@@ -1586,18 +1726,25 @@ class RelationSystem:
         upper = (ub - init) / scale if np.isfinite(ub) else np.inf
         return scale, init, lower, upper, "linear"
 
-    def _pack_free_variables(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Span]]:
-        """Pack active non-fixed variables into one scaled vector.
+    def pack(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Pack active non-fixed variables and prepare the per-solve runtime plan.
+
+        Builds the packed layout -- one record per free variable
+        ``(name, start, stop, offsets, scales, shape, transform)`` stored on
+        ``self.packed_specs`` -- plus the immutable base value map that
+        :meth:`unpack` layers each solver vector onto.  A reconcile/optimize
+        solve calls the residual function thousands of times, so neither may
+        be re-derived per call; completion itself reads the compile-cached
+        plan (see :meth:`complete`).
 
         Returns:
-            ``(x0, lower, upper, x_scale, spans)``.
+            ``(x0, lower, upper)``.  ``x0`` is all zeros: the per-element
+            ``offsets``/``scales`` (and the log transform for positive-bounded
+            scalars) absorb the actual start values.
         """
-        x0: list[float] = []
         lower: list[float] = []
         upper: list[float] = []
-        x_scale: list[float] = []
-        spans: list[Span] = []
-        transforms: dict[str, str] = {}
+        specs: list[tuple[str, int, int, np.ndarray, np.ndarray, int, str | None]] = []
         self._uninitialized_free_variables = []
         for name in sorted(self.active_variable_names):
             var = self.variables_by_name[name]
@@ -1608,11 +1755,12 @@ class RelationSystem:
                     raise ValueError(f"Fixed variable {name!r} has no value.")
                 continue
             spec = self.variable_registry.get(name)
-            lb, ub = scipy_bounds(spec.solver_domain, zero_tol=self.zero_tol)
+            lb, ub = scipy_bounds(spec.solver_domain, zero_tol=ZERO_TOL)
             size = self._variable_dim(name)
-            start = len(x0)
+            start = len(lower)
             offsets: list[float] = []
             scales: list[float] = []
+            span_transform: str | None = None
             try:
                 initial_elements = [
                     float(self._initial_value(var, index=i if var.shape == 1 else None))
@@ -1622,23 +1770,25 @@ class RelationSystem:
                 self._uninitialized_free_variables.append(name)
                 continue
             for i, init in enumerate(initial_elements):
-                ref = self._reference_for_movement(var, init, index=i if var.shape == 1 else None)
-                scale, offset, lo, hi, transform = self._pack_scalar(name, var, init, lb, ub, scale_ref=ref)
-                x0.append(0.0)
+                ref = var.movement_reference(init, index=i if var.shape == 1 else None)
+                scale, offset, lo, hi, transform = self._pack_scalar(var, init, lb, ub, scale_ref=ref)
                 lower.append(lo)
                 upper.append(hi)
-                x_scale.append(1.0)
                 offsets.append(offset)
                 scales.append(scale)
                 if transform == "log":
-                    transforms[name] = "log"
-            spans.append(Span(name, start, len(x0), np.asarray(offsets, dtype=float), np.asarray(scales, dtype=float)))
-        self._span_transforms = transforms
-        return np.asarray(x0), np.asarray(lower), np.asarray(upper), np.asarray(x_scale), spans
+                    span_transform = "log"
+            specs.append((name, start, len(lower), np.asarray(offsets, dtype=float), np.asarray(scales, dtype=float), var.shape, span_transform))
+        self.packed_specs = specs
+        self.packed_dim = len(lower)
+        # Immutable input values are the base every solver vector is layered
+        # onto; completion itself reads the compile-cached plan.
+        self._packed_base_values = self.input_values()
+        return np.zeros(self.packed_dim), np.asarray(lower), np.asarray(upper)
 
     def _required_uninitialized_free_variables(self) -> list[str]:
         """Return uninitialized free variables required by enforced relations."""
-        uninitialized = set(getattr(self, "_uninitialized_free_variables", ()))
+        uninitialized = set(self._uninitialized_free_variables)
         if not uninitialized:
             return []
         required: list[str] = []
@@ -1649,102 +1799,26 @@ class RelationSystem:
                     break
         return required
 
-    def _record_uninitialized_failure(self, result: dict[str, Any]) -> bool:
-        """Fill ``result`` and return True when an enforced relation needs an
-        unsupplied, ungenerated free variable; the mode then returns ``result``."""
-        required = self._required_uninitialized_free_variables()
-        if not required:
-            return False
-        result["errors"].append(
-            "Uninitialized required free variables: " + ", ".join(required)
-            + ". These variables were not supplied and were not generated by active relations."
-        )
-        result["termination"] = "initialization failed"
-        result["uninitialized_free_variables"] = list(getattr(self, "_uninitialized_free_variables", []))
-        return True
-
-    def _reject_unknown_options(self, result: dict[str, Any], unknown: Mapping[str, Any]) -> bool:
-        """Record unknown mode option names on ``result``; True if any were given."""
-        if not unknown:
-            return False
-        result["errors"].append(f"Unknown {result['mode']} option(s): " + ", ".join(sorted(unknown)))
-        result["termination"] = "invalid options"
-        return True
-
-    def _prepare_runtime(self, spans: list[Span]) -> None:
-        """Precompute the flat per-solve plan used to rebuild namespaces fast.
-
-        A reconcile/optimize solve calls the residual function thousands of
-        times, so the per-vector namespace reconstruction must avoid re-deriving
-        the packing layout, the profile/default fill rules and the completion
-        order on every call.  This method caches those once for a given packed
-        layout into ``self._rt_*`` attributes that :meth:`_values_from_vector`
-        and :meth:`_complete_runtime_values` then read.
-
-        Args:
-            spans: Packed free-variable spans for this solve, as returned by
-                :meth:`_pack_free_variables`.
-        """
-        # Identity-keyed guard: re-preparing for the same spans object is wasteful
-        # (the mode prepares once, then reuses the layout across stages).
-        self._rt_spans = spans
-        # Immutable input values are the base every solver vector is layered onto.
-        self._rt_base_values = self._values_from_variables(
-            for_solver=True, skip_missing=True, complete=False, use_input_values=True
-        )
-        # One flat record per packed span: where it lives in the vector, its
-        # affine/log unpacking and whether it is a scalar or a profile array.
-        transforms = getattr(self, "_span_transforms", {})
-        self._rt_span_specs = [
-            (
-                span.name,
-                span.start,
-                span.stop,
-                span.offsets,
-                span.scales,
-                self.variables_by_name[span.name].shape,
-                transforms.get(span.name),
-            )
-            for span in spans
-        ]
-        # Held-constant defaults are filled verbatim when still missing.
-        self._rt_constant_defaults = {
-            name: self._solver_value(name, value)
-            for name, value in getattr(self, "constant_default_values", {}).items()
-        }
-        # Profile reconstruction rules: a fixed supplied profile is its stored
-        # array; a shape-controlled profile is ``average * shape``.
-        self._rt_profile_specs = self._build_profile_specs()
-        # Derived/default providers in dependency order, plus the membership sets
-        # bounding which outputs a provider may write.  Shared with the
-        # certification path through :meth:`_apply_completion_providers`.
-        self._rt_provider_specs = list(self._completion_plan())
-        self._rt_active_vars = set(self.active_variable_names)
-        self._rt_explicit_outputs = set(self.derived_provider_by_output)
-        # One completion pass is exact for an acyclic provider graph (the plan is
-        # topologically ordered); only genuine provider cycles need iteration.
-        self._rt_completion_passes = 1 if getattr(self, "_completion_acyclic", False) else 6
-
     @staticmethod
     def _value_missing(values: Mapping[str, Any], name: str) -> bool:
         """Return whether ``name`` is absent or ``None`` in ``values``."""
         return name not in values or values[name] is None
 
-    def _values_from_vector(self, x: np.ndarray) -> dict[str, Any]:
+    def unpack(self, x: np.ndarray) -> dict[str, Any]:
         """Rebuild a completed solver namespace from one packed solver vector.
 
         Args:
-            x: Packed free-variable vector matching the spans last passed to
-                :meth:`_prepare_runtime`.
+            x: Packed free-variable vector matching the layout built by the
+                last :meth:`pack` call.
 
         Returns:
             A solver-unit namespace with packed variables unpacked and all
             derived/profile/default variables completed.
         """
         # Start from the immutable inputs, then overwrite the packed free vars.
-        values = dict(self._rt_base_values)
+        values = dict(self._packed_base_values)
         arr = np.asarray(x, dtype=float)
-        for name, start, stop, offsets, scales, shape, transform in self._rt_span_specs:
+        for name, start, stop, offsets, scales, shape, transform in self.packed_specs:
             local_x = arr[start:stop]
             # Positive-bounded scalars are packed logarithmically; the rest affine.
             if transform == "log":
@@ -1752,63 +1826,25 @@ class RelationSystem:
             else:
                 actual = offsets + scales * local_x
             values[name] = actual.copy() if shape == 1 else float(actual[0])
-        self._complete_runtime_values(values)
-        return values
+        return self.complete(values)
 
-    def _complete_runtime_values(self, values: dict[str, Any]) -> dict[str, Any]:
-        """Complete ``values`` in place using the cached profile/provider plan.
+    # ── Completion: providers, profiles, value namespaces ─────────────────
 
-        Args:
-            values: Solver-unit namespace to fill; mutated in place.
-
-        Returns:
-            The same ``values`` mapping, for convenience.
-        """
-        # 1) Reconstruct shape-controlled profiles from their scalar average.
-        self._apply_profile_specs(values, self._rt_profile_specs)
-
-        # 2) Fill still-missing held-constant defaults.
-        self._apply_constant_defaults(values, self._rt_constant_defaults)
-
-        # 3) Evaluate providers in dependency order (shared completion core).
-        self._apply_completion_providers(
-            values,
-            self._rt_provider_specs,
-            self._rt_completion_passes,
-            self._rt_active_vars,
-            self._rt_explicit_outputs,
-        )
-        return values
-
-    def _apply_completion_providers(
-        self,
-        out: dict[str, Any],
-        plan: list[tuple[Relation, bool]],
-        passes: int,
-        active_vars: set[str],
-        explicit_outputs: set[str],
-    ) -> None:
+    def _apply_completion_providers(self, out: dict[str, Any]) -> None:
         """Evaluate completion providers in dependency order, in place.
 
-        Single completion loop shared by the solve-time
-        (:meth:`_complete_runtime_values`) and certification-time
-        (:meth:`_with_derived_values`) paths.  Each provider relation whose
-        inputs are all present is evaluated and writes the registry-known outputs
-        it owns: an explicit provider recomputes its output, a default
-        (``only_missing``) fills only a still-missing one.  One pass is exact for
-        an acyclic plan; a cyclic plan iterates until a pass changes nothing
-        (value equality test) or ``passes`` is reached.
-
-        Args:
-            out: Namespace to complete, mutated in place.
-            plan: ``(relation, only_missing)`` pairs in dependency order.
-            passes: Maximum completion passes (1 when the plan is acyclic).
-            active_vars: Variable names a provider is allowed to write.
-            explicit_outputs: Outputs owned by an explicit (non-default) provider.
+        The provider stage of :meth:`complete`.  Each provider relation of the
+        compiled plan whose inputs are all present is evaluated and writes the
+        registry-known outputs it owns: an explicit provider recomputes its
+        output, a default (``only_missing``) fills only a still-missing one.
+        One pass is exact for an acyclic plan; a cyclic plan iterates until a
+        pass changes nothing (value equality test) or the pass cap is reached.
         """
-        for _pass in range(passes):
+        active_vars = self.active_variable_names
+        explicit_outputs = self.derived_provider_by_output
+        for _pass in range(self._completion_passes):
             changed = False
-            for rel, only_missing in plan:
+            for rel, only_missing in self._provider_plan:
                 # A provider can only fire once all of its inputs are known.
                 if any(self._value_missing(out, inp) for inp in rel.input_names):
                     continue
@@ -1857,28 +1893,26 @@ class RelationSystem:
 
         A fixed supplied profile carries its stored solver-form array as
         ``fixed_value``; a shape-controlled profile carries its scalar-average
-        name and unit shape for ``average * shape`` reconstruction.  Cached once
-        by :meth:`_prepare_runtime` for the solve loop; rebuilt live by
-        :meth:`_with_profile_values` on the certification path.
+        name and unit shape for ``average * shape`` reconstruction.  Built once
+        per compile pass and cached on ``self._profile_specs``.
         """
         specs: list[tuple[str, str | None, np.ndarray | None, Any]] = []
-        for name, shape in self.profile_shape_by_name.items():
+        for name, (shape, fixed) in self.supplied_profiles.items():
             fixed_value = None
-            if name in self.fixed_supplied_profile_names:
+            if fixed:
                 var = self.variables_by_name.get(name)
                 if var is not None and var.input_value is not None:
                     fixed_value = self._solver_value(name, var.input_value)
             specs.append((name, self.profile_average_by_name.get(name), shape, fixed_value))
         return specs
 
-    def _apply_profile_specs(self, values: dict[str, Any], specs: list[tuple[str, str | None, np.ndarray | None, Any]]) -> None:
-        """Reconstruct fixed/shape-controlled profiles in place from their specs.
+    def _apply_profile_specs(self, values: dict[str, Any]) -> None:
+        """Reconstruct fixed/shape-controlled profiles in place.
 
-        Single profile-reconstruction rule shared by the solve-time
-        (:meth:`_complete_runtime_values`) and certification-time
-        (:meth:`_with_profile_values`) paths.
+        The profile stage of :meth:`complete`, reading the compile-cached
+        ``self._profile_specs``.
         """
-        for name, avg_name, shape, fixed_value in specs:
+        for name, avg_name, shape, fixed_value in self._profile_specs:
             if fixed_value is not None:
                 values[name] = fixed_value
                 continue
@@ -1887,143 +1921,59 @@ class RelationSystem:
             avg = float(np.asarray(values[avg_name], dtype=float).reshape(-1)[0])
             values[name] = self._solver_value(name, avg * shape)
 
-    def _apply_constant_defaults(self, values: dict[str, Any], solver_defaults: Mapping[str, Any]) -> None:
-        """Fill still-missing held-constant defaults in place from solver-form values.
+    def _apply_constant_defaults(self, values: dict[str, Any]) -> None:
+        """Fill still-missing held-constant defaults in place (solver form).
 
-        Shared apply rule for the solve-time and certification-time paths; each
-        caller supplies the constant defaults already converted to solver units.
+        The constant-default stage of :meth:`complete`, reading the
+        compile-cached ``self._constant_defaults_solver``.
         """
-        for name, value in solver_defaults.items():
+        for name, value in self._constant_defaults_solver.items():
             if self._value_missing(values, name):
                 values[name] = value
 
-    def _values_from_variables(
-        self,
-        *,
-        for_solver: bool,
-        skip_missing: bool = False,
-        complete: bool = True,
-        use_input_values: bool = False,
-    ) -> dict[str, Any]:
-        """Return a value map from variable state.
-
-        Args:
-            for_solver: Whether to convert values to solver units/shapes.
-            skip_missing: Whether to omit missing variables from the map.
-            complete: Whether to run structural completion on solver values.
-            use_input_values: Whether to read immutable input values instead of current values.
-
-        Returns:
-            Variable value map in public or solver form.
-        """
+    def _value_map(self, *, use_input: bool, solver_form: bool) -> dict[str, Any]:
+        """Build a value map from variable state; missing variables are omitted."""
         values: dict[str, Any] = {}
         for name, var in self.variables_by_name.items():
-            value = var.input_value if use_input_values else var.value
+            value = var.input_value if use_input else var.value
             if value is None:
-                if not skip_missing and name not in self.derived_variable_names:
-                    values[name] = None
                 continue
-            values[name] = self._solver_value(name, value) if for_solver else value
-        if for_solver and complete:
-            values = self._complete_values(values)
+            values[name] = var.solver_value(value) if solver_form else value
         return values
 
-    def _complete_values(self, values: dict[str, Any]) -> dict[str, Any]:
-        """Apply profile-shape reconstruction and derived providers.
+    def solver_values(self) -> dict[str, Any]:
+        """Current values in solver form, uncompleted (pass to :meth:`complete` to close)."""
+        return self._value_map(use_input=False, solver_form=True)
+
+    def input_values(self) -> dict[str, Any]:
+        """Immutable supplied inputs in solver form -- the movement/reference base."""
+        return self._value_map(use_input=True, solver_form=True)
+
+    def public_values(self) -> dict[str, Any]:
+        """Current values in public form."""
+        return self._value_map(use_input=False, solver_form=False)
+
+    def complete(self, values: dict[str, Any]) -> dict[str, Any]:
+        """Complete a solver namespace in place; the single completion path.
+
+        Completion is the only place where missing variables may be filled.
+        Three stages, in order: shape-controlled profiles are reconstructed
+        from their scalar averages, held-constant defaults fill still-missing
+        variables, then provider relations run in dependency order (explicit
+        providers recompute their outputs; defaults fill only missing ones).
+        No variable-name heuristic is used.  All stage inputs are compiled
+        products cached by :meth:`_run_compile_pass`.
 
         Args:
-            values: Current namespace.
+            values: Solver-form namespace; mutated in place.
 
         Returns:
-            Completed solver namespace.
+            The same ``values`` mapping, for convenience.
         """
-        out = self._with_profile_values(values)
-        out = self._with_derived_values(out)
-        return out
-
-    def _with_derived_values(self, values: dict[str, Any]) -> dict[str, Any]:
-        """Complete a namespace using graph providers and defaults.
-
-        Runtime completion is the only place where missing variables may be
-        filled.  Values come from explicit active providers or from relations
-        tagged as defaults.  No variable-name heuristic is used.
-
-        Defaults are fallback providers: they fill only missing variables and do
-        not override supplied values or values produced by explicit providers.
-        This lets optional branches such as minority-fuel reactions remain
-        well-defined without inventing variables from names.
-        """
-        explicit_providers = self.derived_provider_by_output
-        default_providers = self.default_provider_by_output
-        constant_defaults = getattr(self, "constant_default_values", {})
-        if not explicit_providers and not default_providers and not constant_defaults:
-            return values
-
-        out = dict(values)
-        # Constant defaults are held at their registry value; fill only when the
-        # variable is still missing, so a real relation or supplied value wins.
-        solver_defaults: dict[str, Any] = {}
-        for name, value in constant_defaults.items():
-            if self._value_missing(out, name):
-                try:
-                    solver_defaults[name] = self._solver_value(name, value)
-                except Exception:
-                    pass
-        self._apply_constant_defaults(out, solver_defaults)
-
-        # Run providers in dependency order through the shared completion core
-        # (one pass for an acyclic plan; cycles iterate).  The membership sets are
-        # read live here because this path may run without a prepared runtime.
-        self._apply_completion_providers(
-            out,
-            self._completion_plan(),
-            1 if self._completion_acyclic else 6,
-            set(self.active_variable_names),
-            explicit_providers,
-        )
-        return out
-
-    def _provider_graph(self) -> nx.DiGraph:
-        """Directed provider graph over variable names, computed once.
-
-        The oriented view of :meth:`_structural_graph` restricted to one selected
-        provider per variable (an explicit derived provider wins over a default),
-        with the relation node contracted to ``input -> output`` edges.  Profile
-        variables also get an ``average -> profile`` edge so the scalar average
-        control is a structural ancestor even for a supplied profile that has no
-        provider relation.  Both the completion order (topological) and the
-        Jacobian sparsity (ancestors) read this one graph.
-        """
-        cached = getattr(self, "_provider_graph_cache", None)
-        if cached is not None:
-            return cached
-        structural = self._structural_graph()
-        graph = nx.DiGraph()
-        # One provider per variable; explicit ownership wins over a default.
-        provider_of: dict[str, tuple[Relation, bool]] = {}
-        for name, rel in self.default_provider_by_output.items():
-            provider_of[name] = (rel, True)
-        for name, rel in self.derived_provider_by_output.items():
-            provider_of[name] = (rel, False)
-        for out, (rel, only_missing) in provider_of.items():
-            graph.add_node(out, provider=rel, only_missing=only_missing)
-            # Provider inputs are the predecessors of the relation node in the
-            # single graph; fall back to the relation if it is not a candidate.
-            rnode = ("relation", rel.name)
-            inputs = [node[1] for node in structural.predecessors(rnode)] if structural.has_node(rnode) else list(rel.input_names)
-            # Constants that are produced variables are real dependencies of the
-            # output (the relation reads their value during completion), so they
-            # belong in the oriented graph that drives Jacobian sparsity; omitting
-            # them would let the conservative sparsity miss a true dependency.
-            inputs = [*inputs, *(c for c in rel.constant_names if c in self.variable_registry)]
-            for inp in inputs:
-                if inp != out:
-                    graph.add_edge(inp, out)
-        for profile, avg in self.profile_average_by_name.items():
-            if avg != profile:
-                graph.add_edge(avg, profile)
-        self._provider_graph_cache = graph
-        return graph
+        self._apply_profile_specs(values)
+        self._apply_constant_defaults(values)
+        self._apply_completion_providers(values)
+        return values
 
     def _completion_plan(self) -> list[tuple[Relation, bool]]:
         """Return derived/default providers in dependency order, computed once.
@@ -2044,18 +1994,19 @@ class RelationSystem:
         providers recompute their output (``only_missing`` False); defaults only
         fill a still-missing output.
         """
-        cached = getattr(self, "_completion_plan_cache", None)
+        cached = self._completion_plan_cache
         if cached is not None:
             return cached
-        graph = self._provider_graph()
-        # Unique provider relations.  A relation is a fill-only default when no
-        # output of it is owned by an explicit derived provider.
+        # One provider per variable; explicit ownership wins over a default.
+        # Unique provider relations owning at least one output after that
+        # resolution.  A relation is a fill-only default when no output of it
+        # is owned by an explicit derived provider.
+        provider_of: dict[str, Relation] = dict(self.default_provider_by_output)
+        provider_of.update(self.derived_provider_by_output)
         explicit_providers = {rel.name for rel in self.derived_provider_by_output.values()}
         rels: dict[str, Relation] = {}
-        for name in graph.nodes:
-            rel = graph.nodes[name].get("provider")
-            if rel is not None:
-                rels.setdefault(rel.name, rel)
+        for rel in provider_of.values():
+            rels.setdefault(rel.name, rel)
         only_missing_by_name = {name: name not in explicit_providers for name in rels}
 
         # Relation dependency DAG: producer -> consumer over all declared outputs.
@@ -2086,82 +2037,104 @@ class RelationSystem:
         self._completion_plan_cache = ordered
         return ordered
 
-    def _evaluate_relation_residuals(self, values: dict[str, Any], *, strict: bool, solver_residuals: bool) -> tuple[dict[str, dict[str, Any]], np.ndarray, list[str], list[str]]:
-        """Evaluate active relation residuals.
+    # ── Residual blocks: relations, domains, movement ─────────────────────
 
-        During optimizer calls (``solver_residuals=True``), only numerical
-        residuals are computed.  Full ``verify_status`` dictionaries are built
-        only for independent verification after the solve.  This avoids calling
-        relation functions twice for every optimizer residual evaluation.
+    def solver_residual_vector(self, values: Mapping[str, Any]) -> tuple[np.ndarray, list[str]]:
+        """Return the enforced-relation residual vector for one solver iterate.
+
+        The hot path: called once per least-squares residual evaluation, so it
+        computes numbers only (no ``verify_status`` dictionaries -- final
+        success is decided by :meth:`certify_relations` on the returned
+        candidate).  Structural provider relations contribute no rows: their
+        outputs were recomputed by completion.  A missing or broken enforced
+        relation contributes one large finite residual so the solver steps away
+        from it instead of aborting.
+
+        Returns:
+            ``(residuals, errors)`` -- the stacked enforced residual rows and
+            the missing-variable error messages.
+        """
+        blocks: list[np.ndarray] = []
+        errors: list[str] = []
+        for rel in self.relations:
+            if not self._relation_is_residual_relation(rel):
+                continue
+            missing = [name for name in rel.variables if name not in values or values[name] is None]
+            if missing:
+                if rel.enforce:
+                    errors.append(f"Relation {rel.name!r} missing variables {missing}.")
+                    blocks.append(np.asarray([1.0e12]))
+                continue
+            if rel.enforce:
+                # ``values`` is already in canonical solver form on every path
+                # that reaches a residual evaluation (base inputs, unpacked
+                # spans and completion outputs are all coerced).
+                blocks.append(self._residual_vector(rel, values, safe=True))
+        residuals = np.concatenate([block.reshape(-1) for block in blocks if block.size]) if blocks else np.empty(0, dtype=float)
+        if not np.all(np.isfinite(residuals)):
+            residuals = np.nan_to_num(residuals, nan=1.0e12, posinf=1.0e12, neginf=-1.0e12)
+        return residuals, errors
+
+    def certify_relations(self, values: Mapping[str, Any]) -> tuple[dict[str, dict[str, Any]], np.ndarray, list[str], list[str]]:
+        """Evaluate every active relation for certification.
+
+        The certification path: builds a full ``verify_status`` dictionary per
+        relation (including structural providers, whose residuals stay out of
+        the certificate residual vector) plus the stacked enforced residual
+        rows.  Used by :func:`fusdb.modes.verify.verify_values` -- solver
+        termination is never a success condition; this is.
+
+        Returns:
+            ``(status_by_relation, residuals, errors, warnings)``.
         """
         status: dict[str, dict[str, Any]] = {}
         blocks: list[np.ndarray] = []
         errors: list[str] = []
         warnings: list[str] = []
         for rel in self.relations:
+            missing = [name for name in rel.variables if name not in values or values[name] is None]
             if not self._relation_is_residual_relation(rel):
                 # Structural provider: its outputs were recomputed by
-                # _with_derived_values.  During optimization it contributes no
-                # residual row.  During certification it is still checked as an
-                # enforced relation on the completed value map.
-                missing = [name for name in rel.variables if name not in values or values[name] is None]
+                # completion.  It contributes no residual row but is still
+                # checked as an enforced relation on the completed value map.
                 if missing:
                     message = f"Relation {rel.name!r} missing variables {missing}."
-                    if not solver_residuals:
-                        status[rel.name] = {
-                            "relation": rel.name,
-                            "verified": False,
-                            "missing": missing,
-                            "errors": [message],
-                            "warnings": [],
-                            "enforced": rel.enforce,
-                            "source": "derived_provider",
-                        }
-                        if rel.enforce:
-                            errors.append(message)
+                    status[rel.name] = {
+                        "relation": rel.name,
+                        "verified": False,
+                        "missing": missing,
+                        "errors": [message],
+                        "warnings": [],
+                        "enforced": rel.enforce,
+                        "source": "derived_provider",
+                    }
+                    if rel.enforce:
+                        errors.append(message)
                     continue
-                if not solver_residuals:
-                    try:
-                        # ``values`` is already in canonical solver form on every
-                        # path that reaches a residual evaluation (base inputs,
-                        # unpacked spans and completion outputs are all coerced),
-                        # so the relation is evaluated against it directly without
-                        # the per-relation namespace copy/re-coercion.
-                        rel_status = self._verify_status(rel, values)
-                        rel_status["source"] = "derived_provider"
-                        # Keep provider residuals out of the global certificate
-                        # residual vector; source/status still records failures.
-                        status[rel.name] = rel_status
-                        warnings.extend(rel_status.get("warnings", []))
-                        if rel.enforce and rel_status.get("errors"):
-                            errors.extend(f"{rel.name}: {err}" for err in rel_status["errors"])
-                    except Exception as exc:
-                        status[rel.name] = {
-                            "relation": rel.name,
-                            "verified": False,
-                            "errors": [str(exc)],
-                            "warnings": [],
-                            "enforced": rel.enforce,
-                            "source": "derived_provider",
-                        }
-                        if rel.enforce:
-                            errors.append(f"{rel.name}: {exc}")
+                try:
+                    rel_status = self._verify_status(rel, values)
+                    rel_status["source"] = "derived_provider"
+                    status[rel.name] = rel_status
+                    warnings.extend(rel_status.get("warnings", []))
+                    if rel.enforce and rel_status.get("errors"):
+                        errors.extend(f"{rel.name}: {err}" for err in rel_status["errors"])
+                except Exception as exc:
+                    status[rel.name] = {
+                        "relation": rel.name,
+                        "verified": False,
+                        "errors": [str(exc)],
+                        "warnings": [],
+                        "enforced": rel.enforce,
+                        "source": "derived_provider",
+                    }
+                    if rel.enforce:
+                        errors.append(f"{rel.name}: {exc}")
                 continue
-            missing = [name for name in rel.variables if name not in values or values[name] is None]
             if missing:
                 message = f"Relation {rel.name!r} missing variables {missing}."
-                if strict and rel.enforce:
-                    errors.append(message)
-                    blocks.append(np.asarray([1.0e12]))
-                if not solver_residuals:
-                    status[rel.name] = {"relation": rel.name, "verified": False, "missing": missing, "errors": [message], "warnings": [], "enforced": rel.enforce}
+                status[rel.name] = {"relation": rel.name, "verified": False, "missing": missing, "errors": [message], "warnings": [], "enforced": rel.enforce}
                 continue
-            if solver_residuals:
-                residual = self._residual_vector(rel, values, safe=True)
-                if rel.enforce:
-                    blocks.append(residual)
-                continue
-            # Certification path: status and residual share one evaluation.
+            # Status and residual share one evaluation.
             rel_status, residual = self._status_and_residual(rel, values)
             status[rel.name] = rel_status
             warnings.extend(rel_status.get("warnings", []))
@@ -2170,13 +2143,11 @@ class RelationSystem:
                 if rel_status.get("errors"):
                     errors.extend(f"{rel.name}: {err}" for err in rel_status["errors"])
             elif not rel_status["verified"]:
-                if self._is_default_relation(rel):
+                if _is_default_relation(rel):
                     warnings.append(f"{rel.name}: weak default not satisfied after reconciliation")
                 else:
                     errors.append(f"{rel.name}: check-only applicability failed")
         residuals = np.concatenate([block.reshape(-1) for block in blocks if block.size]) if blocks else np.empty(0, dtype=float)
-        if solver_residuals and not np.all(np.isfinite(residuals)):
-            residuals = np.nan_to_num(residuals, nan=1.0e12, posinf=1.0e12, neginf=-1.0e12)
         return status, residuals, errors, warnings
 
     def _sparsity_dependency_graph(self) -> nx.DiGraph:
@@ -2189,16 +2160,17 @@ class RelationSystem:
         ``average -> profile`` edges completion uses), so a variable's ancestors
         are every packed variable that can reach it through completion.
 
-        It is deliberately fuller than :meth:`_provider_graph`, which keeps a
-        single selected provider per variable and so encodes only one
-        ``input -> selected_output`` edge per relation.  That single-provider view
+        It is deliberately fuller than the completion plan's per-variable
+        provider selection, which keeps a single selected provider per
+        variable and so encodes only one ``input -> selected_output`` edge
+        per relation.  That single-provider view
         misses dependencies that flow through a relation's *side* outputs (e.g.
         ARC_V0's ``n_i``/fusion-power coupling to ``f_He``), which previously had
         to be recovered by probing the residual once per packed variable.
         Capturing every output here makes the structural pattern conservative on
         its own, so no finite-difference probe is needed.
         """
-        cached = getattr(self, "_sparsity_graph_cache", None)
+        cached = self._sparsity_graph_cache
         if cached is not None:
             return cached
         graph = nx.DiGraph()
@@ -2227,23 +2199,19 @@ class RelationSystem:
             return {name}
         return {name} | nx.ancestors(graph, name)
 
-    def _build_jac_sparsity(self, spans: list[Span], reference: Mapping[str, Any] | None = None):
+    def build_jac_sparsity(self, reference: Mapping[str, Any] | None = None):
         """Build conservative residual-variable sparsity for SciPy coloring.
 
-        The matrix rows must match the complete least-squares residual vector:
-        enforced relation residuals followed by movement-penalty residuals.  The
-        previous implementation omitted movement rows, which disabled sparse
-        finite-difference coloring whenever movement penalties were enabled.
+        Reads the packed layout stored by the last :meth:`pack` call.  The
+        matrix rows must match the complete least-squares residual vector:
+        enforced relation residuals, domain rows, then movement-penalty rows
+        (present only when ``reference`` is given).
         """
-        if not spans:
+        if not self.packed_specs:
             return None
-        span_by_name = {name: (start, stop) for name, start, stop, _offsets, _scales in spans}
+        span_by_name = {name: (start, stop) for name, start, stop, *_rest in self.packed_specs}
         packed_names = set(span_by_name)
-        # Reuse the cached per-solve plan when it matches these spans; otherwise
-        # prepare it so a standalone call still works.
-        if getattr(self, "_rt_spans", None) is not spans:
-            self._prepare_runtime(spans)
-        values = self._values_from_vector(np.zeros(spans[-1][2], dtype=float))
+        values = self.unpack(np.zeros(self.packed_dim, dtype=float))
 
         row_specs: list[tuple[int, set[str]]] = []
         for rel in self.relations:
@@ -2289,9 +2257,9 @@ class RelationSystem:
 
         if reference is not None:
             # The movement penalty emits one crossing residual per input variable
-            # (see _sparse_movement_penalty), so each contributes a single row.
+            # (see movement_residuals), so each contributes a single row.
             # A packed input's row depends only on its own span.
-            for name, _start, _stop, _offsets, _scales in spans:
+            for name in span_by_name:
                 if name not in values or name not in reference or reference[name] is None:
                     continue
                 row_specs.append((1, {name}))
@@ -2306,7 +2274,7 @@ class RelationSystem:
         total_rows = sum(rdim for rdim, _names in row_specs)
         if total_rows <= 0:
             return None
-        matrix = lil_matrix((total_rows, spans[-1][2]), dtype=bool)
+        matrix = lil_matrix((total_rows, self.packed_dim), dtype=bool)
         row = 0
         for rdim, names in row_specs:
             for var_name in names:
@@ -2316,7 +2284,7 @@ class RelationSystem:
             row += rdim
         return matrix.tocsr()
 
-    def _domain_residuals(self, values: Mapping[str, Any]) -> np.ndarray:
+    def domain_residuals(self, values: Mapping[str, Any]) -> np.ndarray:
         """Return physical-domain violation residuals in tolerance units.
 
         Domains are hard feasibility constraints.  This residual is zero inside
@@ -2329,155 +2297,85 @@ class RelationSystem:
         for name in sorted(self.active_variable_names):
             if name not in values or values[name] is None or name not in self.variable_registry:
                 continue
-            spec = self.variable_registry.get(name)
-            lower, upper, lower_inc, upper_inc = spec.domain
-            if lower is None and upper is None:
-                continue
-            sides = int(lower is not None) + int(upper is not None)
-            try:
-                arr = np.asarray(values[name], dtype=float).reshape(-1)
-            except Exception:
-                rows.append(np.full(sides, 1.0e12, dtype=float))
-                continue
-            if not np.all(np.isfinite(arr)):
-                rows.append(np.full(sides, 1.0e12, dtype=float))
-                continue
-            tol = np.maximum(self._variable_tolerance_width(name, np.maximum(np.abs(arr), self._tolerance_scale_floor(name))), 1.0e-300)
-            # A profile's feasibility is governed by its extremes, not by each of
-            # its grid points: it lies in-domain iff its minimum clears the lower
-            # bound and its maximum clears the upper bound.  Reducing the
-            # per-point penalty to the worst point is exact for feasibility (the
-            # violation is zero iff every point is in-domain) and collapses ~46
-            # near-redundant rows per profile to one per bound -- the dominant
-            # term in the solver residual size.  Pointwise domains are still
-            # checked on the full grid by _domain_errors during certification.
-            is_profile = arr.size > 1
-            if lower is not None:
-                boundary = float(lower) + (self.zero_tol if not lower_inc else 0.0)
-                viol = np.maximum(boundary - arr, 0.0) / tol
-                rows.append(np.asarray([float(np.max(viol))]) if is_profile else viol)
-            if upper is not None:
-                boundary = float(upper) - (self.zero_tol if not upper_inc else 0.0)
-                viol = np.maximum(arr - boundary, 0.0) / tol
-                rows.append(np.asarray([float(np.max(viol))]) if is_profile else viol)
+            rows.extend(self._variable_for(name).domain_violation_rows(values[name]))
         return np.concatenate(rows) if rows else np.empty(0, dtype=float)
 
-    def _movement_excess(self, current: Any, reference: Any, name: str) -> float:
-        """Return one input's worst movement past its tolerance band.
-
-        The deadzone excess ``max(|value - input| / tolerance - 1, 0)`` reduced
-        over a variable's points to its worst point, so it is zero while the
-        input stays within tolerance and grows once it crosses.  This is the
-        per-input-variable quantity the reconcile objective drives toward zero
-        for as many inputs as possible.
-
-        Args:
-            current: Solved value (scalar or profile).
-            reference: Supplied input value in the same solver units.
-            name: Variable name (selects the movement tolerance).
-
-        Returns:
-            Scalar excess in tolerance units (0 when within tolerance).
-        """
-        cur = np.asarray(current, dtype=float).reshape(-1)
-        ref = np.asarray(reference, dtype=float).reshape(-1)
-        if cur.size == 0 or cur.shape != ref.shape:
-            return 0.0
-        tol = np.maximum(np.broadcast_to(self._variable_tolerance_width(name, self._variable_scale(name, reference)), cur.shape), 1.0e-300)
-        return float(np.max(np.maximum(np.abs(cur - ref) / tol - 1.0, 0.0)))
-
-    def _movement_inputs(self, values: Mapping[str, Any], reference: Mapping[str, Any], spans: list[Span]):
+    def _movement_inputs(self, values: Mapping[str, Any], reference: Mapping[str, Any]):
         """Yield ``(name, current, reference)`` for every input carrying movement.
 
-        These are the packed variables with a supplied reference plus the
-        supplied variables that are derived from an explicit relation (e.g. a
-        profile reconstructed from an average).  Both the movement residual and
-        its IRLS reweighting iterate this same set so their rows stay aligned.
+        These are the packed variables (from the layout stored by :meth:`pack`)
+        with a supplied reference, plus the supplied variables that are derived
+        from an explicit relation (e.g. a profile reconstructed from an
+        average).  Both the movement residual and its IRLS reweighting iterate
+        this same set so their rows stay aligned.
         """
         packed = set()
-        for name, _start, _stop, _offsets, _scales in spans:
+        for name, *_rest in self.packed_specs:
             packed.add(name)
             if name in values and name in reference and reference[name] is not None:
                 yield name, values[name], reference[name]
         for name in sorted(self.derived_variable_names - packed):
+            # A shape-locked (supplied, unfixed) profile carries no per-point
+            # movement of its own: the level is controlled by its (packed)
+            # scalar average, which already contributes the movement penalty.
+            profile = self.supplied_profiles.get(name)
+            if profile is not None and not profile[1]:
+                continue
             var = self.variables_by_name.get(name)
             if var is None or var.input_value is None or name not in values or values[name] is None:
                 continue
             yield name, values[name], self._solver_value(name, var.input_value)
 
-    def _movement_residuals(self, values: Mapping[str, Any], reference: Mapping[str, Any], spans: list[Span]) -> np.ndarray:
+    def movement_residuals(self, values: Mapping[str, Any], reference: Mapping[str, Any], weights: Mapping[str, float] | None = None) -> np.ndarray:
         """Return the reweighted-L1 movement penalty, one residual per input.
 
         Each input contributes ``sqrt(weight * excess)``, so its squared cost is
         ``weight * excess`` -- a deadzone L1 penalty on the beyond-tolerance
-        excess.  The per-input ``weight`` (``_movement_weights``, default 1)
-        is what the reconcile IRLS loop adjusts: down-weighting inputs already
-        far past tolerance and up-weighting the marginal ones reweights the L1 so
-        repeated solves drive the *number* of crossings down (the convex,
-        iteratively-reweighted surrogate for the L0 "fewest inputs beyond
-        tolerance" aim).
+        excess.  The per-input ``weight`` (default 1) is what the reconcile
+        IRLS loop adjusts via :meth:`movement_weights`: down-weighting inputs
+        already far past tolerance and up-weighting the marginal ones reweights
+        the L1 so repeated solves drive the *number* of crossings down (the
+        convex, iteratively-reweighted surrogate for the L0 "fewest inputs
+        beyond tolerance" aim).  The weights are mode-owned state, passed in
+        per call.
 
         Args:
             values: Current solved values.
             reference: Supplied input reference values (solver units).
-            spans: Packed variable spans.
+            weights: Per-input IRLS weights; missing entries default to 1.
 
         Returns:
             One residual per movement-carrying input variable.
         """
-        weights = getattr(self, "_movement_weights", {})
+        weights = weights or {}
         rows = [
-            np.asarray([np.sqrt(weights.get(name, 1.0) * self._movement_excess(current, ref, name))], dtype=float)
-            for name, current, ref in self._movement_inputs(values, reference, spans)
+            np.asarray([np.sqrt(weights.get(name, 1.0) * self.variables_by_name[name].movement_excess(current, ref))], dtype=float)
+            for name, current, ref in self._movement_inputs(values, reference)
         ]
         return np.concatenate(rows) if rows else np.empty(0, dtype=float)
 
-    def _update_movement_weights(self, values: Mapping[str, Any], reference: Mapping[str, Any], spans: list[Span], *, eps: float) -> None:
-        """Reweight the movement L1 from the current solution (one IRLS step).
+    def movement_weights(self, values: Mapping[str, Any], reference: Mapping[str, Any], *, eps: float) -> dict[str, float]:
+        """Return movement L1 weights from the current solution (one IRLS step).
 
-        Sets ``weight = 1 / (excess + eps)`` per input: an input already well
+        ``weight = 1 / (excess + eps)`` per input: an input already well
         past tolerance gets a small weight (cheap to leave changed), while one
         only marginally out gets a large weight (strongly pushed back inside).
         Re-solving with these weights is the iteratively-reweighted-L1 update
-        whose fixed point minimises the count of inputs beyond tolerance.
+        whose fixed point minimises the count of inputs beyond tolerance.  The
+        caller owns the weights and passes them to :meth:`movement_residuals`.
 
         Args:
             values: Latest solved namespace.
             reference: Supplied input reference values (solver units).
-            spans: Packed variable spans.
             eps: Reweighting floor; smaller drives sparser (more aggressive)
                 solutions at some cost to stability.
         """
-        self._movement_weights = {
-            name: 1.0 / (self._movement_excess(current, ref, name) + float(eps))
-            for name, current, ref in self._movement_inputs(values, reference, spans)
+        return {
+            name: 1.0 / (self.variables_by_name[name].movement_excess(current, ref) + float(eps))
+            for name, current, ref in self._movement_inputs(values, reference)
         }
 
-    def _inputs_beyond_tolerance(self, values: Mapping[str, Any]) -> list[dict[str, Any]]:
-        """Return supplied non-fixed inputs whose solved value left their tolerance.
-
-        Reports, per input variable, the maximum tolerance-normalized deviation
-        ``|value - input| / tolerance``; an input is "beyond tolerance" when that
-        exceeds one.  The count of these is exactly the quantity the reconcile
-        objective tries to minimise, so it is surfaced on the result for the
-        caller to inspect.
-
-        Args:
-            values: Solver-unit namespace produced by the solve.
-
-        Returns:
-            ``{"name", "deviation_tol"}`` entries with deviation > 1, worst first.
-        """
-        out: list[dict[str, Any]] = []
-        for name, var in self.variables_by_name.items():
-            if var.fixed or var.input_value is None or name not in values or values[name] is None:
-                continue
-            # excess is (deviation/tol - 1) clipped at 0, so excess > 0 marks a
-            # crossing; deviation in tolerance units is then 1 + excess.
-            excess = self._movement_excess(values[name], self._solver_value(name, var.input_value), name)
-            if excess > 0.0:
-                out.append({"name": name, "deviation_tol": 1.0 + excess})
-        return sorted(out, key=lambda item: -item["deviation_tol"])
+    # ── Store and final-value checks ──────────────────────────────────────
 
     def _fixed_value_errors(self, values: Mapping[str, Any]) -> list[str]:
         """Return errors for fixed variables changed in a candidate value map."""
@@ -2486,9 +2384,7 @@ class RelationSystem:
             if not var.fixed or var.input_value is None or name not in values or values[name] is None:
                 continue
             try:
-                old = np.asarray(self._solver_value(name, var.input_value), dtype=float).reshape(-1)
-                new = np.asarray(values[name], dtype=float).reshape(-1)
-                if old.shape != new.shape or not np.allclose(old, new, rtol=0.0, atol=max(self.zero_tol, 1e-10 * max(1.0, float(np.max(np.abs(old))) if old.size else 1.0))):
+                if var.moved_from_input(values[name]):
                     errors.append(f"Fixed variable {name!r} changed during candidate solve.")
             except Exception as exc:
                 errors.append(f"Could not validate fixed variable {name!r}: {exc}")
@@ -2514,7 +2410,7 @@ class RelationSystem:
                 errors.append(f"Could not validate domain for variable {name!r}: {exc}")
         return errors
 
-    def _store_solved_values(self, values: Mapping[str, Any]) -> None:
+    def store(self, values: Mapping[str, Any]) -> None:
         """Overwrite current public values from a solver-domain value map.
 
         Inputs are not modified. Fixed variables keep their input-only state.
@@ -2548,77 +2444,26 @@ class RelationSystem:
             except Exception:
                 continue
 
-    def _coerce_to_registry_shape(self, name: str, value: Any) -> Any:
-        """Return ``value`` with the shape declared for ``name`` in the registry.
+    # ── Per-variable delegates and small helpers ──────────────────────────
 
-        Scalar registry variables must remain scalar.  A profile-shaped value for
-        a scalar variable is a relation/planning error and is rejected instead of
-        being displayed or stored as a fake scalar result.  Profile variables may
-        receive a scalar, which is broadcast to the active profile grid.
+    def _variable_for(self, name: str) -> Variable:
+        """Return the live :class:`Variable` for a registry-known name.
+
+        Value-form conversion is owned by :class:`Variable`
+        (:meth:`Variable.solver_value` / :meth:`Variable.public_value`).  The
+        rare name the system does not hold a variable for (a seeding write for
+        an inactive relation's output) gets an unregistered throwaway carrying
+        the same spec, so conversion works without mutating the system.
         """
-        if name not in self.variable_registry:
-            return value
+        var = self.variables_by_name.get(name)
+        if var is not None:
+            return var
         spec = self.variable_registry.get(name)
-        size: int | None = None
-        if spec.shape == 1:
-            var = self.variables_by_name.get(name)
-            size = int((var.size if var is not None else None) or self.profile_size)
-        coerced, _size = coerce_to_shape(
-            name, value, is_profile=spec.shape == 1, size=size, squeeze_scalar=True, reject_nan=True
-        )
-        return coerced
+        return Variable(spec.canonical_name, size=self.profile_size if spec.shape == 1 else None)
 
     def _solver_value(self, name: str, value: Any) -> Any:
-        """Convert a public value to canonical solver shape.
-
-        Values lying exactly on a physical-domain boundary are projected onto
-        the corresponding solver-domain boundary; this is the inverse of
-        ``_public_value``, so a profile edge stored publicly as ``T = 0`` is
-        evaluated at the numerically safe solver bound (for example 1e-12)
-        instead of hitting singular physics formulas.  Only values within
-        ``zero_tol`` of the boundary are projected: interior values and real
-        domain violations are never clipped.
-        """
-        shaped = self._coerce_to_registry_shape(name, value)
-        arr = np.asarray(shaped, dtype=float)
-        out = arr.astype(float, copy=True)
-        if name in self.variable_registry:
-            spec = self.variable_registry.get(name)
-            d_lo, d_hi, d_lo_inc, d_hi_inc = spec.domain
-            s_lo, s_hi = scipy_bounds(spec.solver_domain, zero_tol=self.zero_tol)
-            if d_lo is not None:
-                lo = float(d_lo)
-                if np.isfinite(s_lo) and s_lo > lo:
-                    target = float(s_lo)
-                elif not d_lo_inc:
-                    target = lo + self.zero_tol
-                else:
-                    target = None
-                if target is not None:
-                    out = np.where((out >= lo - self.zero_tol) & (out <= lo + self.zero_tol), target, out)
-            if d_hi is not None:
-                hi = float(d_hi)
-                if np.isfinite(s_hi) and s_hi < hi:
-                    target = float(s_hi)
-                elif not d_hi_inc:
-                    target = hi - self.zero_tol
-                else:
-                    target = None
-                if target is not None:
-                    out = np.where((out >= hi - self.zero_tol) & (out <= hi + self.zero_tol), target, out)
-        return float(out) if out.ndim == 0 else out
-
-    def _check_solver_domain_value(self, name: str, value: Any) -> None:
-        """Raise if ``value`` is outside the variable solver domain."""
-        spec = self.variable_registry.get(name)
-        lb, ub = scipy_bounds(spec.solver_domain, zero_tol=self.zero_tol)
-        arr = np.asarray(self._solver_value(name, value), dtype=float)
-        if not np.all(np.isfinite(arr)):
-            raise ValueError(f"Variable {name!r} initial value is not finite.")
-        if np.isfinite(lb) and np.any(arr < lb):
-            raise ValueError(f"Variable {name!r} initial value is below solver_domain lower bound {lb}.")
-        if np.isfinite(ub) and np.any(arr > ub):
-            raise ValueError(f"Variable {name!r} initial value is above solver_domain upper bound {ub}.")
+        """Convert a public value to canonical solver shape (see :meth:`Variable.solver_value`)."""
+        return self._variable_for(name).solver_value(value)
 
     def _relation_evaluation_values(self, rel: Relation, values: Mapping[str, Any]) -> dict[str, Any]:
         """Return a solver-safe namespace for one relation evaluation.
@@ -2653,26 +2498,10 @@ class RelationSystem:
         return rel.status_and_residual(eval_values, scales=self.variable_scales, rel_tols=self.variable_tolerances, abs_tols=self.variable_abs_tolerances)
 
     def _public_value(self, name: str, value: Any) -> Any:
-        """Project solver-boundary values to physical-domain boundary values.
+        """Project solver values to public values (see :meth:`Variable.public_value`)."""
+        return self._variable_for(name).public_value(value)
 
-        Args:
-            name: Variable name.
-            value: Solver value.
-
-        Returns:
-            Public value inside the physical domain.
-        """
-        spec = self.variable_registry.get(name)
-        d_lo, d_hi, d_lo_inc, d_hi_inc = spec.domain
-        s_lo, s_hi = domain_bounds_for_solver(spec.solver_domain, zero_tol=self.zero_tol)
-        arr = np.asarray(self._coerce_to_registry_shape(name, value), dtype=float).copy()
-        if s_lo is not None and d_lo is not None and d_lo_inc and not np.isclose(float(s_lo), float(d_lo), rtol=0.0, atol=self.zero_tol):
-            arr = np.where(np.isclose(arr, s_lo, rtol=0.0, atol=max(self.zero_tol, abs(s_lo) * 1e-10)), d_lo, arr)
-        if s_hi is not None and d_hi is not None and d_hi_inc and not np.isclose(float(s_hi), float(d_hi), rtol=0.0, atol=self.zero_tol):
-            arr = np.where(np.isclose(arr, s_hi, rtol=0.0, atol=max(self.zero_tol, abs(s_hi) * 1e-10)), d_hi, arr)
-        return float(arr) if arr.ndim == 0 else arr
-
-    def _refresh_scales(self) -> None:
+    def refresh_scales(self) -> None:
         """Refresh variable scales and tolerances used by residuals.
 
         Domains and solver domains are admissible-value constraints, not
@@ -2687,8 +2516,7 @@ class RelationSystem:
             for name, var in self.variables_by_name.items()
         }
         self.variable_abs_tolerances = {
-            name: float(getattr(var, "abs_tol", self.variable_registry.get(name).abs_tol))
-            for name, var in self.variables_by_name.items()
+            name: float(var.abs_tol) for name, var in self.variables_by_name.items()
         }
         # Scale each variable from its current/input reference magnitude (the
         # first of value/input_value with a finite element), defaulting to 0.0.
@@ -2703,62 +2531,7 @@ class RelationSystem:
                 if finite.size:
                     reference = float(np.max(np.abs(finite)))
                     break
-            self.variable_scales[name] = self._variable_scale(name, reference)
-
-    def _tolerance_scale_floor(self, name: str) -> float:
-        """Return the finite scale floor implied by abs_tol / rel_tol."""
-        try:
-            spec = self.variable_registry.get(name)
-            rel_tol = float(self.variables_by_name.get(name).rel_tol if name in self.variables_by_name else spec.rel_tol)
-            abs_tol = float(self.variables_by_name.get(name).abs_tol if name in self.variables_by_name else spec.abs_tol)
-        except Exception:
-            rel_tol = float(self.variable_registry.rel_tol_default)
-            abs_tol = 0.0
-        if rel_tol > 0.0 and abs_tol > 0.0:
-            return max(abs_tol / rel_tol, 1.0e-300)
-        if abs_tol > 0.0:
-            return max(abs_tol, 1.0e-300)
-        return 1.0e-300
-
-    def _variable_scale(self, name: str, *values: Any) -> float:
-        """Return the residual/movement scale for one variable.
-
-        The scale is the largest of the abs_tol / rel_tol floor and the finite
-        magnitudes of the supplied reference values.  It intentionally ignores
-        physical and solver-domain bounds, including unbounded or artificial
-        large bounds.  Both relation-residual scaling and movement-penalty
-        scaling use this same definition.
-        """
-        magnitudes = [self._tolerance_scale_floor(name)]
-        for value in values:
-            if value is None:
-                continue
-            try:
-                arr = np.asarray(value, dtype=float).reshape(-1)
-            except Exception:
-                continue
-            finite = arr[np.isfinite(arr)]
-            if finite.size:
-                magnitudes.append(float(np.max(np.abs(finite))))
-        return max(magnitudes)
-
-    def _variable_tolerance_width(self, name: str, scale: Any) -> np.ndarray:
-        """Return physical tolerance width for a variable and scale."""
-        rel_tol = float(self.variable_tolerances.get(name, self.variable_registry.rel_tol_default))
-        abs_tol = float(self.variable_abs_tolerances.get(name, 0.0))
-        scl = np.maximum(np.asarray(scale, dtype=float), 1.0e-300)
-        return np.maximum(abs_tol, rel_tol * scl)
-
-    def _reference_for_movement(self, var: Variable, fallback: Any, index: int | None = None) -> Any:
-        """Return supplied reference value for movement scaling, or fallback for missing variables."""
-        if var.input_value is not None:
-            try:
-                arr = np.asarray(self._solver_value(var.name, var.input_value), dtype=float).reshape(-1)
-                if arr.size:
-                    return float(arr[min(index or 0, arr.size - 1)])
-            except Exception:
-                pass
-        return fallback
+            self.variable_scales[name] = var.scale(reference)
 
     def _initial_value(self, var: Variable, index: int | None = None) -> float:
         """Return an initial value for one variable element.
@@ -2766,21 +2539,19 @@ class RelationSystem:
         Initial values may come only from user input or relation-generated guesses.
         Solver domains are constraints, not value providers.
         """
-        initial_values = getattr(self, "_initial_guesses", {})
-
         # Relation-generated values are x0 hints, not movement references.  They
         # may override supplied non-fixed values for initialization only; the
         # original public value remains in the movement reference map.
-        if var.name in initial_values and initial_values[var.name] is not None:
-            solver_value = self._solver_value(var.name, initial_values[var.name])
-            self._check_solver_domain_value(var.name, solver_value)
+        if self._initial_guesses.get(var.name) is not None:
+            solver_value = var.solver_value(self._initial_guesses[var.name])
+            var.check_solver_domain(solver_value)
             arr = np.asarray(solver_value, dtype=float).reshape(-1)
             if arr.size:
                 return float(arr[min(index or 0, arr.size - 1)])
 
         if var.input_value is not None:
-            solver_value = self._solver_value(var.name, var.input_value)
-            self._check_solver_domain_value(var.name, solver_value)
+            solver_value = var.solver_value(var.input_value)
+            var.check_solver_domain(solver_value)
             arr = np.asarray(solver_value, dtype=float).reshape(-1)
             if arr.size:
                 return float(arr[min(index or 0, arr.size - 1)])
@@ -2793,7 +2564,7 @@ class RelationSystem:
         # same unique answer regardless.  The magnitude comes from the variable
         # tolerance scale, which the log transform then explores.
         if var.name in self.block_core_names:
-            return float(self._tolerance_scale_floor(var.name))
+            return float(var.tolerance_floor())
 
         raise ValueError(
             f"No initial value for variable {var.name!r}: it was not supplied "
@@ -2812,10 +2583,8 @@ class RelationSystem:
         return max([1, *(self._variable_dim(name) for name in rel.variables if name in self.variable_registry and self.variable_registry.get(name).shape == 1)])
 
     def _variable_dim(self, name: str) -> int:
-        spec = self.variable_registry.get(name)
-        if spec.shape != 1:
-            return 1
-        return int(self.variables_by_name.get(name).size or self.profile_size)
+        """Scalar-element count for one variable (see :attr:`Variable.dim`)."""
+        return self._variable_for(name).dim
 
     def _resolve_relation_names(self, rel: Relation) -> Relation:
         return canonicalize_relation_names(rel, self.variable_registry)
@@ -2828,108 +2597,6 @@ class RelationSystem:
         if name in self.variables_by_name:
             return self.variables_by_name[name]
         var = Variable(name, size=self.profile_size if spec.shape == 1 else None)
-        self.variables.append(var)
         self.variables_by_name[name] = var
         return var
 
-    def _is_default_relation(self, rel: Relation) -> bool:
-        return "default" in set(rel.tags) or str(rel.source_kind).startswith("default")
-
-
-
-    def _classify_variables(self) -> dict[str, dict[str, Any]]:
-        out: dict[str, dict[str, Any]] = {}
-        for name, var in self.variables_by_name.items():
-            out[name] = {
-                "has_input": var.input_value is not None,
-                "value_present": var.value is not None,
-                "fixed": bool(var.fixed),
-            }
-        return out
-
-    def _rank_input_culprits(self, relation_status: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
-        counts: dict[str, int] = {}
-        for rel in self.relations:
-            status = relation_status.get(rel.name, {})
-            if status.get("verified", True):
-                continue
-            for name in rel.variables:
-                var = self.variables_by_name.get(name)
-                if var is not None and not var.fixed:
-                    counts[name] = counts.get(name, 0) + 1
-        return [{"name": name, "count": count} for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))]
-
-    def _new_result(self, mode: str) -> dict[str, Any]:
-        return {"mode": mode, "success": False, "termination": "not run", "errors": [], "warnings": [], "compiler_report": self.compiler_report}
-
-    def _result_from_certificate(
-        self,
-        mode: str,
-        certificate: Mapping[str, Any],
-        *,
-        termination: str,
-        solver: Mapping[str, Any] | None = None,
-        include_values: bool = False,
-        extra: Mapping[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Build a mode result dict from a verification certificate.
-
-        Shared by verify/reconcile/optimize so the common result shape (status,
-        residuals, certificate, graph and compiler views) is assembled in one
-        place.  ``solver`` and ``values`` are added only when supplied, and
-        ``extra`` overlays any mode-specific keys.
-        """
-        result = self._new_result(mode)
-        result.update(
-            {
-                "relation_status": certificate["relation_status"],
-                "residuals": certificate["residuals"].tolist(),
-                "errors": certificate["errors"],
-                "warnings": certificate["warnings"],
-                "variable_status": self._classify_variables(),
-                "termination": termination,
-                "success": bool(certificate["verified"]),
-                "verified": bool(certificate["verified"]),
-                "certificate": {k: v for k, v in certificate.items() if k not in {"residuals", "values"}},
-                "variables": self.variables_by_name,
-                "relations": self.primary_relations,
-            }
-        )
-        if include_values:
-            result["values"] = certificate["values"]
-        if solver is not None:
-            result["solver"] = dict(solver)
-        if extra:
-            result.update(extra)
-        return result
-
-    def _solver_report(self, **overrides: Any) -> dict[str, Any]:
-        """Return a solver-metadata block with neutral defaults.
-
-        Modes override only the fields they have; the no-solve paths keep the
-        same key set without hand-writing a full block of zeros.
-        """
-        report: dict[str, Any] = {
-            "backend": "none",
-            "success": True,
-            "status": 0,
-            "cost": 0.0,
-            "optimality": 0.0,
-            "nfev": 0,
-            "message": "",
-            "residual_calls": 0,
-            "residual_eval_time_s": 0.0,
-            "residual_size": 0,
-            "solver_dim": 0,
-            "jac_sparsity_used": False,
-            "jac_sparsity_shape": None,
-            "residual_eval_mean_ms": 0.0,
-            "relation_weight": 0.0,
-            "relation_weight_schedule": [],
-            "phase_schedule": [],
-            "stage_history": [],
-            "movement_weight": 0.0,
-            "initial_guess_variables": 0,
-        }
-        report.update(overrides)
-        return report

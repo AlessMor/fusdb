@@ -1,0 +1,48 @@
+metadata:
+  id: SPARC_2020
+  name: SPARC V2 - Full-field H-mode
+  organization: CFS
+  country: USA
+  year: 2020
+  doi: https://doi.org/10.1017/S0022377820001257
+  notes: Conceptual compact tokamak from CFS. Considers the "Full-field H-mode" scenario (see Table 2 of the reference).
+tags:
+- tokamak
+- compact_tokamak
+- h_mode
+variables:
+  R: 1.85
+  a: 0.57
+  eps: 0.31
+  B0: 12.2
+  I_p: 8.7e6
+  kappa_95: 1.97
+  delta_95: 0.54
+  P_aux: 25e6
+  tau_pulse: 10 # actually it's t_flattop
+  Phi_tot:
+    value: 42
+    unit: Wb
+  P_fus: 140e6
+  Q: 11
+  tau_E: 0.77
+  q_star:
+    value: 3.05
+    relation: Uckan
+    unit: dimensionless
+  rho_star: 0.0027
+  nu_eff: 0.16
+  nu_star: 0.029
+  H_98y2: 1.0
+  P_rf: 11.1e6
+  P_ohmic: 1.7e6
+  T_e_avg: 7.3
+  T_i_avg: 7.3
+  n_e_avg: 3.1e20
+  n_i_avg: 2.7e20
+  nu_T_e: 2.5
+  nu_n_i: 1.33
+  f_G: 0.37
+  beta: 0.012
+  beta_N: 1.0
+  P_sep_B0_R0: 191e6

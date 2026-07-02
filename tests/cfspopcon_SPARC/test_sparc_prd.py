@@ -26,6 +26,7 @@ import json
 import re
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from fusdb.reactor import Reactor
@@ -49,6 +50,18 @@ _UNIT_SCALE: dict[str, float] = {
     "_1e20_per_cubic_metre": 1.0e20,
     # triple product, n_i_tau_E_T_i canonical unit is keV*s/m^3.
     "_1e20_per_cubic_metre * kiloelectron_volt * second": 1.0e20,
+    # current / resistivity / flux / SOL chain
+    "ampere": 1.0,
+    "volt": 1.0,
+    "tesla": 1.0,
+    "meter * ohm": 1.0,
+    "weber": 1.0,
+    "henry": 1.0,
+    "electron_volt": 1.0e-3,
+    "millimeter": 1.0e-3,
+    "gigawatt": 1.0e9,
+    "gigawatt / meter ** 2": 1.0e9,
+    "megawatt / meter ** 2": 1.0e6,
 }
 
 
@@ -156,6 +169,166 @@ def test_ordered_run_succeeds(ordered_run):
         "L-H transition threshold power",
     ):
         assert name in result.get("executed_relations", []), f"ordered run did not reach {name!r}"
+
+
+def test_current_resistivity_chain_matches_cfspopcon():
+    """The imported current / resistivity / bootstrap chain reproduces cfspopcon's PRD.
+
+    Run as an isolated ordered chain rather than added to the main reactor: a fixed
+    ``Z_eff`` input perturbs the global initial-value seed of the fragile confinement
+    2x2 block, so the chain is exercised on its own here. Demonstrates that the newly
+    imported cfspopcon relations (safety factor, resistivity, bootstrap, ohmic) match.
+    """
+    from fusdb.registry import RELATIONS
+    from fusdb.relationsystem import RelationSystem
+    from fusdb.variable import Variable
+
+    prd = _load_prd()
+    inputs = {
+        "eps": 0.3081, "kappa": 1.75, "delta_95": 0.3, "B0": 12.2, "R": 1.85,
+        "a": _prd_si(prd, "minor_radius"), "I_p": 8.7e6, "T_e_avg": 9.13793,
+        # Separate electron/ion density peaking (fusdb now supports independent
+        # profiles, matching cfspopcon's bootstrap nu_n = (ion + electron)/2).
+        "density_peaking": _prd_si(prd, "electron_density_peaking"),
+        "ion_density_peaking": _prd_si(prd, "ion_density_peaking"),
+        "temperature_peaking": 2.5,
+        "Z_eff": _prd_si(prd, "z_effective"), "beta_p": _prd_si(prd, "beta_poloidal"),
+    }
+    system = RelationSystem([Variable(n, value=v, fixed=True) for n, v in inputs.items()], list(RELATIONS))
+    order = [
+        "Plasma shaping function for q_star", "Edge safety factor q_star",
+        "Poloidal field at outboard midplane", "Spitzer loop resistivity",
+        "Resistivity trapped-particle enhancement", "Neoclassical loop resistivity",
+        "Bootstrap current fraction", "Inductive plasma current",
+        "Loop voltage at flat-top", "Ohmic heating power",
+    ]
+    result = system.ordered(order=order)
+    assert result.get("success"), result.get("errors")
+
+    def got(name: str) -> float:
+        return float(np.ravel(system.variables_by_name[VARIABLES.resolve(name)].value)[0])
+
+    # Algebraic quantities whose inputs match cfspopcon -> exact reproduction.
+    # The bootstrap chain is now exact too: supplying the separate electron/ion
+    # density peaking makes fusdb's nu_n = (ion + electron)/2 match cfspopcon.
+    for prd_name in ("f_shaping", "q_star", "B_pol_out_mid", "spitzer_resistivity",
+                     "trapped_particle_fraction", "neoclassical_loop_resistivity",
+                     "bootstrap_fraction", "inductive_plasma_current", "loop_voltage", "P_ohmic"):
+        assert got(prd_name) == pytest.approx(_prd_si(prd, prd_name), rel=2e-3), prd_name
+
+
+# --- Full downstream reproduction: every now-importable cfspopcon quantity ----
+# Evaluated forward through the imported relations in cfspopcon's algorithm order,
+# from the SPARC operating point (cfspopcon inputs + a few computed "hub"
+# intermediates borrowed from PRD that fusdb derives via composition/profile
+# physics it models differently: Z_eff, beta_p, P_sep, separatrix_elongation,
+# SOL_power_loss_fraction, geometry a/V_p/A_p, n_i_avg).
+#
+# Direct forward evaluation is used rather than RelationSystem.ordered() for two
+# reasons surfaced while building this: (1) ordered() ignores supplied overrides
+# for constant-default parameters in its forward solve (e.g. ejima_coefficient),
+# which would inject non-physics differences; (2) a fixed Z_eff input perturbs the
+# fragile confinement 2x2 block. Forward evaluation reflects the pure relation
+# physics, which is what this comparison is for.
+
+_FULL_ORDER = [
+    "Plasma shaping function for q_star", "Edge safety factor q_star", "Cylindrical edge safety factor",
+    "Poloidal field at outboard midplane", "Toroidal field at outboard midplane",
+    "Fieldline pitch at outboard midplane", "SOL lambda_q Eich regression 15",
+    "Parallel heat flux density", "Perpendicular heat flux density",
+    "Separatrix electron density from average", "Target parallel heat flux from power loss",
+    "Separatrix electron temperature (Spitzer-Harm)", "Upstream total pressure",
+    "Spitzer loop resistivity", "Resistivity trapped-particle enhancement",
+    "Neoclassical loop resistivity", "Bootstrap current fraction", "Inductive plasma current",
+    "Loop voltage at flat-top", "Ohmic heating power", "Internal inductivity",
+    "Internal inductance (cylindrical)", "External inductance (Barr)",
+    "Vertical field mutual inductance (Barr)", "Inverse-mu0 dLe/dR (Barr)",
+    "Vertical magnetic field (Barr)", "Internal flux", "External flux", "Resistive flux",
+    "Poloidal field flux", "Flux needed from solenoid over rampup", "Maximum flattop duration",
+    "Breakdown flux consumption",
+]
+
+
+@pytest.fixture(scope="module")
+def full_reproduction():
+    """Forward-evaluate the imported relations from the SPARC point; return (state, prd)."""
+    from fusdb.registry import RELATIONS
+
+    prd = _load_prd()
+    state = {
+        "R": 1.85, "B0": 12.2, "eps": 0.3081, "kappa": 1.75, "delta_95": 0.3, "I_p": 8.7e6,
+        "n_e_avg": 25e19, "T_e_avg": 9.13793, "temperature_peaking": 2.5,
+        "density_peaking": _prd_si(prd, "electron_density_peaking"),
+        "ion_density_peaking": _prd_si(prd, "ion_density_peaking"),
+        "ion_to_electron_temp_ratio": 1.0, "kappa_95": 1.75 / 1.025, "nesep_over_nebar": 0.3,
+        "toroidal_flux_expansion": 0.6974, "parallel_connection_length": 30.0, "lambda_q_factor": 1.0,
+        "fraction_of_P_SOL_to_divertor": 0.6, "kappa_e0": 2600.0, "target_electron_temp": 0.025,
+        "sheath_heat_transmission_factor": 7.5, "ejima_coefficient": 0.6, "safety_factor_on_axis": 1.0,
+        "afuel": 2.5, "total_flux_available_from_CS": 35.0,
+        "a": _prd_si(prd, "minor_radius"), "V_p": _prd_si(prd, "plasma_volume"),
+        "A_p": _prd_si(prd, "surface_area"), "Z_eff": _prd_si(prd, "z_effective"),
+        "beta_p": _prd_si(prd, "beta_poloidal"), "P_sep": _prd_si(prd, "power_crossing_separatrix"),
+        "separatrix_elongation": _prd_si(prd, "separatrix_elongation"),
+        "SOL_power_loss_fraction": _prd_si(prd, "SOL_power_loss_fraction"),
+        "n_i_avg": _prd_si(prd, "average_ion_density"),
+    }
+
+    def canon(name: str) -> str:
+        try:
+            return VARIABLES.resolve(name)
+        except Exception:
+            return name
+
+    for rel_name in _FULL_ORDER:
+        rel = RELATIONS.get(rel_name)
+        args, ready = {}, True
+        for arg in rel.input_names:
+            key = canon(arg)
+            if key in state:
+                args[arg] = state[key]
+            else:
+                ready = False
+                break
+        if not ready:
+            continue
+        for const in rel.constant_names:
+            key = canon(const)
+            if key in state:
+                args[const] = state[key]
+        for out_name, out_val in rel.output_map(rel.func(**args)).items():
+            state[canon(out_name)] = out_val
+    return state, prd
+
+
+# (PRD name, fusdb var, rel tol). Quantities fusdb reproduces from the imported relations.
+_FULL_MATCH = [
+    ("f_shaping", "f_shaping", 2e-3), ("q_star", "qstar", 2e-3),
+    ("B_pol_out_mid", "B_pol_out_mid", 2e-3), ("B_t_out_mid", "B_t_out_mid", 2e-3),
+    ("lambda_q", "lambda_q", 2e-3), ("q_parallel", "q_parallel", 2e-3), ("q_perp", "q_perp", 2e-3),
+    ("separatrix_electron_density", "n_sep", 2e-3), ("target_q_parallel", "target_q_parallel", 2e-3),
+    ("separatrix_electron_temp", "T_sep", 2e-3), ("spitzer_resistivity", "spitzer_resistivity", 2e-3),
+    ("trapped_particle_fraction", "trapped_particle_fraction", 2e-3),
+    ("neoclassical_loop_resistivity", "neoclassical_loop_resistivity", 2e-3),
+    ("internal_inductivity", "internal_inductivity", 2e-3),
+    ("internal_inductance", "internal_inductance", 2e-3),
+    ("vertical_field_mutual_inductance", "vertical_field_mutual_inductance", 2e-3),
+    ("invmu_0_dLedR", "invmu_0_dLedR", 2e-3), ("vertical_magnetic_field", "vertical_magnetic_field", 2e-3),
+    ("internal_flux", "internal_flux", 2e-3), ("external_flux", "external_flux", 2e-3),
+    ("resistive_flux", "resistive_flux", 2e-3), ("poloidal_field_flux", "poloidal_field_flux", 2e-3),
+    # bootstrap chain: now exact with separate electron/ion density peaking
+    ("bootstrap_fraction", "f_BS", 2e-3), ("inductive_plasma_current", "inductive_plasma_current", 2e-3),
+    ("loop_voltage", "loop_voltage", 2e-3), ("P_ohmic", "P_ohmic", 2e-3),
+]
+
+
+@pytest.mark.parametrize("prd_name, fusdb_var, rel_tol", _FULL_MATCH, ids=[c[0] for c in _FULL_MATCH])
+def test_full_sparc_reproduction(full_reproduction, prd_name, fusdb_var, rel_tol):
+    """Each imported relation reproduces cfspopcon's PRD value at the SPARC operating point."""
+    state, prd = full_reproduction
+    canonical = VARIABLES.resolve(fusdb_var)
+    assert canonical in state, f"fusdb did not compute {fusdb_var!r}"
+    got = float(np.ravel(state[canonical])[0])
+    assert got == pytest.approx(_prd_si(prd, prd_name), rel=rel_tol), prd_name
 
 
 def test_confinement_block_solved_and_consistent(ordered_run):

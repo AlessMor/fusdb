@@ -34,6 +34,7 @@ def build_relation_graph(relations: Iterable[Any] | None = None) -> nx.DiGraph:
     Returns:
         A :class:`networkx.DiGraph` with ``kind`` and ``label`` node attributes.
     """
+    # TODO:remove in favor of building a graph from RelationSystem
     if relations is None:
         relations = RELATIONS.get_filtered_relations()
 

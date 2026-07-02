@@ -8,6 +8,12 @@ import re
 
 import numpy as np
 
+# Width of the numerical band treated as "on a domain boundary": values within
+# ZERO_TOL of a physical bound are projected onto the corresponding solver
+# bound (and back).  Shared by Variable value conversion and RelationSystem
+# packing/domain residuals so both sides of the projection agree exactly.
+ZERO_TOL = 1e-12
+
 
 def unique_preserve_order(items: Iterable[Any]) -> tuple[str, ...]:
     """Return unique string values while preserving first occurrence order.

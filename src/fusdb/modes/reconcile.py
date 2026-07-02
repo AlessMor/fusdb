@@ -7,7 +7,7 @@ solve phases, final certification and state mutation policy.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 import time
 
@@ -16,6 +16,13 @@ from scipy.optimize import least_squares
 
 from . import verify as verify_mode
 from .verify import verify_values
+from ._common import (
+    new_result,
+    record_uninitialized_failure,
+    reject_unknown_options,
+    result_from_certificate,
+    solver_report,
+)
 
 
 def run(
@@ -28,8 +35,6 @@ def run(
     relation_weight: float = 1.0,
     relation_weight_schedule: Iterable[float] | None = None,
     verbose: int = 0,
-    compute_missing: bool = True,
-    initial_residual_tol: float = 1.0,
     **_unused: Any,
 ) -> dict[str, Any]:
     """Run structural simultaneous reconciliation.
@@ -46,43 +51,29 @@ def run(
     """
     self = system
     mode = "reconcile"
-    # IRLS movement weights; reset so each reconcile starts from plain L1.
-    self._movement_weights = {}
-    result = self._new_result(mode)
-    if self._reject_unknown_options(result, _unused):
+    result = new_result(self, mode)
+    if reject_unknown_options(result, _unused):
         return result
-    initial_values: dict[str, Any] = {}
-    if compute_missing:
-        if getattr(self, "_runtime_initial_values_ready", False):
-            initial_values = dict(getattr(self, "_initial_guesses", {}))
-        else:
-            try:
-                initial_values, _initial_info = self._initial_values_from_graph(
-                    residual_tol=float(initial_residual_tol),
-                )
-                self._initial_guesses = dict(initial_values)
-            except Exception as exc:
-                result["warnings"].append(f"initial graph computation failed: {exc}")
-                initial_values = {}
+    # Initial guesses are precomputed by compile() (run() always compiles
+    # before dispatching); reported here so the solver block records how many
+    # variables were seeded.
+    initial_values: dict[str, Any] = dict(self._initial_guesses)
     # If the current variable state already satisfies the compiled
     # active graph, reconcile is a no-op.  This makes ordered/reconcile
     # adapter blocks idempotent and avoids tiny least-squares drift when the
     # relation set is already certified.
-    current_values = self._values_from_variables(
-        for_solver=True,
-        skip_missing=True,
-        complete=False,
-    )
+    current_values = self.solver_values()
     current_certificate = verify_values(self, current_values, complete=True)
     if bool(current_certificate.get("verified", False)):
-        solver = self._solver_report(
+        solver = solver_report(
             message="already verified; no reconcile solve",
             residual_size=int(current_certificate["residuals"].size),
             relation_weight=float(relation_weight),
             movement_weight=float(movement_weight),
             initial_guess_variables=int(len(initial_values)),
         )
-        return self._result_from_certificate(
+        return result_from_certificate(
+            self,
             mode,
             current_certificate,
             termination="already verified; no reconcile solve",
@@ -92,13 +83,13 @@ def run(
         )
 
     try:
-        x0, lower, upper, x_scale, spans = self._pack_free_variables()
+        x0, lower, upper = self.pack()
     except Exception as exc:
         result["errors"].append(str(exc))
         result["termination"] = "initialization failed"
         return result
 
-    if self._record_uninitialized_failure(result):
+    if record_uninitialized_failure(self, result):
         return result
 
     if max_nfev is None:
@@ -117,40 +108,37 @@ def run(
         validation["termination"] = "no free variables; validation only"
         return validation
 
-    self._prepare_runtime(spans)
     profile_spans = [
-        {"name": span.name, "size": int(span.stop - span.start)}
-        for span in spans
-        if self.variables_by_name[span.name].shape == 1
+        {"name": name, "size": int(stop - start)}
+        for name, start, stop, _offsets, _scales, shape, _transform in self.packed_specs
+        if shape == 1
     ]
 
     # Movement residuals anchor only immutable input values, not initial
     # guesses or relation-completed derived values.
-    reference = self._values_from_variables(for_solver=True, skip_missing=True, complete=False, use_input_values=True)
+    reference = self.input_values()
     residual_size = 0
     residual_calls = 0
     residual_eval_time_s = 0.0
     current_relation_weight = float(relation_weight)
     current_movement_weight = float(movement_weight)
+    # IRLS movement weights; mode-owned, starting from plain L1 (all ones).
+    irls_weights: dict[str, float] = {}
 
     def residual_function(x: np.ndarray) -> np.ndarray:
         nonlocal residual_size, residual_calls, residual_eval_time_s, current_relation_weight, current_movement_weight
         t0 = time.perf_counter()
         residual_calls += 1
         try:
-            values = self._values_from_vector(x)
-            _status, relation_residuals, errors, _warnings = self._evaluate_relation_residuals(
-                values,
-                strict=True,
-                solver_residuals=True,
-            )
+            values = self.unpack(x)
             # Missing or temporarily invalid relations already contribute large finite residuals.
-            blocks = [current_relation_weight * relation_residuals]
-            domain_residuals = self._domain_residuals(values)
+            relation_rows, _errors = self.solver_residual_vector(values)
+            blocks = [current_relation_weight * relation_rows]
+            domain_residuals = self.domain_residuals(values)
             if domain_residuals.size:
                 blocks.append(current_relation_weight * domain_residuals)
             if current_movement_weight:
-                blocks.append(current_movement_weight * self._movement_residuals(values, reference, spans))
+                blocks.append(current_movement_weight * self.movement_residuals(values, reference, irls_weights))
             out = np.concatenate([block.reshape(-1) for block in blocks if block.size])
             if not np.all(np.isfinite(out)):
                 raise ValueError("non-finite residual vector")
@@ -164,7 +152,7 @@ def run(
             residual_eval_time_s += time.perf_counter() - t0
 
     def verify_candidate(x: np.ndarray) -> tuple[dict[str, Any], np.ndarray, list[str], list[str], bool, dict[str, Any], dict[str, Any]]:
-        solved = self._values_from_vector(x)
+        solved = self.unpack(x)
         certificate = verify_values(self, solved, complete=False)
         return (
             certificate["relation_status"],
@@ -219,7 +207,6 @@ def run(
     try:
         base_common_kwargs = {
             "bounds": (lower, upper),
-            "x_scale": x_scale,
             "method": "trf",
             "max_nfev": max_nfev,
             # SciPy's default ftol=1e-8 reads a conservative first trust-region
@@ -250,7 +237,7 @@ def run(
             stage_jac_used = False
             try:
                 reference_map = reference if current_movement_weight else None
-                sparsity = self._build_jac_sparsity(spans, reference=reference_map)
+                sparsity = self.build_jac_sparsity(reference=reference_map)
             except Exception:
                 sparsity = None
             if sparsity is not None and sparsity.shape == (int(stage_probe.size), int(current_x.size)):
@@ -300,12 +287,12 @@ def run(
             # Warm-started reweighting needs only a few steps; cap it so a hard
             # (inconsistent) re-solve cannot burn the full budget per pass.
             irls_max_nfev = int(min(max_nfev, max(40, 15 * int(x0.size))))
-            prev_beyond = len(self._inputs_beyond_tolerance(completed_values))
+            prev_beyond = len(inputs_beyond_tolerance(self, completed_values))
             for irls_index in range(int(irls_iterations)):
                 if prev_beyond == 0:
                     break
                 # Reweight from the latest solution, then re-solve warm-started.
-                self._update_movement_weights(completed_values, reference, spans, eps=float(movement_eps))
+                irls_weights = self.movement_weights(completed_values, reference, eps=float(movement_eps))
                 t_stage = time.perf_counter()
                 stage_probe = residual_function(current_x)
                 final_probe_size = int(stage_probe.size)
@@ -314,7 +301,7 @@ def run(
                 # Conservative structural sparsity here too (see the stage loop above).
                 stage_jac_used = False
                 try:
-                    sparsity = self._build_jac_sparsity(spans, reference=reference)
+                    sparsity = self.build_jac_sparsity(reference=reference)
                 except Exception:
                     sparsity = None
                 if sparsity is not None and sparsity.shape == (int(stage_probe.size), int(current_x.size)):
@@ -342,13 +329,13 @@ def run(
                         "failed_relations": int(failed_count),
                         "jac_sparsity_used": bool(stage_jac_used),
                         "residual_size": int(stage_probe.size),
-                        "inputs_beyond_tolerance": len(self._inputs_beyond_tolerance(completed_values)),
+                        "inputs_beyond_tolerance": len(inputs_beyond_tolerance(self, completed_values)),
                         "elapsed_s": float(time.perf_counter() - t_stage),
                     }
                 )
                 # Stop once a pass stops reducing the number beyond tolerance:
                 # further reweighting only churns (common for inconsistent data).
-                new_beyond = len(self._inputs_beyond_tolerance(completed_values))
+                new_beyond = len(inputs_beyond_tolerance(self, completed_values))
                 if new_beyond >= prev_beyond:
                     break
                 prev_beyond = new_beyond
@@ -361,7 +348,7 @@ def run(
         result["termination"] = "solver error"
         return result
 
-    solver = self._solver_report(
+    solver = solver_report(
         backend="scipy.optimize.least_squares",
         success=bool(solve_result.success),
         status=int(getattr(solve_result, "status", 0)),
@@ -384,25 +371,67 @@ def run(
         initial_guess_variables=int(len(initial_values)),
         profile_solver_spans=profile_spans,
     )
-    validation = self._result_from_certificate(
+    validation = result_from_certificate(
+        self,
         mode,
         certificate,
         termination=str(solve_result.message),
         solver=solver,
         include_values=True,
-        extra={"uninitialized_free_variables": list(getattr(self, "_uninitialized_free_variables", []))},
+        extra={"uninitialized_free_variables": list(self._uninitialized_free_variables)},
     )
 
     # There is no separate candidate/final variable state. The latest solve output
     # becomes the current public value and is overwritten on every reconcile call.
-    self._store_solved_values(completed_values)
-    self._refresh_scales()
+    self.store(completed_values)
+    self.refresh_scales()
     stored_validation = verify_mode.run(self)
     if bool(stored_validation.get("success", False)) != bool(verified):
         validation["warnings"].append("stored values verify differently after public conversion")
     validation["variables"] = self.variables_by_name
-    validation["likely_culprits"] = self._rank_input_culprits(validation.get("relation_status", {}))
+    validation["likely_culprits"] = rank_input_culprits(self, validation.get("relation_status", {}))
     # The objective minimises this set: non-fixed inputs whose solved value left
     # their tolerance band, worst deviation first.
-    validation["inputs_beyond_tolerance"] = self._inputs_beyond_tolerance(completed_values)
+    validation["inputs_beyond_tolerance"] = inputs_beyond_tolerance(self, completed_values)
     return validation
+
+
+def inputs_beyond_tolerance(system: Any, values: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return supplied non-fixed inputs whose solved value left their tolerance.
+
+    Reports, per input variable, the maximum tolerance-normalized deviation
+    ``|value - input| / tolerance``; an input is "beyond tolerance" when that
+    exceeds one.  The count of these is exactly the quantity the reconcile
+    objective tries to minimise, so it is surfaced on the result for the
+    caller to inspect.
+
+    Args:
+        system: The compiled relation system.
+        values: Solver-unit namespace produced by the solve.
+
+    Returns:
+        ``{"name", "deviation_tol"}`` entries with deviation > 1, worst first.
+    """
+    out: list[dict[str, Any]] = []
+    for name, var in system.variables_by_name.items():
+        if var.fixed or var.input_value is None or name not in values or values[name] is None:
+            continue
+        # excess is (deviation/tol - 1) clipped at 0, so excess > 0 marks a
+        # crossing; deviation in tolerance units is then 1 + excess.
+        excess = var.movement_excess(values[name], var.solver_value(var.input_value))
+        if excess > 0.0:
+            out.append({"name": name, "deviation_tol": 1.0 + excess})
+    return sorted(out, key=lambda item: -item["deviation_tol"])
+
+
+def rank_input_culprits(system: Any, relation_status: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for rel in system.relations:
+        status = relation_status.get(rel.name, {})
+        if status.get("verified", True):
+            continue
+        for name in rel.variables:
+            var = system.variables_by_name.get(name)
+            if var is not None and not var.fixed:
+                counts[name] = counts.get(name, 0) + 1
+    return [{"name": name, "count": count} for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))]

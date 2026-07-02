@@ -127,10 +127,12 @@ relations:
   - Average fuel mass number             # f_D, f_T -> afuel
   - Default ion temperature average from plasma average temperature  # -> T_i_avg
   - Line averaged density from average density                        # -> n_la
+  - Default ion temperature peaking from electron temperature peaking  # -> ion_temperature_peaking
+  - Default ion density peaking from electron density peaking           # -> ion_density_peaking
   - Parabolic electron temperature profile   # -> T_e
-  - Parabolic ion temperature profile        # -> T_i
+  - Parabolic ion temperature profile        # -> T_i (ion_temperature_peaking)
   - Parabolic electron density profile       # -> n_e
-  - Parabolic ion density profile            # n_i_avg -> n_i (dilution-adjusted)
+  - Parabolic ion density profile            # -> n_i (ion_density_peaking)
   - D density from ion density and D fraction
   - T density from ion density and T fraction
   # 3. Pressure / stored energy
