@@ -28,11 +28,22 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
       - name: Install docs dependencies
         run: pip install -e .[docs]
 
       - name: Build MkDocs site
         run: mkdocs build -f docs/mkdocs.yml
+
+      - name: Verify Pages artifact
+        run: |
+          touch site/.nojekyll
+          test -f site/index.html
+          test -f site/search/search_index.json
+          grep -q "mkdocs-material" site/index.html
+          grep -q "assets/stylesheets/main" site/index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
