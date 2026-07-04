@@ -1,0 +1,28 @@
+source: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.54'
+reaction: 3.1 W +e → W++2e
+category: ionization
+species: W
+output: W_ionization_rate
+relation_name: AMJUEL H.2 2.54 W ionization rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- -23.79630000000D+00
+- 8.522300000000D+00
+- -4.027100000000D+00
+- 1.339000000000D+00
+- -0.339800000000D+00
+- 0.063800000000D+00
+- -0.008200000000D+00
+- 0.000600000000D+00
+- 0.000000000000D+00
+amjuel_comments:
+- '%tungsten coef. rate'

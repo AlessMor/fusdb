@@ -104,8 +104,7 @@ _NAME_OVERRIDE = {"P_in": "P_loss"}
 def _fusdb_value(system, name: str):
     """Return the current fusdb value for a canonical name or alias, or None."""
     canonical = _NAME_OVERRIDE.get(name) or VARIABLES.resolve(name)
-    var = system.variables_by_name.get(canonical)
-    return None if var is None else var.value
+    return system.values.get(canonical)
 
 
 # (PRD/cfspopcon name, relative tolerance, xfail reason or None).
@@ -206,7 +205,7 @@ def test_current_resistivity_chain_matches_cfspopcon():
     assert result.get("success"), result.get("errors")
 
     def got(name: str) -> float:
-        return float(np.ravel(system.variables_by_name[VARIABLES.resolve(name)].value)[0])
+        return float(np.ravel(system.values[VARIABLES.resolve(name)])[0])
 
     # Algebraic quantities whose inputs match cfspopcon -> exact reproduction.
     # The bootstrap chain is now exact too: supplying the separate electron/ion
@@ -335,13 +334,13 @@ def test_confinement_block_solved_and_consistent(ordered_run):
     """The ordered 2x2 block produces tau_E and P_loss and satisfies W_th = P_loss*tau_E.
 
     This locks in the fix that routes the ordered block through the shared
-    ``_solve_initial_block`` solver. The solved values do not match cfspopcon's PRD
+    ``fusdb.seeding.solve_block`` solver. The solved values do not match cfspopcon's PRD
     (W_th is over-estimated upstream), but the block itself must converge and be
     internally consistent.
     """
     system, _result, _prd = ordered_run
     tau_E = _fusdb_value(system, "energy_confinement_time")
     P_loss = _fusdb_value(system, "P_in")
-    W_th = system.variables_by_name["W_th"].value
+    W_th = system.values["W_th"]
     assert tau_E is not None and P_loss is not None, "confinement block did not solve tau_E/P_loss"
     assert P_loss * tau_E == pytest.approx(W_th, rel=1e-4), "W_th = P_loss * tau_E not satisfied"

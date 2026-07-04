@@ -12,8 +12,14 @@ algorithm and result shape; the SciPy backend uses
 - `constraints`: optional extra system-level constraint expressions
 - `name`: optional system name
 
-**Canonical runtime state**
-- `variables_by_name`: the single variable container, `{name: Variable}`
+**Canonical runtime state** (plain dicts — the system holds no `Variable`
+objects; per-variable numerics live on the process-lifetime `VariableSpec`)
+- `inputs` / `values`: supplied and current values, `{name: value}` in
+  canonical units; `fixed`: the fixed-name set; `rel_tols` / `abs_tols`:
+  resolved per-name tolerances; `known`: every tracked name
+- `variable_roles`: the compile verdict — exactly one solve role per variable
+  (`inactive` / `fixed` / `held` / `derived` / `core` / `packed`); packing,
+  completion, movement and reporting all switch on it
 - `relations`: full list of active `Relation` objects (including relation-local guards)
 - `primary_relations`: the active relations selected by compilation
 - `relations_by_name`: mapping `{name: Relation}`
@@ -46,11 +52,12 @@ algorithm and result shape; the SciPy backend uses
 - `initial_values_from_graph()`: the seeding oracle (direct propagation plus
   the small structural block solver) used to build solver start values.
 
-Per-variable numerics (solver/public value conversion, shape coercion, scales
-and tolerances) are owned by `Variable` (see
-[Variable Class](variable_class.md)); the system holds thin name-keyed
-delegates (`_solver_value`, `_public_value`) for call sites that only have a
-name.
+Per-variable numerics (solver/public value conversion, shape coercion, domain
+checks, scales and tolerances) are owned by the frozen `VariableSpec`
+(computed once per process, with precomputed bounds/projection constants);
+the system passes its `profile_size` and resolved tolerances as arguments.
+`Variable` is a boundary input record only (see
+[Variable Class](variable_class.md)).
 
 The result dictionaries returned by `run()` include standard keys such as
 `mode`, `success`, `errors`, `warnings`, `relation_status`, `residuals`,

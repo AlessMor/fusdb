@@ -51,7 +51,7 @@ def test_reconcile_moves_supplied_average_to_the_profile_value():
     system = _system(14.0, profile)  # not fixed: reconcile is free to move it
     result = system.run("reconcile")
     assert result["verified"]
-    assert system.variables_by_name["T_e_avg"].value == pytest.approx(15.0, abs=1e-3)
+    assert system.values["T_e_avg"] == pytest.approx(15.0, abs=1e-3)
 
 
 def test_shape_locked_profile_residual_is_trivially_satisfied():

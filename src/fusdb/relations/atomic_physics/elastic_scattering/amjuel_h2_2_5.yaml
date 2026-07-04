@@ -1,0 +1,32 @@
+source: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.5'
+reaction: 0.3T p+H → p+H totalratecoef.
+category: elastic_scattering
+species: H2
+output: H2_proton_elastic_total_rate
+relation_name: AMJUEL H.2 2.5 H2 proton elastic total rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-1.857812000000E+01'
+- '2.411708000000E-01'
+- '1.046088000000E-02'
+- '-1.203649000000E-02'
+- '-3.679626000000E-03'
+- '2.895358000000E-04'
+- '1.354441000000E-04'
+- '-2.712317000000E-06'
+- '-1.356528000000E-06'
+amjuel_comments:
+- 2 2
+- Maxwellianratecoefﬁcientvs. T , withH atrest, obtainedbytakingthecorrespondingBeam-
+- p 2
+- Maxw. rate coefﬁcient at Eb=0.06 eV and veriﬁcation by independent integration of cross-
+- section

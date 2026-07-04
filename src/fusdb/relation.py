@@ -13,11 +13,23 @@ from typing import Any, Callable
 import numpy as np
 from scipy.optimize import least_squares, root_scalar
 
-from .utils import compare_numeric, domain_bounds_for_solver, normalize_tags, parse_constraint_specs, safe_max_abs, unique_preserve_order, value_in_domain
+from .utils import compare_numeric, domain_bounds_for_solver, normalize_tags, parse_constraint_specs, safe_max_abs, signed_scalar_grid, unique_preserve_order, value_in_domain
 
 REGISTERED_RELATIONS: dict[str, "Relation"] = {}
-REGISTERED_RELATIONS_BY_FUNCTION: dict[str, "Relation"] = {}
 _ALLOWED_OPS = {"==", "<", "<=", ">", ">="}
+
+# Shared variable registry, resolved lazily (importing it at module load would
+# cycle through fusdb.registry) and cached for the hot tolerance/domain paths.
+_VARIABLE_REGISTRY = None
+
+
+def _variable_registry():
+    global _VARIABLE_REGISTRY
+    if _VARIABLE_REGISTRY is None:
+        from .registry.variable_registry import VARIABLES
+
+        _VARIABLE_REGISTRY = VARIABLES
+    return _VARIABLE_REGISTRY
 
 
 class RelationSolveError(ValueError):
@@ -80,6 +92,7 @@ class Relation:
     # is safe under parallel runs.
     _variables: tuple[str, ...] = field(init=False, repr=False, compare=False)
     _implicit: bool = field(init=False, repr=False, compare=False)
+    _arg_pairs: tuple[tuple[str, str], ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Normalize metadata and build local constraint relations."""
@@ -108,6 +121,7 @@ class Relation:
                 self._constant_defaults[name] = parameter.default
         self._variables = unique_preserve_order((*self.input_names, *self.outputs))
         self._implicit = bool(set(self.outputs) & set(self.input_names))
+        self._arg_pairs = tuple(zip(self.argument_names, self.input_names))
 
         # Local constraints are themselves relations. enforce=False means checked-only applicability.
         built: list[Relation] = []
@@ -166,7 +180,7 @@ class Relation:
         Returns:
             Raw function return value.
         """
-        args = {arg: namespace[name] for arg, name in zip(self.argument_names, self.input_names)}
+        args = {arg: namespace[name] for arg, name in self._arg_pairs}
         for name in self.constant_names:
             if name in namespace and namespace[name] is not None:
                 args[name] = namespace[name]
@@ -432,17 +446,9 @@ class Relation:
         }
         return status, residual_vector
 
-    def _default_registry(self):
-        """Return the shared variable registry without making it relation-owned."""
-        try:
-            from .registry.variable_registry import VARIABLES
-        except Exception:
-            return None
-        return VARIABLES
-
     def _canonicalize_standalone_values(self, values: Mapping[str, Any]) -> dict[str, Any]:
         allowed = set(self.variables) | set(self.constant_names)
-        registry = self._default_registry()
+        registry = _variable_registry()
         out: dict[str, Any] = {}
         unknown: list[str] = []
         for key, value in dict(values).items():
@@ -450,7 +456,7 @@ class Relation:
             if text in self.constant_names:
                 out[text] = value
                 continue
-            resolved = registry.resolve(text) if registry is not None and text in registry else text
+            resolved = registry.resolve(text) if text in registry else text
             if resolved not in allowed:
                 unknown.append(text)
                 continue
@@ -460,8 +466,8 @@ class Relation:
         return out
 
     def _variable_spec(self, name: str):
-        registry = self._default_registry()
-        if registry is None or name not in registry:
+        registry = _variable_registry()
+        if name not in registry:
             return None
         return registry.get(name)
 
@@ -476,9 +482,7 @@ class Relation:
         # 1e-8: at 1e-8 a small physical imbalance becomes a residual ~1e6x
         # larger than every output relation (which use ~0.01), which dominates
         # the least-squares cost and stalls the solve.
-        registry = self._default_registry()
-        rel_tol = float(getattr(registry, "rel_tol_default", 0.01)) if registry is not None else 0.01
-        return rel_tol, 0.0
+        return float(_variable_registry().rel_tol_default), 0.0
 
     def _check_all_domains(self, ns: Mapping[str, Any], *, names: Iterable[str], use_solver_domain: bool) -> None:
         for name in names:
@@ -527,7 +531,7 @@ class Relation:
 
     def _solve_one_missing_scalar_scan(self, target: str, ns: Mapping[str, Any]) -> tuple[Any, dict[str, Any]] | None:
         lower, upper = self._scalar_bounds_for_target(target)
-        points = self._signed_scalar_grid(lower, upper)
+        points = signed_scalar_grid(lower, upper, decades=240, step=6, dense=True)
         if not points:
             return None
 
@@ -609,27 +613,6 @@ class Relation:
         lower, upper = domain_bounds_for_solver(spec.solver_domain, zero_tol=0.0)
         return (-np.inf if lower is None else float(lower)), (np.inf if upper is None else float(upper))
 
-    def _signed_scalar_grid(self, lower: float, upper: float, *, decades: int = 240, step: int = 6) -> list[float]:
-        points: list[float] = []
-
-        def add(value: float) -> None:
-            if np.isfinite(value) and lower <= value <= upper:
-                points.append(float(value))
-        if lower <= 0.0 <= upper:
-            add(0.0)
-        if np.isfinite(lower):
-            add(lower)
-        if np.isfinite(upper):
-            add(upper)
-        if np.isfinite(lower) and np.isfinite(upper) and upper > lower:
-            for value in np.linspace(lower, upper, 21):
-                add(float(value))
-        for exponent in range(-decades, decades + 1, step):
-            magnitude = float(10.0 ** exponent)
-            add(magnitude)
-            add(-magnitude)
-        return sorted(set(points))
-
     def _initial_template_for(self, ns: Mapping[str, Any]) -> np.ndarray:
         for value in ns.values():
             arr = np.asarray(value)
@@ -703,6 +686,11 @@ class Relation:
         )
 
 
+def is_default_relation(rel: "Relation") -> bool:
+    """Whether a relation is a weak default (fallback provider / x0 seed)."""
+    return "default" in set(rel.tags) or str(rel.source_kind).startswith("default")
+
+
 def relation(
     _func: Callable[..., Any] | None = None,
     *,
@@ -733,7 +721,6 @@ def relation(
         if built.name in REGISTERED_RELATIONS:
             raise ValueError(f"Duplicate relation {built.name!r}.")
         REGISTERED_RELATIONS[built.name] = built
-        REGISTERED_RELATIONS_BY_FUNCTION[built.function_name] = built
         return built
 
     if _func is not None:

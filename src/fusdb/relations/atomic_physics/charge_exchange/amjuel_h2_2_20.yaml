@@ -1,0 +1,27 @@
+source: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.20'
+reaction: 3.1.8FJ p + H(1s) → H(1s)+p
+category: charge_exchange
+species: H
+output: H_charge_exchange_rate
+relation_name: AMJUEL H.2 2.20 H charge exchange Freeman-Jones rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-0.184175600000e+02'
+- '0.528295000000e+00'
+- '-0.220047700000e+00'
+- '0.975019200000e-01'
+- '-0.174918300000e-01'
+- '0.495429800000e-03'
+- '0.217491000000e-03'
+- '-0.253020600000e-04'
+- '0.823075100000e-06'
+amjuel_comments: []

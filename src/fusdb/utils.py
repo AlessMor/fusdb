@@ -292,6 +292,47 @@ def coerce_to_shape(
     raise ValueError(f"Profile variable {name!r} value must be scalar or 1D.")
 
 
+def signed_scalar_grid(lower: float, upper: float, *, decades: int, step: int, dense: bool = False) -> list[float]:
+    """Return signed log-spaced start candidates inside ``[lower, upper]``.
+
+    Candidate points are ``+/- 10**k`` for ``k`` in ``range(-decades,
+    decades + 1, step)``, clipped to the interval.  With ``dense=True`` the
+    grid additionally includes zero, the finite interval endpoints and a
+    21-point linear fill between finite bounds (used by the standalone
+    relation inverse solve, which brackets sign changes on this grid).
+
+    Args:
+        lower: Interval lower bound (may be ``-inf``).
+        upper: Interval upper bound (may be ``+inf``).
+        decades: Magnitude range of the log grid.
+        step: Exponent stride of the log grid.
+        dense: Include zero, endpoints and the linear fill.
+
+    Returns:
+        Sorted unique candidate values.
+    """
+    points: set[float] = set()
+
+    def add(value: float) -> None:
+        if np.isfinite(value) and lower <= value <= upper:
+            points.add(float(value))
+
+    for exponent in range(-decades, decades + 1, step):
+        magnitude = float(10.0**exponent)
+        add(magnitude)
+        add(-magnitude)
+    if dense:
+        add(0.0)
+        if np.isfinite(lower):
+            add(lower)
+        if np.isfinite(upper):
+            add(upper)
+        if np.isfinite(lower) and np.isfinite(upper) and upper > lower:
+            for value in np.linspace(lower, upper, 21):
+                add(float(value))
+    return sorted(points)
+
+
 def compare_numeric(
     lhs: Any,
     op: str,

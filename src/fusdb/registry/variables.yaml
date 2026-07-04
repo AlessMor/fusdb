@@ -380,6 +380,25 @@ T_sep:
   domain: '[0, inf)'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
+T_edge:
+  aliases:
+  - edge_electron_temp
+  - edge_electron_temperature
+  default_unit: keV
+  description:
+  - Edge collision temperature used by AMJUEL H.2 atomic-physics rate fits.
+  domain: (0, inf)
+  solver_domain: '[1e-12, 300]'
+  abs_tol: 1.0e-4
+n_e_edge:
+  aliases:
+  - edge_electron_density
+  default_unit: 1/m^3
+  description:
+  - Edge electron density used by AMJUEL H.4 atomic-physics rate fits.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 1.0e+18
 T_e:
   aliases:
   - T_e_prof
@@ -1034,6 +1053,413 @@ sigmav_THe3_np:
   - THe3_np reactivity CF88
   domain: '[0, inf)'
   abs_tol: 1.0e-26
+Ar_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Ar ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Ar_plus_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Ar plus ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Ar_proton_elastic_diffusion_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Ar proton elastic diffusion.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Ar_proton_elastic_total_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Ar proton elastic total.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+B_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for B ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+B_plus_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for B plus ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Be_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Be ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Be_plus_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Be plus ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+C_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for C ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+C_plus_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for C plus ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Fe_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Fe ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Fe_plus_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Fe plus ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_charge_exchange_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H2 charge exchange.
+  default_relation:
+  - AMJUEL H.2 2.26 H2 charge exchange rate
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_dissociation_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H2 dissociation.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_dissociation_via_h_minus_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H2 dissociation via h minus.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_dissociative_attachment_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H2 dissociative attachment.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_dissociative_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.4 rate coefficient for H2 dissociative ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_mad_via_h2_plus_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.4 rate coefficient for H2 molecular-assisted dissociation via H2+.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_mad_via_h_minus_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.4 rate coefficient for H2 molecular-assisted dissociation via H-.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_mai_via_h2_plus_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.4 rate coefficient for H2 molecular-assisted ionization via H2+.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_mar_via_h2_plus_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.4 rate coefficient for H2 molecular-assisted recombination via H2+.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_mar_via_h_minus_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.4 rate coefficient for H2 molecular-assisted recombination via H-.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_molecular_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.4 rate coefficient for H2 molecular ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_plus_dissociative_recombination_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H2 plus dissociative recombination.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_proton_elastic_diffusion_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H2 proton elastic diffusion.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H2_proton_elastic_total_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H2 proton elastic total.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H_charge_exchange_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H charge exchange.
+  default_relation:
+  - AMJUEL H.2 2.25 H charge exchange Langevin rate
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H_proton_elastic_diffusion_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H proton elastic diffusion.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H_proton_elastic_total_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H proton elastic total.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H_proton_impact_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for H proton impact ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+H_recombination_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.4 rate coefficient for H recombination (radiative + three-body).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+He_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for He ionization.
+  default_relation:
+  - AMJUEL H.2 2.36 He ionization STRAHL rate
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+He_plus_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for He plus ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+He_proton_elastic_diffusion_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for He proton elastic diffusion.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+He_proton_elastic_total_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for He proton elastic total.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+He_self_elastic_diffusion_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for He self elastic diffusion.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+He_self_elastic_total_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for He self elastic total.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Kr_proton_elastic_diffusion_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Kr proton elastic diffusion.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Kr_proton_elastic_total_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Kr proton elastic total.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+N2_dissociation_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for N2 dissociation.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+N2_dissociative_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for N2 dissociative ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+N2_molecular_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for N2 molecular ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+N2_plus_dissociative_excitation_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for N2 plus dissociative excitation.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+N2_plus_dissociative_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for N2 plus dissociative ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+N2_plus_dissociative_recombination_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for N2 plus dissociative recombination.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+N2_plus_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for N2 plus ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+N_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for N ionization.
+  default_relation:
+  - AMJUEL H.2 2.45 N ionization Brook rate
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Ne_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Ne ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Ne_plus_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Ne plus ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Ne_proton_elastic_diffusion_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Ne proton elastic diffusion.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Ne_proton_elastic_total_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Ne proton elastic total.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+O_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for O ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+O_plus_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for O plus ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+W_ionization_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for W ionization.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Xe_proton_elastic_diffusion_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Xe proton elastic diffusion.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
+Xe_proton_elastic_total_rate:
+  default_unit: m^3/s
+  description:
+  - AMJUEL H.2 rate coefficient for Xe proton elastic total.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e-30
 P_fus_DT:
   default_unit: W
   description:

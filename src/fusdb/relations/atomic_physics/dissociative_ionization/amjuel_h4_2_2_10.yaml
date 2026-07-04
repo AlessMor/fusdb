@@ -1,0 +1,170 @@
+source: AMJUEL
+amjuel_section: H.4
+amjuel_subsection: '4.12'
+reaction: 2.2.10 e + H2 → 2e + H + H+
+category: dissociative_ionization
+species: H2
+output: H2_dissociative_ionization_rate
+relation_name: AMJUEL H.4 2.2.10 H2 dissociative ionization rate
+inputs:
+  density: n_e_edge
+  temperature: T_edge
+input_units:
+  n_e_edge: m^-3
+  T_edge: keV
+  amjuel_density: 1e8 cm^-3
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_ij a_ij * ln(T_eV)^i * ln(n_e_cm3/1e8)^j
+temperature_limits:
+  min_eV: '0.05000D+00'
+  max_eV: '1.00000D+03'
+density_limits:
+  min_cm3: '1.00000D+08'
+  max_cm3: '1.00000D+16'
+fit_error:
+  max_rel_pct: 1.2041
+  mean_rel_pct: 0.4804
+coefficient_blocks:
+  - density_indices: [0, 1, 2]
+    rows:
+      - temperature_index: 0
+        coefficients:
+          - "-3.793749300315D+01"
+          - "-3.333162972531D-01"
+          - "1.849601203843D-01"
+      - temperature_index: 1
+        coefficients:
+          - "1.280249398154D+01"
+          - "1.028969438485D+00"
+          - "-3.271855492638D-01"
+      - temperature_index: 2
+        coefficients:
+          - "-3.778148553140D+00"
+          - "-1.415561059533D+00"
+          - "2.928509524911D-01"
+      - temperature_index: 3
+        coefficients:
+          - "2.499987501522D-01"
+          - "1.032922656537D+00"
+          - "-1.580288004759D-01"
+      - temperature_index: 4
+        coefficients:
+          - "2.480574522949D-01"
+          - "-4.372934216955D-01"
+          - "6.448433196301D-02"
+      - temperature_index: 5
+        coefficients:
+          - "-9.960628182831D-02"
+          - "1.092652428162D-01"
+          - "-1.782307798975D-02"
+      - temperature_index: 6
+        coefficients:
+          - "1.709129400742D-02"
+          - "-1.574889001363D-02"
+          - "2.865310743302D-03"
+      - temperature_index: 7
+        coefficients:
+          - "-1.435304503973D-03"
+          - "1.203823111704D-03"
+          - "-2.350465388313D-04"
+      - temperature_index: 8
+        coefficients:
+          - "4.808639828229D-05"
+          - "-3.761591649539D-05"
+          - "7.490531472388D-06"
+  - density_indices: [3, 4, 5]
+    rows:
+      - temperature_index: 0
+        coefficients:
+          - "-8.803945197107D-02"
+          - "2.205180180735D-02"
+          - "-2.852568161901D-03"
+      - temperature_index: 1
+        coefficients:
+          - "1.305597441611D-01"
+          - "-3.408439821910D-02"
+          - "4.591924060066D-03"
+      - temperature_index: 2
+        coefficients:
+          - "-7.425165688158D-02"
+          - "2.028424685287D-02"
+          - "-3.042376564749D-03"
+      - temperature_index: 3
+        coefficients:
+          - "9.934702707539D-03"
+          - "-2.450845732158D-03"
+          - "5.716646876513D-04"
+      - temperature_index: 4
+        coefficients:
+          - "1.229222932630D-03"
+          - "-9.281410519553D-04"
+          - "5.946235618034D-05"
+      - temperature_index: 5
+        coefficients:
+          - "1.192181214757D-04"
+          - "2.310636556641D-04"
+          - "-2.492990725967D-05"
+      - temperature_index: 6
+        coefficients:
+          - "-1.700396064727D-04"
+          - "-1.502644504654D-06"
+          - "3.297869416435D-07"
+      - temperature_index: 7
+        coefficients:
+          - "2.507288189894D-05"
+          - "-3.077975735212D-06"
+          - "3.748299687254D-07"
+      - temperature_index: 8
+        coefficients:
+          - "-1.077314971617D-06"
+          - "1.950247963978D-07"
+          - "-2.569729600929D-08"
+  - density_indices: [6, 7, 8]
+    rows:
+      - temperature_index: 0
+        coefficients:
+          - "1.942314738448D-04"
+          - "-6.597388255594D-06"
+          - "8.798544848606D-08"
+      - temperature_index: 1
+        coefficients:
+          - "-3.167471002157D-04"
+          - "1.070920193931D-05"
+          - "-1.408139742113D-07"
+      - temperature_index: 2
+        coefficients:
+          - "2.279124955373D-04"
+          - "-8.197224564797D-06"
+          - "1.130682076163D-07"
+      - temperature_index: 3
+        coefficients:
+          - "-5.339115778704D-05"
+          - "2.135848413694D-06"
+          - "-3.072223247387D-08"
+      - temperature_index: 4
+        coefficients:
+          - "-8.758032156912D-08"
+          - "-7.270955072707D-08"
+          - "1.100087131523D-09"
+      - temperature_index: 5
+        coefficients:
+          - "1.217600444191D-06"
+          - "-3.624263301602D-08"
+          - "6.139167092128D-10"
+      - temperature_index: 6
+        coefficients:
+          - "6.572135289627D-10"
+          - "4.269190108005D-10"
+          - "-3.666090917669D-11"
+      - temperature_index: 7
+        coefficients:
+          - "-2.613600078122D-08"
+          - "8.263175463927D-10"
+          - "-8.509179497022D-12"
+      - temperature_index: 8
+        coefficients:
+          - "1.804377780165D-09"
+          - "-6.031847199601D-11"
+          - "7.416020205748D-13"

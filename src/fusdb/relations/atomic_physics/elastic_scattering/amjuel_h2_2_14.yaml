@@ -1,0 +1,30 @@
+source: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.14'
+reaction: 0.7D p+Kr → p+Krdiff. ratecoef.
+category: elastic_scattering
+species: Kr
+output: Kr_proton_elastic_diffusion_rate
+relation_name: AMJUEL H.2 2.14 Kr proton elastic diffusion rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-1.865129000000E+01'
+- '-1.062916000000E-01'
+- '-1.827846000000E-01'
+- '-2.368024000000E-03'
+- '1.711988000000E-02'
+- '-6.251324000000E-04'
+- '-1.097944000000E-03'
+- '1.970191000000E-04'
+- '-9.968727000000E-06'
+amjuel_comments:
+- Maxwellianratecoefﬁcientvs. T ,withKratrest,obtainedbytakingthecorrespondingBeam-
+- p
+- Maxw. ratecoefﬁcientatEb=0.1eVandveriﬁcationbyindependentintegrationofcross-section

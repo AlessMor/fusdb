@@ -43,12 +43,13 @@ class RelationRegistry:
                     )
                 owners[identifier] = rel
             # Validate against the variable registry (rejects alias-degenerate
-            # relations) but keep the original relation: name canonicalization is
-            # left to RelationSystem, so registry-level filtering semantics are
-            # unchanged.
-            canonicalize_relation(rel, variable_registry)
-            by_name[rel.name] = rel
-            by_function[rel.function_name] = rel
+            # relations) and store the canonicalized relation, so every relation
+            # leaving the registry already uses canonical variable names.
+            # Name-based filtering is unaffected: canonicalization changes
+            # variable names, never ``rel.name``.
+            canonical = canonicalize_relation(rel, variable_registry)
+            by_name[rel.name] = canonical
+            by_function[rel.function_name] = canonical
         self._relations = MappingProxyType(by_name)
         self._by_function = MappingProxyType(by_function)
 

@@ -57,7 +57,7 @@ def run(
     # Initial guesses are precomputed by compile() (run() always compiles
     # before dispatching); reported here so the solver block records how many
     # variables were seeded.
-    initial_values: dict[str, Any] = dict(self._initial_guesses)
+    initial_values: dict[str, Any] = dict(self.initial_guesses)
     # If the current variable state already satisfies the compiled
     # active graph, reconcile is a no-op.  This makes ordered/reconcile
     # adapter blocks idempotent and avoids tiny least-squares drift when the
@@ -217,15 +217,24 @@ def run(
             "ftol": 1.0e-12,
             "verbose": int(verbose),
         }
-        for stage_index, (weight, move_weight) in enumerate(phase_schedule):
-            current_relation_weight = float(weight)
-            current_movement_weight = float(move_weight)
+
+        def run_stage(stage_label: Any, *, stage_max_nfev: int, reference_map: Mapping[str, Any] | None) -> dict[str, Any]:
+            """Run one bounded least-squares stage from ``current_x`` and record it.
+
+            Shared by the relation-weight continuation and the IRLS loop.
+            Mutates the shared solver state (``current_x``, ``solve_result``,
+            the verification products) and appends the stage-history entry,
+            which is also returned so a caller may extend it.
+            """
+            nonlocal solve_result, current_x, relation_status, completed_values, certificate, verified
+            nonlocal final_probe_size, jac_sparsity_used, jac_sparsity
             t_stage = time.perf_counter()
             # Residual size changes between feasibility-only and movement-regularized
             # stages, so sparsity must be built per stage.
             stage_probe = residual_function(current_x)
             final_probe_size = int(stage_probe.size)
             stage_kwargs = dict(base_common_kwargs)
+            stage_kwargs["max_nfev"] = stage_max_nfev
             # Sparse finite-difference Jacobian.  The structural pattern follows
             # the completion-dependency graph and is conservative: it has an edge
             # for every output of every completion relation, so it never omits a
@@ -236,7 +245,6 @@ def run(
             # stale pattern can never make the solve wrong -- only slower.
             stage_jac_used = False
             try:
-                reference_map = reference if current_movement_weight else None
                 sparsity = self.build_jac_sparsity(reference=reference_map)
             except Exception:
                 sparsity = None
@@ -253,20 +261,29 @@ def run(
                 for item in relation_status.values()
                 if item.get("enforced", True) and not item.get("verified", False)
             )
-            stage_history.append(
-                {
-                    "stage": int(stage_index),
-                    "relation_weight": float(weight),
-                    "movement_weight": float(move_weight),
-                    "nfev": int(getattr(solve_result, "nfev", -1)),
-                    "cost": float(getattr(solve_result, "cost", np.nan)),
-                    "termination": str(getattr(solve_result, "message", "")),
-                    "verified": bool(verified),
-                    "failed_relations": int(failed_count),
-                    "jac_sparsity_used": bool(stage_jac_used),
-                    "residual_size": int(stage_probe.size),
-                    "elapsed_s": float(time.perf_counter() - t_stage),
-                }
+            entry = {
+                "stage": stage_label,
+                "relation_weight": float(current_relation_weight),
+                "movement_weight": float(current_movement_weight),
+                "nfev": int(getattr(solve_result, "nfev", -1)),
+                "cost": float(getattr(solve_result, "cost", np.nan)),
+                "termination": str(getattr(solve_result, "message", "")),
+                "verified": bool(verified),
+                "failed_relations": int(failed_count),
+                "jac_sparsity_used": bool(stage_jac_used),
+                "residual_size": int(stage_probe.size),
+                "elapsed_s": float(time.perf_counter() - t_stage),
+            }
+            stage_history.append(entry)
+            return entry
+
+        for stage_index, (weight, move_weight) in enumerate(phase_schedule):
+            current_relation_weight = float(weight)
+            current_movement_weight = float(move_weight)
+            run_stage(
+                int(stage_index),
+                stage_max_nfev=max_nfev,
+                reference_map=reference if current_movement_weight else None,
             )
             # Verification is independent of the stage objective.  Stop as soon
             # as all enforced relations are simultaneously satisfied.
@@ -293,49 +310,11 @@ def run(
                     break
                 # Reweight from the latest solution, then re-solve warm-started.
                 irls_weights = self.movement_weights(completed_values, reference, eps=float(movement_eps))
-                t_stage = time.perf_counter()
-                stage_probe = residual_function(current_x)
-                final_probe_size = int(stage_probe.size)
-                stage_kwargs = dict(base_common_kwargs)
-                stage_kwargs["max_nfev"] = irls_max_nfev
-                # Conservative structural sparsity here too (see the stage loop above).
-                stage_jac_used = False
-                try:
-                    sparsity = self.build_jac_sparsity(reference=reference)
-                except Exception:
-                    sparsity = None
-                if sparsity is not None and sparsity.shape == (int(stage_probe.size), int(current_x.size)):
-                    stage_kwargs["jac_sparsity"] = sparsity
-                    stage_jac_used = True
-                    jac_sparsity_used = True
-                    jac_sparsity = sparsity
-                solve_result = least_squares(residual_function, current_x, **stage_kwargs)
-                current_x = np.asarray(solve_result.x, dtype=float)
-                relation_status, _residuals, _errors, _warnings, verified, completed_values, certificate = verify_candidate(current_x)
-                failed_count = sum(
-                    1
-                    for item in relation_status.values()
-                    if item.get("enforced", True) and not item.get("verified", False)
-                )
-                stage_history.append(
-                    {
-                        "stage": f"irls_{irls_index}",
-                        "relation_weight": float(current_relation_weight),
-                        "movement_weight": float(current_movement_weight),
-                        "nfev": int(getattr(solve_result, "nfev", -1)),
-                        "cost": float(getattr(solve_result, "cost", np.nan)),
-                        "termination": str(getattr(solve_result, "message", "")),
-                        "verified": bool(verified),
-                        "failed_relations": int(failed_count),
-                        "jac_sparsity_used": bool(stage_jac_used),
-                        "residual_size": int(stage_probe.size),
-                        "inputs_beyond_tolerance": len(inputs_beyond_tolerance(self, completed_values)),
-                        "elapsed_s": float(time.perf_counter() - t_stage),
-                    }
-                )
+                entry = run_stage(f"irls_{irls_index}", stage_max_nfev=irls_max_nfev, reference_map=reference)
+                new_beyond = len(inputs_beyond_tolerance(self, completed_values))
+                entry["inputs_beyond_tolerance"] = new_beyond
                 # Stop once a pass stops reducing the number beyond tolerance:
                 # further reweighting only churns (common for inconsistent data).
-                new_beyond = len(inputs_beyond_tolerance(self, completed_values))
                 if new_beyond >= prev_beyond:
                     break
                 prev_beyond = new_beyond
@@ -378,7 +357,7 @@ def run(
         termination=str(solve_result.message),
         solver=solver,
         include_values=True,
-        extra={"uninitialized_free_variables": list(self._uninitialized_free_variables)},
+        extra={"uninitialized_free_variables": list(self.uninitialized_free_variables)},
     )
 
     # There is no separate candidate/final variable state. The latest solve output
@@ -388,7 +367,6 @@ def run(
     stored_validation = verify_mode.run(self)
     if bool(stored_validation.get("success", False)) != bool(verified):
         validation["warnings"].append("stored values verify differently after public conversion")
-    validation["variables"] = self.variables_by_name
     validation["likely_culprits"] = rank_input_culprits(self, validation.get("relation_status", {}))
     # The objective minimises this set: non-fixed inputs whose solved value left
     # their tolerance band, worst deviation first.
@@ -413,12 +391,13 @@ def inputs_beyond_tolerance(system: Any, values: Mapping[str, Any]) -> list[dict
         ``{"name", "deviation_tol"}`` entries with deviation > 1, worst first.
     """
     out: list[dict[str, Any]] = []
-    for name, var in system.variables_by_name.items():
-        if var.fixed or var.input_value is None or name not in values or values[name] is None:
+    for name, ref in system.inputs.items():
+        if name in system.fixed or ref is None or values.get(name) is None:
             continue
         # excess is (deviation/tol - 1) clipped at 0, so excess > 0 marks a
         # crossing; deviation in tolerance units is then 1 + excess.
-        excess = var.movement_excess(values[name], var.solver_value(var.input_value))
+        spec = system.spec_of(name)
+        excess = spec.movement_excess(values[name], spec.solver_value(ref, system.profile_size), *system.tols_of(name))
         if excess > 0.0:
             out.append({"name": name, "deviation_tol": 1.0 + excess})
     return sorted(out, key=lambda item: -item["deviation_tol"])
@@ -431,7 +410,6 @@ def rank_input_culprits(system: Any, relation_status: Mapping[str, Mapping[str, 
         if status.get("verified", True):
             continue
         for name in rel.variables:
-            var = system.variables_by_name.get(name)
-            if var is not None and not var.fixed:
+            if name in system.known and name not in system.fixed:
                 counts[name] = counts.get(name, 0) + 1
     return [{"name": name, "count": count} for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))]

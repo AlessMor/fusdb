@@ -37,7 +37,7 @@ def test_variables_table_can_display_existing_system_state():
     reactor = _reactor("Solved", 3.2)
     reactor.relations = lambda: ()
     system = reactor.relation_system()
-    system.variables_by_name["R"].set_value(4.4)
+    system.values["R"] = 4.4
 
     html = variables_table(system, variable_names=("R",))
 
@@ -46,11 +46,12 @@ def test_variables_table_can_display_existing_system_state():
 
 
 def test_variables_table_renders_solved_column_snapshot():
-    var = Variable("R", value=3.0)
-    var.set_value(4.4)  # input_value stays 3.0, value becomes 4.4
     column = SolvedColumn(
         name="Snap",
-        variables_by_name={"R": var},
+        inputs={"R": 3.0},
+        values={"R": 4.4},
+        rel_tols={"R": 0.01},
+        abs_tols={"R": 0.0},
         active_variable_names=frozenset({"R"}),
         relation_names_by_variable={"R": ("geometry rule",)},
         result={"success": True},
@@ -73,7 +74,7 @@ def test_run_absorbs_solved_values_and_keeps_last_system():
     assert reactor.last_system is not None
     # The solved value replaces the input entirely: value == input_value, and
     # both mirror the solved system.
-    assert reactor.R.value == reactor.last_system.variables_by_name["R"].value
+    assert reactor.R.value == reactor.last_system.values["R"]
     assert reactor.R.input_value == reactor.R.value
 
 

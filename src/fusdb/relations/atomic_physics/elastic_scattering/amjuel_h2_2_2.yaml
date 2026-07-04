@@ -1,0 +1,30 @@
+source: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.2'
+reaction: 0.1D p+H(1s) → p+H(1s)diff. rate coef.
+category: elastic_scattering
+species: H
+output: H_proton_elastic_diffusion_rate
+relation_name: AMJUEL H.2 2.2 H proton elastic diffusion rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-1.937499000000E+01'
+- '1.064443000000E-01'
+- '-5.831768000000E-02'
+- '-2.768932000000E-02'
+- '1.018222000000E-02'
+- '1.253253000000E-03'
+- '-1.245254000000E-03'
+- '2.110022000000E-04'
+- '-1.121733000000E-05'
+amjuel_comments:
+- Maxwellian rate coefﬁcient vs. Tp, with H(1s) at rest, obtained by taking the corresponding
+- Beam-Maxw. rate coefﬁcient at Eb=0.08 eV and veriﬁcation by independent integration of
+- cross-section

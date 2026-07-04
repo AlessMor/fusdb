@@ -1,0 +1,42 @@
+source: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.26'
+reaction: 3.2.3 p + H → H +H+
+category: charge_exchange
+species: H2
+output: H2_charge_exchange_rate
+relation_name: AMJUEL H.2 2.26 H2 charge exchange rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+fit_error:
+  max_rel_pct: 10.2031
+  mean_rel_pct: 6.3799
+coefficients:
+- -2.163099643422D+01
+- 3.206843053514D+00
+- -3.369939911269D+00
+- 1.290238400703D+00
+- -3.988189754178D-01
+- 1.462287796966D-01
+- -3.524154596754D-02
+- 4.146324082808D-03
+- -1.846022446828D-04
+amjuel_comments:
+- 2 2
+- Effective ion conversion rate (charge exchange on H )
+- ∑ 2
+- ⟨σv⟩ =⟨σv⟩ + 14 ⟨σv⟩ · pH (v)
+- eff H2(v=0) v=1 H2(v) 2
+- 'Same vibrational distribution (as function of Te) as above. Therefore: single parameter ﬁt'
+- vs. Te, since vibrational distribution does not depend upon density, E0 is ﬁxed (0.1 eV) and
+- T =T =T.
+- p e
+- 'Max. rel. Error: 10.2031 %'
+- 'Mean rel. Error: 6.3799 %'
+- 'Competing process at low T: see above: dissociative electron attachment, process 2-2-17'

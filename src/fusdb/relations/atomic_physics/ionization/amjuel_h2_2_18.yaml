@@ -1,0 +1,31 @@
+source: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.18'
+reaction: 3.1.6FJ p + H(1s) → p+p+e
+category: ionization
+species: H
+output: H_proton_impact_ionization_rate
+relation_name: AMJUEL H.2 2.18 H proton-impact ionization Freeman-Jones rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-0.149086100000e+03'
+- '0.759257500000e+02'
+- '-0.220928100000e+02'
+- '0.390970900000e+01'
+- '-0.440216800000e+00'
+- '0.320904700000e-01'
+- '-0.149340900000e-02'
+- '0.409415100000e-04'
+- '-0.506977700000e-06'
+amjuel_comments:
+- This ﬁt seems to be completely corrupted. Probably misprints in original F.J. CLM-R-137
+- report. Checked also with old AURORA code (PPPL, ca. 1979) implementation. Identical
+- 'ﬁt used there. Recommendation: Use cross-section and HYDKIN online integration to rate'
+- coefﬁcients.

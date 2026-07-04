@@ -26,6 +26,16 @@ from matplotlib.axes import Axes
 
 from fusdb.registry import RELATIONS
 
+from ._bokeh import (
+    axis_limit_controls,
+    labeled_row,
+    link_two_filter_visibility,
+    log_grid,
+    log_log_figure,
+    model_html,
+    validate_axis_limits,
+    write_html,
+)
 from .style import axes
 
 # Preferred parametrisation per reaction, best-first. The single ordering used by
@@ -161,15 +171,6 @@ def plot_reactivity(
     return ax
 
 
-def _validate_axis_limits(limits: tuple[float, float], *, label: str) -> tuple[float, float]:
-    lower, upper = float(limits[0]), float(limits[1])
-    if lower <= 0 or upper <= 0:
-        raise ValueError(f"{label} must be positive for log-scaled axes.")
-    if lower >= upper:
-        raise ValueError(f"{label} must satisfy min < max.")
-    return lower, upper
-
-
 def reactivity_app(
     *,
     x_limits: tuple[float, float] = (1.0, 1.0e3),
@@ -190,38 +191,27 @@ def reactivity_app(
     Returns:
         A Bokeh layout model (embed with :func:`render_reactivity_app_html`).
     """
-    from bokeh.layouts import column, row
-    from bokeh.models import Button, CheckboxButtonGroup, CustomJS, Div, Legend, LegendItem, TextInput
-    from bokeh.plotting import figure
+    from bokeh.layouts import column
+    from bokeh.models import CheckboxButtonGroup, Legend, LegendItem
 
-    x_limits = _validate_axis_limits(x_limits, label="x_limits")
-    y_limits = _validate_axis_limits(y_limits, label="y_limits")
-    if int(num_points) < 2:
-        raise ValueError("num_points must be at least 2.")
+    x_limits = validate_axis_limits(x_limits, label="x_limits")
+    y_limits = validate_axis_limits(y_limits, label="y_limits")
 
     series = discover_reactivity_series()
-    temperature_keV = np.logspace(np.log10(x_limits[0]), np.log10(x_limits[1]), int(num_points))
+    temperature_keV = log_grid(x_limits, num_points)
 
-    plot = figure(
+    plot = log_log_figure(
+        x_limits=x_limits,
+        y_limits=y_limits,
         width=width,
         height=height,
-        x_axis_type="log",
-        y_axis_type="log",
-        x_range=x_limits,
-        y_range=y_limits,
-        tools="pan,wheel_zoom,box_zoom,reset,save",
-        active_scroll="wheel_zoom",
         title="Fusion Reactivities",
-        sizing_mode="stretch_width",
+        x_label="Ion temperature [keV]",
+        y_label="⟨σv⟩ [m^3/s]",
     )
-    plot.xaxis.axis_label = "Ion temperature [keV]"
-    plot.yaxis.axis_label = "⟨σv⟩ [m^3/s]"
-    plot.grid.grid_line_alpha = 0.3
 
     renderers = []
     legend_items: list = []
-    renderer_reactions: list[str] = []
-    renderer_sources: list[str] = []
     for reaction, source, label, relation in series:
         # ``evaluate`` returns raw function values (no domain enforcement), so
         # edge NaNs/zeros are tolerated here and clipped for the log axis. Some
@@ -240,8 +230,6 @@ def reactivity_app(
         )
         renderers.append(renderer)
         legend_items.append(LegendItem(label=label, renderers=[renderer], visible=True))
-        renderer_reactions.append(reaction)
-        renderer_sources.append(source)
 
     plot.add_layout(Legend(items=legend_items, location="top_left", click_policy="hide"))
 
@@ -254,103 +242,36 @@ def reactivity_app(
         labels=source_labels, active=list(range(len(source_labels))), sizing_mode="stretch_width"
     )
 
-    x_min_input = TextInput(title="x min", value=str(x_limits[0]), width=120)
-    x_max_input = TextInput(title="x max", value=str(x_limits[1]), width=120)
-    y_min_input = TextInput(title="y min", value=str(y_limits[0]), width=120)
-    y_max_input = TextInput(title="y max", value=str(y_limits[1]), width=120)
-    axis_button = Button(label="Apply limits", button_type="primary", width=120)
-    status = Div(text="", width=460)
-
-    toggle_callback = CustomJS(
-        args=dict(
-            cbReactions=reaction_selector,
-            cbSources=source_selector,
-            renderers=renderers,
-            reactionLabels=reaction_labels,
-            sourceLabels=source_labels,
-            rendererReactions=renderer_reactions,
-            rendererSources=renderer_sources,
-            legendItems=legend_items,
-            status=status,
-        ),
-        code="""
-const selectedReactions = new Set(cbReactions.active.map((index) => reactionLabels[index]));
-const selectedSources = new Set(cbSources.active.map((index) => sourceLabels[index]));
-for (let i = 0; i < renderers.length; i++) {
-  const isVisible = selectedReactions.has(rendererReactions[i]) && selectedSources.has(rendererSources[i]);
-  renderers[i].visible = isVisible;
-  legendItems[i].visible = isVisible;
-}
-status.text = "";
-""",
-    )
-    reaction_selector.js_on_change("active", toggle_callback)
-    source_selector.js_on_change("active", toggle_callback)
-
-    axis_button.js_on_click(
-        CustomJS(
-            args=dict(
-                plot=plot,
-                xMinInput=x_min_input,
-                xMaxInput=x_max_input,
-                yMinInput=y_min_input,
-                yMaxInput=y_max_input,
-                status=status,
-            ),
-            code="""
-const xMin = Number(xMinInput.value), xMax = Number(xMaxInput.value);
-const yMin = Number(yMinInput.value), yMax = Number(yMaxInput.value);
-if (!(xMin > 0 && xMax > 0 && yMin > 0 && yMax > 0)) {
-  status.text = "<span style='color:#b00020'>Axis limits must be positive.</span>";
-  return;
-}
-if (!(xMin < xMax && yMin < yMax)) {
-  status.text = "<span style='color:#b00020'>Each axis must satisfy min &lt; max.</span>";
-  return;
-}
-plot.x_range.start = xMin; plot.x_range.end = xMax;
-plot.y_range.start = yMin; plot.y_range.end = yMax;
-status.text = "";
-""",
-        )
+    limit_widgets, status = axis_limit_controls(plot, x_limits, y_limits)
+    link_two_filter_visibility(
+        reaction_selector,
+        source_selector,
+        reaction_labels,
+        source_labels,
+        [reaction for reaction, *_ in series],
+        [source for _, source, *_ in series],
+        renderers,
+        legend_items,
+        status,
     )
 
-    label_style = "font-weight:600; min-width:90px; padding-top:6px;"
     return column(
         plot,
-        row(Div(text=f"<div style='{label_style}'>Reactions</div>", width=100), reaction_selector,
-            sizing_mode="stretch_width"),
-        row(Div(text=f"<div style='{label_style}'>Sources</div>", width=100), source_selector,
-            sizing_mode="stretch_width"),
-        row(Div(text=f"<div style='{label_style}'>Limits</div>", width=100),
-            x_min_input, x_max_input, y_min_input, y_max_input, axis_button, status,
-            sizing_mode="stretch_width"),
+        labeled_row("Reactions", reaction_selector),
+        labeled_row("Sources", source_selector),
+        labeled_row("Limits", *limit_widgets),
         sizing_mode="stretch_width",
     )
 
 
-def render_reactivity_app_html(
-    *,
-    x_limits: tuple[float, float] = (1.0, 1.0e3),
-    y_limits: tuple[float, float] = (1e-30, 1e-21),
-    num_points: int = 1000,
-    width: int = 960,
-    height: int = 620,
-    title: str = "Fusion Reactivity Plotter",
-) -> str:
-    """Return a self-contained interactive HTML document (BokehJS from CDN)."""
-    from bokeh.embed import file_html
-    from bokeh.resources import CDN
+def render_reactivity_app_html(*, title: str = "Fusion Reactivity Plotter", **kwargs: Any) -> str:
+    """Return a self-contained interactive HTML document (BokehJS from CDN).
 
-    app = reactivity_app(
-        x_limits=x_limits, y_limits=y_limits, num_points=num_points, width=width, height=height
-    )
-    return file_html(app, CDN, title)
+    ``**kwargs`` are forwarded to :func:`reactivity_app`.
+    """
+    return model_html(reactivity_app(**kwargs), title)
 
 
-def save_reactivity_app_html(path: str | Path, **kwargs: object) -> Path:
+def save_reactivity_app_html(path: str | Path, **kwargs: Any) -> Path:
     """Write the interactive reactivity plotter HTML to ``path`` and return it."""
-    output_path = Path(path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(render_reactivity_app_html(**kwargs), encoding="utf-8")  # type: ignore[arg-type]
-    return output_path
+    return write_html(path, render_reactivity_app_html(**kwargs))

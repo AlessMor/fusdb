@@ -9,6 +9,7 @@ metadata:
 tags:
 - tokamak
 - compact_tokamak
+- h_mode
 solver_tags:
   mode: verify
   verbosity: false

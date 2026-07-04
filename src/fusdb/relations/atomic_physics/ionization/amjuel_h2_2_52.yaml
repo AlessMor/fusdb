@@ -1,0 +1,33 @@
+source: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.52'
+reaction: 2.26B0 e+Fe → e+Fe++e
+category: ionization
+species: Fe
+output: Fe_ionization_rate
+relation_name: AMJUEL H.2 2.52 Fe ionization STRAHL rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+fit_error:
+  max_rel_pct: 0.0907
+  mean_rel_pct: 0.045
+coefficients:
+- -2.457959373433D+01
+- 8.433391049230D+00
+- -3.846892092374D+00
+- 1.185976759143D+00
+- -2.459329335625D-01
+- 3.266162856106D-02
+- -2.642594731066D-03
+- 1.182305727446D-04
+- -2.237621366618D-06
+amjuel_comments:
+- Ionization Rate for neutral Iron Atoms
+- 'Max. rel. Error: .0907 %'
+- 'Mean rel. Error: .0450 %'

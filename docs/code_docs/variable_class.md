@@ -51,25 +51,14 @@ State methods:
 - `set_input(value)` -> set the user/input value (canonical units); also resets `value`
 - `set_value(value)` -> set the current public value (canonical units)
 
-Per-variable numerics (owned by the variable, consumed by `RelationSystem`):
-
-- `dim` -> number of scalar elements (1 for scalars, grid size for profiles)
-- `coerce_shape(value)` -> value coerced to this variable's registry shape
-- `solver_value(value)` / `public_value(value)` -> conversion between the
-  public form and the numerically safe solver form (physical-domain boundary
-  values are projected onto solver-domain bounds and back)
-- `check_solver_domain(value)` -> raise if a value violates the solver domain
-- `candidate_valid(value)` -> whether a prospective value is finite and in-domain
-- `scale(*refs)` / `tolerance_floor()` / `tolerance_width(scale)` -> the
-  residual/movement scaling quantities derived from `rel_tol`/`abs_tol`
-- `movement_reference(fallback, index=None)` -> one supplied-input element for
-  movement scaling
-- `movement_excess(current, reference)` -> worst tolerance-band crossing of a
-  solved value against the supplied input (the reconcile objective quantity)
-- `domain_violation_rows(value)` -> tolerance-normalized physical-domain
-  violation rows for the solver feasibility residual
-- `moved_from_input(value)` -> whether a candidate value moved off the
-  supplied input (used to reject solves that changed a fixed variable)
+`Variable` is a **boundary input record only**: it validates and
+unit-converts one user/yaml input and is then ingested by `RelationSystem`
+into plain value dicts.  All per-variable numerics (`solver_value`,
+`public_value`, `coerce`, `check_solver_domain`, `candidate_valid`,
+`tolerance_floor`/`tolerance_width`/`scale_of`, `movement_excess`,
+`domain_violation_rows`) live on the frozen `VariableSpec` in the registry —
+computed once per process with precomputed bounds/projection constants, taking
+the profile size and resolved tolerances as arguments.
 
 Profiles (shape==1) accept scalar inputs (broadcast to the profile length) or
 1D arrays; the constructor and setters validate shape, size and physical

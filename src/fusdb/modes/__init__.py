@@ -10,7 +10,11 @@ _MODE_MODULES = {
     "ordered": "fusdb.modes.ordered",
     "reconcile": "fusdb.modes.reconcile",
     "optimize": "fusdb.modes.optimize",
+    "popcon": "fusdb.modes.popcon",
 }
+
+# The valid mode names; the single source consumed by Reactor validation.
+MODE_NAMES = frozenset(_MODE_MODULES)
 
 
 def get_mode(name: str) -> Callable[..., dict[str, Any]]:

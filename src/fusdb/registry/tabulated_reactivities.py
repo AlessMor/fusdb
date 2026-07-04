@@ -287,6 +287,54 @@ def prepare_table(
     )
 
 
+@lru_cache(maxsize=None)
+def _xsection_maxwellian_arrays(
+    table_ref: str | Path, resolved_reference_frame: str
+) -> tuple[NDArray[np.float64], NDArray[np.float64], float]:
+    """Return ``(energy_grid_joule, cross_section_grid_m2, reduced_mass_kg)``.
+
+    These depend only on the table and the resolved reference frame, so they
+    are built once and shared: the relations that integrate them sit inside
+    least-squares residual loops, and re-interpolating the cross section onto
+    the energy grid per call dominated the evaluation cost.  The returned
+    arrays are shared and must not be mutated.
+    """
+    table = prepare_table(
+        table_ref,
+        expected_kind="cross_section",
+        metadata_keys=("reactants", "reference_frame"),
+        quantities=("energy", "cross_section"),
+        units=("ev", "barn"),
+        scales=(1.0e-3, 1.0e-28),
+        scaled_units=("kev", "m^2"),
+        sort_by=0,
+        unique_by=0,
+    )
+    incident_energy_keV, cross_section_m2 = table.columns
+    projectile, target = _reactants_from_metadata(table)
+    m_projectile = _reactant_mass_u(projectile)
+    m_target = _reactant_mass_u(target)
+    if resolved_reference_frame == "lab":
+        energy_cm_keV = incident_energy_keV * m_target / (m_projectile + m_target)
+    else:
+        energy_cm_keV = incident_energy_keV
+    energy_grid_kev = np.logspace(
+        REACTIVITY_TABLES.energy_grid_start_log10_kev,
+        REACTIVITY_TABLES.energy_grid_stop_log10_kev,
+        REACTIVITY_TABLES.energy_grid_num_points,
+        dtype=float,
+    )
+    cross_section_grid_m2 = np.interp(
+        energy_grid_kev,
+        energy_cm_keV,
+        cross_section_m2,
+        left=0.0,
+        right=0.0,
+    )
+    reduced_mass_kg = m_projectile * m_target / (m_projectile + m_target) * ATOMIC_MASS_UNIT_KG
+    return energy_grid_kev * KEV_TO_J, cross_section_grid_m2, reduced_mass_kg
+
+
 def reactivity_from_xsection_table(
     table_ref: str | Path,
     ion_temp_profile: float64 | NDArray[np.float64] | sp.Expr,
@@ -320,28 +368,9 @@ def reactivity_from_xsection_table(
         )
         return _symbolic_placeholder(symbolic_reaction_id, ion_temp_profile)
 
-    incident_energy_keV, cross_section_m2 = table.columns
-    projectile, target = _reactants_from_metadata(table)
-    m_projectile = _reactant_mass_u(projectile)
-    m_target = _reactant_mass_u(target)
-    if resolved_reference_frame == "lab":
-        energy_cm_keV = incident_energy_keV * m_target / (m_projectile + m_target)
-    else:
-        energy_cm_keV = incident_energy_keV
-    energy_grid_kev = np.logspace(
-        REACTIVITY_TABLES.energy_grid_start_log10_kev,
-        REACTIVITY_TABLES.energy_grid_stop_log10_kev,
-        REACTIVITY_TABLES.energy_grid_num_points,
-        dtype=float,
+    energy_joule, cross_section_grid_m2, reduced_mass_kg = _xsection_maxwellian_arrays(
+        table_ref, resolved_reference_frame
     )
-    cross_section_grid_m2 = np.interp(
-        energy_grid_kev,
-        energy_cm_keV,
-        cross_section_m2,
-        left=0.0,
-        right=0.0,
-    )
-    reduced_mass_kg = m_projectile * m_target / (m_projectile + m_target) * ATOMIC_MASS_UNIT_KG
 
     temperatures = np.asarray(ion_temp_profile, dtype=float)
     is_scalar = temperatures.ndim == 0
@@ -351,7 +380,6 @@ def reactivity_from_xsection_table(
     positive = flat_temperatures > 0.0
     if np.any(positive):
         kT = flat_temperatures[positive] * KEV_TO_J
-        energy_joule = energy_grid_kev * KEV_TO_J
         prefactor = np.sqrt(8.0 / (np.pi * reduced_mass_kg)) / (kT**1.5)
         integrand = (
             cross_section_grid_m2[None, :]
@@ -364,6 +392,49 @@ def reactivity_from_xsection_table(
     if is_scalar:
         return float64(reshaped.item())
     return reshaped.astype(np.float64, copy=False)
+
+
+@lru_cache(maxsize=None)
+def _reactivity_interpolator(table_ref: str | Path, interpolation_kind: str) -> Any:
+    """Return the shared log-log interpolator for one reactivity table.
+
+    Constructing the interpolator (spline setup over the log table) costs far
+    more than evaluating it, and the ``sigmav_*`` relations that use it sit
+    inside least-squares residual loops, so one interpolator per
+    ``(table, kind)`` is built once and reused across all evaluations.
+    """
+    table = prepare_table(
+        table_ref,
+        expected_kind="reactivity",
+        quantities=("temperature", "sigmav"),
+        units=("ev", "cm^3/s"),
+        scales=(1.0e-3, 1.0e-6),
+        scaled_units=("kev", "m^3/s"),
+        positive_columns=(0, 1),
+        sort_by=0,
+        unique_by=0,
+    )
+    temperature_grid_keV, reactivity_grid_m3_per_s = table.columns
+    log_temperature_grid = np.log10(temperature_grid_keV)
+    log_reactivity_grid = np.log10(reactivity_grid_m3_per_s)
+    if interpolation_kind == "pchip":
+        from scipy.interpolate import PchipInterpolator
+
+        return PchipInterpolator(
+            log_temperature_grid,
+            log_reactivity_grid,
+            extrapolate=False,
+        )
+    from scipy.interpolate import interp1d
+
+    return interp1d(
+        log_temperature_grid,
+        log_reactivity_grid,
+        kind=interpolation_kind,
+        bounds_error=False,
+        fill_value=np.nan,
+        assume_sorted=True,
+    )
 
 
 def reactivity_from_reactivity_table(
@@ -386,18 +457,7 @@ def reactivity_from_reactivity_table(
     if isinstance(ion_temp_profile, sp.Expr):
         return _symbolic_placeholder(reaction_id, ion_temp_profile)
 
-    table = prepare_table(
-        table_ref,
-        expected_kind="reactivity",
-        quantities=("temperature", "sigmav"),
-        units=("ev", "cm^3/s"),
-        scales=(1.0e-3, 1.0e-6),
-        scaled_units=("kev", "m^3/s"),
-        positive_columns=(0, 1),
-        sort_by=0,
-        unique_by=0,
-    )
-    temperature_grid_keV, reactivity_grid_m3_per_s = table.columns
+    interpolator = _reactivity_interpolator(table_ref, interpolation_kind)
     temperatures = np.asarray(ion_temp_profile, dtype=float)
     is_scalar = temperatures.ndim == 0
     flat_temperatures = temperatures.reshape(-1)
@@ -405,27 +465,6 @@ def reactivity_from_reactivity_table(
 
     positive_mask = flat_temperatures > 0.0
     if np.any(positive_mask):
-        log_temperature_grid = np.log10(temperature_grid_keV)
-        log_reactivity_grid = np.log10(reactivity_grid_m3_per_s)
-        if interpolation_kind == "pchip":
-            from scipy.interpolate import PchipInterpolator
-
-            interpolator = PchipInterpolator(
-                log_temperature_grid,
-                log_reactivity_grid,
-                extrapolate=False,
-            )
-        else:
-            from scipy.interpolate import interp1d
-
-            interpolator = interp1d(
-                log_temperature_grid,
-                log_reactivity_grid,
-                kind=interpolation_kind,
-                bounds_error=False,
-                fill_value=np.nan,
-                assume_sorted=True,
-            )
         interpolated = np.asarray(
             interpolator(np.log10(flat_temperatures[positive_mask])),
             dtype=float,

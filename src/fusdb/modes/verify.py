@@ -22,8 +22,8 @@ def verify_values(system: Any, values: Mapping[str, Any], *, complete: bool = Tr
     if complete:
         check_values = self.complete(check_values)
     relation_status, residuals, errors, warnings = self.certify_relations(check_values)
-    fixed_errors = self._fixed_value_errors(check_values)
-    domain_errors = self._domain_errors(check_values)
+    fixed_errors = self.fixed_value_errors(check_values)
+    domain_errors = self.domain_errors(check_values)
     all_errors = [*errors, *fixed_errors, *domain_errors]
     failed_relations = [
         name for name, status in relation_status.items()

@@ -21,6 +21,7 @@ Generated pages:
   * ``code_docs/api/fusdb/registry/*``         -- tables for the registry YAML files
   * ``code_docs/reactors/**``                  -- tables for the reactor input YAML files
   * ``code_docs/reactivity_plotter.html``      -- reactivity figure widget
+  * ``code_docs/atomic_physics_plotter.html``  -- atomic-physics rate figure widget
   * ``code_docs/relations_variables_graph.html`` -- variable/relation graph widget
 
 To extend: drop files into ``examples/``, ``src/fusdb``, ``reactors/`` or
@@ -522,6 +523,11 @@ def build_figure_widgets() -> None:
 
     widgets = {
         "reactivity_plotter.html": ("reactivity", "Fusion reactivities", _render_reactivity_widget),
+        "atomic_physics_plotter.html": (
+            "atomic physics rates",
+            "Atomic & molecular rate coefficients",
+            _render_atomic_physics_widget,
+        ),
         "relations_variables_graph.html": (
             "relation graph",
             "Relation-variable graph from current registries",
@@ -541,6 +547,13 @@ def _render_reactivity_widget(title: str) -> str:
     from fusdb.plotting.reactivity import render_reactivity_app_html
 
     return render_reactivity_app_html(title=title, num_points=400)
+
+
+def _render_atomic_physics_widget(title: str) -> str:
+    """Render the interactive Bokeh atomic-physics rate plotter as embeddable HTML."""
+    from fusdb.plotting.atomic_physics import render_atomic_physics_app_html
+
+    return render_atomic_physics_app_html(title=title)
 
 
 def _render_relation_graph_widget(title: str) -> str:

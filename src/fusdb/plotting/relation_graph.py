@@ -12,6 +12,7 @@ import networkx as nx
 from matplotlib.axes import Axes
 
 from fusdb.registry import RELATIONS, VARIABLES
+from fusdb.relationsystem import relation_bipartite_graph
 
 from .style import RELATION_COLOR, VARIABLE_COLOR, axes
 
@@ -25,7 +26,12 @@ def build_relation_graph(relations: Iterable[Any] | None = None) -> nx.DiGraph:
     """Build a directed relation -> variable graph.
 
     Each relation becomes a ``kind="relation"`` node; its inputs point into it
-    and its outputs point out of it (both ``kind="variable"`` nodes).
+    and its outputs point out of it (both ``kind="variable"`` nodes).  The
+    structure comes from the shared
+    :func:`fusdb.relationsystem.relation_bipartite_graph` builder (the same
+    graph the compiled system analyses); this view relabels its tuple node ids
+    to the ``"kind::name"`` strings used by the plotters and adds display
+    labels.
 
     Args:
         relations: Relations to include. Defaults to the registry's filtered
@@ -34,20 +40,13 @@ def build_relation_graph(relations: Iterable[Any] | None = None) -> nx.DiGraph:
     Returns:
         A :class:`networkx.DiGraph` with ``kind`` and ``label`` node attributes.
     """
-    # TODO:remove in favor of building a graph from RelationSystem
     if relations is None:
         relations = RELATIONS.get_filtered_relations()
 
-    graph = nx.DiGraph()
-    for relation in relations:
-        relation_node = f"relation::{relation.name}"
-        graph.add_node(relation_node, kind="relation", label=relation.name)
-        for name in relation.input_names:
-            graph.add_node(f"variable::{name}", kind="variable", label=name)
-            graph.add_edge(f"variable::{name}", relation_node)
-        for name in relation.outputs:
-            graph.add_node(f"variable::{name}", kind="variable", label=name)
-            graph.add_edge(relation_node, f"variable::{name}")
+    graph = relation_bipartite_graph(relations)
+    graph = nx.relabel_nodes(graph, {node: f"{node[0]}::{node[1]}" for node in graph.nodes})
+    for node, data in graph.nodes(data=True):
+        data["label"] = node.split("::", 1)[1]
     return graph
 
 

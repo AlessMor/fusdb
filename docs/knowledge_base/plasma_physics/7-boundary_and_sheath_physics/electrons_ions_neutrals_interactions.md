@@ -29,6 +29,29 @@ For simplicity, only hydrogenic species are considered.
     \(H_2(v,J)\) denotes a molecular hydrogenic species in vibrational state \(v\) and rotational state \(J\).  
     \(h\nu\) denotes a photon.
 
+## Rate Coefficients
+
+Rate coefficients for the implemented subset of the processes below (AMJUEL H.2
+fits vs. temperature and H.4 fits vs. density and temperature) can be explored
+interactively:
+
+<div style="width: 100%; height: 860px; border: 1px solid #e1e4e5;">
+  <iframe
+    src="../../../../code_docs/atomic_physics_plotter.html"
+    style="width: 100%; height: 100%; border: 0;"
+    loading="lazy"
+  ></iframe>
+</div>
+
+The interactive plotter is built from `fusdb.plotting.atomic_physics`. Every
+atomic-physics rate relation in the relation registry is discovered at site
+build time, so new fits appear automatically. Use the density slider to move
+the density-dependent `[H.4]` curves across the AMJUEL fit range, the process
+and species controls to filter curves (hydrogenic species are shown by
+default), click legend entries to hide individual curves, and use the toolbar
+or explicit axis limits to pan and zoom. Hovering a curve shows its reaction
+and, where AMJUEL reports one, the fit error.
+
 ---
 
 ## Electron-Electron Interactions

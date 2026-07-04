@@ -5,11 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-import numpy as np
-from scipy.optimize import least_squares
-
 from fusdb.relation import Relation
-from fusdb.utils import ZERO_TOL, scipy_bounds
+from fusdb.seeding import solve_block
+from fusdb.utils import ZERO_TOL
 
 from ._common import new_result
 
@@ -38,7 +36,7 @@ def run(system: Any, order: Iterable[Any] | None = None, *, passes: int = 1, **_
     step_status: list[dict[str, Any]] = []
 
     def record_status(rel: Relation, *, action: str) -> bool:
-        status = self._verify_status(rel, self._relation_evaluation_values(rel, values))
+        status = self.relation_status_and_residual(rel, self.relation_evaluation_values(rel, values))[0]
         step_status.append({"relation": rel.name, "action": action, **status})
         return bool(status.get("verified", False))
 
@@ -70,14 +68,14 @@ def run(system: Any, order: Iterable[Any] | None = None, *, passes: int = 1, **_
                 if isinstance(solved, Mapping):
                     written = []
                     for name, value in solved.items():
-                        values[name] = self._solver_value(name, value)
-                        self.variables_by_name[name].set_value(self._public_value(name, value))
+                        values[name] = self.solver_value(name, value)
+                        self.values[name] = self.public_value(name, value)
                         written.append(name)
                     action = "solve:" + ",".join(written)
                 elif len(missing) == 1:
                     name = missing[0]
-                    values[name] = self._solver_value(name, solved)
-                    self.variables_by_name[name].set_value(self._public_value(name, solved))
+                    values[name] = self.solver_value(name, solved)
+                    self.values[name] = self.public_value(name, solved)
                     action = f"solve:{name}"
                 else:
                     raise ValueError(f"relation returned one value for multiple missing variables {missing}")
@@ -97,7 +95,6 @@ def run(system: Any, order: Iterable[Any] | None = None, *, passes: int = 1, **_
             "executed_relations": executed,
             "step_status": step_status,
             "termination": "ordered evaluation completed",
-            "variables": self.variables_by_name,
             "values": self.public_values(),
         }
     )
@@ -118,92 +115,32 @@ def _solve_ordered_block(self: Any, rels: list[Relation], values: dict[str, Any]
     unknowns: list[str] = []
     for rel in rels:
         for name in rel.variables:
-            self._ensure_variable_exists(name)
+            self.track(name)
             if name not in values or values[name] is None:
-                if self.variables_by_name[name].fixed:
+                if name in self.fixed:
                     result["errors"].append(f"Fixed variable {name!r} in ordered block has no value.")
                     return False
                 if name not in unknowns:
                     unknowns.append(name)
     if not unknowns:
-        return all(self._verify_status(rel, self._relation_evaluation_values(rel, values))["verified"] for rel in rels)
+        return all(self.relation_status_and_residual(rel, self.relation_evaluation_values(rel, values))[0]["verified"] for rel in rels)
 
-    # Primary path: delegate to the shared block solver used by reconcile's
-    # initial computation (``_solve_initial_block``), which packs positive
+    # Delegate to the shared block solver used by reconcile's initial
+    # computation (:func:`fusdb.seeding.solve_block`), which packs positive
     # unknowns logarithmically and refines starts with a coarse log-grid scan.
     # Using the same routine for ordered blocks and reconcile means an ordered
     # 2x2 block (e.g. solving tau_E/P_loss from the energy-confinement scaling
     # and the W_th = P_loss * tau_E balance) converges wherever reconcile does.
-    # The local linear solve below is kept only as a fallback for structural
-    # cases the shared solver declines (e.g. a profile-valued numerical core).
-    block = self._solve_initial_block(tuple(unknowns), rels, values, residual_tol=1.0)
-    if block is not None:
-        for name, value in block.items():
-            values[name] = value
-            self.variables_by_name[name].set_value(self._public_value(name, value))
-        if all(self._verify_status(rel, self._relation_evaluation_values(rel, values))["verified"] for rel in rels):
-            return True
-        result["errors"].append("Ordered solve block did not verify.")
+    # Ordered blocks opt in to profile-valued numerical cores, which the
+    # reconcile seeding path declines.
+    block = solve_block(self, tuple(unknowns), rels, values, residual_tol=1.0, allow_profile_core=True)
+    if block is None:
+        result["errors"].append("Ordered solve block failed or did not verify.")
         return False
-
-    # Local affine packing records ``(name, start, stop, offsets, scales)`` for
-    # this block only; the fallback never touches the system's packed layout.
-    spans: list[tuple[str, int, int, np.ndarray, np.ndarray]] = []
-    x0: list[float] = []
-    lower: list[float] = []
-    upper: list[float] = []
-    for name in unknowns:
-        var = self.variables_by_name[name]
-        lb, ub = scipy_bounds(self.variable_registry.get(name).solver_domain, zero_tol=ZERO_TOL)
-        size = self._variable_dim(name)
-        start = len(x0)
-        offsets = []
-        scales = []
-        for i in range(size):
-            try:
-                init = float(self._initial_value(var, index=i if var.shape == 1 else None))
-            except ValueError:
-                known_start = self._block_start_from_knowns(rels, values, lb, ub)
-                if known_start is None:
-                    result["errors"].append(f"No initial value available for {name!r} in ordered block.")
-                    return False
-                init = known_start
-            ref = var.movement_reference(init, index=i if var.shape == 1 else None)
-            scale, offset, lo, hi, _transform = self._pack_scalar(var, init, lb, ub, scale_ref=ref, allow_log=False)
-            x0.append(0.0)
-            lower.append(lo)
-            upper.append(hi)
-            offsets.append(offset)
-            scales.append(scale)
-        spans.append((name, start, len(x0), np.asarray(offsets), np.asarray(scales)))
-
-    def block_values(x: np.ndarray) -> dict[str, Any]:
-        out = dict(values)
-        for name, start, stop, offsets, scales in spans:
-            var = self.variables_by_name[name]
-            actual = offsets + scales * x[start:stop]
-            out[name] = actual.copy() if var.shape == 1 else float(actual[0])
-        return out
-
-    def residual(x: np.ndarray) -> np.ndarray:
-        local = block_values(x)
-        blocks = [self._residual_vector(rel, self._relation_evaluation_values(rel, local), safe=True) for rel in rels if rel.enforce]
-        return np.concatenate(blocks) if blocks else np.empty(0)
-
-    try:
-        probe = residual(np.asarray(x0))
-        if probe.size < len(x0):
-            result["errors"].append(f"Ordered solve block is underdetermined: {probe.size} residuals for {len(x0)} unknowns {unknowns}.")
-            return False
-        sol = least_squares(residual, np.asarray(x0), bounds=(np.asarray(lower), np.asarray(upper)), method="trf", max_nfev=200)
-    except Exception as exc:
-        result["errors"].append(f"Ordered solve block failed: {exc}")
-        return False
-    solved = block_values(sol.x)
-    if residual(sol.x).size and float(np.max(np.abs(residual(sol.x)))) > 1e-6:
-        result["errors"].append("Ordered solve block did not verify.")
-        return False
-    for name in unknowns:
-        values[name] = solved[name]
-        self.variables_by_name[name].set_value(self._public_value(name, solved[name]))
-    return True
+    for name, value in block.items():
+        values[name] = value
+        self.values[name] = self.public_value(name, value)
+    if all(self.relation_status_and_residual(rel, self.relation_evaluation_values(rel, values))[0]["verified"] for rel in rels):
+        return True
+    result["errors"].append("Ordered solve block did not verify.")
+    return False

@@ -1,0 +1,33 @@
+source: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.43'
+reaction: 2.6B1 e+C+ → e+C+++e
+category: ionization
+species: C_plus
+output: C_plus_ionization_rate
+relation_name: AMJUEL H.2 2.43 C+ ionization STRAHL rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+fit_error:
+  max_rel_pct: 0.9478
+  mean_rel_pct: 0.482
+coefficients:
+- -4.406752926798D+01
+- 2.464907506907D+01
+- -1.157330396759D+01
+- 3.619195611010D+00
+- -7.853469883899D-01
+- 1.149856668829D-01
+- -1.070995852675D-02
+- 5.681198605329D-04
+- -1.299242985961D-05
+amjuel_comments:
+- Ionization rate for Carbon Ions
+- 'Max. rel. Error: .9478 %'
+- 'Mean rel. Error: .4820 %'

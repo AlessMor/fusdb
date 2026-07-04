@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import html
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
 import numpy as np
 import yaml
 
+from .modes import MODE_NAMES
 from .registry import RELATIONS, TAGS, VARIABLES
 from .relationsystem import RelationSystem
+from .tables import SolvedColumn, _table_column, _variables_text_table, variables_table
 from .variable import Variable
 
 
@@ -112,201 +113,6 @@ def _parse_variables(raw: Mapping[str, Any], *, grid_size: int | None, base_dir:
     return variables
 
 
-def _format_table_value(value: Any) -> str:
-    """Compact scalar/profile formatting for HTML table cells."""
-    if value is None:
-        return ""
-    try:
-        array = np.asarray(value, dtype=float)
-    except (TypeError, ValueError):
-        return html.escape(str(value))
-    if array.ndim == 0 or array.size == 1:
-        scalar = float(array.ravel()[0])
-        if scalar == 0:
-            return "0"
-        if abs(scalar) >= 1e4 or abs(scalar) < 1e-3:
-            return f"{scalar:.3e}"
-        return f"{scalar:.4g}"
-    return f"prof[{array.size}] mean={np.nanmean(array):.3g}"
-
-
-def _table_cell_display(var: Variable | None, used: bool) -> tuple[str, str, str]:
-    """Return ``(background, foreground, html_text)`` for one variable cell."""
-    background = ""
-    color = "#000000"
-    text = ""
-    if var is None:
-        return background, color, text
-
-    has_input = var.input_value is not None
-    input_value = var.input_value
-    value = var.value
-    if has_input and used and value is not None:
-        try:
-            input_array = np.asarray(input_value, dtype=float)
-            value_array = np.asarray(value, dtype=float)
-            exact = bool(np.array_equal(input_array, value_array))
-            scale = max(
-                float(np.max(np.abs(input_array))),
-                float(np.max(np.abs(value_array))),
-                1e-300,
-            )
-            tolerance = max(
-                float(var.abs_tol or 0.0),
-                float(var.rel_tol or 0.0) * scale,
-            )
-            within = bool(np.all(np.abs(value_array - input_array) <= tolerance))
-        except Exception:
-            exact, within = False, False
-        if exact:
-            background, color, text = "#c6efce", "#006100", _format_table_value(value)
-        elif within:
-            background, color = "#ffeb9c", "#9c6500"
-            text = f"{_format_table_value(input_value)} ({_format_table_value(value)})"
-        else:
-            background, color = "#ffc7ce", "#9c0006"
-            text = f"<b>{_format_table_value(input_value)}</b> &rarr; {_format_table_value(value)}"
-    elif has_input and not used:
-        color, text = "#6E6E6E", _format_table_value(value if value is not None else input_value)
-    elif (not has_input) and used and value is not None:
-        color, text = "#FFFFFF", _format_table_value(value)
-    elif has_input and used and value is None:
-        color, text = "#606060", _format_table_value(input_value)
-    return background, color, text
-
-
-def _sort_table_variable_names(names: Iterable[str]) -> tuple[str, ...]:
-    """Sort variable names by registry order, then alphabetically."""
-    registry_order = {
-        spec.name: index
-        for index, spec in enumerate(VARIABLES)
-    }
-    return tuple(
-        sorted(
-            names,
-            key=lambda name: (registry_order.get(name, len(registry_order)), name),
-        )
-    )
-
-
-class SolvedColumn(NamedTuple):
-    """One table column's display data, extracted from a reactor or system.
-
-    Picklable, so it doubles as the result a worker process returns from a
-    parallel solve (see :func:`solve_reactors`).
-    """
-
-    name: str
-    variables_by_name: Mapping[str, Variable]
-    active_variable_names: frozenset[str]
-    relation_names_by_variable: Mapping[str, tuple[str, ...]]
-    result: Mapping[str, Any]
-
-
-def _table_column(source: Any) -> SolvedColumn:
-    """Extract a :class:`SolvedColumn` from a reactor, system, or column.
-
-    A :class:`RelationSystem` contributes active variables, per-variable relation
-    names (for cell tooltips), and the result of its most recent run (for header
-    colouring). A :class:`Reactor` contributes only its current variable values.
-    An already-built :class:`SolvedColumn` is returned unchanged.
-    """
-    if isinstance(source, SolvedColumn):
-        return source
-    if hasattr(source, "variables_by_name"):  # RelationSystem
-        relations: dict[str, list[str]] = {}
-        for rel in getattr(source, "relations", ()):
-            for variable_name in rel.variables:
-                relations.setdefault(variable_name, []).append(rel.name)
-        return SolvedColumn(
-            source.name,
-            source.variables_by_name,
-            frozenset(getattr(source, "active_variable_names", ())),
-            {name: tuple(dict.fromkeys(names)) for name, names in relations.items()},
-            getattr(source, "last_result", None) or {},
-        )
-    return SolvedColumn(source.name, source.variables, frozenset(), {}, {})
-
-
-def _displayed_variable_names(columns: Iterable[SolvedColumn], variable_names: Iterable[str] | None) -> tuple[str, ...]:
-    """Resolve the row order/subset: the explicit list, or active + supplied."""
-    if variable_names is not None:
-        return tuple(variable_names)
-    names: set[str] = set()
-    for column in columns:
-        names.update(column.active_variable_names)
-        names.update(name for name, var in column.variables_by_name.items() if var.input_value is not None)
-    return _sort_table_variable_names(names)
-
-
-def variables_table(*sources: Any, variable_names: Iterable[str] | None = None) -> str:
-    """Render current variable values for one or more reactors/systems as HTML.
-
-    Each positional source is a :class:`Reactor`, a :class:`RelationSystem`, or a
-    :class:`SolvedColumn` (e.g. from :func:`solve_reactors`); columns are sources
-    and rows are variables. Reactor columns show current values; solved systems
-    and columns additionally highlight active variables, colour input->output
-    changes, add relation tooltips, and colour the header by solve success.
-    ``variable_names`` overrides the row order/subset; when omitted, all active
-    and user-supplied variables are shown.
-
-    Returns:
-        HTML ``<table>`` string.
-    """
-    columns = [_table_column(source) for source in sources]
-    ordered_names = _displayed_variable_names(columns, variable_names)
-
-    parts = ["<table style='border-collapse:collapse;font-size:0.8em'>"]
-    parts.append("<tr><th style='text-align:left;padding:2px 8px'>variable</th>")
-    for column in columns:
-        style = "padding:2px 8px"
-        if column.result:
-            style += f";color:{'#1EFF00' if column.result.get('success') else '#c00000'}"
-        parts.append(f"<th style='{style}'>{html.escape(column.name)}</th>")
-    parts.append("</tr>")
-
-    for name in ordered_names:
-        parts.append(
-            f"<tr><td style='text-align:left;padding:2px 8px;font-weight:bold'>"
-            f"{html.escape(name)}</td>"
-        )
-        for column in columns:
-            background, color, text = _table_cell_display(column.variables_by_name.get(name), name in column.active_variable_names)
-            style = f"padding:2px 8px;color:{color}"
-            if background:
-                style += f";background-color:{background}"
-            rel_names = column.relation_names_by_variable.get(name, ())
-            title = (
-                f" title='{html.escape(chr(10).join(rel_names), quote=True)}'"
-                if rel_names
-                else ""
-            )
-            parts.append(f"<td style='{style}'{title}>{text}</td>")
-        parts.append("</tr>")
-    parts.append("</table>")
-    return "".join(parts)
-
-
-def _variables_text_table(source: Any, variable_names: Iterable[str] | None = None) -> str:
-    """Render one source's current variables as an aligned plain-text table."""
-    column = _table_column(source)
-    variables = column.variables_by_name
-    names = _displayed_variable_names([column], variable_names)
-    rows = []
-    for name in names:
-        var = variables.get(name)
-        value = _format_table_value(None if var is None else (var.value if var.value is not None else var.input_value))
-        unit = (var.unit or "") if var is not None else ""
-        rows.append((name, value, unit))
-    name_w = max((len(name) for name, _, _ in rows), default=len(column.name))
-    value_w = max((len(value) for _, value, _ in rows), default=0)
-    lines = [column.name, "-" * (name_w + value_w + 2)]
-    for name, value, unit in rows:
-        line = f"{name:<{name_w}}  {value:>{value_w}}"
-        lines.append(f"{line}  {unit}" if unit else line)
-    return "\n".join(lines)
-
-
 @dataclass
 class Reactor:
     """A reactor scenario with variables and relation-selection settings."""
@@ -335,7 +141,7 @@ class Reactor:
         # YAML this reactor was loaded from, if any; lets solve_reactors ship it
         # to a worker process. Set by from_yaml. Here so __getattr__ skips it.
         self.source_path: Path | None = None
-        if self.mode not in {"verify", "reconcile", "optimize", "ordered"}:
+        if self.mode not in MODE_NAMES:
             raise ValueError(f"Unsupported reactor mode {self.mode!r}.")
         self.tags = tuple(str(tag).strip().lower() for tag in self.tags)
         self.relation_include = tuple(str(name) for name in (self.relation_include or ()))
@@ -430,8 +236,10 @@ class Reactor:
         Returns:
             RelationSystem instance.
         """
+        # No clone: the system ingests the records into its own value dicts,
+        # which is the isolation copy (values are replaced, never mutated).
         return RelationSystem(
-            [var.clone() for var in self.variables.values()],
+            self.variables.values(),
             self.relations(),
             constraints=self.constraints,
             name=self.name,
@@ -460,10 +268,10 @@ class Reactor:
             result = system.ordered(order=self.relation_order or None, **options)
         else:
             result = system.run(chosen, **options)
-        for name, solved in system.variables_by_name.items():
+        for name, value in system.values.items():
             var = self.variables.get(name)
-            if var is not None and solved.value is not None:
-                var.set_input(solved.value)
+            if var is not None and value is not None:
+                var.set_input(value)
         return result
 
     def _display_source(self) -> Any:
@@ -539,6 +347,24 @@ class Reactor:
         """
         return self.run("ordered", **options)
 
+    def popcon(self, *, x: Any, y: Any, **options: Any) -> dict[str, Any]:
+        """Run a batched 2-D popcon scan over two axis variables.
+
+        The whole grid is evaluated as one batched computation with this
+        reactor's inputs held exactly as given and the axis values pinned to
+        the grid coordinates; every point is then individually certified.
+        See :mod:`fusdb.modes.popcon` for the options and result payload.
+
+        Args:
+            x: X-axis spec (variable name plus grid values/range).
+            y: Y-axis spec.
+            **options: Popcon-mode options (``outputs``, ``verbose``).
+
+        Returns:
+            Popcon result dictionary.
+        """
+        return self.run("popcon", x=x, y=y, **options)
+
 
 def _picklable_result(result: Mapping[str, Any]) -> dict[str, Any]:
     """Keep only the picklable, display/print-relevant parts of a run result.
@@ -578,6 +404,9 @@ def _solve_reactor_path(task: tuple[str, str, Mapping[str, Any]]) -> SolvedColum
         location = Path(path)
         return SolvedColumn(
             location.parent.name or location.stem,
+            {},
+            {},
+            {},
             {},
             frozenset(),
             {},

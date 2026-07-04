@@ -1,0 +1,33 @@
+source: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.50'
+reaction: 2.18B0 e+Ar → e+Ar++e
+category: ionization
+species: Ar
+output: Ar_ionization_rate
+relation_name: AMJUEL H.2 2.50 Ar ionization STRAHL rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+fit_error:
+  max_rel_pct: 0.1093
+  mean_rel_pct: 0.0503
+coefficients:
+- -3.330347417325D+01
+- 1.627861918393D+01
+- -7.765170847889D+00
+- 2.446384994382D+00
+- -5.186581624286D-01
+- 7.184868450814D-02
+- -6.200405891186D-03
+- 3.018464732517D-04
+- -6.325074170944D-06
+amjuel_comments:
+- Ionization Rate for neutral Argon Atoms
+- 'Max. rel. Error: .1093 %'
+- 'Mean rel. Error: .0503 %'
