@@ -66,6 +66,40 @@ def charged_fusion_power(
 
 
 @relation(
+    name='Total alpha power',
+    tags=('fusion_power',),
+    outputs='P_alpha_total',
+)
+def total_alpha_power(
+    P_fus_DT_alpha: float,
+    P_fus_DHe3_alpha: float = 0.0,
+    P_fus_He3He3_alpha: float = 0.0,
+    P_fus_THe3_D_alpha: float = 0.0,
+    P_fus_THe3_np_alpha: float = 0.0,
+    P_fus_TT_alpha: float = 0.0,
+ ) -> Any:
+    """Return total alpha power from all implemented alpha-producing channels."""
+    return (
+        P_fus_DT_alpha
+        + P_fus_DHe3_alpha
+        + P_fus_He3He3_alpha
+        + P_fus_THe3_D_alpha
+        + P_fus_THe3_np_alpha
+        + P_fus_TT_alpha
+    )
+
+
+@relation(
+    name='Non-alpha charged fusion power',
+    tags=('fusion_power',),
+    outputs='P_non_alpha_charged',
+)
+def non_alpha_charged_fusion_power(P_charged: float, P_alpha_total: float) -> Any:
+    """Return charged-particle fusion power carried by non-alpha products."""
+    return P_charged - P_alpha_total
+
+
+@relation(
     name='Neutron fusion power',
     tags=('fusion_power',),
     outputs='P_neutron',

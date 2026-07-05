@@ -56,6 +56,11 @@ kappa:
   solver_domain: '[0.1, 10]'
   abs_tol: 0.001
   default: 1.0
+  # CHECK gate: pre-existing producers stay the defaults; the PROCESS shape
+  # scalings (STAR, Zohm, MAST, FIESTA, inductance, Menard-1997) are opt-in.
+  default_relation:
+  - Elongation
+  - ST elongation vs aspect ratio
 separatrix_elongation:  # CHECK imported from cfspopcon (radiated_power/synchrotron); supplied or set from geometry
   default_unit: dimensionless
   description:
@@ -73,6 +78,10 @@ kappa_95:
   domain: (0, inf)
   solver_domain: '[0.1, 10]'
   abs_tol: 0.001
+  # CHECK gate: IPDG89 kappa/1.12 stays the default; the PROCESS CREATE
+  # EU-DEMO fit is opt-in.
+  default_relation:
+  - Elongation 95%
 delta:
   default_unit: dimensionless
   aliases:
@@ -83,10 +92,16 @@ delta:
   domain: '[-1, 1]'
   abs_tol: 0.001
   default: 0.0
+  # CHECK gate: pre-existing producers stay the defaults; the PROCESS shape
+  # scalings (STAR, MAST, FIESTA) are opt-in.
+  default_relation:
+  - Triangularity 95%
+  - ST triangularity vs aspect ratio
 delta_95:
   default_unit: dimensionless
   aliases:
   - triangularity_psi95
+  - triang95  # CHECK PROCESS name (plasma_geometry)
   description:
   - Triangularity at 95% flux surface.
   domain: '[0, 1]'
@@ -95,22 +110,30 @@ V_p:
   default_unit: m^3
   aliases:
   - plasma_volume
+  - vol_plasma  # CHECK PROCESS name (plasma_geometry)
   description:
   - Plasma volume.
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 1.0
+  # CHECK gate: Sauter volume stays the default; the PROCESS arcs volume is opt-in.
+  default_relation:
+  - Tokamak plasma volume
 A_p:
   default_unit: m^2
   aliases:
   - plasma_surface_area
   - surface_area
   - S_p
+  - a_plasma_surface  # CHECK PROCESS name (density_limit)
   description:
   - Surface area around the LCFS in the toroidal and poloidal direction.
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
+  # CHECK gate: Sauter surface stays the default; the PROCESS arcs surface is opt-in.
+  default_relation:
+  - Tokamak plasma surface
 S_fw:
   default_unit: m^2
   aliases:
@@ -126,24 +149,35 @@ S_phi:
   aliases:
   - plasma_cross_section
   - S_cross
+  - a_plasma_poloidal  # CHECK PROCESS name (plasma_geometry)
   description:
   - Surface of the plasma cross-section in the radial and poloidal direction.
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
+  # CHECK gate: Sauter cross-section stays the default; the PROCESS arcs
+  # cross-section and simplified-squareness Sauter variant are opt-in.
+  default_relation:
+  - Tokamak plasma cross-sectional surface
 L_p:
   default_unit: m
   aliases:
   - poloidal_circumference
+  - len_plasma_poloidal  # CHECK PROCESS name (plasma_fields)
   description:
   - Poloidal length around the plasma cross-section.
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
+  # CHECK gate: Sauter poloidal length stays the default; the PROCESS arcs
+  # perimeter and simplified-squareness Sauter variant are opt-in.
+  default_relation:
+  - Tokamak plasma poloidal length
 squareness:
   default_unit: dimensionless
   aliases:
   - xi
+  - plasma_square  # CHECK PROCESS name (plasma_geometry)
   description:
   - Squareness (xi).
   domain: '[-0.5, 0.5]'
@@ -203,13 +237,21 @@ B_max:
   solver_domain: '[1e-12, 30]'
 B_p:
   default_unit: T
+  aliases:
+  - b_plasma_surface_poloidal_average  # CHECK PROCESS name (plasma_fields)
   description:
   - Poloidal field.
   domain: '[0, inf)'
   solver_domain: '[1e-12, 30]'
   abs_tol: 0.01
+  # CHECK gate: the Ampere surface-average stays the default; the Peng/STAR TART
+  # branch (spherical tokamaks) is opt-in.
+  default_relation:
+  - Surface-averaged poloidal field from plasma current
 I_p:
   default_unit: A
+  aliases:
+  - plasma_current  # CHECK PROCESS name (plasma_fields); PROCESS uses amperes
   description:
   - Plasma current.
   domain: '[0, inf)'
@@ -224,6 +266,11 @@ f_BS:
   domain: '[0, 1]'
   abs_tol: 0.001
   solver_domain: '[0, 1]'
+  # CHECK gate: the cfspopcon Gi (2014) bootstrap stays the default; the PROCESS
+  # scalings (ITER-89, Sakai, ARIES, Andrade, Hoang, Wong, Gi-II, Sugiyama L/H,
+  # Nevins, Wilson, Sauter) are off unless explicitly included.
+  default_relation:
+  - Bootstrap current fraction
 f_NI:
   default_unit: dimensionless
   description:
@@ -272,6 +319,10 @@ f_shaping:  # CHECK imported from cfspopcon (plasma_current/safety_factor)
   domain: (0, inf)
   solver_domain: '[1e-12, 100]'
   abs_tol: 0.001
+  # CHECK gate: the cfspopcon IPB shaping function stays the default; the PROCESS
+  # fq scalings (Peng, Todd I/II, Connor-Hastie, Sauter, FIESTA) are opt-in.
+  default_relation:
+  - Plasma shaping function for q_star
 q_a:
   default_unit: dimensionless
   description:
@@ -414,6 +465,7 @@ T_e:
 T0:
   aliases:
   - T_e_peak
+  - temp_plasma_electron_on_axis_kev  # CHECK PROCESS name (radiation_power); PROCESS uses keV
   default_unit: keV
   description:
   - On-axis/peak electron temperature.
@@ -477,6 +529,8 @@ n_sep:
   abs_tol: 1.0e+18
 nesep_over_nebar:  # CHECK imported from cfspopcon (scrape_off_layer/separatrix_density)
   default_unit: dimensionless
+  aliases:
+  - prn1  # CHECK PROCESS name (density_limit); PROCESS defines prn1 = nesep/dene
   description:
   - Ratio of separatrix electron density to volume-averaged electron density.
   domain: (0, inf)
@@ -497,6 +551,7 @@ n_i_avg:
 n0:
   aliases:
   - n_e_peak
+  - nd_plasma_electron_on_axis  # CHECK PROCESS name (radiation_power)
   default_unit: 1/m^3
   description:
   - On-axis electron density.
@@ -1792,11 +1847,17 @@ loop_voltage:  # CHECK imported from cfspopcon (plasma_current/resistive_heating
 # --- Flux consumption (cfspopcon plasma_current/flux_consumption) -------------
 internal_inductivity:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: dimensionless
+  aliases:
+  - ind_plasma_internal_norm  # CHECK PROCESS name (plasma_geometry); PROCESS li(3)
   description:
   - Normalised internal inductance of the plasma.
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
+  # CHECK gate: the cfspopcon Wesson inductivity stays the default; the PROCESS
+  # Menard spherical-tokamak fit is opt-in.
+  default_relation:
+  - Internal inductivity
 safety_factor_on_axis:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: dimensionless
   aliases:
@@ -2008,6 +2069,10 @@ P_sep:
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
+  # CHECK gate: the cfspopcon P_in - P_rad relation stays the default; the
+  # PROCESS power-balance decomposition is off unless explicitly included.
+  default_relation:
+  - Power crossing the separatrix
 lambda_q:  # CHECK imported from cfspopcon (scrape_off_layer/lambda_q); cfspopcon uses mm, fusdb uses m
   default_unit: m
   aliases:
@@ -2041,6 +2106,7 @@ B_t_out_mid:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_densit
   default_unit: T
   aliases:
   - B_tor_omp
+  - b_plasma_outboard_toroidal  # CHECK PROCESS name (plasma_fields); same formula R*B0/(R+a)
   description:
   - Toroidal magnetic field at the outboard midplane.
   domain: (0, inf)
@@ -2488,6 +2554,10 @@ P_sync:
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
+  # CHECK gate: the cfspopcon profile-integrated synchrotron relation stays the
+  # default; the PROCESS Albajar-Fidone total-power fit is off unless included.
+  default_relation:
+  - Synchrotron radiation
 P_rad:
   default_unit: W
   description:
@@ -2689,3 +2759,412 @@ iotabar:
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
+# --- PROCESS exhaust ----------------------------------------------------------
+P_alpha_total:  # CHECK new aggregate over fusdb alpha channels (PROCESS exhaust uses p_alpha_total_mw, MW)
+  default_unit: W
+  description:
+  - Total alpha power from all fusion channels.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1000000.0
+P_non_alpha_charged:  # CHECK imported from PROCESS (exhaust); PROCESS p_non_alpha_charged_mw is MW, fusdb W
+  default_unit: W
+  description:
+  - Charged-particle fusion power carried by non-alpha products.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1000000.0
+f_p_alpha_plasma_deposited:  # CHECK imported from PROCESS (exhaust)
+  default_unit: dimensionless
+  description:
+  - Fraction of alpha power deposited in the plasma.
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  default: 0.95  # CHECK PROCESS initial value
+  abs_tol: 0.001
+# --- PROCESS physics.py (cherry-pick) -----------------------------------------
+f_pfirsch_schluter:  # CHECK imported from PROCESS (physics.py, ps_fraction_scene)
+  default_unit: dimensionless
+  description:
+  - Pfirsch-Schluter current fraction.
+  domain: '[-1, 1]'
+  solver_domain: '[-1, 1]'
+  abs_tol: 0.001
+P_ie_equilibration:  # CHECK imported from PROCESS (physics.py, rether)
+  default_unit: W/m^3
+  description:
+  - Ion-electron equilibration power density.
+  domain: '[-inf, inf]'
+  abs_tol: 100.0
+debye_length:  # CHECK imported from PROCESS (physics.py, DetailedPhysics)
+  default_unit: m
+  description:
+  - Electron Debye length.
+  domain: (0, inf)
+  solver_domain: '[1e-30, inf)'
+  abs_tol: 1.0e-9
+beta_norm_max:  # CHECK imported from PROCESS (physics.py, PlasmaBeta)
+  default_unit: dimensionless
+  description:
+  - Normalised-beta upper limit (beta_N_max) from the selected scaling.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.01
+  # CHECK gate: Wesson is the default; original/Menard/Tholerus/Stambaugh opt-in.
+  default_relation:
+  - Normalised beta limit (Wesson)
+c_beta:  # CHECK imported from PROCESS (physics.py, Tholerus beta limit)
+  default_unit: dimensionless
+  description:
+  - Pressure-peaking coefficient for the Tholerus normalised-beta limit.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+# --- PROCESS current_drive ----------------------------------------------------
+eta_cd:  # CHECK imported from PROCESS (current_drive)
+  default_unit: A/W
+  description:
+  - Absolute current-drive efficiency (A/W) from the selected HCD method.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+  # CHECK gate: NBI ITER-1990 is the arbitrary default; the LH/IC/EC/EBW and
+  # simplified-NBI scalings are off unless explicitly included. REVIEW: pick a
+  # sensible default per device (no single PROCESS default -- it is a switch).
+  default_relation:
+  - Current drive efficiency NBI ITER-1990
+eta_cd_norm:  # CHECK imported from PROCESS (current_drive)
+  default_unit: dimensionless
+  description:
+  - Normalised current-drive efficiency gamma (10^20 A/Wm^2).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+eta_cd_dimensionless:  # CHECK imported from PROCESS (current_drive)
+  default_unit: dimensionless
+  description:
+  - Dimensionless current-drive efficiency zeta (Poli/Luce).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+c_hcd_driven:  # CHECK imported from PROCESS (current_drive)
+  default_unit: A
+  description:
+  - Plasma current driven by an auxiliary heating system.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 10000.0
+p_hcd_injected:  # CHECK imported from PROCESS (current_drive)
+  default_unit: W
+  description:
+  - Power injected by an auxiliary heating & current-drive system.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1000000.0
+temp_plasma_electron_density_weighted:  # CHECK imported from PROCESS (current_drive); density-weighted Te
+  default_unit: keV
+  description:
+  - Density-weighted average electron temperature.
+  domain: '[0, inf)'
+  solver_domain: '[0, 300]'
+  abs_tol: 0.05
+dlamee:  # CHECK imported from PROCESS (current_drive, EC Fenstermacher)
+  default_unit: dimensionless
+  description:
+  - Electron-electron Coulomb logarithm (PROCESS dlamee).
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.01
+n_ecrh_harmonic:  # CHECK imported from PROCESS (current_drive)
+  default_unit: dimensionless
+  description:
+  - Electron-cyclotron / EBW harmonic number.
+  domain: (0, inf)
+  solver_domain: '[1, inf)'
+  default: 1.0
+  abs_tol: 0.001
+i_ecrh_wave_mode:  # CHECK imported from PROCESS (current_drive); 0=O-mode, 1=X-mode
+  default_unit: dimensionless
+  description:
+  - Electron-cyclotron cut-off wave-mode switch (0 = O-mode, 1 = X-mode).
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+xi_ebw:  # CHECK imported from PROCESS (current_drive, EBW Freethy)
+  default_unit: dimensionless
+  description:
+  - Electron-Bernstein-wave current-drive scaling factor.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+m_beam_amu:  # CHECK imported from PROCESS (current_drive, NBI)
+  default_unit: amu
+  description:
+  - Neutral-beam ion mass.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
+e_beam_kev:  # CHECK imported from PROCESS (current_drive, NBI)
+  default_unit: keV
+  description:
+  - Neutral-beam energy.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.1
+f_radius_beam_tangency_rmajor:  # CHECK imported from PROCESS (current_drive, NBI)
+  default_unit: dimensionless
+  description:
+  - Neutral-beam tangency radius divided by the plasma major radius.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 0.001
+fshine:  # CHECK imported from PROCESS (current_drive, NBI)
+  default_unit: dimensionless
+  description:
+  - Neutral-beam shine-through fraction.
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  abs_tol: 0.001
+beam_stopping_cross_section:  # CHECK imported from PROCESS (current_drive, sigbeam)
+  default_unit: m^2
+  description:
+  - Neutral-beam stopping cross-section (Janev-Boley-Post).
+  domain: (0, inf)
+  solver_domain: '[1e-30, inf)'
+  abs_tol: 1.0e-23
+beam_ion_coulomb_log:  # CHECK imported from PROCESS (current_drive, xlmbdabi)
+  default_unit: dimensionless
+  description:
+  - Beam-ion (fast-ion / background-ion) Coulomb logarithm.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.01
+f_p_beam_injected_ions:  # CHECK imported from PROCESS (current_drive, cfnbi)
+  default_unit: dimensionless
+  description:
+  - Fraction of neutral-beam power coupled to the ions.
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  abs_tol: 0.001
+n_charge_plasma_effective_mass_weighted_vol_avg:  # CHECK imported from PROCESS (current_drive, cfnbi)
+  default_unit: dimensionless
+  description:
+  - Mass-weighted plasma effective charge.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
+dlamie:  # CHECK imported from PROCESS (current_drive); ion-electron Coulomb log
+  default_unit: dimensionless
+  description:
+  - Ion-electron Coulomb logarithm.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.01
+c_Fe:  # CHECK imported from PROCESS (current_drive, sigbeam); iron concentration n_Fe/n_e
+  default_unit: dimensionless
+  description:
+  - Iron concentration (n_Fe / n_e) for the beam stopping cross-section.
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+cosang:  # CHECK imported from PROCESS (current_drive, eccdef)
+  default_unit: dimensionless
+  description:
+  - Cosine of the poloidal angle at which ECCD takes place (+1 outboard).
+  domain: '[-1, 1]'
+  solver_domain: '[-1, 1]'
+  default: 1.0
+  abs_tol: 0.001
+# --- PROCESS bootstrap_current ------------------------------------------------
+beta_thermal_poloidal:  # CHECK imported from PROCESS (bootstrap_current, Wilson scaling)
+  default_unit: dimensionless
+  description:
+  - Thermal component of the poloidal beta.
+  domain: '[0, inf)'
+  solver_domain: '[0, 10]'
+  abs_tol: 0.01
+radius_plasma_pedestal_density_norm:  # CHECK imported from PROCESS (bootstrap_current, Sugiyama H)
+  default_unit: dimensionless
+  description:
+  - Normalised plasma radius of the density pedestal.
+  domain: (0, 1]
+  solver_domain: '[1e-3, 1]'
+  abs_tol: 0.001
+nd_plasma_pedestal_electron:  # CHECK imported from PROCESS (bootstrap_current, Sugiyama H)
+  default_unit: 1/m^3
+  description:
+  - Electron number density at the pedestal.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e+18
+temp_plasma_pedestal_kev:  # CHECK imported from PROCESS (bootstrap_current, Sugiyama H)
+  default_unit: keV
+  description:
+  - Electron temperature at the pedestal.
+  domain: '[0, inf)'
+  solver_domain: '[0, 300]'
+  abs_tol: 0.05
+f_He3:  # CHECK imported from PROCESS (bootstrap_current, Sauter main-ion charge)
+  default_unit: dimensionless
+  description:
+  - Helium-3 fuel fraction (sets the Sauter main-ion charge 1 + f_He3).
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  default: 0.0
+  abs_tol: 0.001
+# --- PROCESS plasma_profiles --------------------------------------------------
+j_plasma_on_axis:  # CHECK imported from PROCESS (plasma_profiles)
+  default_unit: A/m^2
+  description:
+  - Central (on-axis) plasma current density (parabolic current profile).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1000.0
+# --- PROCESS plasma_current ---------------------------------------------------
+alphaj:  # CHECK imported from PROCESS (plasma_current); current profile index
+  default_unit: dimensionless
+  description:
+  - Current profile index (Connor-Hastie plasma-current model).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  default: 1.0  # CHECK PROCESS initial value
+  abs_tol: 0.001
+alphap:  # CHECK imported from PROCESS (plasma_current); pressure profile index
+  default_unit: dimensionless
+  description:
+  - Pressure profile index (Connor-Hastie plasma-current model).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  default: 0.0  # CHECK PROCESS initial value
+  abs_tol: 0.001
+pres_plasma_on_axis:  # CHECK imported from PROCESS (plasma_current)
+  default_unit: Pa
+  description:
+  - Central (on-axis) plasma pressure.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0
+f_diamagnetic:  # CHECK imported from PROCESS (plasma_current)
+  aliases:
+  - f_c_plasma_diamagnetic
+  default_unit: dimensionless
+  description:
+  - Diamagnetic current fraction.
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  abs_tol: 0.001
+  # CHECK gate: SCENE is the default (PROCESS's recommended non-trivial option);
+  # the Hender tight-aspect-ratio fit is opt-in.
+  default_relation:
+  - Diamagnetic current fraction SCENE
+# --- PROCESS plasma_geometry ---------------------------------------------------
+A_p_out:  # CHECK imported from PROCESS (plasma_geometry)
+  aliases:
+  - a_plasma_surface_outboard
+  default_unit: m^2
+  description:
+  - Outboard plasma surface area (intersecting-arcs model).
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.1
+q95_min:  # CHECK imported from PROCESS (plasma_geometry); STAR-code ST scaling
+  default_unit: dimensionless
+  description:
+  - Minimum safe q95 from the STAR-code spherical-tokamak scaling.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
+fkzohm:  # CHECK imported from PROCESS (plasma_geometry)
+  default_unit: dimensionless
+  description:
+  - Adjustment factor on the Zohm ITER elongation scaling.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  default: 1.0  # CHECK PROCESS initial value
+  abs_tol: 0.001
+m_s_limit:  # CHECK imported from PROCESS (plasma_geometry)
+  default_unit: dimensionless
+  description:
+  - Margin to vertical stability criterion (CREATE EU-DEMO elongation fit).
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  default: 0.3  # CHECK PROCESS initial value
+  abs_tol: 0.001
+# --- PROCESS density_limit ----------------------------------------------------
+p_perp_edge:  # CHECK imported from PROCESS (density_limit); PROCESS p_perp is MW/m^2, fusdb W/m^2
+  default_unit: W/m^2
+  description:
+  - Power per unit area crossing the plasma edge (excludes radiation and neutrons).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 100.0
+n_e_max:  # CHECK imported from PROCESS (density_limit)
+  aliases:
+  - nd_plasma_electrons_max
+  default_unit: 1/m^3
+  description:
+  - Average electron density limit from the selected density-limit scaling.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  abs_tol: 1.0e+18
+  # CHECK gate: ASDEX New is the default (PROCESS i_density_limit = 8 initial
+  # value); the other six scalings are off unless explicitly included. The
+  # Greenwald scaling is not among the producers -- fusdb keeps it as n_GW.
+  default_relation:
+  - Density limit ASDEX New
+# --- PROCESS radiation_power ------------------------------------------------
+alphan:  # CHECK imported from PROCESS (radiation_power); density profile index, n = n0*(1-rho^2)^alphan
+  default_unit: dimensionless
+  description:
+  - Density profile index (PROCESS parabolic profile form). Distinct from
+    density_peaking; not the SepOS turbulence parameter alpha_t.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  default: 0.25  # CHECK PROCESS initial value
+  abs_tol: 0.001
+alphat:  # CHECK imported from PROCESS (radiation_power); temperature profile index, T = T0*(1-rho^tbeta)^alphat
+  default_unit: dimensionless
+  description:
+  - Temperature profile index (PROCESS parabolic profile form). Not the SepOS
+    turbulence parameter alpha_t.
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  default: 0.5  # CHECK PROCESS initial value
+  abs_tol: 0.001
+tbeta:  # CHECK imported from PROCESS (radiation_power); temperature profile inner index
+  default_unit: dimensionless
+  description:
+  - Temperature profile inner index (rho**tbeta in the PROCESS profile form).
+  domain: '[0, inf)'
+  solver_domain: '[0, inf)'
+  default: 2.0  # CHECK PROCESS initial value
+  abs_tol: 0.001
+f_sync_reflect:  # CHECK imported from PROCESS (radiation_power)
+  default_unit: dimensionless
+  description:
+  - Fraction of synchrotron radiation reflected by the wall.
+  domain: '[0, 1]'
+  solver_domain: '[0, 1]'
+  default: 0.6  # CHECK PROCESS initial value
+  abs_tol: 0.001
+# --- PROCESS plasma_fields --------------------------------------------------
+B_t_in_mid:  # CHECK imported from PROCESS (plasma_fields)
+  default_unit: T
+  aliases:
+  - b_plasma_inboard_toroidal
+  description:
+  - Toroidal magnetic field at the inboard midplane.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.001
+B_total:  # CHECK imported from PROCESS (plasma_fields)
+  default_unit: T
+  aliases:
+  - b_plasma_total
+  description:
+  - Total magnetic field from on-axis toroidal and surface-averaged poloidal fields.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 0.01

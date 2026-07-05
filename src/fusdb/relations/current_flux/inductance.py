@@ -37,6 +37,24 @@ def calc_internal_inductivity(q_cyl: Any, safety_factor_on_axis: Any = 1.0) -> A
 
 
 @relation(
+    name="Internal inductivity (Menard)",
+    tags=("plasma", "current_drive", "spherical_tokamak", "process"),
+    outputs="internal_inductivity",
+)
+def calculate_internal_inductance_menard(kappa: Any) -> Any:
+    """Normalised internal inductance from the Menard spherical-tokamak fit
+    (NSTX, li in 0.4-0.85, recommended for kappa > 2.5): li = 3.4 - kappa.
+
+    Adapted from PROCESS; see README.md section "Third-party Notices".
+
+    The Wesson variant (``ln(1.65 + 0.89 * alphaj)``) is not imported -- it is
+    the existing "Internal inductivity" relation with ``alphaj = q_cyl/q0 - 1``.
+    """
+    # CHECK
+    return 3.4 - kappa
+
+
+@relation(
     name="Internal inductance (cylindrical)",
     tags=("plasma", "current_drive", "tokamak"),
     outputs="internal_inductance",

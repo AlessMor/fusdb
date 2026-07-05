@@ -16,5 +16,7 @@ def test_plasma_loss_power_solves_any_single_missing_variable():
 def test_plasma_loss_power_verifies_when_all_variables_are_supplied():
     rel = RELATIONS.get("Plasma loss power")
 
-    assert rel(P_loss=150.0, P_charged=120.0, P_aux=30.0) is True
-    assert rel(P_loss=149.0, P_charged=120.0, P_aux=30.0) is False
+    # Reactor-scale watts: P_loss carries abs_tol=1e6 W, so violations must
+    # exceed max(abs_tol, rel_tol * scale) to fail verification.
+    assert rel(P_loss=150.0e6, P_charged=120.0e6, P_aux=30.0e6) is True
+    assert rel(P_loss=140.0e6, P_charged=120.0e6, P_aux=30.0e6) is False

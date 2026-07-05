@@ -10,6 +10,9 @@ MEV_TO_J = 1.0e6 * ELECTRON_CHARGE_C
 
 # Keep package-wide physical constants in one import location.
 MU0 = 1.25663706212e-6
+EPSILON0 = 8.8541878128e-12  # vacuum permittivity [F/m] (CODATA)
+ELECTRON_MASS_KG = 9.1093837015e-31  # electron mass [kg] (CODATA)
+PROTON_MASS_KG = 1.67262192369e-27  # proton mass [kg] (CODATA)
 
 # Preserve the package's existing reference energies exactly.
 DT_REACTION_ENERGY_J = 2.8198311e-12

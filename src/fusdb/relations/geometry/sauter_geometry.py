@@ -90,6 +90,64 @@ def sauter_plasma_cross_sectional_surface(
     return  S_phi
 
 
+@relation(
+    name="Tokamak plasma poloidal length (PROCESS squareness)",
+    tags=("geometry", "tokamak", "process"),
+    outputs="L_p",
+)
+def process_sauter_poloidal_length(
+    rminor: float,
+    kappa: float,
+    triang: float,
+    plasma_square: float,
+) -> float:
+    """Poloidal length around the plasma cross-section (Sauter formula with
+    PROCESS's simplified ``w07 = squareness + 1``, assuming top-down symmetry;
+    fusdb's default relation computes w07 from Sauter's theta_07 fit instead).
+
+    Adapted from PROCESS; see README.md section "Third-party Notices".
+
+    References
+    ----------
+        - O. Sauter, Fusion Engineering and Design 112, 633-645 (2016)
+    """
+    # CHECK
+    w07 = plasma_square + 1
+    return (
+        2.0e0
+        * np.pi
+        * rminor
+        * (1 + 0.55 * (kappa - 1))
+        * (1 + 0.08 * triang**2)
+        * (1 + 0.2 * (w07 - 1))
+    )
+
+
+@relation(
+    name="Tokamak plasma cross-sectional surface (PROCESS squareness)",
+    tags=("geometry", "tokamak", "process"),
+    outputs="S_phi",
+)
+def process_sauter_cross_sectional_surface(
+    rminor: float,
+    kappa: float,
+    plasma_square: float,
+) -> float:
+    """Plasma cross-sectional area (Sauter formula with PROCESS's simplified
+    ``w07 = squareness + 1``; fusdb's default relation computes w07 from
+    Sauter's theta_07 fit instead).
+
+    Adapted from PROCESS; see README.md section "Third-party Notices".
+
+    References
+    ----------
+        - O. Sauter, Fusion Engineering and Design 112, 633-645 (2016)
+    """
+    # CHECK
+    w07 = plasma_square + 1
+    return np.pi * rminor**2 * kappa * (1 + 0.52 * (w07 - 1))
+
+
 def sauter_cross_section_points(
     R: float,
     a: float,

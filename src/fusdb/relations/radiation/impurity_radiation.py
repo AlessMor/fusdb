@@ -164,6 +164,70 @@ def calc_impurity_line_radiation_mavrin_noncoronal(
     return V_p * trapezoid(q_rad, x=rho)
 
 
+# ── PROCESS tabulated coronal Lz (impurity_radiation.py pimpden) ──────────────
+# Adapted from PROCESS; see README.md section "Third-party Notices".
+# PROCESS radiates impurities from tabulated coronal-equilibrium Lz(Te) curves
+# (ADAS acd85/scd85/plt89/prb89, the "infinite confinement" column of
+# data/lz_non_corona_14_elements/), log-log interpolated in temperature -- an
+# alternative to the Mavrin/Post-Jensen polynomial fits. The tables were
+# extracted programmatically (no transcription) into
+# registry/atomic_radiation/process_coronal_lz.yaml. Gated (Mavrin coronal
+# stays the default). Species: the 10 for which PROCESS has data AND fusdb has a
+# concentration variable (no Li in PROCESS's set).
+
+# PROCESS overwrites pimpden with the *raw* endpoint Lz outside the table range
+# (unit-inconsistent -- it drops the n_e^2 factor -- but negligible there since
+# Bremsstrahlung dominates at high Te). This port instead relies on np.interp's
+# natural endpoint clamping so the n_e^2 scaling is preserved. (# CHECK)
+_PROCESS_LZ_SPECIES = ("He", "Be", "C", "N", "O", "Ne", "Ar", "Kr", "Xe", "W")
+
+
+def _process_coronal_Lz(symbol: str, Te_keV: np.ndarray) -> np.ndarray:
+    """PROCESS coronal Lz [W*m^3] for one species: log-log interpolation of the
+    tabulated Lz(Te) curve (PROCESS ``pimpden``)."""
+    entry = _load_raw("process_coronal_lz.yaml")[symbol]
+    T_tab = np.asarray(entry["temperature_keV"], dtype=float)
+    Lz_tab = np.asarray(entry["Lz_Wm3"], dtype=float)
+    # Clip to the table range: this both implements the endpoint clamp (Lz[0]
+    # below / Lz[-1] above, n_e^2-scaled) and avoids log(0) where fusdb's
+    # parabolic T_e reaches ~0 at the edge.
+    Te = np.clip(np.asarray(Te_keV, dtype=float), T_tab[0], T_tab[-1])
+    return np.exp(np.interp(np.log(Te), np.log(T_tab), np.log(Lz_tab)))
+
+
+@relation(
+    name="Impurity line radiation (PROCESS coronal tables)",
+    tags=("power_balance", "process"),
+    outputs="P_line",
+)
+def calc_impurity_line_radiation_process_coronal(
+    n_e: Any, T_e: Any, rho: Any, V_p: Any,
+    c_He: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0, c_O: Any = 0.0,
+    c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_Xe: Any = 0.0, c_W: Any = 0.0,
+) -> Any:
+    """Total impurity line-radiated power from PROCESS's tabulated coronal Lz
+    cooling curves.
+
+    Adapted from PROCESS; see README.md section "Third-party Notices".
+
+    Same rho-integrated assembly as the Mavrin relations (q = n_e^2 * sum_s
+    c_s Lz_s, integrated V_p * trapezoid over rho) so it is a drop-in
+    ``P_line`` alternative; only the Lz source differs.
+    """
+    # CHECK
+    concentrations = {"He": c_He, "Be": c_Be, "C": c_C, "N": c_N, "O": c_O,
+                      "Ne": c_Ne, "Ar": c_Ar, "Kr": c_Kr, "Xe": c_Xe, "W": c_W}
+    Te = np.asarray(T_e, dtype=float)
+    c_times_Lz = np.zeros_like(Te)
+    for symbol, concentration in concentrations.items():
+        if float(concentration) == 0.0:
+            continue
+        Lz = _process_coronal_Lz(symbol, Te)  # [W*m^3]
+        c_times_Lz = c_times_Lz + concentration * Lz
+    q_rad = np.nan_to_num(np.asarray(n_e, dtype=float) ** 2 * c_times_Lz, nan=0.0)
+    return V_p * trapezoid(q_rad, x=rho)
+
+
 # ── Edge impurity seeding (Lengyel model, cfspopcon impurities/edge_radiator_conc) ──
 # ADAS-free: the cooling-curve integral L_int = int(Lz*sqrt(Te) dTe) is evaluated
 # numerically over the Mavrin coronal Lz curve (cfspopcon uses the radas noncoronal
