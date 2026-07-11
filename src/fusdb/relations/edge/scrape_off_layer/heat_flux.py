@@ -6,7 +6,7 @@ in SI (W/m^2). The formulas are unit-consistent in SI, so no rescaling is needed
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import MU0
 
 

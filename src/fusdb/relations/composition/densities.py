@@ -4,9 +4,9 @@ import math
 from typing import Any
 
 import numpy as np
-from scipy.integrate import trapezoid
+from fusdb.utils import trapezoid
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import (
     SPECIES,
 )

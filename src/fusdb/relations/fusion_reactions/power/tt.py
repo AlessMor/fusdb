@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import (
     TT_ALPHA_ENERGY_J,
     TT_N_ENERGY_J,

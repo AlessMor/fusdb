@@ -1,6 +1,6 @@
 """Spherical tokamak confinement scaling relations."""
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 @relation(

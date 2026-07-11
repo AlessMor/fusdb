@@ -14,7 +14,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
-from .registry import VARIABLES
+from ..registry import VARIABLES
 
 
 def _format_table_value(value: Any) -> str:

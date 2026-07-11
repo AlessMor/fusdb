@@ -22,9 +22,6 @@ metadata:
     Z=6 impurity fraction supplies the PRD dilution through quasineutrality
     so density scans are physical under reconcile.
 
-solver_tags:
-  mode: reconcile
-  verbosity: false
 
 # Same machine class as reactors/SPARC: restricts the reconcile candidate
 # pool (e.g. keeps spherical_tokamak shape scalings out).

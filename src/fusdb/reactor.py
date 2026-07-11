@@ -13,8 +13,113 @@ import yaml
 from .modes import MODE_NAMES
 from .registry import RELATIONS, TAGS, VARIABLES
 from .relationsystem import RelationSystem
-from .tables import SolvedColumn, _table_column, _variables_text_table, variables_table
+from .plotting.tables import SolvedColumn, _table_column, _variables_text_table, variables_table
 from .variable import Variable
+
+# Threshold-driven confinement-mode selection is a discrete outer problem:
+# each candidate mode gets its own relation graph and therefore its own
+# confinement-time scaling.  Everything regime-specific is discovered from the
+# registries rather than hardcoded here:
+#   * the regimes themselves are the ``confinement_mode`` tag group, listed in
+#     allowed_tags.yaml in threshold-escalation order;
+#   * a regime's sustainment guards are the relations tagged
+#     ``("regime_guard", <regime>)``;
+#   * a regime's fallback confinement-time scaling is the tau_E producer
+#     tagged ``("regime_default", <regime>)``.
+_REGIME_SOLVE_MODES = {"reconcile", "optimize", "popcon"}
+
+
+def _regime_order() -> tuple[str, ...]:
+    """Confinement regimes in threshold-escalation order (allowed_tags.yaml)."""
+    return tuple(str(tag) for tag in (TAGS.raw.get("confinement_mode") or ()))
+
+
+def _regime_guard_names(regime: str | None) -> tuple[str, ...]:
+    """Sustainment guard relation names of one regime, in registration order."""
+    if not regime:
+        return ()
+    return tuple(rel.name for rel in RELATIONS if "regime_guard" in rel.tags and regime in rel.tags)
+
+
+def _all_regime_guard_names() -> tuple[str, ...]:
+    """All sustainment guard relation names, in registration order."""
+    return tuple(rel.name for rel in RELATIONS if "regime_guard" in rel.tags)
+
+
+def _regime_tau_default_name(regime: str) -> str | None:
+    """Name of the regime's fallback tau_E scaling, or None when undeclared."""
+    for rel in RELATIONS:
+        if "regime_default" in rel.tags and regime in rel.tags and "tau_E" in rel.output_names:
+            return rel.name
+    return None
+
+
+def _confinement_regime(tags: Iterable[str]) -> str | None:
+    """Return the first declared confinement-mode tag, if any."""
+    order = _regime_order()
+    return next((tag for tag in tags if tag in order), None)
+
+
+def _unique_extend(base: Iterable[str], extra: Iterable[str]) -> tuple[str, ...]:
+    """Append strings while preserving first occurrence order."""
+    out: list[str] = []
+    for item in (*tuple(base), *tuple(extra)):
+        if item not in out:
+            out.append(item)
+    return tuple(out)
+
+
+def _with_sustainment_guards(includes: tuple[str, ...], regime: str | None) -> tuple[str, ...]:
+    """Append checked-only sustainment guards for ``regime``."""
+    return _unique_extend(includes, _regime_guard_names(regime))
+
+
+def _with_confinement_regime(tags: tuple[str, ...], regime: str) -> tuple[str, ...]:
+    """Replace any confinement-mode tags with exactly ``regime``."""
+    order = _regime_order()
+    out: list[str] = []
+    inserted = False
+    for tag in tags:
+        if tag in order:
+            if not inserted:
+                out.append(regime)
+                inserted = True
+            continue
+        out.append(tag)
+    if not inserted:
+        out.append(regime)
+    return tuple(out)
+
+
+def _regime_warning(old: str, new: str, mode: str) -> str:
+    """User-facing warning for automatic regime correction."""
+    return (
+        f"Declared {old} operating condition is inconsistent with confinement-mode thresholds; "
+        f"switched to {new} for {mode}."
+    )
+
+
+def _switch_candidate_regimes(declared: str | None) -> tuple[str, ...]:
+    """Regime order used only after verify proves the current tag is inconsistent."""
+    order = _regime_order()
+    if declared not in order:
+        return ()
+    if declared == order[0]:
+        return order
+    return tuple(regime for regime in order if regime != order[0])
+
+
+def _regime_verified_by_guards(statuses: Mapping[str, Mapping[str, Any]], regime: str) -> bool:
+    """Whether every guard for ``regime`` is present and verified."""
+    guards = _regime_guard_names(regime)
+    return bool(guards) and all(bool((statuses.get(guard) or {}).get("verified", False)) for guard in guards)
+
+
+def _copy_value(value: Any) -> Any:
+    """Copy scalar/profile values used to clone reactor variables."""
+    if isinstance(value, np.ndarray):
+        return value.copy()
+    return value
 
 
 def _resolve_reactor_yaml(path_like: str | Path) -> Path:
@@ -124,7 +229,6 @@ class Reactor:
     doi: str | None = None
     notes: str | None = None
     tags: tuple[str, ...] = field(default_factory=tuple)
-    mode: str = "verify"
     variables: dict[str, Variable] = field(default_factory=dict)
     relation_include: tuple[str, ...] = field(default_factory=tuple)
     relation_exclude: tuple[str, ...] = field(default_factory=tuple)
@@ -141,8 +245,6 @@ class Reactor:
         # YAML this reactor was loaded from, if any; lets solve_reactors ship it
         # to a worker process. Set by from_yaml. Here so __getattr__ skips it.
         self.source_path: Path | None = None
-        if self.mode not in MODE_NAMES:
-            raise ValueError(f"Unsupported reactor mode {self.mode!r}.")
         self.tags = tuple(str(tag).strip().lower() for tag in self.tags)
         self.relation_include = tuple(str(name) for name in (self.relation_include or ()))
         self.relation_exclude = tuple(str(name) for name in (self.relation_exclude or ()))
@@ -169,7 +271,6 @@ class Reactor:
         if not isinstance(raw, Mapping):
             raise TypeError("reactor.yaml must contain a mapping.")
         metadata = raw.get("metadata", {}) or {}
-        solver_tags = raw.get("solver_tags", {}) or {}
         grid = raw.get("grid", {}) or {}
         grid_size = grid.get("size") if isinstance(grid, Mapping) else None
         relation_spec = raw.get("relations", {}) or {}
@@ -181,7 +282,6 @@ class Reactor:
             doi=metadata.get("doi"),
             notes=metadata.get("notes"),
             tags=tuple(raw.get("tags", ()) or ()),
-            mode=str(solver_tags.get("mode", raw.get("mode", "verify"))),
             variables=_parse_variables(raw.get("variables", {}) or {}, grid_size=grid_size, base_dir=path.parent),
             relation_include=tuple(relation_spec.get("include", ()) or ()) if isinstance(relation_spec, Mapping) else (),
             relation_exclude=tuple(relation_spec.get("exclude", ()) or ()) if isinstance(relation_spec, Mapping) else (),
@@ -245,7 +345,7 @@ class Reactor:
             name=self.name,
         )
 
-    def run(self, mode: str | None = None, **options: Any) -> dict[str, Any]:
+    def run(self, mode: str = "verify", **options: Any) -> dict[str, Any]:
         """Build a RelationSystem, run one mode, and absorb the solved values.
 
         The solve runs on a clone, then each solved value replaces this reactor's
@@ -255,13 +355,25 @@ class Reactor:
         carries that run's original inputs for the input->output display.
 
         Args:
-            mode: Optional mode override.
+            mode: Execution mode (``verify``, ``reconcile``, ``optimize``,
+                ``popcon``, or ``ordered``); defaults to ``verify``.
             **options: Mode-specific options.
 
         Returns:
             Result dictionary.
         """
-        chosen = mode or self.mode
+        chosen = str(mode or "verify")
+        if chosen not in MODE_NAMES:
+            raise ValueError(f"Unsupported reactor mode {chosen!r}.")
+        if chosen == "verify":
+            return self._run_guarded_once(chosen, **options)
+        if chosen in _REGIME_SOLVE_MODES:
+            return self._run_with_regime_verification(chosen, **options)
+        return self._run_once(chosen, **options)
+
+    def _run_once(self, mode: str, **options: Any) -> dict[str, Any]:
+        """Run one mode with the currently configured relation set."""
+        chosen = mode
         system = self.relation_system()
         self.last_system = system
         if chosen == "ordered":
@@ -273,6 +385,212 @@ class Reactor:
             if var is not None and value is not None:
                 var.set_input(value)
         return result
+
+    def _run_guarded_once(self, mode: str, **options: Any) -> dict[str, Any]:
+        """Run one mode with the current regime sustainment guard included."""
+        base_include = self.relation_include
+        self.relation_include = _with_sustainment_guards(base_include, _confinement_regime(self.tags))
+        try:
+            return self._run_once(mode, **options)
+        finally:
+            self.relation_include = base_include
+
+    def _run_with_regime_verification(self, mode: str, **options: Any) -> dict[str, Any]:
+        """Run one regime at a time, switching only when verify proves it necessary."""
+        declared = _confinement_regime(self.tags)
+        if declared not in _regime_order():
+            return self._run_once(mode, **options)
+
+        current = declared
+        path = [declared]
+        tried: set[str] = set()
+        last_result: dict[str, Any] | None = None
+        max_attempts = len(_switch_candidate_regimes(declared)) + 1
+        for _attempt in range(max_attempts):
+            clone = self._clone_for_regime(current, include_guards=False)
+            # The solve/scan itself uses only the current tag and its
+            # confinement-time relation.  A separate verify pass below includes
+            # every guard exactly to decide whether the discrete tag must change.
+            result = clone._run_once(mode, **options)
+            last_result = result
+            verify_result = clone._verify_all_regime_guards()
+            suggested = clone._suggest_regime_from_verify(verify_result, declared, current)
+            if suggested is not None and suggested != current:
+                if suggested not in tried:
+                    tried.add(current)
+                    current = suggested
+                    path.append(current)
+                    continue
+                result["unresolved_regime"] = True
+                clone._apply_regime_verify_failure(result, verify_result, current)
+            elif suggested is None and not _regime_verified_by_guards(verify_result.get("relation_status") or {}, current):
+                clone._apply_regime_verify_failure(result, verify_result, current)
+
+            self._absorb_regime_candidate(clone)
+            self._annotate_regime_result(result, declared, current, path, mode)
+            return result
+
+        # Defensive fallback: a pathological guard cycle should not leave the
+        # reactor un-updated or hide the last concrete mode result.
+        if last_result is None:
+            return self._run_once(mode, **options)
+        last_result["unresolved_regime"] = True
+        self._annotate_regime_result(last_result, declared, current, path, mode)
+        return last_result
+
+    def _annotate_regime_result(self, result: dict[str, Any], declared: str | None, selected: str | None, path: list[str], mode: str) -> None:
+        """Attach regime metadata and switch warning to a mode result."""
+        if selected is None:
+            return
+        result["regime"] = selected
+        result["declared_regime"] = declared
+        result["regime_path"] = list(path)
+        if declared and selected != declared:
+            result["warnings"] = [
+                _regime_warning(declared, selected, mode),
+                *(result.get("warnings") or []),
+            ]
+
+    def _verify_all_regime_guards(self) -> dict[str, Any]:
+        """Verify the solved values against every sustainment guard.
+
+        Every guard is an outputless, checked-only relation over registry
+        variables, and the solved system already holds the compiled,
+        completed post-solve namespace -- so the guards are evaluated
+        directly on it instead of building and compiling a second
+        RelationSystem per solve.  A guard whose variables the solve could
+        not value reports unverified, exactly as it would after pruning.
+        """
+        system = self.last_system if self.last_system is not None else self.relation_system()
+        excluded = set()
+        for item in self.relation_exclude:
+            try:
+                excluded.add(RELATIONS.get(item).name)
+            except KeyError:
+                excluded.add(str(item))
+        values = system.complete(system.solver_values())
+        status: dict[str, Any] = {}
+        for name in _all_regime_guard_names():
+            if name in excluded:
+                continue
+            rel = RELATIONS.get(name)
+            missing = [v for v in rel.variables if values.get(v) is None]
+            if missing:
+                status[name] = {
+                    "relation": name,
+                    "verified": False,
+                    "enforced": rel.enforce,
+                    "errors": [f"Relation {name!r} missing variables {missing}."],
+                    "warnings": [],
+                }
+                continue
+            try:
+                status[name] = system.relation_status_and_residual(rel, system.relation_evaluation_values(rel, values))[0]
+            except Exception as exc:
+                status[name] = {"relation": name, "verified": False, "enforced": rel.enforce, "errors": [str(exc)], "warnings": []}
+        return {"relation_status": status}
+
+    def _suggest_regime_from_verify(self, verify_result: Mapping[str, Any], declared: str | None, current: str | None) -> str | None:
+        """Return the verified regime to switch to, or ``declared``/``None``."""
+        statuses = verify_result.get("relation_status") or {}
+        if not isinstance(statuses, Mapping):
+            return None
+        candidates = _switch_candidate_regimes(declared)
+        if current in candidates and _regime_verified_by_guards(statuses, current):
+            return current
+        for regime in candidates:
+            if regime != current and _regime_verified_by_guards(statuses, regime):
+                return regime
+        return None
+
+    def _apply_regime_verify_failure(self, result: dict[str, Any], verify_result: Mapping[str, Any], regime: str) -> None:
+        """Mark a mode result failed because its final values do not verify for ``regime``."""
+        result["success"] = False
+        if "verified" in result:
+            result["verified"] = False
+        errors = result.setdefault("errors", [])
+        for error in self._regime_guard_errors(verify_result, regime):
+            if error not in errors:
+                errors.append(error)
+
+    def _regime_guard_errors(self, verify_result: Mapping[str, Any], regime: str) -> list[str]:
+        """Return only the failed guard messages for one regime."""
+        statuses = verify_result.get("relation_status") or {}
+        if not isinstance(statuses, Mapping):
+            return [f"Declared {regime} operating condition could not be verified."]
+        errors: list[str] = []
+        for guard in _regime_guard_names(regime):
+            status = statuses.get(guard)
+            if not isinstance(status, Mapping):
+                errors.append(f"{guard}: relation was not checked")
+            elif not bool(status.get("verified", False)):
+                detail = status.get("errors") or [f"{guard}: relation did not verify"]
+                errors.extend(str(item) for item in detail)
+        return errors
+
+    def _clone_for_regime(self, regime: str, *, include_guards: bool = True) -> "Reactor":
+        """Return an isolated reactor candidate for one confinement regime."""
+        variables = {
+            name: Variable(
+                var.name,
+                value=_copy_value(var.input_value),
+                unit=var.unit,
+                rel_tol=var.rel_tol,
+                abs_tol=var.abs_tol,
+                fixed=var.fixed,
+                size=var.size,
+                constraints=var.constraints,
+            )
+            for name, var in self.variables.items()
+        }
+        clone = Reactor(
+            name=self.name,
+            organization=self.organization,
+            country=self.country,
+            year=self.year,
+            doi=self.doi,
+            notes=self.notes,
+            tags=_with_confinement_regime(self.tags, regime),
+            variables=variables,
+            relation_include=self._candidate_relation_include(regime, include_guards=include_guards),
+            relation_exclude=self.relation_exclude,
+            relation_order=self.relation_order,
+            constraints=self.constraints,
+            grid_size=self.grid_size,
+        )
+        clone.source_path = self.source_path
+        return clone
+
+    def _candidate_relation_include(self, regime: str, *, include_guards: bool = True) -> tuple[str, ...]:
+        """Add optional regime guards and a mode-appropriate tau_E default relation."""
+        extras = list(_regime_guard_names(regime)) if include_guards else []
+        if not self._has_explicit_tau_e_scaling():
+            scaling = _regime_tau_default_name(regime)
+            if scaling and scaling not in self.relation_exclude:
+                extras.append(scaling)
+        return _unique_extend(self.relation_include, extras)
+
+    def _has_explicit_tau_e_scaling(self) -> bool:
+        """Whether relation_include already names a tau_E producer."""
+        for identifier in self.relation_include:
+            try:
+                rel = RELATIONS.get(identifier)
+            except KeyError:
+                continue
+            if "tau_E" in rel.output_names:
+                return True
+        return False
+
+    def _absorb_regime_candidate(self, candidate: "Reactor") -> None:
+        """Copy the winning candidate's public solve state into this reactor."""
+        self.tags = candidate.tags
+        self.last_system = candidate.last_system
+        for name, src in candidate.variables.items():
+            dst = self.variables.get(name)
+            if dst is None:
+                self.variables[name] = src
+            elif src.value is not None:
+                dst.set_input(src.value)
 
     def _display_source(self) -> Any:
         """Return the most recent solved system, or this reactor's inputs."""

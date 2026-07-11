@@ -6,7 +6,7 @@ from .relation import Relation, RelationSolveError, RelationUnderdeterminedError
 from .relationsystem import RelationSystem
 from .variable import Variable
 from .reactor import Reactor, solve_reactors
-from .tables import SolvedColumn, variables_table
+from .plotting.tables import SolvedColumn, variables_table
 from .registry import RELATIONS, SPECIES, TAGS, VARIABLES, RelationRegistry, SpeciesRegistry, TagRegistry, VariableRegistry
 
 
@@ -23,6 +23,12 @@ def __getattr__(name: str) -> Relation:
         return RELATIONS.get(name)
     except Exception as exc:
         raise AttributeError(name) from exc
+
+
+def __dir__() -> list[str]:
+    """Include dynamically exported relation functions in API discovery."""
+    relations = (rel.function_name for rel in RELATIONS)
+    return sorted({*globals(), *relations})
 
 
 __all__ = [

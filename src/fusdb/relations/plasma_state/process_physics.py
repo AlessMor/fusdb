@@ -8,7 +8,7 @@ plasma-diagnostic utilities are not.
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import ELECTRON_CHARGE_C, EPSILON0, KEV_TO_J
 
 

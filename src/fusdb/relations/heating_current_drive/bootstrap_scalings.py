@@ -25,7 +25,7 @@ import numpy as np
 from scipy import integrate
 from scipy.special import beta as _beta_fn
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import ELECTRON_CHARGE_C, MU0
 
 _TAGS = ("plasma", "current_drive", "tokamak", "process")

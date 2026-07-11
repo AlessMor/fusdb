@@ -47,8 +47,7 @@ CATEGORY_ORDER = (
     "dissociative_ionization",
     "dissociative_excitation",
     "dissociative_recombination",
-    "mar_via_h2_plus",
-    "mar_via_h_minus",
+    "mar",
 )
 SPECIES_ORDER = (
     "H",
@@ -85,8 +84,7 @@ CATEGORY_COLORS = {
     "recombination": "#2a78d6",
     "ionization": "#1baf7a",
     "elastic_scattering": "#2870b9",
-    "mar_via_h2_plus": "#008300",
-    "mar_via_h_minus": "#008300",
+    "mar": "#008300",
     "dissociative_ionization": "#4a3aa7",
     "dissociative_excitation": "#8a63c7",
     "molecular_ionization": "#4a3aa7",
@@ -148,6 +146,11 @@ def _order(sequence: tuple[str, ...], value: str) -> int:
     return sequence.index(value) if value in sequence else len(sequence)
 
 
+def _category_from_module_parts(module_parts: list[str]) -> str:
+    """Return the plotting category for a relation module path."""
+    return "mar" if "mar" in module_parts else (module_parts[-2] if len(module_parts) >= 2 else "other")
+
+
 def discover_rate_series() -> list[RateSeries]:
     """Return every atomic-physics rate curve discovered from the registry.
 
@@ -161,7 +164,7 @@ def discover_rate_series() -> list[RateSeries]:
         if not _is_rate_relation(relation):
             continue
         module_parts = relation.func.__module__.split(".")
-        category = module_parts[-2] if len(module_parts) >= 2 else "other"
+        category = _category_from_module_parts(module_parts)
         species = _species_label(module_parts[-1])
         label = re.sub(r"^AMJUEL H\.\d+ ", "", relation.name).removesuffix(" rate")
         series.append(

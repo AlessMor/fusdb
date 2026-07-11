@@ -2,9 +2,9 @@
 
 from typing import Any
 
-from scipy.integrate import trapezoid
+from fusdb.utils import trapezoid
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 @relation(

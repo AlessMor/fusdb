@@ -3,7 +3,7 @@ from typing import Any
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 
 @relation(
     name='Total radiated power',

@@ -6,7 +6,7 @@ and are gated onto ``eta_cd``. PROCESS's ``cullhy``/``lhrad``/``lheval``
 orchestration is not ported.
 """
 
-from fusdb import relation
+from fusdb.relation import relation
 
 _TAGS = ("plasma", "current_drive", "tokamak", "process")
 

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 @relation(

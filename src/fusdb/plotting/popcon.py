@@ -35,6 +35,7 @@ def plot_popcon(
     levels: Mapping[str, Sequence[float]] | None = None,
     fill_levels: int | Sequence[float] = 20,
     cmap: str = "viridis",
+    colors: Mapping[str, str] | None = None,
     ax: Axes | None = None,
     title: str | None = None,
 ) -> Axes:
@@ -47,6 +48,8 @@ def plot_popcon(
         levels: Optional explicit line-contour levels per field name.
         fill_levels: Filled contour levels for ``fill``: a count or a sequence.
         cmap: Colormap for the filled field.
+        colors: Optional per-contour line colour, keyed by field name;
+            fields absent from the mapping fall back to the default palette.
         ax: Optional axis to draw on.
         title: Optional axis title.
 
@@ -76,14 +79,16 @@ def plot_popcon(
         ax.figure.colorbar(filled, ax=ax, label=_field_label(fill))
 
     handles = []
-    colors = color_cycle(contours)
+    palette = color_cycle(contours)
+    overrides = dict(colors or {})
     for name in contours:
-        contour_kwargs = {"colors": colors[name], "linewidths": 1.5}
+        line_color = overrides.get(name, palette[name])
+        contour_kwargs = {"colors": line_color, "linewidths": 1.5}
         if levels.get(name) is not None:
             contour_kwargs["levels"] = list(levels[name])
         contour = ax.contour(x, y, field(name), **contour_kwargs)
         ax.clabel(contour, fmt="%g", fontsize=8)
-        handles.append(Line2D([], [], color=colors[name], label=_field_label(name)))
+        handles.append(Line2D([], [], color=line_color, label=_field_label(name)))
     if handles:
         ax.legend(handles=handles, loc="upper right", fontsize=8)
 

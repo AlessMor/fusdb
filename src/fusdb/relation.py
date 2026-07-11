@@ -152,8 +152,8 @@ class Relation:
         """Whether an output also appears as an input (cached at construction)."""
         return self._implicit
 
-    def __call__(self, **kwargs: Any) -> Any:
-        """Use the relation with strict standalone acausal semantics.
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Use the relation with standalone acausal semantics.
 
         Let ``n`` be the number of relation variables, i.e. declared inputs plus
         declared outputs. Constants with defaults are not counted.
@@ -165,11 +165,29 @@ class Relation:
         * If fewer than ``n - 1`` variables are supplied, raise a clear
           underdetermined error.
 
+        Positional arguments map to the decorated function's declared inputs,
+        followed by its optional constants.  This keeps the common forward call
+        as simple as ``relation(a, b)``; inverse solves and explicit output
+        verification remain unambiguous keyword calls.
+
         The returned value from an inverse solve is accepted only after the
         canonical relation and local relation constraints verify within the
         registry tolerances.
         """
-        return self.solve(kwargs)
+        if not args:
+            return self.solve(kwargs)
+        positional_names = (*self.input_names, *self.constant_names)
+        if len(args) > len(positional_names):
+            raise TypeError(
+                f"{self.function_name}() takes at most {len(positional_names)} positional "
+                f"arguments but {len(args)} were given"
+            )
+        values = self._canonicalize_standalone_values(kwargs)
+        for name, value in zip(positional_names, args):
+            if name in values:
+                raise TypeError(f"{self.function_name}() got multiple values for argument {name!r}")
+            values[name] = value
+        return self.solve(values)
 
     def evaluate(self, namespace: Mapping[str, Any]) -> Any:
         """Evaluate the implementation function in its declared direction.
@@ -480,7 +498,7 @@ class Relation:
         # output variable to borrow a tolerance from.  Normalise them by the
         # registry's default relative tolerance rather than a machine-tight
         # 1e-8: at 1e-8 a small physical imbalance becomes a residual ~1e6x
-        # larger than every output relation (which use ~0.01), which dominates
+        # larger than every output relation (which use ~0.001), which dominates
         # the least-squares cost and stalls the solve.
         return float(_variable_registry().rel_tol_default), 0.0
 

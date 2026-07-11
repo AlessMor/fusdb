@@ -44,8 +44,10 @@ def run(
         return result
 
     if x0.size == 0:
-        return verify_mode.run(self)
-    reference = self.input_values()
+        validation = verify_mode.run(self)
+        validation["mode"] = "optimize"
+        validation["termination"] = "no free variables; validation only"
+        return validation
 
     def objective_value(x: np.ndarray) -> float:
         values = self.unpack(x)
@@ -57,7 +59,7 @@ def run(
         if sense == "maximize":
             val = -val
         if movement_weight:
-            move = self.movement_residuals(values, reference)
+            move = self.movement_residuals(values)
             val += float(movement_weight) * float(np.dot(move, move))
         return val
 

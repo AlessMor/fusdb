@@ -392,3 +392,56 @@ def safe_max_abs(value: Any, default: float = 0.0) -> float:
     if finite.size == 0:
         return float(default)
     return float(np.max(np.abs(finite)))
+
+
+# ── Radial-profile integration and averaging ─────────────────────────────
+
+
+def trapezoid(y: Any, x: Any = None) -> Any:
+    """Trapezoidal integration over the last axis.
+
+    Drop-in for ``scipy.integrate.trapezoid`` with a 1-D ``x`` (or ``None``
+    for unit spacing): the same formula, in plain numpy.  Relations integrate
+    small profile arrays thousands of times per solve, and scipy's array-API
+    compatibility layer dominates that cost.
+    """
+    arr = np.asarray(y, dtype=float)
+    d = 1.0 if x is None else np.diff(np.asarray(x, dtype=float))
+    return np.sum(d * (arr[..., 1:] + arr[..., :-1]) / 2.0, axis=-1)
+
+
+def rho_average(profile: Any, rho: Any) -> Any:
+    """Return the straight average over the profile coordinate ``rho``."""
+    arr = np.asarray(profile, dtype=float)
+    if arr.ndim == 0:
+        return arr
+    if arr.size == 0:
+        return np.asarray(0.0)
+    r = np.asarray(rho, dtype=float)
+    if r.ndim == 1 and arr.shape[-1] == r.size and r.size > 1:
+        width = float(r[-1] - r[0])
+        if width > 0.0:
+            return trapezoid(arr, x=r) / width
+    return np.mean(arr, axis=-1)
+
+
+def volume_average(profile: Any, rho: Any) -> Any:
+    """Return an approximate flux-volume average over normalized minor radius.
+
+    Without an explicit ``dV/drho`` profile, fusdb assumes self-similar nested
+    flux surfaces, so ``dV/drho`` is proportional to ``rho``.  The volume factor
+    cancels in the normalized average:
+
+    ``<f>_V = integral(f(rho) * rho d rho) / integral(rho d rho)``.
+    """
+    arr = np.asarray(profile, dtype=float)
+    if arr.ndim == 0:
+        return arr
+    if arr.size == 0:
+        return np.asarray(0.0)
+    r = np.asarray(rho, dtype=float)
+    if r.ndim == 1 and arr.shape[-1] == r.size and r.size > 1:
+        denom = float(trapezoid(r, x=r))
+        if denom > 0.0:
+            return trapezoid(arr * r, x=r) / denom
+    return rho_average(arr, rho)

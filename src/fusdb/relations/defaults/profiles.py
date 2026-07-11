@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 @relation(

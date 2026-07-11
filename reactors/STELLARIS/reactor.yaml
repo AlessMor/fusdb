@@ -6,9 +6,6 @@ metadata:
   doi: 10.1016/j.fusengdes.2025.114868
 tags:
 - stellarator
-solver_tags:
-  mode: verify
-  verbosity: false
 variables:
   R:
     value: 12.74

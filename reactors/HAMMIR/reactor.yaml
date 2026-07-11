@@ -6,9 +6,6 @@ metadata:
   doi: 10.1088/1741-4326/ad3fcb
 tags:
 - mirror
-solver_tags:
-  mode: verify
-  verbosity: false
 variables:
   V_p: 46
   T_avg:

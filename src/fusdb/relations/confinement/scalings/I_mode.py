@@ -1,6 +1,6 @@
 """I-mode confinement scaling relations."""
 
-from fusdb import relation
+from fusdb.relation import relation
 
 @relation(
     name="hubbard_nominal_confinement_time",
@@ -153,7 +153,7 @@ def hubbard_upper_confinement_time(
 
 @relation(
     name="cfspopcon_imodey2_confinement_time",
-    tags=("confinement", "i_mode"),
+    tags=("confinement", "i_mode", "regime_default"),
     outputs="tau_E",
 )
 def cfspopcon_imodey2_confinement_time(

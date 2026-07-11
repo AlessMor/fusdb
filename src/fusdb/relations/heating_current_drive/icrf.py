@@ -4,7 +4,7 @@ Ported from PROCESS ``IonCyclotron.ion_cyclotron_ipdg89``. Returns the absolute
 current-drive efficiency (A/W), gated onto ``eta_cd``.
 """
 
-from fusdb import relation
+from fusdb.relation import relation
 
 _TAGS = ("plasma", "current_drive", "tokamak", "process")
 

@@ -1,6 +1,6 @@
 """Spherical tokamak shape relations."""
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 @relation(

@@ -407,7 +407,6 @@ def _reactor_markdown(path: Path) -> str:
     for heading, key, header in (
         ("Metadata", "metadata", "Field"),
         ("Tags", "tags", "Tag"),
-        ("Solver Tags", "solver_tags", "Key"),
         ("Variables", "variables", "Variable"),
     ):
         lines += [f"## {heading}", "", *yaml_tables(document.get(key), key_header=header), ""]
@@ -477,8 +476,7 @@ def _reactor_collection_markdown(reactor_files: list[Path]) -> str:
         for heading, key, header in (
             ("Metadata", "metadata", "Field"),
             ("Tags", "tags", "Tag"),
-            ("Solver Tags", "solver_tags", "Key"),
-            ("Variables", "variables", "Variable"),
+                ("Variables", "variables", "Variable"),
         ):
             lines += [f"### {heading}", "", *yaml_tables(document.get(key), key_header=header), ""]
     return "\n".join(lines)

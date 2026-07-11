@@ -6,7 +6,7 @@ relation from the ``current_drive`` orchestrator. The absolute efficiency
 ``eta_cd`` [A/W] comes from the method-specific scalings (nbi/ecrh/icrf/ebw/lhcd).
 """
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import ELECTRON_CHARGE_C, EPSILON0, KEV_TO_J
 
 _TAGS = ("plasma", "current_drive", "tokamak", "process")

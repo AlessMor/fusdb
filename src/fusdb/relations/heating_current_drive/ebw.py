@@ -6,7 +6,7 @@ absolute current-drive efficiency (A/W), gated onto ``eta_cd``.
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import ELECTRON_CHARGE_C, ELECTRON_MASS_KG, EPSILON0
 
 _TAGS = ("plasma", "current_drive", "tokamak", "process")

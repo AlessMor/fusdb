@@ -2,12 +2,12 @@
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 @relation(
     name="iter_89p_confinement_time",
-    tags=("confinement", "l_mode"),
+    tags=("confinement", "l_mode", "regime_default"),
     outputs="tau_E",
 )
 def iter_89p_confinement_time(
@@ -818,7 +818,7 @@ def iter_ipb98y1_confinement_time(
 
 @relation(
     name="tau_E_iter_ipb98y2",
-    tags=("confinement", "h_mode"),
+    tags=("confinement", "h_mode", "regime_default"),
     outputs="tau_E",
 )
 def tau_E_iter_ipb98y2(

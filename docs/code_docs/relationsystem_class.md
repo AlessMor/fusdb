@@ -41,16 +41,23 @@ objects; per-variable numerics live on the process-lifetime `VariableSpec`)
   public-form). `complete(values)` is the single completion path: it closes a
   namespace in place (profiles → constant defaults → providers) using the
   plan frozen at compile time.
-- `solver_residual_vector(values)` / `domain_residuals(values)` /
-  `movement_residuals(values, reference, weights)`: the residual blocks; modes
-  weight and stack them. `certify_relations(values)` builds the full
-  per-relation certification statuses. IRLS movement weights are mode-owned
-  and produced by `movement_weights(values, reference, eps=...)`.
-- `build_jac_sparsity(reference=None)`: conservative Jacobian sparsity for the
-  current packed layout.
+- `residual_layout(values, include_movement=False)`: freeze the residual-row
+  layout on a probe namespace; `layout_relation_rows` / `layout_domain_rows` /
+  `layout_movement_rows` then evaluate any namespace at that fixed shape (a
+  missing value penalizes its own rows instead of changing the vector size),
+  so a whole solve stage keeps one row layout. `solver_residual_vector(values)`
+  / `domain_residuals(values)` / `movement_residuals(values, weights)` are the
+  presence-driven probe variants; modes weight and stack the blocks.
+  `certify_relations(values)` builds the full per-relation certification
+  statuses. IRLS movement weights are mode-owned and produced by
+  `movement_weights(values, eps=...)`; movement references and tolerance
+  widths are frozen into a movement plan at `pack()` time.
+- `build_jac_sparsity(layout)` / `jacobian_plan(layout)`: conservative
+  Jacobian sparsity and the grouped-difference plan for the frozen layout.
 - `store(values)`: write solved values back into the variables.
-- `initial_values_from_graph()`: the seeding oracle (direct propagation plus
-  the small structural block solver) used to build solver start values.
+- `initial_values_from_graph(system)` (module function): the seeding oracle
+  (direct propagation plus the small structural block solver) used to build
+  solver start values.
 
 Per-variable numerics (solver/public value conversion, shape coercion, domain
 checks, scales and tolerances) are owned by the frozen `VariableSpec`

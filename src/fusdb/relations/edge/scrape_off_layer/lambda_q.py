@@ -9,7 +9,7 @@ cfspopcon returns lambda_q in mm; fusdb's ``lambda_q`` is in metres, so each
 scaling converts its mm result to metres (``* 1e-3``).
 """
 
-from fusdb import relation
+from fusdb.relation import relation
 
 _PA_PER_ATM = 101325.0  # cfspopcon expresses average_total_pressure in atm
 _MM_TO_M = 1.0e-3       # cfspopcon returns lambda_q in mm

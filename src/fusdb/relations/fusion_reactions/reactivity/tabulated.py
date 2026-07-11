@@ -6,7 +6,7 @@ import numpy as np
 from numpy import float64
 from numpy.typing import NDArray
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry.tabulated_reactivities import reactivity_from_reactivity_table
 from fusdb.registry.tabulated_reactivities import reactivity_from_xsection_table
 

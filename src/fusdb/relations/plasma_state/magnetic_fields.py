@@ -8,7 +8,7 @@ branch; the Peng/STAR spherical-tokamak branch depends on ``plascar_bpol``
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import MU0
 
 

@@ -47,7 +47,7 @@ class VariableSpec:
     solver_domain: tuple[float | None, float | None, bool, bool] = (None, None, True, True)
     constraints: tuple[tuple[str, bool], ...] = ()
     description: str = ""
-    rel_tol: float = 0.01
+    rel_tol: float = 0.001
     abs_tol: float = 0.0
     average_variable: str | None = None
     default_relation: tuple[str, ...] = ()
@@ -305,7 +305,7 @@ class VariableRegistry:
     The registry only stores metadata. Values belong to ``Variable`` objects.
     """
 
-    def __init__(self, specs: Iterable[VariableSpec], *, rel_tol_default: float = 0.01, profile_size_default: int = 46) -> None:
+    def __init__(self, specs: Iterable[VariableSpec], *, rel_tol_default: float = 0.001, profile_size_default: int = 46) -> None:
         self.rel_tol_default = float(rel_tol_default)
         self.profile_size_default = int(profile_size_default)
         by_name: dict[str, VariableSpec] = {}
@@ -328,7 +328,7 @@ class VariableRegistry:
         with Path(path).open("r", encoding="utf-8") as handle:
             raw = yaml.safe_load(handle) or {}
         defaults = raw.pop("defaults", {}) if isinstance(raw, dict) else {}
-        rel_tol_default = float(defaults.get("rel_tol", 0.01)) if isinstance(defaults, Mapping) else 0.01
+        rel_tol_default = float(defaults.get("rel_tol", 0.001)) if isinstance(defaults, Mapping) else 0.001
         abs_tol_default = float(defaults.get("abs_tol", 0.0)) if isinstance(defaults, Mapping) else 0.0
         profile_size_default = int(defaults.get("profile_size", 46)) if isinstance(defaults, Mapping) else 46
         specs: list[VariableSpec] = []

@@ -22,7 +22,7 @@ Differences from PROCESS, all faithful to the same physics:
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 def _coulomb_logarithm(re, tempe, ne):

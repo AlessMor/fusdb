@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 
 _N19 = 1.0e19  # cfspopcon expresses average_electron_density in 1e19 m^-3
 

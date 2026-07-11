@@ -6,18 +6,22 @@ cfspopcon's ``input.yaml`` pinned at the optimized PRD operating point), runs it
 fusdb variables against cfspopcon's reference output ``output/PRD.json``.
 
 Phase-1 scope (see plan): only the subset of cfspopcon's 110-step algorithm that maps
-onto existing fusdb relations is reproduced. Quantities fusdb already computes well
-(geometry, Greenwald limit/fraction) are asserted strictly. Quantities that differ for
-*known, documented* reasons are marked ``xfail`` so the discrepancy is visible and a
-future fix is flagged automatically:
+onto existing fusdb relations is reproduced. Quantities fusdb reproduces are asserted
+strictly (geometry and Greenwald). Quantities that differ for *known,
+documented* reasons are marked ``xfail`` so the discrepancy stays visible and a future
+fix is flagged automatically:
 
-  * fusion power / pressure: fusdb integrates profiles uniformly in ``rho``
-    (``trapezoid(..., x=rho)``) rather than volume-weighting (``dV ~ V'(rho) drho``),
-    which overestimates core-peaked integrals; compounded by fusdb's parabolic profiles
-    vs cfspopcon's ``prf`` form.
-  * ``tau_E`` / ``P_loss``: fusdb's ordered 2x2 block solver does not converge the
-    multi-scale (``P_loss ~1e7 W``, ``tau_E ~0.5 s``) W_th/IPB98 system.
-  * ``P_LH``: fusdb uses a different L-H scaling constant than cfspopcon.
+  * ``P_loss`` / ``tau_E``: cfspopcon's ``calc_plasma_stored_energy`` forms
+    ``W_th`` from the scalar averages (``3/2 (<n_e><T_e>+<n_i><T_i>) V``) *before* the
+    1-D profiles exist. fusdb now uses the profile-consistent definition
+    ``W_th = 3/2 <p_th>_V V``, so the 2x2 confinement block remains internally
+    consistent but no longer reproduces cfspopcon's ``P_loss`` / ``tau_E``.
+  * fusion power / pressure / beta: cfspopcon uses ``prf`` peaked profiles; fusdb uses
+    parabolic ``(1-rho^2)^alpha``. The reactivity is steeply nonlinear in ``T_i``, so the
+    profile-shape difference over-states ``P_fusion`` ~70% (and the volume-averaged
+    pressure/``beta`` ~24%). Porting the ``prf`` form is the remaining gap.
+  * ``P_LH``: fusdb uses a different L-H scaling constant (Martin) than cfspopcon
+    (Martin + Ryter low-density branch).
 """
 
 from __future__ import annotations
@@ -119,14 +123,30 @@ STRICT_CASES = [
 ]
 
 _XFAIL_RAW = [
-    ("average_total_pressure", 0.05, "rho-uniform profile integration overestimates core-peaked pressure"),
-    ("beta_toroidal", 0.05, "beta_T tracks the over-estimated thermal pressure"),
-    ("P_fusion", 0.05, "rho-uniform integration + parabolic vs prf profiles overestimate fusion power"),
+    (
+        "P_in",
+        0.05,
+        "fusdb W_th uses the volume-averaged pressure profile; cfspopcon uses scalar-average products",
+    ),
+    (
+        "energy_confinement_time",
+        0.05,
+        "fusdb W_th uses the volume-averaged pressure profile; cfspopcon uses scalar-average products",
+    ),
+    (
+        "average_total_pressure",
+        0.05,
+        "cfspopcon prf profile vs fusdb parabolic: volume-averaged pressure ~24% high",
+    ),
+    ("beta_toroidal", 0.05, "beta_T tracks the prf-vs-parabolic volume-averaged pressure gap"),
+    (
+        "P_fusion",
+        0.05,
+        "cfspopcon prf profiles vs fusdb parabolic: fusion power ~70% high (reactivity steeply peaked in T_i)",
+    ),
     ("P_neutron", 0.05, "neutron power tracks the over-estimated fusion power"),
     ("P_alpha", 0.05, "alpha power tracks the over-estimated fusion power"),
-    ("P_LH_thresh", 0.05, "fusdb L-H scaling constant differs from cfspopcon"),
-    ("energy_confinement_time", 0.05, "tau_E tracks the over-estimated W_th (rho-uniform pressure integration) through the confinement block"),
-    ("P_in", 0.05, "P_loss ~ W_th^2.7 through the confinement block, amplifying the over-estimated thermal pressure"),
+    ("P_LH_thresh", 0.05, "fusdb L-H scaling constant differs from cfspopcon (Martin vs Martin+Ryter)"),
 ]
 # xfail(strict): each runs and is expected to fail; if fusdb is fixed it xpasses and
 # the suite fails, prompting the case to be promoted to a strict assertion.
@@ -334,9 +354,10 @@ def test_confinement_block_solved_and_consistent(ordered_run):
     """The ordered 2x2 block produces tau_E and P_loss and satisfies W_th = P_loss*tau_E.
 
     This locks in the fix that routes the ordered block through the shared
-    ``fusdb.seeding.solve_block`` solver. The solved values do not match cfspopcon's PRD
-    (W_th is over-estimated upstream), but the block itself must converge and be
-    internally consistent.
+    ``fusdb.seeding.solve_block`` solver. ``W_th`` is now formed from the
+    volume-averaged thermal pressure profile, so this no longer asserts agreement
+    with cfspopcon's scalar-average stored-energy input; it locks in convergence
+    and internal consistency.
     """
     system, _result, _prd = ordered_run
     tau_E = _fusdb_value(system, "energy_confinement_time")

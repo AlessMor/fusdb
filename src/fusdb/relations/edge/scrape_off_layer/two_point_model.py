@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import ATOMIC_MASS_UNIT_KG, KEV_TO_J
 
 _KEV_TO_EV = 1.0e3

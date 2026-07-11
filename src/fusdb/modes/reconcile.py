@@ -65,6 +65,11 @@ def run(
     current_values = self.solver_values()
     current_certificate = verify_values(self, current_values, complete=True)
     if bool(current_certificate.get("verified", False)):
+        # Completion may have filled missing outputs even though no numerical
+        # solve is needed.  Reconciliation owns that state change: persist the
+        # completed namespace just as the solved path below does.
+        self.store(current_certificate["values"])
+        self.refresh_scales()
         solver = solver_report(
             message="already verified; no reconcile solve",
             residual_size=int(current_certificate["residuals"].size),
@@ -114,40 +119,42 @@ def run(
         if shape == 1
     ]
 
-    # Movement residuals anchor only immutable input values, not initial
-    # guesses or relation-completed derived values.
-    reference = self.input_values()
-    residual_size = 0
+    # Movement residuals anchor only immutable input values (frozen into the
+    # pack-time movement plan), never initial guesses or relation-completed
+    # derived values.
     residual_calls = 0
     residual_eval_time_s = 0.0
     current_relation_weight = float(relation_weight)
     current_movement_weight = float(movement_weight)
     # IRLS movement weights; mode-owned, starting from plain L1 (all ones).
     irls_weights: dict[str, float] = {}
+    # Frozen residual-row layout (see RelationSystem.residual_layout),
+    # re-frozen per stage by run_stage.  Every evaluation of a stage fills
+    # exactly these rows -- a missing value penalizes its own rows -- so the
+    # vector size SciPy sees can never drift mid-solve.
+    layout: dict[str, Any] = {}
 
     def residual_function(x: np.ndarray) -> np.ndarray:
-        nonlocal residual_size, residual_calls, residual_eval_time_s, current_relation_weight, current_movement_weight
+        nonlocal residual_calls, residual_eval_time_s
         t0 = time.perf_counter()
         residual_calls += 1
+        size = int(layout["size"])
         try:
             values = self.unpack(x)
             # Missing or temporarily invalid relations already contribute large finite residuals.
-            relation_rows, _errors = self.solver_residual_vector(values)
-            blocks = [current_relation_weight * relation_rows]
-            domain_residuals = self.domain_residuals(values)
-            if domain_residuals.size:
-                blocks.append(current_relation_weight * domain_residuals)
-            if current_movement_weight:
-                blocks.append(current_movement_weight * self.movement_residuals(values, reference, irls_weights))
-            out = np.concatenate([block.reshape(-1) for block in blocks if block.size])
-            if not np.all(np.isfinite(out)):
-                raise ValueError("non-finite residual vector")
-            residual_size = int(out.size)
+            blocks = [current_relation_weight * self.layout_relation_rows(values, layout)]
+            domain_rows = self.layout_domain_rows(values, layout)
+            if domain_rows.size:
+                blocks.append(current_relation_weight * domain_rows)
+            if layout["movement_names"] is not None:
+                blocks.append(current_movement_weight * self.layout_movement_rows(values, layout, irls_weights))
+            parts = [block for block in blocks if block.size]
+            out = np.concatenate(parts) if parts else np.empty(0, dtype=float)
+            if out.size != size or not np.all(np.isfinite(out)):
+                return np.full(size, 1.0e12, dtype=float)
             return out
         except Exception:
-            if residual_size:
-                return np.full(residual_size, 1.0e12, dtype=float)
-            raise
+            return np.full(size, 1.0e12, dtype=float)
         finally:
             residual_eval_time_s += time.perf_counter() - t0
 
@@ -164,26 +171,16 @@ def run(
             certificate,
         )
 
-    try:
-        probe = residual_function(x0)
-        residual_size = int(probe.size)
-    except Exception as exc:
-        result["errors"].append(f"Residual initialization failed: {exc}")
-        result["termination"] = "initialization failed"
-        return result
-    if probe.size == 0:
-        validation = verify_mode.run(self)
-        validation["mode"] = mode
-        validation["termination"] = "no residuals; validation only"
-        return validation
-
     if relation_weight_schedule is None:
         # Escalating relation-weight continuation.  Movement penalties anchor
         # supplied input data in every stage: moving data must always cost
         # something, otherwise degenerate states that zero the whole system
         # satisfy the relation residuals for free.  Seeded variables
         # carry no movement rows, so they stay free to move wherever the
-        # relations require.
+        # relations require.  (A single stage at the high weight was measured
+        # 2026-07: it worsens the inputs-beyond-tolerance count on STELLARIS
+        # and STEP and slows DEMO, whose warm-up stage verifies in a few
+        # evaluations and exits early -- the warm-up is load-bearing.)
         phase_schedule = [(1.0, float(movement_weight)), (100.0, float(movement_weight))]
         weight_schedule = tuple(weight for weight, _move in phase_schedule)
     else:
@@ -194,6 +191,21 @@ def run(
         # with the requested movement weight, without an implicit feasibility phase.
         phase_schedule = [(float(weight), float(movement_weight)) for weight in weight_schedule]
 
+    # Freeze an initial layout at x0: this exercises one full
+    # unpack/completion (surfacing initialization failures early) and decides
+    # the no-residuals early exit.  Stages re-freeze it on their own iterate.
+    try:
+        layout = self.residual_layout(self.unpack(x0), include_movement=bool(phase_schedule[0][1]))
+    except Exception as exc:
+        result["errors"].append(f"Residual initialization failed: {exc}")
+        result["termination"] = "initialization failed"
+        return result
+    if int(layout["size"]) == 0:
+        validation = verify_mode.run(self)
+        validation["mode"] = mode
+        validation["termination"] = "no residuals; validation only"
+        return validation
+
     stage_history: list[dict[str, Any]] = []
     solve_result = None
     current_x = np.asarray(x0, dtype=float)
@@ -203,7 +215,7 @@ def run(
     verified = False
     jac_sparsity_used = False
     jac_sparsity = None
-    final_probe_size = int(probe.size)
+    final_probe_size = int(layout["size"])
     try:
         base_common_kwargs = {
             "bounds": (lower, upper),
@@ -214,11 +226,15 @@ def run(
             # systems (e.g. STELLARIS stalled at nfev=2 with the steady-state
             # balances grossly unsatisfied).  Tightening ftol lets the solve keep
             # making progress; it still terminates on gtol/xtol once converged.
+            # (2026-07: relaxing to 1e-10/1e-11 and lowering the max_nfev cap
+            # were both measured and REJECTED -- ARC/STELLARIS lose
+            # inputs-beyond-tolerance quality; the grinding stages stop on the
+            # nfev cap or gtol/xtol, not ftol.)
             "ftol": 1.0e-12,
             "verbose": int(verbose),
         }
 
-        def run_stage(stage_label: Any, *, stage_max_nfev: int, reference_map: Mapping[str, Any] | None) -> dict[str, Any]:
+        def run_stage(stage_label: Any, *, stage_max_nfev: int, include_movement: bool) -> dict[str, Any]:
             """Run one bounded least-squares stage from ``current_x`` and record it.
 
             Shared by the relation-weight continuation and the IRLS loop.
@@ -227,32 +243,55 @@ def run(
             which is also returned so a caller may extend it.
             """
             nonlocal solve_result, current_x, relation_status, completed_values, certificate, verified
-            nonlocal final_probe_size, jac_sparsity_used, jac_sparsity
+            nonlocal final_probe_size, jac_sparsity_used, jac_sparsity, layout
             t_stage = time.perf_counter()
-            # Residual size changes between feasibility-only and movement-regularized
-            # stages, so sparsity must be built per stage.
-            stage_probe = residual_function(current_x)
-            final_probe_size = int(stage_probe.size)
+            # Stage objectives differ (movement rows come and go with the
+            # movement weight), so the row layout is re-frozen per stage on
+            # the current iterate; every evaluation of this stage then fills
+            # exactly these rows.
+            layout = self.residual_layout(self.unpack(current_x), include_movement=include_movement)
+            final_probe_size = int(layout["size"])
             stage_kwargs = dict(base_common_kwargs)
             stage_kwargs["max_nfev"] = stage_max_nfev
-            # Sparse finite-difference Jacobian.  The structural pattern follows
+            # Jacobian strategy, best first.  The structural pattern follows
             # the completion-dependency graph and is conservative: it has an edge
             # for every output of every completion relation, so it never omits a
             # real dependency (including ones that flow through a relation's side
-            # outputs, e.g. ARC_V0's n_i/fusion power vs f_He).  It is accepted
-            # only when its shape exactly matches the live residual/variable sizes
-            # for this stage; any mismatch falls back to dense differences, so a
-            # stale pattern can never make the solve wrong -- only slower.
-            stage_jac_used = False
+            # outputs, e.g. ARC_V0's n_i/fusion power vs f_He).  Either form is
+            # accepted only when its shape exactly matches the frozen layout;
+            # any mismatch falls back to scipy's dense differences, so a stale
+            # pattern can never make the solve wrong -- only slower.
+            stage_jac_mode = "dense"
+            expected_shape = (int(layout["size"]), int(current_x.size))
             try:
-                sparsity = self.build_jac_sparsity(reference=reference_map)
+                plan = self.jacobian_plan(layout)
             except Exception:
-                sparsity = None
-            if sparsity is not None and sparsity.shape == (int(stage_probe.size), int(current_x.size)):
-                stage_kwargs["jac_sparsity"] = sparsity
-                stage_jac_used = True
+                plan = None
+            if plan is not None and tuple(plan["sparsity"].shape) == expected_shape:
+                stage_kwargs["jac"] = grouped_jacobian(
+                    self,
+                    plan,
+                    layout,
+                    lower=lower,
+                    upper=upper,
+                    relation_weight=current_relation_weight,
+                    movement_weight=current_movement_weight,
+                    irls_weights=irls_weights,
+                    residual_function=residual_function,
+                )
+                jac_sparsity = plan["sparsity"]
                 jac_sparsity_used = True
-                jac_sparsity = sparsity
+                stage_jac_mode = "grouped"
+            else:
+                try:
+                    sparsity = self.build_jac_sparsity(layout)
+                except Exception:
+                    sparsity = None
+                if sparsity is not None and sparsity.shape == expected_shape:
+                    stage_kwargs["jac_sparsity"] = sparsity
+                    jac_sparsity_used = True
+                    jac_sparsity = sparsity
+                    stage_jac_mode = "sparsity"
             solve_result = least_squares(residual_function, current_x, **stage_kwargs)
             current_x = np.asarray(solve_result.x, dtype=float)
             relation_status, _residuals, _errors, _warnings, verified, completed_values, certificate = verify_candidate(current_x)
@@ -270,8 +309,9 @@ def run(
                 "termination": str(getattr(solve_result, "message", "")),
                 "verified": bool(verified),
                 "failed_relations": int(failed_count),
-                "jac_sparsity_used": bool(stage_jac_used),
-                "residual_size": int(stage_probe.size),
+                "jac_mode": stage_jac_mode,
+                "jac_sparsity_used": stage_jac_mode != "dense",
+                "residual_size": int(layout["size"]),
                 "elapsed_s": float(time.perf_counter() - t_stage),
             }
             stage_history.append(entry)
@@ -283,7 +323,7 @@ def run(
             run_stage(
                 int(stage_index),
                 stage_max_nfev=max_nfev,
-                reference_map=reference if current_movement_weight else None,
+                include_movement=bool(current_movement_weight),
             )
             # Verification is independent of the stage objective.  Stop as soon
             # as all enforced relations are simultaneously satisfied.
@@ -309,8 +349,8 @@ def run(
                 if prev_beyond == 0:
                     break
                 # Reweight from the latest solution, then re-solve warm-started.
-                irls_weights = self.movement_weights(completed_values, reference, eps=float(movement_eps))
-                entry = run_stage(f"irls_{irls_index}", stage_max_nfev=irls_max_nfev, reference_map=reference)
+                irls_weights = self.movement_weights(completed_values, eps=float(movement_eps))
+                entry = run_stage(f"irls_{irls_index}", stage_max_nfev=irls_max_nfev, include_movement=True)
                 new_beyond = len(inputs_beyond_tolerance(self, completed_values))
                 entry["inputs_beyond_tolerance"] = new_beyond
                 # Stop once a pass stops reducing the number beyond tolerance:
@@ -372,6 +412,109 @@ def run(
     # their tolerance band, worst deviation first.
     validation["inputs_beyond_tolerance"] = inputs_beyond_tolerance(self, completed_values)
     return validation
+
+
+def grouped_jacobian(
+    system: Any,
+    plan: Mapping[str, Any],
+    layout: Mapping[str, Any],
+    *,
+    lower: np.ndarray,
+    upper: np.ndarray,
+    relation_weight: float,
+    movement_weight: float,
+    irls_weights: Mapping[str, float],
+    residual_function: Any,
+):
+    """Return the grouped two-point-difference Jacobian callable for one stage.
+
+    Differentiates exactly the stage objective ``residual_function``, one
+    perturbation per column group of the finite-difference coloring (``plan``,
+    from :meth:`RelationSystem.jacobian_plan`) -- but each group evaluation
+    re-runs only the completion providers and relation rows downstream of the
+    perturbed columns, while the cheap vectorized domain/movement blocks are
+    recomputed whole (unaffected rows difference to exactly zero).  Row sizes
+    are pinned by ``layout``, so every block difference is well-defined; an
+    unexpected group failure falls back to one full residual call for that
+    group, which can make the Jacobian slower but never wrong.
+    """
+    csc = plan["sparsity"]
+    groups = plan["groups"]
+    dims = layout["relation_dims"]
+    offsets: list[tuple[int, int]] = []
+    total = 0
+    for rdim in dims:
+        offsets.append((total, total + rdim))
+        total += rdim
+    include_movement = layout["movement_names"] is not None
+    rel_step = float(np.sqrt(np.finfo(float).eps))
+
+    def jac(x: np.ndarray, *_args: Any) -> np.ndarray:
+        x = np.asarray(x, dtype=float)
+        values0 = system.unpack(x)
+        blocks0: list[np.ndarray] = []
+        for rel, rdim in zip(system._enforced_residual_relations, dims):
+            rows, _error = system.enforced_residual_block(rel, values0)
+            rows = np.asarray(rows, dtype=float).reshape(-1)
+            blocks0.append(rows if rows.size == rdim else np.full(rdim, 1.0e12, dtype=float))
+        domain0 = system.layout_domain_rows(values0, layout)
+        move0 = (
+            system.layout_movement_rows(values0, layout, irls_weights)
+            if include_movement
+            else np.empty(0, dtype=float)
+        )
+        m = int(csc.shape[0])
+        sign = np.where(x >= 0.0, 1.0, -1.0)
+        h = rel_step * sign * np.maximum(1.0, np.abs(x))
+        h = np.where(x + h > upper, -np.abs(h), h)
+        h = np.where(x + h < lower, np.abs(h), h)
+        jacobian = np.zeros((m, x.size), dtype=float)
+        f0_weighted: np.ndarray | None = None
+        for group in groups:
+            cols = group["cols"]
+            x_new = x.copy()
+            x_new[cols] = x[cols] + h[cols]
+            try:
+                ns = dict(values0)
+                for name in group["deleted"]:
+                    ns.pop(name, None)
+                for name, start, stop, offs, scales, shape, transform in group["spans"]:
+                    local = x_new[start:stop]
+                    actual = offs * np.exp(local) if transform == "log" else offs + scales * local
+                    ns[name] = actual.copy() if shape == 1 else float(actual[0])
+                system.apply_profile_specs(ns)
+                system._apply_completion_providers(ns, plan=group["providers"])
+                if any(ns.get(name) is None for name in group["deleted"]):
+                    raise ValueError("incremental completion left values missing")
+                df = np.zeros(m, dtype=float)
+                for index in group["relations"]:
+                    rows, _error = system.enforced_residual_block(system._enforced_residual_relations[index], ns)
+                    rows = np.asarray(rows, dtype=float).reshape(-1)
+                    start_row, stop_row = offsets[index]
+                    if rows.size != stop_row - start_row:
+                        rows = np.full(stop_row - start_row, 1.0e12, dtype=float)
+                    df[start_row:stop_row] = relation_weight * (rows - blocks0[index])
+                domain_new = system.layout_domain_rows(ns, layout)
+                df[total:total + domain0.size] = relation_weight * (domain_new - domain0)
+                if move0.size:
+                    move_new = system.layout_movement_rows(ns, layout, irls_weights)
+                    df[total + domain0.size:] = movement_weight * (move_new - move0)
+            except Exception:
+                if f0_weighted is None:
+                    parts = [relation_weight * np.concatenate(blocks0)] if blocks0 else []
+                    parts.append(relation_weight * domain0)
+                    if move0.size:
+                        parts.append(movement_weight * move0)
+                    f0_weighted = np.concatenate(parts) if parts else np.empty(0, dtype=float)
+                df = residual_function(x_new) - f0_weighted
+                if df.size != m:
+                    continue
+            for j in cols:
+                rows_idx = csc.indices[csc.indptr[j]:csc.indptr[j + 1]]
+                jacobian[rows_idx, j] = df[rows_idx] / h[j]
+        return jacobian
+
+    return jac
 
 
 def inputs_beyond_tolerance(system: Any, values: Mapping[str, Any]) -> list[dict[str, Any]]:

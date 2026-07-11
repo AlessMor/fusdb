@@ -5,7 +5,7 @@ Ported from PROCESS ``process/models/physics/plasma_current.py``
 split into one relation per scaling, gated in variables.yaml.
 """
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 @relation(

@@ -4,7 +4,23 @@ from typing import Any
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
+
+
+@relation(
+    name="Plasma stored energy from averages",
+    tags=("plasma", "confinement"),
+    outputs="W_th",
+)
+def calc_plasma_stored_energy(p_th: float, V_p: float) -> Any:
+    """Return thermal stored energy from volume-averaged thermal pressure.
+
+    The relation keeps the historical name so existing reactor files that
+    include ``Plasma stored energy from averages`` keep working, but the stored
+    energy definition is the profile-consistent volume integral:
+    ``W_th = 3/2 * <p_th>_V * V_p``.
+    """
+    return 1.5 * p_th * V_p
 
 
 @relation(
@@ -55,5 +71,3 @@ def thermal_stored_energy(p_th: float, V_p: float) -> float:
         Thermal stored energy.
     """
     return 1.5 * p_th * V_p
-
-

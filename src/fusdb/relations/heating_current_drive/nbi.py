@@ -8,7 +8,7 @@ PROCESS's beam-geometry/shine-through orchestration (``iternb``/``culnbi``/
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import ELECTRON_CHARGE_C, ELECTRON_MASS_KG, PROTON_MASS_KG
 
 _TAGS = ("plasma", "current_drive", "tokamak", "process")

@@ -1,7 +1,7 @@
 # TODO: include aliases from cfspopcon and PROCESS
 
 defaults:
-  rel_tol: 0.01
+  rel_tol: 0.001
   abs_tol: 0.0
   profile_size: 46
 R:
@@ -216,8 +216,28 @@ B:
   description:
   - Magnetic field (profile over radial direction).
   shape: 1
+  average_variable: B_avg
   domain: '[0, inf)'
-  abs_tol: 0.01
+  abs_tol: 0.001
+  solver_domain: '[1e-12, 30]'
+B_avg:
+  default_unit: T
+  aliases:
+  - B_vol_avg
+  - average_magnetic_field
+  description:
+  - Volume-averaged magnetic field.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  solver_domain: '[1e-12, 30]'
+B_rho_avg:
+  default_unit: T
+  aliases:
+  - rho_average_magnetic_field
+  description:
+  - Straight-rho averaged magnetic field.
+  domain: '[0, inf)'
+  abs_tol: 0.001
   solver_domain: '[1e-12, 30]'
 B0:
   default_unit: T
@@ -228,12 +248,12 @@ B0:
   - Toroidal field on axis.
   domain: (0, inf)
   solver_domain: '[1e-12, 30]'
-  abs_tol: 0.01
+  abs_tol: 0.001
 B_max:
   default_unit: T
   description:
   - Peak field on coil.
-  abs_tol: 0.01
+  abs_tol: 0.001
   solver_domain: '[1e-12, 30]'
 B_p:
   default_unit: T
@@ -243,7 +263,7 @@ B_p:
   - Poloidal field.
   domain: '[0, inf)'
   solver_domain: '[1e-12, 30]'
-  abs_tol: 0.01
+  abs_tol: 0.001
   # CHECK gate: the Ampere surface-average stays the default; the Peng/STAR TART
   # branch (spherical tokamaks) is opt-in.
   default_relation:
@@ -377,7 +397,7 @@ beta_p:
   - Poloidal beta.
   domain: '[0, inf)'
   solver_domain: '[0, 10]'
-  abs_tol: 0.01
+  abs_tol: 0.001
 beta_limit:
   default_unit: dimensionless
   description:
@@ -393,10 +413,21 @@ troyon_margin:
 p_th:
   default_unit: Pa
   description:
-  - Thermal pressure.
+  - Volume-averaged thermal pressure.
   aliases:
+  - p_th_avg
+  - p_th_vol_avg
   - p_tot_avg
+  - p_tot_vol_avg
   - average_total_pressure
+  abs_tol: 1000.0
+p_th_rho_avg:
+  default_unit: Pa
+  description:
+  - Straight-rho averaged thermal pressure.
+  aliases:
+  - p_tot_rho_avg
+  - rho_average_total_pressure
   abs_tol: 1000.0
 p_peak:
   default_unit: Pa
@@ -414,11 +445,23 @@ W_th:
 T_e_avg:
   aliases:
   - T_avg
+  - T_e_vol_avg
+  - T_vol_avg
   - average_electron_temp
   - ten
   default_unit: keV
   description:
   - Volume-averaged electron temperature.
+  domain: (0, inf)
+  solver_domain: '[1e-12, 300]'
+  abs_tol: 0.05
+T_e_rho_avg:
+  aliases:
+  - T_rho_avg
+  - rho_average_electron_temp
+  default_unit: keV
+  description:
+  - Straight-rho averaged electron temperature.
   domain: (0, inf)
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
@@ -457,6 +500,7 @@ T_e:
   description:
   - Electron temperature.
   shape: 1
+  average_variable: T_e_avg
   domain: '[0, inf)'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
@@ -488,9 +532,19 @@ T_i:
 T_i_avg:
   default_unit: keV
   aliases:
+  - T_i_vol_avg
   - average_ion_temp
   description:
   - Volume-averaged ion temperature.
+  domain: '[0, inf)'
+  solver_domain: '[1e-12, 300]'
+  abs_tol: 0.05
+T_i_rho_avg:
+  default_unit: keV
+  aliases:
+  - rho_average_ion_temp
+  description:
+  - Straight-rho averaged ion temperature.
   domain: '[0, inf)'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
@@ -511,10 +565,22 @@ ion_to_electron_temp_ratio:
 n_e_avg:
   aliases:
   - n_avg
+  - n_e_vol_avg
+  - n_vol_avg
   - average_electron_density
   default_unit: 1/m^3
   description:
   - Volume-averaged electron density.
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 1.0e+18
+n_e_rho_avg:
+  aliases:
+  - n_rho_avg
+  - rho_average_electron_density
+  default_unit: 1/m^3
+  description:
+  - Straight-rho averaged electron density.
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
@@ -538,6 +604,7 @@ nesep_over_nebar:  # CHECK imported from cfspopcon (scrape_off_layer/separatrix_
   abs_tol: 0.001
 n_i_avg:
   aliases:
+  - n_i_vol_avg
   - average_ion_density
   default_unit: 1/m^3
   description:
@@ -545,6 +612,15 @@ n_i_avg:
     impurity dilution is present.
   default_relation:
   - Default ion density average from plasma average density
+  domain: (0, inf)
+  solver_domain: '[1e-12, inf)'
+  abs_tol: 1.0e+18
+n_i_rho_avg:
+  aliases:
+  - rho_average_ion_density
+  default_unit: 1/m^3
+  description:
+  - Straight-rho averaged ion density.
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
@@ -565,6 +641,7 @@ n_e:
   description:
   - Electron density.
   shape: 1
+  average_variable: n_e_avg
   domain: '[0, inf)'
   abs_tol: 1.0e+18
   solver_domain: '[0, inf)'
@@ -577,6 +654,7 @@ n_i:
   description:
   - Ion density.
   shape: 1
+  average_variable: n_i_avg
   domain: '[0, inf)'
   abs_tol: 1.0e+18
   solver_domain: '[0, inf)'
@@ -662,8 +740,19 @@ n_D:
   solver_domain: '[0, inf)'
 n_D_avg:
   default_unit: 1/m^3
+  aliases:
+  - n_D_vol_avg
   description:
   - Volume-averaged deuterium ion density.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+  solver_domain: '[0, inf)'
+n_D_rho_avg:
+  default_unit: 1/m^3
+  aliases:
+  - rho_average_deuterium_density
+  description:
+  - Straight-rho averaged deuterium ion density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
   solver_domain: '[0, inf)'
@@ -672,6 +761,25 @@ n_T:
   description:
   - Tritium ion density profile.
   shape: 1
+  average_variable: n_T_avg
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+  solver_domain: '[0, inf)'
+n_T_avg:
+  default_unit: 1/m^3
+  aliases:
+  - n_T_vol_avg
+  description:
+  - Volume-averaged tritium ion density.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+  solver_domain: '[0, inf)'
+n_T_rho_avg:
+  default_unit: 1/m^3
+  aliases:
+  - rho_average_tritium_density
+  description:
+  - Straight-rho averaged tritium ion density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
   solver_domain: '[0, inf)'
@@ -680,6 +788,25 @@ n_He3:
   description:
   - Helium-3 ion density profile.
   shape: 1
+  average_variable: n_He3_avg
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+  solver_domain: '[0, inf)'
+n_He3_avg:
+  default_unit: 1/m^3
+  aliases:
+  - n_He3_vol_avg
+  description:
+  - Volume-averaged helium-3 ion density.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+  solver_domain: '[0, inf)'
+n_He3_rho_avg:
+  default_unit: 1/m^3
+  aliases:
+  - rho_average_helium3_density
+  description:
+  - Straight-rho averaged helium-3 ion density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
   solver_domain: '[0, inf)'
@@ -688,6 +815,25 @@ n_He4:
   description:
   - Helium-4 ion density profile.
   shape: 1
+  average_variable: n_He4_avg
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+  solver_domain: '[0, inf)'
+n_He4_avg:
+  default_unit: 1/m^3
+  aliases:
+  - n_He4_vol_avg
+  description:
+  - Volume-averaged helium-4 ion density.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+  solver_domain: '[0, inf)'
+n_He4_rho_avg:
+  default_unit: 1/m^3
+  aliases:
+  - rho_average_helium4_density
+  description:
+  - Straight-rho averaged helium-4 ion density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
   solver_domain: '[0, inf)'
@@ -696,6 +842,25 @@ n_imp:
   description:
   - Generic impurity ion density profile.
   shape: 1
+  average_variable: n_imp_avg
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+  solver_domain: '[0, inf)'
+n_imp_avg:
+  default_unit: 1/m^3
+  aliases:
+  - n_imp_vol_avg
+  description:
+  - Volume-averaged generic impurity ion density.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+  solver_domain: '[0, inf)'
+n_imp_rho_avg:
+  default_unit: 1/m^3
+  aliases:
+  - rho_average_impurity_density
+  description:
+  - Straight-rho averaged generic impurity ion density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
   solver_domain: '[0, inf)'
@@ -1913,35 +2078,35 @@ internal_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption
   description:
   - Flux due to the plasma current and internal inductance.
   domain: '[0, inf)'
-  abs_tol: 0.01
+  abs_tol: 0.001
 external_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: Wb
   description:
   - Surface flux generated by the plasma current (external inductance).
   domain: '[0, inf)'
-  abs_tol: 0.01
+  abs_tol: 0.001
 resistive_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: Wb
   description:
   - Resistive flux consumed over the current ramp-up (Ejima).
   domain: '[0, inf)'
-  abs_tol: 0.01
+  abs_tol: 0.001
 poloidal_field_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: Wb
   description:
   - Surface flux contribution from the vertical (poloidal-field-coil) field.
-  abs_tol: 0.01
+  abs_tol: 0.001
 flux_needed_from_CS_over_rampup:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: Wb
   description:
   - Total flux needed from the central solenoid over the ramp-up.
-  abs_tol: 0.01
+  abs_tol: 0.001
 total_flux_available_from_CS:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: Wb
   description:
   - Total flux available from the central solenoid.
   domain: '[0, inf)'
-  abs_tol: 0.01
+  abs_tol: 0.001
 max_flattop_duration:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: s
   description:
@@ -1952,7 +2117,7 @@ breakdown_flux_consumption:  # CHECK imported from cfspopcon (plasma_current/flu
   default_unit: Wb
   description:
   - Resistive flux required for plasma breakdown.
-  abs_tol: 0.01
+  abs_tol: 0.001
 P_heating:
   default_unit: W
   description:
@@ -2015,6 +2180,15 @@ P_ECRH:
   domain: '[0, inf)'
   abs_tol: 1000000.0
   solver_domain: '[0, inf)'
+P_OL_thresh:
+  default_unit: W
+  description:
+  - Ohmic-L transition threshold power.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  solver_domain: '[0, inf)'
+  default_relation:
+  - Ohmic-L transition threshold power
 P_LH:
   default_unit: W
   aliases:
@@ -2809,7 +2983,7 @@ beta_norm_max:  # CHECK imported from PROCESS (physics.py, PlasmaBeta)
   - Normalised-beta upper limit (beta_N_max) from the selected scaling.
   domain: '[0, inf)'
   solver_domain: '[0, inf)'
-  abs_tol: 0.01
+  abs_tol: 0.001
   # CHECK gate: Wesson is the default; original/Menard/Tholerus/Stambaugh opt-in.
   default_relation:
   - Normalised beta limit (Wesson)
@@ -2874,7 +3048,7 @@ dlamee:  # CHECK imported from PROCESS (current_drive, EC Fenstermacher)
   - Electron-electron Coulomb logarithm (PROCESS dlamee).
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
-  abs_tol: 0.01
+  abs_tol: 0.001
 n_ecrh_harmonic:  # CHECK imported from PROCESS (current_drive)
   default_unit: dimensionless
   description:
@@ -2939,7 +3113,7 @@ beam_ion_coulomb_log:  # CHECK imported from PROCESS (current_drive, xlmbdabi)
   - Beam-ion (fast-ion / background-ion) Coulomb logarithm.
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
-  abs_tol: 0.01
+  abs_tol: 0.001
 f_p_beam_injected_ions:  # CHECK imported from PROCESS (current_drive, cfnbi)
   default_unit: dimensionless
   description:
@@ -2960,7 +3134,7 @@ dlamie:  # CHECK imported from PROCESS (current_drive); ion-electron Coulomb log
   - Ion-electron Coulomb logarithm.
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
-  abs_tol: 0.01
+  abs_tol: 0.001
 c_Fe:  # CHECK imported from PROCESS (current_drive, sigbeam); iron concentration n_Fe/n_e
   default_unit: dimensionless
   description:
@@ -2984,7 +3158,7 @@ beta_thermal_poloidal:  # CHECK imported from PROCESS (bootstrap_current, Wilson
   - Thermal component of the poloidal beta.
   domain: '[0, inf)'
   solver_domain: '[0, 10]'
-  abs_tol: 0.01
+  abs_tol: 0.001
 radius_plasma_pedestal_density_norm:  # CHECK imported from PROCESS (bootstrap_current, Sugiyama H)
   default_unit: dimensionless
   description:
@@ -3167,4 +3341,4 @@ B_total:  # CHECK imported from PROCESS (plasma_fields)
   - Total magnetic field from on-axis toroidal and surface-averaged poloidal fields.
   domain: (0, inf)
   solver_domain: '[1e-12, inf)'
-  abs_tol: 0.01
+  abs_tol: 0.001

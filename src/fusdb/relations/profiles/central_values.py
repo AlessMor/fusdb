@@ -13,7 +13,7 @@ already produces ``n0``/``T0``/``n_i_peak``/``T_i_peak``/``n_la``.
 
 from scipy.special import beta as _beta_fn
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import KEV_TO_J
 
 

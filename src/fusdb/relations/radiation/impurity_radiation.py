@@ -29,9 +29,9 @@ from typing import Any
 import numpy as np
 import yaml
 from numpy.polynomial.polynomial import polyval
-from scipy.integrate import trapezoid
+from fusdb.utils import trapezoid
 
-from fusdb import relation
+from fusdb.relation import relation
 
 _DATA = Path(__file__).resolve().parents[2] / "registry" / "atomic_radiation"
 _MAVRIN_T_MIN, _MAVRIN_T_MAX = 0.1, 100.0  # Mavrin 2018 coronal validity [keV]

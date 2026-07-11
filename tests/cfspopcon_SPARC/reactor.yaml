@@ -21,9 +21,6 @@ metadata:
     Phase-1 cfspopcon reproduction test point. Values use fusdb aliases and
     unit-conversion; the ordered run mirrors the cfspopcon algorithm order.
 
-solver_tags:
-  mode: ordered
-  verbosity: false
 
 variables:
   # --- Geometry / field (cfspopcon flat inputs, via aliases + units) ---
@@ -91,7 +88,7 @@ relations:
   - Tokamak plasma surface
   - Average fuel mass number
   - Default ion temperature average from plasma average temperature
-  - Line averaged density from average density
+  - Default line averaged density from average density
   - Parabolic electron temperature profile
   - Parabolic ion temperature profile
   - Parabolic electron density profile
@@ -99,7 +96,7 @@ relations:
   - D density from ion density and D fraction
   - T density from ion density and T fraction
   - Thermal pressure
-  - Thermal stored energy
+  - Plasma stored energy from averages
   - tau_E_iter_ipb98y2
   - Energy confinement balance
   - Toroidal beta
@@ -126,7 +123,7 @@ relations:
   # 2. Averages + profiles
   - Average fuel mass number             # f_D, f_T -> afuel
   - Default ion temperature average from plasma average temperature  # -> T_i_avg
-  - Line averaged density from average density                        # -> n_la
+  - Default line averaged density from average density                # -> n_la
   - Default ion temperature peaking from electron temperature peaking  # -> ion_temperature_peaking
   - Default ion density peaking from electron density peaking           # -> ion_density_peaking
   - Parabolic electron temperature profile   # -> T_e
@@ -136,8 +133,8 @@ relations:
   - D density from ion density and D fraction
   - T density from ion density and T fraction
   # 3. Pressure / stored energy
-  - Thermal pressure                     # -> p_th
-  - Thermal stored energy                # -> W_th
+  - Thermal pressure                     # -> p_th (volume-averaged pressure)
+  - Plasma stored energy from averages   # -> W_th = 3/2 * p_th * V_p
   # 4. Confinement 2x2 block (cfspopcon "solve_energy_confinement_scaling_for_input_power"):
   #    solve tau_E and P_loss simultaneously from W_th and the IPB98(y,2) scaling.
   #    Solved by the shared block solver (_solve_initial_block), the same routine

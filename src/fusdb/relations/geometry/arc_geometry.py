@@ -13,7 +13,7 @@ the fusdb defaults.
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 def _plasma_angles_arcs(a, kappa, triang):

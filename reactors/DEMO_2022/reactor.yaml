@@ -9,9 +9,6 @@ metadata:
 tags:
 - tokamak
 - h_mode
-solver_tags:
-  mode: verify
-  verbosity: false
 variables:
   R:
     value: 9.0
@@ -19,9 +16,7 @@ variables:
   a:
     value: 2.9
     fixed: true
-  A:
-    value: 3.1
-    fixed: true
+  A: 3.1
   kappa_95: 
     value: 1.65
     fixed: true

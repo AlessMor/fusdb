@@ -8,7 +8,7 @@ and the Legendre-based ``eccdef``/``legend`` model are not ported.
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import ELECTRON_CHARGE_C, ELECTRON_MASS_KG, EPSILON0
 
 _TAGS = ("plasma", "current_drive", "tokamak", "process")

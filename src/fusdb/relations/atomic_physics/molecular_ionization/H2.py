@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h4_rate
 
 _DATA_DIR = Path(__file__).resolve().parent

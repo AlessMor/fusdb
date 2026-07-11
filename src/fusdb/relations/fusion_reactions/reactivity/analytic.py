@@ -7,7 +7,7 @@ from numpy import float64
 from numpy.typing import NDArray
 from scipy import constants as scipy_constants
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 _AVOGADRO_NUMBER = scipy_constants.Avogadro
@@ -248,16 +248,22 @@ def sigmav_DT_BoschHale(
     gamow_coefficient = 34.3827
     reduced_mass_energy = 1124656
 
-    # Compute the temperature-corrected fit variables.
-    theta = T_i / (
-        1
-        - (T_i * (coefficients[2] + T_i * (coefficients[4] + T_i * coefficients[6])))
-        / (1 + T_i * (coefficients[3] + T_i * (coefficients[5] + T_i * coefficients[7])))
-    )
-    eta = (gamow_coefficient**2 / (4 * theta)) ** (1 / 3)
+    # Compute the temperature-corrected fit variables.  A parabolic profile
+    # reaches T_i=0 at the edge, where theta=0 makes eta and 1/T_i**3 diverge
+    # into a 0*inf NaN; the reactivity there is physically zero (no fusion at
+    # zero temperature), so non-finite contributions are zeroed -- matching the
+    # edge guard the synchrotron-radiation relation applies for the same reason.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        theta = T_i / (
+            1
+            - (T_i * (coefficients[2] + T_i * (coefficients[4] + T_i * coefficients[6])))
+            / (1 + T_i * (coefficients[3] + T_i * (coefficients[5] + T_i * coefficients[7])))
+        )
+        eta = (gamow_coefficient**2 / (4 * theta)) ** (1 / 3)
 
-    # Evaluate the Bosch-Hale reactivity and convert from cm^3/s to m^3/s.
-    sigmav = coefficients[1] * theta * np.sqrt(eta / (reduced_mass_energy * T_i**3)) * np.exp(-3 * eta)
+        # Evaluate the Bosch-Hale reactivity and convert from cm^3/s to m^3/s.
+        sigmav = coefficients[1] * theta * np.sqrt(eta / (reduced_mass_energy * T_i**3)) * np.exp(-3 * eta)
+    sigmav = np.where(np.asarray(T_i, dtype=float) > 0.0, sigmav, 0.0)
     return sigmav * 1e-6  # type: ignore[no-any-return]
 
 

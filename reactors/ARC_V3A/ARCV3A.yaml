@@ -10,9 +10,6 @@ tags:
 - tokamak
 - compact_tokamak
 - h_mode
-solver_tags:
-  mode: verify
-  verbosity: false
 variables:
   R:
     value: 4.62
@@ -20,8 +17,7 @@ variables:
   a:
     value: 1.18
     fixed: true
-  eps:
-    value: 0.26
+  eps: 0.26
   B0: 11.4
   I_p: 12e6
   elongation: 1.8

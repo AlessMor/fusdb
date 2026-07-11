@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from fusdb.relation import Relation
-from fusdb.seeding import solve_block
+from fusdb.relationsystem import solve_block
 from fusdb.utils import ZERO_TOL
 
 from ._common import new_result

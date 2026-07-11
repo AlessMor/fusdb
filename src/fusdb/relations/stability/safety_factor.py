@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import MU0
 
 # used in tokamaks - represents the number of toroidal turns a field line must complete to achieve a single poloidal transit

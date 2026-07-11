@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 from scipy import constants as scipy_constants
 
-from fusdb import relation
+from fusdb.relation import relation
 from fusdb.registry import ATOMIC_MASS_UNIT_KG
 
 _N20 = 1.0e20  # cfspopcon normalisation density

@@ -390,6 +390,18 @@ def _replay_completion(system: Any, ns: dict[str, np.ndarray], n: int, trust: di
     held = {name for name in system.inputs if system.inputs.get(name) is not None} | set(system.fixed)
     for _pass in range(system._completion_passes):
         changed = False
+        # Re-level shape-controlled profiles from their (possibly provider-
+        # updated) scalar averages, mirroring the profile stage of
+        # RelationSystem.complete().  A supplied profile is level-free: its
+        # shape is fixed but its level tracks its average, which may itself be
+        # a scan axis or be derived from one (e.g. T_i_avg = T_e_avg), so it
+        # must be rebuilt each pass rather than frozen at the compile midpoint.
+        for name, avg_name, shape, fixed_value in system._profile_specs:
+            if fixed_value is None and avg_name is not None and ns.get(avg_name) is not None:
+                relevelled = ns[avg_name] * np.asarray(shape, dtype=float)
+                if ns.get(name) is None or not np.array_equal(ns[name], relevelled):
+                    ns[name] = relevelled
+                    changed = True
         for rel, only_missing, input_names, outs in system._provider_plan:
             if any(ns.get(name) is None for name in input_names):
                 continue

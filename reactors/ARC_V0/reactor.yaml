@@ -10,9 +10,6 @@ tags:
 - tokamak
 - compact_tokamak
 - i_mode
-solver_tags:
-  mode: verify
-  verbosity: false
 variables:
   R:
     value: 3.3
@@ -20,9 +17,7 @@ variables:
   a:
     value: 1.13
     fixed: true
-  A:
-    value: 2.92
-    fixed: true
+  A: 2.92
   P_fus:
     value: 525
     unit: MW
@@ -54,19 +49,15 @@ variables:
   T_e:
     value: ARC2015_Te.csv
     unit: keV
-    fixed: true
   T_i: # Assuming T_i = T_e
     value: ARC2015_Te.csv
     unit: keV
-    fixed: true
   n_e:
     value: ARC2015_ne20.csv
     unit: 1e20 m^-3
-    fixed: true
   n_i: # Assuming n_i = n_e
     value: ARC2015_ne20.csv
     unit: 1e20 m^-3
-    fixed: true
   TBR: 1.1
   tau_E: 0.64
   H89: 2.8

@@ -16,8 +16,17 @@ device:
   - stellarator
   - mirror
 
+# Confinement regimes, listed in threshold-escalation order (lowest heating
+# power first): the Reactor regime driver reads this order when it has to
+# switch a reactor whose declared regime fails its sustainment guards.
 confinement_mode:
   - ohmic_mode
-  - h_mode
   - l_mode
+  - h_mode
   - i_mode
+
+# Relations the regime driver includes by name. No reactor declares an
+# `internal` tag, so a relation tagged here is never picked up by automatic
+# tag selection -- it is reachable only via an explicit relations.include.
+internal:
+  - regime_guard

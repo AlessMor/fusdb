@@ -1,11 +1,11 @@
 """Ohmic confinement scaling relations."""
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 @relation(
     name="neo_alcator_confinement_time",
-    tags=("confinement", "ohmic_mode"),
+    tags=("confinement", "ohmic_mode", "regime_default"),
     outputs="tau_E",
 )
 def neo_alcator_confinement_time(

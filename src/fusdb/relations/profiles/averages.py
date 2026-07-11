@@ -3,30 +3,9 @@
 from typing import Any
 
 import numpy as np
-from scipy.integrate import trapezoid
 
-from fusdb import relation
-
-
-def _volume_average(profile: Any, rho: Any) -> Any:
-    """Return the rho-weighted grid average of a profile.
-
-    Mirrors :meth:`RelationSystem._profile_average`: a trapezoidal average over the
-    ``rho`` grid when it is usable, otherwise the arithmetic mean.  Keeping the two
-    identical means these consistency residuals measure the same average the solver
-    reconstructs profiles against.
-    """
-    arr = np.asarray(profile, dtype=float)
-    if arr.ndim == 0:
-        return arr
-    if arr.size == 0:
-        return np.asarray(0.0)
-    r = np.asarray(rho, dtype=float)
-    if r.ndim == 1 and r.size == arr.size and r.size > 1:
-        width = float(r[-1] - r[0])
-        if width > 0.0:
-            return trapezoid(arr, x=r) / width
-    return np.mean(arr)
+from fusdb.relation import relation
+from fusdb.utils import rho_average, volume_average
 
 
 def _profile_average_residual(avg: Any, profile: Any, rho: Any) -> Any:
@@ -39,11 +18,20 @@ def _profile_average_residual(avg: Any, profile: Any, rho: Any) -> Any:
     residual is identically zero, so it never fights a free-level profile.
     """
     lhs = np.asarray(avg, dtype=float)
-    rhs = np.asarray(_volume_average(profile, rho), dtype=float)
+    rhs = np.asarray(volume_average(profile, rho), dtype=float)
     if not np.all(np.isfinite(lhs)) or not np.all(np.isfinite(rhs)):
         raise ValueError("profile average must be finite")
     scale = np.maximum(np.maximum(np.abs(lhs), np.abs(rhs)), 1.0)
     return (lhs - rhs) / scale
+
+
+@relation(
+    name="Magnetic-field volume-average consistency",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+)
+def magnetic_field_volume_average(B_avg: float, B: Any, rho: Any) -> Any:
+    """Link the magnetic-field profile to its volume-average ``B_avg``."""
+    return _profile_average_residual(B_avg, B, rho)
 
 
 @relation(
@@ -92,22 +80,126 @@ def deuterium_density_volume_average(n_D_avg: float, n_D: Any, rho: Any) -> Any:
 
 
 @relation(
-    name="Line averaged density from average density",
-    tags=("plasma", "confinement", "tokamak"),
-    outputs="n_la",
+    name="Tritium density volume-average consistency",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
 )
-def line_averaged_density_from_average_density(n_avg: float) -> float:
-    """Approximate line-averaged density from volume-averaged density.
+def tritium_density_volume_average(n_T_avg: float, n_T: Any, rho: Any) -> Any:
+    """Link the tritium density profile to its volume-average ``n_T_avg``."""
+    return _profile_average_residual(n_T_avg, n_T, rho)
 
-    NOTE: This is a temporary bridge so confinement scalings that require
-    ``n_la`` can be reached when only ``n_avg`` is supplied.  It should be
-    replaced by a proper line-average relation from a density profile and
-    geometry, or by reactor-specific profile-shape information.
 
-    Args:
-        n_avg: Average plasma density.
+@relation(
+    name="Helium-3 density volume-average consistency",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+)
+def helium3_density_volume_average(n_He3_avg: float, n_He3: Any, rho: Any) -> Any:
+    """Link the helium-3 density profile to its volume-average ``n_He3_avg``."""
+    return _profile_average_residual(n_He3_avg, n_He3, rho)
 
-    Returns:
-        Approximate line-averaged density.
-    """
-    return n_avg
+
+@relation(
+    name="Helium-4 density volume-average consistency",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+)
+def helium4_density_volume_average(n_He4_avg: float, n_He4: Any, rho: Any) -> Any:
+    """Link the helium-4 density profile to its volume-average ``n_He4_avg``."""
+    return _profile_average_residual(n_He4_avg, n_He4, rho)
+
+
+@relation(
+    name="Impurity density volume-average consistency",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+)
+def impurity_density_volume_average(n_imp_avg: float, n_imp: Any, rho: Any) -> Any:
+    """Link the generic impurity density profile to its volume-average ``n_imp_avg``."""
+    return _profile_average_residual(n_imp_avg, n_imp, rho)
+
+
+@relation(
+    name="Magnetic-field rho-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="B_rho_avg",
+)
+def magnetic_field_rho_average(B: Any, rho: Any) -> Any:
+    return rho_average(B, rho)
+
+
+@relation(
+    name="Electron temperature rho-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="T_e_rho_avg",
+)
+def electron_temperature_rho_average(T_e: Any, rho: Any) -> Any:
+    return rho_average(T_e, rho)
+
+
+@relation(
+    name="Ion temperature rho-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="T_i_rho_avg",
+)
+def ion_temperature_rho_average(T_i: Any, rho: Any) -> Any:
+    return rho_average(T_i, rho)
+
+
+@relation(
+    name="Electron density rho-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="n_e_rho_avg",
+)
+def electron_density_rho_average(n_e: Any, rho: Any) -> Any:
+    return rho_average(n_e, rho)
+
+
+@relation(
+    name="Ion density rho-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="n_i_rho_avg",
+)
+def ion_density_rho_average(n_i: Any, rho: Any) -> Any:
+    return rho_average(n_i, rho)
+
+
+@relation(
+    name="Deuterium density rho-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="n_D_rho_avg",
+)
+def deuterium_density_rho_average(n_D: Any, rho: Any) -> Any:
+    return rho_average(n_D, rho)
+
+
+@relation(
+    name="Tritium density rho-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="n_T_rho_avg",
+)
+def tritium_density_rho_average(n_T: Any, rho: Any) -> Any:
+    return rho_average(n_T, rho)
+
+
+@relation(
+    name="Helium-3 density rho-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="n_He3_rho_avg",
+)
+def helium3_density_rho_average(n_He3: Any, rho: Any) -> Any:
+    return rho_average(n_He3, rho)
+
+
+@relation(
+    name="Helium-4 density rho-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="n_He4_rho_avg",
+)
+def helium4_density_rho_average(n_He4: Any, rho: Any) -> Any:
+    return rho_average(n_He4, rho)
+
+
+@relation(
+    name="Impurity density rho-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="n_imp_rho_avg",
+)
+def impurity_density_rho_average(n_imp: Any, rho: Any) -> Any:
+    return rho_average(n_imp, rho)

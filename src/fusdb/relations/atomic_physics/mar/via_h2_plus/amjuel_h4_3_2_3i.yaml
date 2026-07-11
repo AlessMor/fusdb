@@ -1,0 +1,30 @@
+name: AMJUEL H.4 3.2.3i H2 MAI via H2+ rate
+category: mar_via_h2_plus
+output: H2_mai_via_h2_plus_rate
+input:
+  - n_e_edge
+  - T_edge
+density_limits:
+  min_cm3: 1e+14
+  max_cm3: 1e+22
+coefficient_blocks:
+  - density_indices: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    rows:
+      - temperature_index: 0
+        coefficients: [1.5450E+01, 1.8378E+00, -2.3495E+00, 1.1605E+00, -3.7115E-01, -9.0820E-02, 7.0669E-02, -2.7975E-02, 4.1615E-03]
+      - temperature_index: 1
+        coefficients: [1.6611E+01, 2.2853E+00, -3.9480E+00, 1.2204E+00, 1.7872E-01, -6.3993E-01, 2.5491E-01, -6.3593E-02, 7.8417E-03]
+      - temperature_index: 2
+        coefficients: [1.8070E+01, -7.6978E+00, -1.7039E+00, 4.8065E+00, -6.8268E-01, -1.6447E+00, 8.9542E-01, -2.4715E-01, 3.6243E-02]
+      - temperature_index: 3
+        coefficients: [1.4306E+01, 3.3410E+01, -2.4036E+01, 9.5606E+00, -2.7938E+00, -1.9165E+00, 1.3211E+00, -4.4721E-01, 6.7242E-02]
+      - temperature_index: 4
+        coefficients: [4.2396E+00, 7.1733E+01, -5.1455E+01, 2.4541E+01, -5.9428E+00, -1.7564E+00, 1.3463E+00, -4.1820E-01, 5.8875E-02]
+      - temperature_index: 5
+        coefficients: [-1.6309E+01, 8.4059E+01, -6.3606E+01, 3.9866E+01, -1.7484E+01, 3.0321E+00, 7.9889E-01, -8.3927E-02, -8.5367E-03]
+      - temperature_index: 6
+        coefficients: [-3.6198E+01, 5.7195E+01, -4.4462E+01, 3.7288E+01, -2.1907E+01, 1.2239E+01, -2.8052E+00, 7.6225E-02, 5.3157E-02]
+      - temperature_index: 7
+        coefficients: [-4.9060E+01, 8.9295E+00, 7.6300E+00, 2.1233E+01, -2.2610E+01, 1.5897E+01, -5.8912E+00, 1.0586E+00, -7.7911E-02]
+      - temperature_index: 8
+        coefficients: [-4.6364E+01, -5.3719E+00, 4.1913E+01, -4.2201E+00, 1.1959E+01, -6.2407E+00, 9.6408E-01, 2.5115E-01, -3.1647E-02]

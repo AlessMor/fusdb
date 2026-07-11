@@ -4,9 +4,9 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
-from scipy.integrate import trapezoid
 
-from fusdb import relation
+from fusdb.relation import relation
+from fusdb.utils import volume_average
 
 
 # From plasma_profiles/density_peaking.py
@@ -22,18 +22,18 @@ from fusdb import relation
 def _peaking_table(rho_key: tuple[float, ...]) -> tuple[np.ndarray, np.ndarray]:
     """Return a monotone ``(peakings, alphas)`` table for one rho grid.
 
-    ``peak/average`` of ``(1-rho^2)^alpha`` is strictly increasing in alpha, so
-    one precomputed table per grid inverts the peaking->alpha map in O(log n)
-    by interpolation instead of an 80-step bisection on every profile build.
+    ``peak/volume_average`` of ``(1-rho^2)^alpha`` is strictly increasing in
+    alpha, so one precomputed table per grid inverts the peaking->alpha map in
+    O(log n) by interpolation instead of an 80-step bisection on every profile
+    build.
     """
     rho = np.asarray(rho_key, dtype=float)
     base = np.maximum(1.0 - rho**2, 0.0)
-    width = float(rho[-1] - rho[0]) if rho.size > 1 else 1.0
     alphas = np.linspace(0.0, 50.0, 2001)
     peaks = np.empty_like(alphas)
     for i, alpha in enumerate(alphas):
         shape = base**alpha
-        mean = float(np.mean(shape)) if width <= 0.0 else float(trapezoid(shape, x=rho) / width)
+        mean = float(volume_average(shape, rho))
         peaks[i] = shape[0] / max(mean, 1e-300)
     return peaks, alphas
 
@@ -49,21 +49,33 @@ def _alpha_for_peaking(peaking: float, rho: np.ndarray) -> float:
     return float(np.interp(target, peaks, alphas))
 
 
+# Small pedestal so a generated profile never reaches exactly zero at rho=1.
+# A real plasma has finite separatrix values; the exact zero of (1-rho^2)^alpha
+# makes temperature-driven relations (fusion reactivity, line/synchrotron
+# radiation) singular at the edge and stiffens the confinement solve.
+_EDGE_PEDESTAL = 0.02
+
+
 def _parabolic_profile(average: Any, peaking: Any, rho: Any) -> np.ndarray:
+    """Return an ``average * shape`` profile whose volume-average equals ``average``.
+
+    ``average`` may be a scalar (per-point) or a batched ``(N, 1)`` column (the
+    popcon grid), in which case the result is ``(N, P)``.  ``peaking`` is assumed
+    uniform across the batch (the popcon peaking controls are grid constants).
+    """
     rho_arr = np.asarray(rho, dtype=float)
     if rho_arr.ndim != 1:
         raise ValueError("rho must be a one-dimensional profile grid")
-    avg = float(np.asarray(average, dtype=float))
-    peak = float(np.asarray(peaking, dtype=float))
+    peak = float(np.asarray(peaking, dtype=float).reshape(-1)[0])
     alpha = _alpha_for_peaking(peak, rho_arr)
     shape = np.maximum(1.0 - rho_arr**2, 0.0) ** alpha
-    width = float(rho_arr[-1] - rho_arr[0]) if rho_arr.size > 1 else 1.0
-    if width <= 0.0:
-        mean = float(np.mean(shape))
-    else:
-        mean = float(trapezoid(shape, x=rho_arr) / width)
-    mean = max(mean, 1e-300)
-    return avg * shape / mean
+    shape = shape * (1.0 - _EDGE_PEDESTAL) + _EDGE_PEDESTAL
+    mean = float(volume_average(shape, rho_arr))
+    unit = shape / max(mean, 1e-300)
+    avg_arr = np.asarray(average, dtype=float)
+    if avg_arr.ndim == 0:
+        return float(avg_arr) * unit
+    return avg_arr.reshape(avg_arr.shape[0], 1) * unit
 
 
 @relation(

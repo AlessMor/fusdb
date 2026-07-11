@@ -1,6 +1,6 @@
 """Simple metrics for the heat-exhaust challenge."""
 
-from fusdb import relation
+from fusdb.relation import relation
 
 
 @relation(

@@ -1,6 +1,5 @@
 """Confinement relations."""
 
 from .balance import *
-from .transitions import *
-from .transitions_process import *
+from .confinement_modes_threshold import *
 from .scalings import *

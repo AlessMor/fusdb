@@ -11,9 +11,6 @@ tags:
 - tokamak
 - spherical_tokamak
 - h_mode
-solver_tags:
-  mode: verify
-  verbosity: false
 variables:
   R:
     value: 3.6
