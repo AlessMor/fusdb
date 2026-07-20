@@ -1,0 +1,40 @@
+schema_version: 1
+datatype: polynomialfit
+source: mavrin_coronal
+subject: C
+provenance: Mavrin 2018 coronal cooling-rate fit
+atomic_number: 6
+temperature_bin_borders:
+- 0.0
+- 0.5
+- 100.0
+radc:
+- - -34.738
+  - -5.0085
+  - -12.788
+  - -16.637
+  - -7.2904
+- - -34.174
+  - -0.36687
+  - 0.68856
+  - -0.29191
+  - 0.04447
+# Mean-charge fit Zbar(T_e) from the same paper (Mavrin 2018, Table 2):
+# log10-binned polynomial in log10(T_e[keV]), ascending coefficients like
+# radc.  Charge intervals differ from the radiative (radc) bins, so they
+# carry their own borders.
+charge_temperature_bin_borders:
+- 0.0
+- 0.7
+- 100.0
+zc:
+- - 5.8588
+  - -1.7632
+  - -7.3521
+  - -12.217
+  - -7.2007
+- - 6.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0

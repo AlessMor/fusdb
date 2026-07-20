@@ -1,12 +1,9 @@
 """AMJUEL H.2 charge exchange fits for H2."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.26 H2 charge exchange rate',
@@ -39,7 +36,7 @@ def amjuel_h_2_2_26_h2_charge_exchange_rate(T_edge: Any) -> Any:
     - Max. rel. Error: 10.2031 %
     - Mean rel. Error: 6.3799 %
     - Competing process at low T: see above: dissociative electron attachment, process 2-2-17"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_26.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.26_H2-charge-exchange", T_edge)
 
 
 @relation(
@@ -84,4 +81,4 @@ def amjuel_h_2_2_27_h2_charge_exchange_old_rate(T_edge: Any) -> Any:
     - Next few reactions: rate coefficients, vs. Te, for a number of N ,N+ corona dissociation and
     - 2 2
     - ionisation channels"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_27.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.27_H2-charge-exchange", T_edge)

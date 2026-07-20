@@ -1,0 +1,35 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.33
+subject: N2-plus-dissociative-recombination
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.33'
+reaction: 2.7.14 e + N+ → N +N
+category: dissociative_recombination
+species: N2_plus
+output: N2_plus_dissociative_recombination_rate
+relation_name: AMJUEL H.2 2.33 N2+ dissociative recombination rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-1.668240000000E+01'
+- '-0.300000000000E+00'
+- '0.000000000000E+00'
+- '0.000000000000E+00'
+- '0.000000000000E+00'
+- '0.000000000000E+00'
+- '0.000000000000E+00'
+- '0.000000000000E+00'
+- '0.000000000000E+00'
+amjuel_comments:
+- 'Dissociativerecombination,cross-section: [15]∆E canbetakenfromelectronenergyweighted'
+- el
+- 'rate coefﬁcient. KER: 1.06 - 5.824 eV at zero electron impact energy, depending on vibrational'
+- 'state of N+ and electronic state of products. Suggestion: KER = 3.5 eV'

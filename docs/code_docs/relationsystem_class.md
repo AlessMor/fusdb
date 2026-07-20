@@ -32,7 +32,11 @@ objects; per-variable numerics live on the process-lifetime `VariableSpec`)
 - `run(mode='verify', **options)`: compile, then dispatch to one of the
   available modes (`verify`, `reconcile`, `optimize`, `ordered`) and return a
   result dict. `verify()`/`reconcile()`/`optimize()`/`ordered()` are shortcuts.
-- `compile()`: build/prune the active system (`run` calls this first).
+- `compile(force=False)`: build/prune the active system (`run` calls this
+  first). The structural verdicts depend only on *which* variables are
+  supplied/fixed, so while that fingerprint is unchanged a re-compile only
+  refreshes the value-dependent products (scales, fixed-profile specs, seed
+  values); `force=True` re-runs the full prune-to-fixpoint loop.
 - `pack()` / `unpack(x)`: free variables <-> solver vector. `pack()` returns
   `(x0, lower, upper)` (with `x0` all zeros — the layout's offsets/scales
   absorb the start values) and stores the packed layout on `packed_specs`.
@@ -45,9 +49,8 @@ objects; per-variable numerics live on the process-lifetime `VariableSpec`)
   layout on a probe namespace; `layout_relation_rows` / `layout_domain_rows` /
   `layout_movement_rows` then evaluate any namespace at that fixed shape (a
   missing value penalizes its own rows instead of changing the vector size),
-  so a whole solve stage keeps one row layout. `solver_residual_vector(values)`
-  / `domain_residuals(values)` / `movement_residuals(values, weights)` are the
-  presence-driven probe variants; modes weight and stack the blocks.
+  so a whole solve stage keeps one row layout. This is the single residual
+  protocol; modes weight and stack the blocks.
   `certify_relations(values)` builds the full per-relation certification
   statuses. IRLS movement weights are mode-owned and produced by
   `movement_weights(values, eps=...)`; movement references and tolerance
@@ -66,11 +69,17 @@ the system passes its `profile_size` and resolved tolerances as arguments.
 `Variable` is a boundary input record only (see
 [Variable Class](variable_class.md)).
 
-The result dictionaries returned by `run()` include standard keys such as
-`mode`, `success`, `errors`, `warnings`, `relation_status`, `residuals`,
-`variables` (a mapping of `Variable` objects), `relations` (the active
-`Relation` objects), `solver` (solver metadata), and `compiler_report`
-(the structural diagnostics view).
+The result dictionaries returned by `run()` are plain data (strings, numbers,
+numpy arrays -- they pickle and save to HDF5 as-is) with the standard keys
+`mode`, `success`, `termination`, `errors`, `warnings`, `relation_status`
+(per-relation status dicts), `failed_relations`, `max_residual`, `solver`
+(solver metadata, when a solve ran), `values` (the completed solver-form
+namespace, when the mode returns one), and `compiler_report` (the structural
+diagnostics view), plus mode-specific extras (`inputs_beyond_tolerance`,
+`likely_culprits`, the `popcon` payload, regime annotations).  Pass
+`save="run.h5"` to `run()` -- or call `fusdb.save_result(result, path)` /
+`fusdb.load_result(path)` -- to archive/reload a result as HDF5 (requires the
+optional `h5py` dependency, `pip install fusdb[io]`).
 
 **Profile-aware behavior**
 Profile variables (shape 1) are handled explicitly: scalar inputs are broadcast

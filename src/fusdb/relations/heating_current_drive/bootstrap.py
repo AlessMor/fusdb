@@ -1,5 +1,7 @@
 """Bootstrap and inductive current-drive relations."""
 
+import numpy as np
+
 from fusdb.relation import relation
 
 
@@ -35,10 +37,13 @@ def calc_bootstrap_fraction(density_peaking, ion_density_peaking, temperature_pe
     """
     # CHECK
     nu_n = (ion_density_peaking + density_peaking) / 2
+    temp_delta = np.maximum(temperature_peaking - 1.0, 0.0)
+    total_delta = np.maximum(temp_delta + nu_n - 1.0, 0.0)
+    temp_delta_for_denominator = np.maximum(temp_delta, 1.0e-12)
 
     bootstrap_fraction = 0.474 * (
-        (temperature_peaking - 1.0 + nu_n - 1.0) ** 0.974
-        * (temperature_peaking - 1.0) ** -0.416
+        total_delta**0.974
+        * temp_delta_for_denominator**-0.416
         * Z_eff**0.178
         * qstar**-0.133
         * eps**0.4

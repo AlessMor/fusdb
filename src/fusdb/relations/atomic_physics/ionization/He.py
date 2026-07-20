@@ -1,12 +1,9 @@
 """AMJUEL H.2 ionization fits for He."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.35 He ionization Freeman-Jones rate',
@@ -32,7 +29,7 @@ def amjuel_h_2_2_35_he_ionization_freeman_minus_jones_rate(T_edge: Any) -> Any:
     - charge number. aB0: ionisation of neutral atom. aB1: ionisation of singly charged ion.
     - Ionization Rate for neutral Helium Atoms
     - 2 +"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_35.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.35_He-ionization", T_edge)
 
 
 @relation(
@@ -56,4 +53,4 @@ def amjuel_h_2_2_36_he_ionization_strahl_rate(T_edge: Any) -> Any:
     - Max. rel. Error: 0.4138 %
     - Mean rel. Error: 0.1636 %
     - Ionization Rate for single charged Helium Ions"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_36.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.36_He-ionization", T_edge)

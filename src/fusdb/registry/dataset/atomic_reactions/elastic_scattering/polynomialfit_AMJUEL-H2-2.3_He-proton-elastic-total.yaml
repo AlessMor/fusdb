@@ -1,0 +1,35 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.3
+subject: He-proton-elastic-total
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.3'
+reaction: 0.2T p+He(1s21S) → p+He(1s21S)totalratecoef.
+category: elastic_scattering
+species: He
+output: He_proton_elastic_total_rate
+relation_name: AMJUEL H.2 2.3 He proton elastic total rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-1.940685000000E+01'
+- '1.706015000000E-01'
+- '5.518956000000E-03'
+- '-1.073297000000E-02'
+- '-1.744782000000E-02'
+- '1.271241000000E-03'
+- '1.541255000000E-03'
+- '-3.211063000000E-04'
+- '1.805115000000E-05'
+amjuel_comments:
+- Maxwellian rate coefﬁcient vs. T , with He(1s 1S) at rest, obtained by taking the correspond-
+- p
+- ing Beam-Maxw. rate coefﬁcient at Eb=0.2 eV and veriﬁcation by independent integration of
+- cross-section

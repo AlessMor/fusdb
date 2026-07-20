@@ -1,12 +1,9 @@
 """AMJUEL H.2 elastic scattering fits for Ar."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.11 Ar proton elastic total rate',
@@ -29,7 +26,7 @@ def amjuel_h_2_2_11_ar_proton_elastic_total_rate(T_edge: Any) -> Any:
     - p
     - Maxw. rate coefficient at Eb=0.05 eV and verification by independent integration of cross-
     - section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_11.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.11_Ar-proton-elastic-total", T_edge)
 
 
 @relation(
@@ -53,4 +50,4 @@ def amjuel_h_2_2_12_ar_proton_elastic_diffusion_rate(T_edge: Any) -> Any:
     - p
     - Maxw. rate coefficient at Eb=0.07 eV and verification by independent integration of cross-
     - section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_12.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.12_Ar-proton-elastic-diffusion", T_edge)

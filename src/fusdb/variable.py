@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -12,15 +13,25 @@ from .registry import VARIABLES, VariableSpec, convert_value
 from .utils import coerce_numeric_value, coerce_to_shape, parse_constraint_specs, value_in_domain
 
 
-@dataclass
+@dataclass(frozen=True)
 class Variable:
-    """One active scalar or profile variable.
+    """One declared scalar or profile variable: an immutable ingestion record.
 
     A ``Variable`` is its registry :class:`VariableSpec` (the immutable
-    definition: name, aliases, unit, shape, domain, tolerances) plus the
-    per-scenario state (``value``/``input_value``/``fixed``).  Definition
-    metadata is read through ``self.spec``; it is never copied onto the
-    instance, so a variable cannot drift out of sync with its registry.
+    definition: name, aliases, unit, shape, domain, tolerances) plus one
+    scenario's *declaration* about it (canonical value, ``fixed``, tolerance
+    overrides, profile size, local guards).  Definition metadata is read
+    through ``self.spec``; it is never copied onto the instance, so a
+    variable cannot drift out of sync with its registry.
+
+    Constructing a ``Variable`` *is* the ingestion event -- unit conversion,
+    shape coercion, domain validation -- and the instance is frozen
+    immediately afterward, so possessing one is proof that event happened
+    exactly once.  There are no setters: a changed declaration is a new
+    ``Variable`` (see :meth:`clone`), never a mutation of this one.  A solve
+    never writes back into a ``Variable``; solved state lives on the
+    ``RelationSystem`` that ran it (``reactor.last_system``), and
+    :class:`fusdb.reactor.SolvedVariable` is the read-through view over both.
 
     Args:
         name: Canonical variable name or alias.
@@ -55,28 +66,37 @@ class Variable:
         return self.spec.shape
 
     def __post_init__(self) -> None:
-        """Resolve registry metadata and normalize the value."""
-        self.spec = spec = VARIABLES.get(self.name)
-        self.name = spec.name
-        self.rel_tol = spec.rel_tol if self.rel_tol is None else float(self.rel_tol)
-        self.abs_tol = spec.abs_tol if self.abs_tol is None else float(self.abs_tol)
-        self.value = coerce_numeric_value(self.value)
-        if self.value is not None:
-            self.value = convert_value(self.value, from_unit=self.unit or spec.unit, to_unit=spec.unit)
-        self.unit = spec.unit  # value is now in canonical units
-        self.input_value = self._copy_value(self.value)
+        """Resolve registry metadata and normalize the value (the one ingestion pass)."""
+        spec = VARIABLES.get(self.name)
+        object.__setattr__(self, "spec", spec)
+        object.__setattr__(self, "name", spec.name)
+        object.__setattr__(self, "rel_tol", spec.rel_tol if self.rel_tol is None else float(self.rel_tol))
+        object.__setattr__(self, "abs_tol", spec.abs_tol if self.abs_tol is None else float(self.abs_tol))
+        value = coerce_numeric_value(self.value)
+        if value is not None:
+            value = convert_value(value, from_unit=self.unit or spec.unit, to_unit=spec.unit)
+        object.__setattr__(self, "value", value)
+        object.__setattr__(self, "unit", spec.unit)  # value is now in canonical units
+        object.__setattr__(self, "input_value", self._copy_value(self.value))
 
         # Validate profile shape and physical domain.
         if self.size is not None:
-            self.size = int(self.size)
-            if self.size <= 0:
+            size = int(self.size)
+            if size <= 0:
                 raise ValueError(f"Variable {self.name!r} size must be positive.")
+            object.__setattr__(self, "size", size)
         if self.shape == 0 and self.size is not None:
             raise ValueError(f"Scalar variable {self.name!r} cannot define a profile size.")
         if self.value is not None and not value_in_domain(self.value, spec.domain):
             raise ValueError(f"Variable {self.name!r} value is outside domain {spec.domain!r}.")
         if self.shape == 1 and self.value is not None:
-            self.value, self.size = coerce_to_shape(self.name, self.value, is_profile=True, size=self.size)
+            # ``input_value`` was already captured above, before this
+            # coercion -- matching the pre-freeze ordering exactly (a
+            # scalar supplied for a profile variable keeps a scalar
+            # ``input_value`` while ``value`` is the broadcast array).
+            coerced, size = coerce_to_shape(self.name, self.value, is_profile=True, size=self.size)
+            object.__setattr__(self, "value", coerced)
+            object.__setattr__(self, "size", size)
 
         # Record-local constraints are relation guards attached to this input;
         # registry-level constraint guards live on the spec.
@@ -91,39 +111,18 @@ class Variable:
                     source_name=self.name,
                 )
             )
-        self.relations = tuple(built)
+        object.__setattr__(self, "relations", tuple(built))
 
-    def _normalize_value(self, value: Any) -> Any:
-        """Normalize a canonical-unit value to this variable shape."""
-        if value is None:
-            return None
-        coerced, self.size = coerce_to_shape(
-            self.name, value, is_profile=self.shape == 1, size=self.size
-        )
-        return coerced
+    def clone(self, **changes: Any) -> "Variable":
+        """Return a new, independently-ingested ``Variable`` with fields overridden.
 
-    def set_input(self, value: Any) -> None:
-        """Set the user/input value in canonical units.
-
-        Args:
-            value: New canonical-unit value.
+        This is the only way to change a declaration: ``var.clone(value=3.3)``
+        or ``var.clone(fixed=True)``.  Every field not named in ``changes``
+        carries over from ``self``; the result goes through
+        :meth:`__post_init__` fresh (full unit conversion and validation),
+        exactly as if newly constructed.
         """
-        normalized = self._normalize_value(value)
-        if normalized is not None and not value_in_domain(normalized, self.spec.domain, zero_tol=0.0):
-            raise ValueError(f"Variable {self.name!r} value is outside domain {self.spec.domain!r}.")
-        self.input_value = self._copy_value(normalized)
-        self.value = self._copy_value(normalized)
-
-    def set_value(self, value: Any) -> None:
-        """Set the current public value in canonical units.
-
-        Args:
-            value: New canonical-unit value.
-        """
-        normalized = self._normalize_value(value)
-        if normalized is not None and not value_in_domain(normalized, self.spec.domain, zero_tol=0.0):
-            raise ValueError(f"Variable {self.name!r} value is outside domain {self.spec.domain!r}.")
-        self.value = self._copy_value(normalized)
+        return dataclasses.replace(self, **changes)
 
     def _copy_value(self, value: Any) -> Any:
         """Copy a scalar/array value.

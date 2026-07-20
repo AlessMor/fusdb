@@ -1,4 +1,9 @@
-"""Unit conversion helpers with a small no-pint fallback."""
+"""Unit conversion helpers backed by pint.
+
+Values are converted once at the ingestion boundary (``Variable``); nothing in
+the solver hot path touches units, so the pint registry is built lazily on the
+first conversion.
+"""
 
 from __future__ import annotations
 
@@ -16,53 +21,27 @@ def unit_registry():
     return _UNIT_REGISTRY
 
 
-_FALLBACK_FACTORS = {
-    ("MW", "W"): 1e6,
-    ("GW", "W"): 1e9,
-    ("kW", "W"): 1e3,
-    ("GJ", "J"): 1e9,
-    ("MJ", "J"): 1e6,
-    ("kJ", "J"): 1e3,
-    ("MA", "A"): 1e6,
-    ("kA", "A"): 1e3,
-    ("keV", "keV"): 1.0,
-    ("amu", "amu"): 1.0,
-    ("s", "s"): 1.0,
-    ("m", "m"): 1.0,
-    ("T", "T"): 1.0,
-    ("MW/m", "W/m"): 1e6,
-    ("MW*T/m", "W*T/m"): 1e6,
-    ("1e20/m**3", "1/m**3"): 1e20,
-    ("1e20 m**-3", "1/m**3"): 1e20,
-    ("1e20/m^3", "1/m**3"): 1e20,
-}
+def _normalize_unit(text: str | None) -> str:
+    unit = "" if text is None else str(text).strip()
+    if unit in {"", "1", "dimensionless", "none", "None"}:
+        return "dimensionless"
+    return unit.replace("^", "**")
 
 
 def convert_value(value: Any, *, from_unit: str | None, to_unit: str | None) -> Any:
     """Convert one scalar or array-like value between units."""
     if value is None:
         return None
-    dst = "" if to_unit is None else str(to_unit).strip()
-    if dst in {"", "1", "dimensionless", "none", "None"}:
-        dst = "dimensionless"
-    else:
-        dst = dst.replace("^", "**")
+    dst = _normalize_unit(to_unit)
     if hasattr(value, "to") and hasattr(value, "magnitude"):
         converted = value.to(dst).magnitude
     else:
-        src = "" if from_unit is None else str(from_unit).strip()
-        if src in {"", "1", "dimensionless", "none", "None"}:
-            src = "dimensionless"
-        else:
-            src = src.replace("^", "**")
+        src = _normalize_unit(from_unit)
         if src == dst:
             return value
         try:
             converted = (np.asarray(value) * unit_registry()(src)).to(dst).magnitude
-        except Exception:
-            key = (src, dst)
-            if key not in _FALLBACK_FACTORS:
-                raise RuntimeError(f"Unit conversion requires pint for {src!r} -> {dst!r}.")
-            converted = np.asarray(value) * _FALLBACK_FACTORS[key]
+        except Exception as exc:
+            raise ValueError(f"Cannot convert unit {src!r} -> {dst!r}: {exc}") from exc
     arr = np.asarray(converted)
     return float(arr) if arr.ndim == 0 else arr

@@ -1,0 +1,34 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.34
+subject: N2-plus-ionization
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.34'
+reaction: 2.7.15 e + N+ → e+N++ +e
+category: ionization
+species: N2_plus
+output: N2_plus_ionization_rate
+relation_name: AMJUEL H.2 2.34 N2+ ionization rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-4.675067000000E+01'
+- '2.768681000000E+01'
+- '-1.260874000000E+01'
+- '3.402022000000E+00'
+- '-5.302686000000E-01'
+- '3.823736000000E-02'
+- '6.310561000000E-04'
+- '-2.798009000000E-04'
+- '1.272992000000E-05'
+amjuel_comments:
+- 2 2
+- 'Single ionisation of N+, cross-section: [11]'
+- ∆Eel = 27.12 eV, KER=0.

@@ -1,12 +1,9 @@
 """AMJUEL H.2 ionization fits for N."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.44 N ionization STRAHL rate',
@@ -27,7 +24,7 @@ def amjuel_h_2_2_44_n_ionization_strahl_rate(T_edge: Any) -> Any:
     AMJUEL comments:
     - Ionization rate coefficient for neutral Nitrogen Atoms (Bell et al., CLM-R216) [8]
     - <sigma*vrel>(Te)(cm**3/s),N -- > N+"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_44.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.44_N-ionization", T_edge)
 
 
 @relation(
@@ -51,4 +48,4 @@ def amjuel_h_2_2_45_n_ionization_brook_rate(T_edge: Any) -> Any:
     - was used for the Bell rate coefficient. (Checked, Oct.2013: original Bell report and Brook
     - cross-sections are identical)
     - DeltaEel = 14.5"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_45.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.45_N-ionization", T_edge)

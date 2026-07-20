@@ -1,0 +1,49 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.23
+subject: H2-dissociative-attachment
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.23'
+reaction: 2.2.17 e + H2 → e+H2(v) → H +H−
+category: dissociative_attachment
+species: H2
+output: H2_dissociative_attachment_rate
+relation_name: AMJUEL H.2 2.23 H2 dissociative attachment rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+fit_error:
+  max_rel_pct: 11.6159
+  mean_rel_pct: 5.8452
+coefficients:
+- -2.278396332892D+01
+- 8.634828071751D-01
+- -1.686619409809D+00
+- 4.392288378207D-01
+- -4.393128035945D-01
+- 2.640299048385D-01
+- -6.748601049114D-02
+- 7.753368735736D-03
+- -3.328288267126D-04
+amjuel_comments:
+- Effective dissociative attachment rate.
+- ⟨σv⟩ =⟨σv⟩ +∑14 ⟨σv⟩ · pH (v)
+- eff H2(v=0) v=1 H2(v) 2
+- Vibrational distribution pH (v,T ) (vs. T ) taken into account. Only coupling to H (v) elec-
+- 2 e e 2
+- tronic ground state. No population of H (v) from electronically excited H∗, no radiative transi-
+- 2 2
+- 'tions between vibrational levels. Assume: incident H particle with 0.1 eV (for the rate taken to'
+- 'befor H atrest) and T = T , hence: density independent vibrational distribution and effective'
+- 2 i e
+- rate, as well as neutral molecule energy independent rate.
+- 'Competingprocesses: seeionconversion,below,andcontributiontodissociationviavibrational'
+- states, i.e., enhanced transition into repulsive triplett 3b.... state.
+- 'Max. rel. Error: 11.6159 %'
+- 'Mean rel. Error: 5.8452 %'

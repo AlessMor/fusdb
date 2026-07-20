@@ -1,12 +1,9 @@
 """AMJUEL H.2 dissociative ionization fits for N2."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.30 N2 dissociative ionization rate',
@@ -29,4 +26,4 @@ def amjuel_h_2_2_30_n2_dissociative_ionization_rate(T_edge: Any) -> Any:
     - dissociative
     - ionisation to N + N+
     - DeltaEel = 24.34 eV, KER: 8 eV (estimated, not clearly specified in paper)"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_30.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.30_N2-dissociative-ionization", T_edge)

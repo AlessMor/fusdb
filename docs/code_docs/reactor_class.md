@@ -62,26 +62,26 @@ reactor = Reactor(
 - `relation_system(...)` builds and returns a `RelationSystem` bound to the
   reactor's current variables and selected relations.
 - `run(**kwargs)` convenience wrapper that builds a `RelationSystem` and runs
-  the configured `mode`. The solve happens on a clone; afterwards each solved
-  value replaces the reactor's input (both `value` and `input_value`), so
-  `reactor.<var>` reflects the latest solve and a re-run starts from it. The
-  solved system is kept on `last_system`, which still carries that run's
-  original inputs for the input→output display.
-- A reactor renders its variables automatically in Jupyter via `_repr_html_`.
-  `print_variables_table(*names)` prints a plain-text table and
-  `print_html_variables_table(*names)` displays the rich HTML table inline;
-  pass variable names to show a subset. Before a run these show the loaded
-  inputs; after `run`/`reconcile`/... they show the reconciled values (with
-  input→output colouring, active-variable highlighting, and relation tooltips).
-  Use the module-level `variables_table(*sources)` to render one combined table
-  for several reactors, already-run `RelationSystem`s, and/or `SolvedColumn`s.
+  the configured `mode`. `Variable` is immutable, so a solve never rewrites
+  the reactor's declarations; the solved system is kept on `last_system`, and
+  `reactor.<var>` (`get_variable`) returns a `SolvedVariable` read-through
+  view -- `.declared` is the original, unchanged `Variable`, `.value` reads
+  the latest solved value from `last_system` when one exists (falling back to
+  the declaration otherwise). A later `run()` therefore starts from the same
+  declarations again, not the previous solution; call
+  `reactor.restart_from_solution()` first to opt into that explicitly.
+- To display variables, first build `TableData` with
+  `variable_table_data(*sources)`, then call `render_table(data, format="html"`
+  or `format="text")`. This supports several reactors, already-run
+  `RelationSystem`s, and/or `SolvedColumn`s, and retains input→output colouring,
+  active-variable highlighting, and relation tooltips.
 
 **Parallel solving**
 - `solve_reactors(paths, mode="reconcile", workers=N)` solves many reactor YAMLs
   at once, one worker process each (reconcile is CPU-bound, so processes — not
   threads — give the speedup). Live reactors/systems can't cross a process
   boundary, so each worker loads from YAML and returns a picklable `SolvedColumn`
-  (the same display column `variables_table` consumes). A reactor that fails to
+  (the same display column `variable_table_data` consumes). A reactor that fails to
   load or solve comes back as a failed-result column instead of aborting the
   batch. `paths` may be YAML paths/directories or `from_yaml`-loaded reactors
   (their `source_path` is used).
@@ -89,16 +89,16 @@ reactor = Reactor(
 **Variable table example**
 ```python
 from IPython.display import HTML, display
-from fusdb import Reactor, variables_table
+from fusdb import Reactor, render_table, variable_table_data
 
 # Current (input) values, no solve:
 reactors = [Reactor.from_yaml(path) for path in reactor_paths]
-display(HTML(variables_table(*reactors)))
+display(HTML(render_table(variable_table_data(*reactors))))
 
 # Reconciled values, solved in parallel:
 from fusdb import solve_reactors
 columns = solve_reactors(reactor_paths, mode="reconcile")
-display(HTML(variables_table(*columns)))
+display(HTML(render_table(variable_table_data(*columns))))
 ```
 
 **Profiles and variables**

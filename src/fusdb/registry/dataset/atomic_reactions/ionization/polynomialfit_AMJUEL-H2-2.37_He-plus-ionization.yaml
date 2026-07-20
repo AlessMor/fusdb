@@ -1,0 +1,37 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.37
+subject: He-plus-ionization
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.37'
+reaction: 2.2B1 e+He+(1s) → e+He+++e
+category: ionization
+species: He_plus
+output: He_plus_ionization_rate
+relation_name: AMJUEL H.2 2.37 He+ ionization STRAHL rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+fit_error:
+  max_rel_pct: 0.9472
+  mean_rel_pct: 0.5457
+coefficients:
+- -7.559669902889D+01
+- 5.464529470916D+01
+- -2.644507121426D+01
+- 8.159073714053D+00
+- -1.694080618046D+00
+- 2.348225872648D-01
+- -2.073277438991D-02
+- 1.049056816265D-03
+- -2.305310731172D-05
+amjuel_comments:
+- 'Max. rel. Error: 0.9472 %'
+- 'Mean rel. Error: 0.5457 %'
+- Ionization Rates for neutral Beryllium Atoms

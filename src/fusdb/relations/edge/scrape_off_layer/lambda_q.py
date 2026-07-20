@@ -9,6 +9,8 @@ cfspopcon returns lambda_q in mm; fusdb's ``lambda_q`` is in metres, so each
 scaling converts its mm result to metres (``* 1e-3``).
 """
 
+import numpy as np
+
 from fusdb.relation import relation
 
 _PA_PER_ATM = 101325.0  # cfspopcon expresses average_total_pressure in atm
@@ -78,8 +80,11 @@ def calc_lambda_q_with_eich_regression_15(P_sep, R, B_pol_out_mid, eps, lambda_q
     #15 in Table 3 in :cite:`eich_scaling_2013`. ``P_sep`` is in W (cfspopcon MW).
     """
     # CHECK
-    power_crossing_separatrix = P_sep / 1.0e6
+    power_crossing_separatrix = np.asarray(P_sep, dtype=float) / 1.0e6
     lambda_q = 1.35 * R**0.04 * B_pol_out_mid**-0.92 * eps**0.42
-    if power_crossing_separatrix > 0:
-        return _MM_TO_M * lambda_q_factor * lambda_q * power_crossing_separatrix**-0.02
-    return _MM_TO_M * lambda_q_factor * lambda_q
+    # Branch per element so the batched popcon namespace evaluates in one call.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        power_factor = np.where(
+            power_crossing_separatrix > 0, power_crossing_separatrix**-0.02, 1.0
+        )
+    return _MM_TO_M * lambda_q_factor * lambda_q * power_factor

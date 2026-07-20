@@ -1,0 +1,36 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.19
+subject: H-charge-exchange
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.19'
+reaction: 3.1.8 p + H(1s) → H(1s)+p
+category: charge_exchange
+species: H
+output: H_charge_exchange_rate
+relation_name: AMJUEL H.2 2.19 H charge exchange rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-1.850280000000E+01'
+- '3.708409000000E-01'
+- '7.949876000000E-03'
+- '-6.143769000000E-04'
+- '-4.698969000000E-04'
+- '-4.096807000000E-04'
+- '1.440382000000E-04'
+- '-1.514243000000E-05'
+- '5.122435000000E-07'
+amjuel_comments:
+- addedbyDR:singleparameterMaxwellianratecoeff.,vs. T ,forneutraltargetatrest,obtained
+- p
+- from corresponding ﬁt for Beam-Maxwellian rate coeff. evaluated at E = 0.1 eV and then
+- b
+- veriﬁed by independent integration of cross-section with proper low energy asymptotics.

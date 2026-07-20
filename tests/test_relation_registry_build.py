@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fusdb.registry import RELATIONS, RelationRegistry
+from fusdb.registry import RELATIONS, RelationRegistry, VariableRegistry
 from fusdb.relation import Relation, canonicalize_relation
 from fusdb.relationsystem import RelationSystem
 from fusdb.variable import Variable
@@ -28,6 +28,26 @@ def test_shipped_relations_build_without_degenerate_relations():
     assert len(registry) > 0
     # The lazy global proxy must build to the same set.
     assert len(RELATIONS) == len(registry)
+
+
+def test_variable_registry_rejects_duplicate_variable_keys(tmp_path):
+    path = tmp_path / "variables.yaml"
+    path.write_text(
+        "\n".join(
+            (
+                "defaults:",
+                "  rel_tol: 0.001",
+                "f_He3:",
+                "  default_unit: dimensionless",
+                "f_He3:",
+                "  default_unit: dimensionless",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Duplicate YAML key/variable 'f_He3'"):
+        VariableRegistry.from_yaml(path)
 
 
 class _Spec:
@@ -142,8 +162,9 @@ def test_get_filtered_relations_exclude_and_order_accept_function_name():
     ordered = RELATIONS.get_filtered_relations(names=[function], order=[function])
     assert ordered[0].name == name
     # order referencing an inactive (unselected) relation still errors.
+    inactive_function = "prf_electron_temperature_profile"
     with pytest.raises(ValueError, match="inactive relation"):
-        RELATIONS.get_filtered_relations(order=[function])
+        RELATIONS.get_filtered_relations(order=[inactive_function])
 
 
 def test_ordered_mode_resolves_step_by_function_name():

@@ -1,12 +1,9 @@
 """AMJUEL H.2 elastic scattering fits for He."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.3 He proton elastic total rate',
@@ -30,7 +27,7 @@ def amjuel_h_2_2_3_he_proton_elastic_total_rate(T_edge: Any) -> Any:
     - p
     - ing Beam-Maxw. rate coefficient at Eb=0.2 eV and verification by independent integration of
     - cross-section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_3.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.3_He-proton-elastic-total", T_edge)
 
 
 @relation(
@@ -55,7 +52,7 @@ def amjuel_h_2_2_4_he_proton_elastic_diffusion_rate(T_edge: Any) -> Any:
     - p
     - ing Beam-Maxw. rate coefficient at Eb=0.2 eV and verification by independent integration of
     - cross-section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_4.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.4_He-proton-elastic-diffusion", T_edge)
 
 
 @relation(
@@ -80,7 +77,7 @@ def amjuel_h_2_2_7_he_self_elastic_total_rate(T_edge: Any) -> Any:
     - He
     - Beam-Maxw. ratecoefficientatEb=0.2eVandverificationbyindependentintegrationofcross-
     - section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_7.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.7_He-self-elastic-total", T_edge)
 
 
 @relation(
@@ -105,4 +102,4 @@ def amjuel_h_2_2_8_he_self_elastic_diffusion_rate(T_edge: Any) -> Any:
     - He
     - Beam-Maxw. ratecoefficientatEb=0.2eVandverificationbyindependentintegrationofcross-
     - section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_8.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.8_He-self-elastic-diffusion", T_edge)

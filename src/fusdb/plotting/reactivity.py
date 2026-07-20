@@ -4,8 +4,8 @@ A single source of truth for the reactivity plotters. Reaction sources are
 discovered from the relation registry, so new reactions and parametrisations
 appear without editing this module. Two representations share that discovery:
 
-* :func:`plot_reactivity` -- a static matplotlib log-log plot, one preferred
-  curve per reaction (used in the example notebooks).
+* :func:`reactivity_curves` -- backend-neutral log-log curve data, one preferred
+  curve per reaction.
 * :func:`reactivity_app` -- a standalone, client-side interactive Bokeh explorer
   with every parametrisation drawn as a toggleable curve (used for the embedded
   docs widget ``code_docs/reactivity_plotter.html``).
@@ -22,7 +22,6 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 import numpy as np
-from matplotlib.axes import Axes
 
 from fusdb.registry import RELATIONS
 
@@ -36,7 +35,8 @@ from ._bokeh import (
     validate_axis_limits,
     write_html,
 )
-from .style import axes
+from .data import Curve, CurveSet
+from .renderers import bokeh_curve_set
 
 # Preferred parametrisation per reaction, best-first. The single ordering used by
 # both the static plot (which keeps one curve per reaction) and the interactive
@@ -113,7 +113,7 @@ def discover_reactivity_series() -> list[tuple[str, str, str, Any]]:
     return sorted(series, key=lambda item: (item[0], _source_rank(item[1])))
 
 
-def default_reactivities() -> dict[str, ReactivitySource]:
+def _default_reactivities() -> dict[str, ReactivitySource]:
     """Return one preferred reactivity relation per reaction, keyed by label.
 
     For each reaction the source earliest in :data:`SOURCE_PREFERENCE` is kept.
@@ -133,42 +133,40 @@ def default_reactivities() -> dict[str, ReactivitySource]:
     return chosen
 
 
-def plot_reactivity(
+def reactivity_curves(
     reactions: Mapping[str, ReactivitySource] | None = None,
     *,
     temperature_keV: np.ndarray | None = None,
-    ax: Axes | None = None,
-    **plot_kw: Any,
-) -> Axes:
-    """Plot fusion reactivities on a log-log axis.
+) -> CurveSet:
+    """Evaluate reactivities once and return backend-neutral log-log curve data."""
+    reactions = dict(reactions) if reactions is not None else _default_reactivities()
+    temperature = DEFAULT_TEMPERATURE_KEV if temperature_keV is None else np.asarray(temperature_keV, dtype=float)
+    return CurveSet(
+        [Curve(temperature, _evaluate(source, temperature), label, style={"linewidth": 2}) for label, source in reactions.items()],
+        xlabel="Ion temperature [keV]",
+        ylabel=r"$\langle \sigma v \rangle$ [m$^3$/s]",
+        xscale="log",
+        yscale="log",
+    )
 
-    Args:
-        reactions: Mapping of legend label -> reactivity source (a ``@relation``
-            object or any ``f(T_i=...)`` callable). Defaults to one curve per
-            reaction from :func:`default_reactivities`.
-        temperature_keV: Ion-temperature grid in keV. Defaults to ~1-500 keV.
-        ax: Existing axis to draw on; a new figure is created when omitted.
-        **plot_kw: Forwarded to ``Axes.loglog`` (e.g. ``linewidth``).
 
-    Returns:
-        The axis the curves were drawn on.
-    """
-    reactions = dict(reactions) if reactions is not None else default_reactivities()
-    if temperature_keV is None:
-        temperature_keV = DEFAULT_TEMPERATURE_KEV
-    else:
-        temperature_keV = np.asarray(temperature_keV, dtype=float)
-
-    ax = axes(ax, figsize=(10, 6))
-    plot_kw.setdefault("linewidth", 2)
-    for label, source in reactions.items():
-        ax.loglog(temperature_keV, _evaluate(source, temperature_keV), label=label, **plot_kw)
-
-    ax.set_xlabel("Ion temperature [keV]")
-    ax.set_ylabel(r"$\langle \sigma v \rangle$ [m$^3$/s]")
-    ax.grid(True, which="both", alpha=0.3)
-    ax.legend()
-    return ax
+def _all_reactivity_curves(series: list[tuple[str, str, str, Any]], temperature_keV: np.ndarray) -> CurveSet:
+    """Evaluate every registered parametrisation for the interactive explorer."""
+    curves = []
+    for reaction, source, label, relation in series:
+        with np.errstate(all="ignore"):
+            raw = np.asarray(relation.evaluate({"T_i": temperature_keV}), dtype=float)
+        values = np.clip(np.nan_to_num(raw, nan=0.0, posinf=0.0, neginf=0.0), 1e-40, None)
+        curves.append(
+            Curve(
+                temperature_keV,
+                values,
+                label,
+                style={"line_width": 2.2, "color": REACTION_COLORS.get(reaction, "#222222"), "line_dash": SOURCE_DASHES.get(source, ())},
+                metadata={"reaction": reaction, "source": source},
+            )
+        )
+    return CurveSet(curves, xlabel="Ion temperature [keV]", ylabel="⟨σv⟩ [m^3/s]", xscale="log", yscale="log")
 
 
 def reactivity_app(
@@ -210,26 +208,9 @@ def reactivity_app(
         y_label="⟨σv⟩ [m^3/s]",
     )
 
-    renderers = []
-    legend_items: list = []
-    for reaction, source, label, relation in series:
-        # ``evaluate`` returns raw function values (no domain enforcement), so
-        # edge NaNs/zeros are tolerated here and clipped for the log axis. Some
-        # parametrisations divide/power through invalid values at the edges; the
-        # resulting numpy warnings are expected and silenced.
-        with np.errstate(all="ignore"):
-            raw = np.asarray(relation.evaluate({"T_i": temperature_keV}), dtype=float)
-        values = np.clip(np.nan_to_num(raw, nan=0.0, posinf=0.0, neginf=0.0), 1e-40, None)
-        renderer = plot.line(
-            temperature_keV.tolist(),
-            values.tolist(),
-            line_width=2.2,
-            color=REACTION_COLORS.get(reaction, "#222222"),
-            line_dash=SOURCE_DASHES.get(source, ()),
-            visible=True,
-        )
-        renderers.append(renderer)
-        legend_items.append(LegendItem(label=label, renderers=[renderer], visible=True))
+    data = _all_reactivity_curves(series, temperature_keV)
+    _plot, renderers, _sources = bokeh_curve_set(data, plot=plot, legend=False)
+    legend_items = [LegendItem(label=curve.label, renderers=[renderer], visible=True) for curve, renderer in zip(data.curves, renderers, strict=True)]
 
     plot.add_layout(Legend(items=legend_items, location="top_left", click_policy="hide"))
 

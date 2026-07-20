@@ -1,12 +1,9 @@
 """AMJUEL H.2 charge exchange fits for H."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.19 H charge exchange rate',
@@ -30,7 +27,7 @@ def amjuel_h_2_2_19_h_charge_exchange_rate(T_edge: Any) -> Any:
     - from corresponding fit for Beam-Maxwellian rate coeff. evaluated at E = 0.1 eV and then
     - b
     - verified by independent integration of cross-section with proper low energy asymptotics."""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_19.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.19_H-charge-exchange", T_edge)
 
 
 @relation(
@@ -49,7 +46,7 @@ def amjuel_h_2_2_20_h_charge_exchange_freeman_minus_jones_rate(T_edge: Any) -> A
     The returned rate coefficient is converted from cm^3/s to m^3/s.
     
     Source: AMJUEL H.2 coefficient fit."""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_20.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.20_H-charge-exchange", T_edge)
 
 
 @relation(
@@ -70,4 +67,4 @@ def amjuel_h_2_2_25_h_charge_exchange_langevin_rate(T_edge: Any) -> Any:
     Source: AMJUEL H.2 coefficient fit.
     AMJUEL comments:
     - Langevin rate coefficient, constant at 2e-8"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_25.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.25_H-charge-exchange", T_edge)

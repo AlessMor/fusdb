@@ -7,10 +7,19 @@ name = "fusdb"
 version = "0.1.0"
 description = "Fusion reactor scenario database with per-folder YAML and a single Reactor class."
 requires-python = ">=3.10"
-dependencies = ["PyYAML>=6.0", "sympy>=1.12", "scipy>=1.11", "networkx>=3.0", "pycountry>=24.6.1", "hypernetx==2.4.0", "pandas==2.2.2", "fastjsonschema>=2.18", "pyomo>=6.7"]
+dependencies = ["PyYAML>=6.0", "scipy>=1.11", "networkx>=3.0", "pint>=0.23"]
 
 [project.optional-dependencies]
 plotting = ["matplotlib>=3.7", "bokeh>=3.5"]
+# Result saving/loading (fusdb.save_result / fusdb.load_result) uses HDF5.
+io = ["h5py>=3.0"]
+# Optional dataset features: symbolic reactivity placeholders (sympy) and the
+# PRF profile lookup tables (pandas).  Imported lazily; only needed when those
+# features are actually evaluated.
+datasets = ["sympy>=1.12", "pandas>=2.2"]
+# h5py reads the cfspopcon reference dataset.nc (netCDF4/HDF5) in
+# tests/cfspopcon_SPARC; matplotlib backs the comparison notebook/plots.
+test = ["pytest>=7.0", "h5py>=3.0", "matplotlib>=3.7", "sympy>=1.12", "pandas>=2.2"]
 docs = [
     "matplotlib>=3.7",
     "bokeh>=3.5",
@@ -32,4 +41,10 @@ include-package-data = false
 where = ["src"]
 
 [tool.setuptools.package-data]
-fusdb = ["registry/*.yaml", "registry/reactivity_tables/*.yaml"]
+fusdb = [
+    "registry/*.yaml",
+    "registry/dataset/fusion/*.yaml",
+    "registry/dataset/atomic_reactions/*/*.yaml",
+    "registry/dataset/atomic_reactions/mar/*/*.yaml",
+    "registry/dataset/radiation/*.yaml",
+]

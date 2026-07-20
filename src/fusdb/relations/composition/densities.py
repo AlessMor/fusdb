@@ -32,7 +32,7 @@ def ion_density_from_tracked_species_densities(
 
 @relation(
     name="Electron density from tracked species densities",
-    tags=("plasma", "composition"),
+    tags=("default", "plasma", "composition"),
     outputs="n_e",
 )
 def electron_density_from_tracked_species_densities(
@@ -42,7 +42,13 @@ def electron_density_from_tracked_species_densities(
     n_He4: Any,
     n_imp: Any,
 ) -> Any:
-    """Return electron density from charge neutrality."""
+    """Return electron density from charge neutrality.
+
+    A weak *default*: pointwise it is the constant-fractions profile tie in
+    species form (n_X = f_X n_i makes it ``zbar * n_i``), so like the
+    quasineutrality profile ties it must not pre-empt an independently derived
+    electron profile; quasineutrality is anchored at the averages level.
+    """
     return n_D + n_T + 2.0 * n_He3 + 2.0 * n_He4 + _IMPURITY_CHARGE * n_imp
 
 

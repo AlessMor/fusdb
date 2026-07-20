@@ -1,12 +1,9 @@
 """AMJUEL H.2 ionization fits for H."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.17 H ionization Freeman-Jones rate',
@@ -24,7 +21,7 @@ def amjuel_h_2_2_17_h_ionization_freeman_minus_jones_rate(T_edge: Any) -> Any:
     The returned rate coefficient is converted from cm^3/s to m^3/s.
     
     Source: AMJUEL H.2 coefficient fit."""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_17.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.17_H-ionization", T_edge)
 
 
 @relation(
@@ -48,4 +45,4 @@ def amjuel_h_2_2_18_h_proton_minus_impact_ionization_freeman_minus_jones_rate(T_
     - report. Checked also with old AURORA code (PPPL, ca. 1979) implementation. Identical
     - fit used there. Recommendation: Use cross-section and HYDKIN online integration to rate
     - coefficients."""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_18.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.18_H-proton-impact-ionization", T_edge)

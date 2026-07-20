@@ -10,7 +10,7 @@ from .species_registry import SPECIES, SpeciesRegistry, SpeciesSpec
 from .tag_registry import TAGS, TagRegistry
 from .variable_registry import VARIABLES, VariableRegistry, VariableSpec
 from .relation_registry import RELATIONS, RelationRegistry
+from .dataset import DATASETS, DatasetDocument, DatasetRegistry, load_dataset
 
 
 from .unitregistry import convert_value
-

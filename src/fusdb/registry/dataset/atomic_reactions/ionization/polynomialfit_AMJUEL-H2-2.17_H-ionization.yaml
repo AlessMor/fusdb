@@ -1,0 +1,31 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.17
+subject: H-ionization
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.17'
+reaction: 2.1.5FJ e + H(1s) → e+H+ +e
+category: ionization
+species: H
+output: H_ionization_rate
+relation_name: AMJUEL H.2 2.17 H ionization Freeman-Jones rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-0.317385000000e+02'
+- '0.114381800000e+02'
+- '-0.383399800000e+01'
+- '0.704669200000e+00'
+- '-0.743148620000e-01'
+- '0.415374900000e-02'
+- '-0.948696700000e-04'
+- '0.000000000000e-00'
+- '0.000000000000e+00'
+amjuel_comments: []

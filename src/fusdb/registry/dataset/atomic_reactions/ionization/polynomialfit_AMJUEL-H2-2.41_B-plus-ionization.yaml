@@ -1,0 +1,32 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.41
+subject: B-plus-ionization
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.41'
+reaction: 2.5B1 e+B+ → e+B+++e
+category: ionization
+species: B_plus
+output: B_plus_ionization_rate
+relation_name: AMJUEL H.2 2.41 B+ ionization STRAHL rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- -4.420568125967D+01
+- 2.558429301929D+01
+- -1.226766585830D+01
+- 3.790617724445D+00
+- -7.898969090461D-01
+- 1.094004163863D-01
+- -9.602179535698D-03
+- 4.812751663763D-04
+- -1.045722639512D-05
+amjuel_comments:
+- Ionization Rates for single charged Boron Ions

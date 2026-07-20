@@ -9,15 +9,23 @@ import pytest
 import yaml
 
 from fusdb.registry import RelationRegistry
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate, evaluate_amjuel_h4_rate
+from fusdb.registry.dataset import load_dataset
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate, evaluate_amjuel_h4_rate
 
 
-AMJUEL_DIR = Path(__file__).resolve().parents[1] / "src" / "fusdb" / "relations" / "atomic_physics"
+AMJUEL_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "fusdb"
+    / "registry"
+    / "dataset"
+    / "atomic_reactions"
+)
 FORTRAN_FLOAT = re.compile(r"^[+-]?\d+\.\d+(?:[DEde][+-]\d+)$")
 
 
 def _yaml_paths() -> list[Path]:
-    return sorted(path for path in AMJUEL_DIR.glob("*/*.yaml") if path.name.startswith("amjuel_h2_"))
+    return sorted(AMJUEL_DIR.rglob("polynomialfit_AMJUEL-H2-*.yaml"))
 
 
 def test_all_amjuel_h2_yaml_files_keep_expected_shape():
@@ -26,7 +34,10 @@ def test_all_amjuel_h2_yaml_files_keep_expected_shape():
 
     for path in paths:
         data = yaml.safe_load(path.read_text())
-        assert data["source"] == "AMJUEL"
+        assert data["schema_version"] == 1
+        assert data["datatype"] == "polynomialfit"
+        assert data["source"].startswith("AMJUEL-H2-")
+        assert data["database"] == "AMJUEL"
         assert data["amjuel_section"] == "H.2"
         assert data["inputs"] == {"temperature": "T_edge"}
         assert data["output_unit"] == "m^3/s"
@@ -50,22 +61,22 @@ def test_all_amjuel_h2_yaml_files_keep_expected_shape():
 
 
 def test_amjuel_h2_evaluator_uses_edge_temperature_and_cm3_to_m3_conversion():
-    path = AMJUEL_DIR / "charge_exchange" / "amjuel_h2_2_19.yaml"
+    dataset_id = "polynomialfit_AMJUEL-H2-2.19_H-charge-exchange"
 
     # At T_edge = 1e-3 keV, AMJUEL has T = 1 eV and ln(T) = 0, so only b0 contributes.
     expected = math.exp(-1.850280000000e01) * 1.0e-6
-    assert evaluate_amjuel_h2_rate(path, T_edge=1.0e-3) == pytest.approx(expected, rel=1.0e-12)
+    assert evaluate_amjuel_h2_rate(dataset_id, T_edge=1.0e-3) == pytest.approx(expected, rel=1.0e-12)
 
-    values = evaluate_amjuel_h2_rate(path, T_edge=np.array([1.0e-3, 1.0e-2]))
+    values = evaluate_amjuel_h2_rate(dataset_id, T_edge=np.array([1.0e-3, 1.0e-2]))
     assert values.shape == (2,)
     assert np.all(values >= 0.0)
 
 
 def test_amjuel_h2_constant_langevin_charge_exchange_fit():
-    path = AMJUEL_DIR / "charge_exchange" / "amjuel_h2_2_25.yaml"
+    dataset_id = "polynomialfit_AMJUEL-H2-2.25_H-charge-exchange"
 
-    low = evaluate_amjuel_h2_rate(path, T_edge=1.0e-3)
-    high = evaluate_amjuel_h2_rate(path, T_edge=1.0)
+    low = evaluate_amjuel_h2_rate(dataset_id, T_edge=1.0e-3)
+    high = evaluate_amjuel_h2_rate(dataset_id, T_edge=1.0)
     assert low == pytest.approx(2.0e-14, rel=5.0e-10)
     assert high == pytest.approx(low, rel=1.0e-12)
 
@@ -121,7 +132,7 @@ def test_amjuel_h2_relation_includes_temperature_limit_when_amjuel_reports_tmin(
 
 
 def _h4_yaml_paths() -> list[Path]:
-    return sorted(path for path in AMJUEL_DIR.glob("*/*.yaml") if path.name.startswith("amjuel_h4_"))
+    return sorted(AMJUEL_DIR.rglob("polynomialfit_AMJUEL-H4-*.yaml"))
 
 
 def test_all_amjuel_h4_yaml_files_keep_expected_shape():
@@ -130,47 +141,82 @@ def test_all_amjuel_h4_yaml_files_keep_expected_shape():
 
     for path in paths:
         data = yaml.safe_load(path.read_text())
-        assert data["source"] == "AMJUEL"
+        assert data["schema_version"] == 1
+        assert data["datatype"] == "polynomialfit"
+        assert data["source"].startswith("AMJUEL-H4-")
+        assert data["database"] == "AMJUEL"
         assert data["amjuel_section"] == "H.4"
-        assert data["inputs"] == {"density": "n_e_edge", "temperature": "T_edge"}
-        assert data["output_unit"] == "m^3/s"
-        assert data["source_output_unit"] == "cm^3/s"
-        assert data["relation_name"].startswith("AMJUEL H.4 ")
+        if "inputs" in data:
+            assert data["inputs"] == {"density": "n_e_edge", "temperature": "T_edge"}
+        if "output_unit" in data:
+            assert data["output_unit"] == "m^3/s"
+            assert data["source_output_unit"] == "cm^3/s"
+        assert data.get("relation_name", data.get("name", "")).startswith("AMJUEL H.4 ")
         assert data["output"].endswith("_rate")
-        assert FORTRAN_FLOAT.match(data["density_limits"]["min_cm3"])
-        assert FORTRAN_FLOAT.match(data["density_limits"]["max_cm3"])
+        assert float(str(data["density_limits"]["min_cm3"]).replace("D", "E")) > 0.0
+        assert float(str(data["density_limits"]["max_cm3"]).replace("D", "E")) > 0.0
 
         blocks = data["coefficient_blocks"]
-        assert [block["density_indices"] for block in blocks] == [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+        covered_density_indices = sorted(
+            index for block in blocks for index in block["density_indices"]
+        )
+        assert covered_density_indices == list(range(9))
         for block in blocks:
             rows = block["rows"]
             assert [row["temperature_index"] for row in rows] == list(range(9))
             for row in rows:
-                assert len(row["coefficients"]) == 3
-                assert all(FORTRAN_FLOAT.match(value) for value in row["coefficients"])
+                assert len(row["coefficients"]) == len(block["density_indices"])
+                assert all(math.isfinite(float(str(value).replace("D", "E"))) for value in row["coefficients"])
 
 
 def test_amjuel_h4_evaluator_uses_edge_units_and_density_scaling():
-    path = AMJUEL_DIR / "recombination" / "amjuel_h4_2_1_8.yaml"
+    dataset_id = "polynomialfit_AMJUEL-H4-2.1.8_H-recombination"
 
     # At T_edge = 1e-3 keV (1 eV) and n_e_edge = 1e14 m^-3 (1e8 cm^-3) both fit
     # logarithms vanish, so only the (0, 0) coefficient contributes.
-    data = yaml.safe_load(path.read_text())
+    data = load_dataset(dataset_id).data
     a00 = float(data["coefficient_blocks"][0]["rows"][0]["coefficients"][0].replace("D", "E"))
     expected = math.exp(a00) * 1.0e-6
-    assert evaluate_amjuel_h4_rate(path, n_e_edge=1.0e14, T_edge=1.0e-3) == pytest.approx(expected, rel=1.0e-12)
+    assert evaluate_amjuel_h4_rate(dataset_id, n_e_edge=1.0e14, T_edge=1.0e-3) == pytest.approx(expected, rel=1.0e-12)
 
-    values = evaluate_amjuel_h4_rate(path, n_e_edge=np.array([1.0e14, 1.0e15]), T_edge=1.0e-3)
+    values = evaluate_amjuel_h4_rate(dataset_id, n_e_edge=np.array([1.0e14, 1.0e15]), T_edge=1.0e-3)
     assert values.shape == (2,)
     assert np.all(values >= 0.0)
 
 
 def test_amjuel_h4_evaluator_clips_density_to_fit_limits():
-    path = AMJUEL_DIR / "recombination" / "amjuel_h4_2_1_8.yaml"
+    dataset_id = "polynomialfit_AMJUEL-H4-2.1.8_H-recombination"
 
-    below_limit = evaluate_amjuel_h4_rate(path, n_e_edge=1.0e12, T_edge=1.0e-2)
-    at_limit = evaluate_amjuel_h4_rate(path, n_e_edge=1.0e14, T_edge=1.0e-2)
+    below_limit = evaluate_amjuel_h4_rate(dataset_id, n_e_edge=1.0e12, T_edge=1.0e-2)
+    at_limit = evaluate_amjuel_h4_rate(dataset_id, n_e_edge=1.0e14, T_edge=1.0e-2)
     assert below_limit == pytest.approx(at_limit, rel=1.0e-12)
+
+
+@pytest.mark.parametrize(
+    ("dataset_id", "a00"),
+    (
+        ("polynomialfit_AMJUEL-H4-3.2.3r_H2-mar-via-h2-plus", -2.191302446846e01),
+        ("polynomialfit_AMJUEL-H4-3.2.3d_H2-mad-via-h2-plus", -2.305748927979e01),
+        ("polynomialfit_AMJUEL-H4-3.2.3i_H2-mai-via-h2-plus", -4.373131541734e01),
+        ("polynomialfit_AMJUEL-H4-2.2.17r_H2-mar-via-h-minus", -2.297800283146e01),
+        ("polynomialfit_AMJUEL-H4-2.2.17d_H2-mad-via-h-minus", -3.882083547683e01),
+    ),
+)
+def test_amjuel_condensed_molecular_fits_match_their_corona_limit(dataset_id, a00):
+    # At 1 eV and 1e14 m^-3, both AMJUEL fit logarithms are zero. The rate is
+    # therefore exactly exp(a00) cm^3/s, converted to m^3/s.
+    expected = math.exp(a00) * 1.0e-6
+    assert evaluate_amjuel_h4_rate(dataset_id, 1.0e14, 1.0e-3) == pytest.approx(
+        expected, rel=1.0e-12
+    )
+
+    values = evaluate_amjuel_h4_rate(
+        dataset_id,
+        np.logspace(14, 22, 9),
+        1.0e-3,
+    )
+    assert np.all(np.isfinite(values))
+    assert np.all(values > 0.0)
 
 
 def test_amjuel_h4_relations_register_with_density_constraints():

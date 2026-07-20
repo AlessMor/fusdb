@@ -106,7 +106,11 @@ def test_reconcile_switches_declared_ohmic_mode_to_l_mode_with_zero_threshold() 
     assert any("switched to l_mode for reconcile" in warning for warning in result["warnings"])
 
 
-def test_popcon_preflight_switches_declared_h_mode_to_l_mode_with_warning() -> None:
+def test_popcon_auto_regime_assigns_l_mode_below_lh_threshold() -> None:
+    # popcon now selects the confinement regime per grid point automatically
+    # (no global preflight switch, no mutation of the reactor's declared tags):
+    # a point below the L-H threshold (P_sep < P_LH) is solved in l_mode and
+    # reported through the regime_index map, while the reactor stays h_mode.
     reactor = _reactor("h_mode")
 
     result = reactor.popcon(
@@ -116,8 +120,12 @@ def test_popcon_preflight_switches_declared_h_mode_to_l_mode_with_warning() -> N
     )
 
     assert result["success"]
-    assert "l_mode" in reactor.tags
-    assert result["regime"] == "l_mode"
-    assert any("switched to l_mode for popcon" in warning for warning in result["warnings"])
-    assert np.isfinite(result["popcon"]["fields"]["P_sep"]).all()
-    assert np.isfinite(result["popcon"]["fields"]["P_LH"]).all()
+    payload = result["popcon"]
+    names = payload["regime_names"]
+    assert "l_mode" in names
+    regime_index = payload["regime_index"]
+    assert regime_index.shape == (1, 1)
+    assert names[regime_index[0, 0]] == "l_mode"
+    assert reactor.tags == ("tokamak", "h_mode")  # declared regime is not mutated
+    assert np.isfinite(payload["fields"]["P_sep"]).all()
+    assert np.isfinite(payload["fields"]["P_LH"]).all()

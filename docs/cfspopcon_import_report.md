@@ -21,7 +21,7 @@ section 'Third-party Notices'."* and a `# CHECK` marker for review; every new
 - **plasma_current/** — safety_factor (`f_shaping`, `qstar`), bootstrap (`f_BS`), resistive_heating (Spitzer/neoclassical resistivity, trapped enhancement, current relaxation, loop voltage, ohmic power, inductive current), flux_consumption (7 fluxes + internal inductance/inductivity) + Barr surface-inductance sub-model (external/vertical inductance, `invmu_0_dLedR`, vertical field — `fa..fh` ported to scalar numpy, Barr coeffs).
 - **scrape_off_layer/** — lambda_q (4 scalings), heat_flux (B_pol/B_tor/pitch, q∥, q⊥), separatrix_density, **two-point model** (separatrix temp, upstream pressure, target temp/density/flux basics+factors+combined, target q∥, 6 momentum-loss fits, required power-loss), reattachment (ionization volume, neutral-flux factor, reattachment time).
 - **separatrix_conditions/** — power crossing separatrix, full Martin+Ryter L-H, L-I (3 scalings), P_SOL/P_LH & P_SOL/P_LI ratios; **SepOS** (critical alpha_MHD, poloidal sound Larmor radius, L-H/MHD/density condition functions, ion/electron sustainment power).
-- **radiated_power/ + impurities/** — synchrotron, core radiated fraction, min-radiation targets; **impurity radiation** (Mavrin coronal [default] / Mavrin noncoronal / Post-Jensen, per-species over Mavrin's 11), **edge Lengyel** (cooling integral N/Ne/Ar + edge concentration). Coefficients in `registry/atomic_radiation/*.yaml`.
+- **radiated_power/ + impurities/** — synchrotron, core radiated fraction, min-radiation targets; **impurity radiation** (Mavrin coronal [default] / Mavrin noncoronal / Post-Jensen, per-species over Mavrin's 11), **edge Lengyel** (cooling integral N/Ne/Ar + edge concentration). Per-species coefficients in `registry/dataset/radiation/*.yaml`.
 - **profiles/** — temperature peaking (peak temps), Angioni density peaking (effective collisionality, electron variant → `density_peaking`, ion variant → `ion_density_peaking`). fusdb keeps independent electron/ion peaking factors for both density and temperature; the ion factors default to the electron value (`Default ion {density,temperature} peaking from electron`) and can be supplied/scaled independently. The bootstrap uses `nu_n = (ion + electron)/2`, matching cfspopcon.
 - **metrics/** — heat-exhaust proxies `PB_over_R`, `PBpRnSq`.
 - **plasma_pressure/beta** — reviewed, fully covered by fusdb (0 imported).
@@ -54,7 +54,7 @@ section 'Third-party Notices'."* and a `# CHECK` marker for review; every new
 
 ## New registry additions
 - **Species** (radiating impurities): Li, Be, C, N, O, Ne, Ar, Kr, Xe, W.
-- **Data files:** `registry/atomic_radiation/{mavrin_coronal,mavrin_noncoronal,post_jensen}.yaml` (noncoronal & Post-Jensen coefficients extracted programmatically from cfspopcon source — no transcription error).
+- **Data files:** per-species `polynomialfit_{mavrin_coronal,mavrin_noncoronal,post_jensen}_*.yaml` resources under `registry/dataset/radiation/` (noncoronal & Post-Jensen coefficients extracted programmatically from cfspopcon source — no transcription error).
 - **109 new variables** (each `# CHECK`), plus aliases mapping cfspopcon names to existing fusdb vars (e.g. `triangularity_psi95→delta_95`, `elongation_psi95→kappa_95`, `bootstrap_fraction→f_BS`, `q_star→qstar`, `P_rad_impurity→P_line`, `poloidal_circumference→L_p`).
 
 ## How to review

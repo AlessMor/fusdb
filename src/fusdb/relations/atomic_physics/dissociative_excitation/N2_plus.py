@@ -1,12 +1,9 @@
 """AMJUEL H.2 dissociative excitation fits for N2_plus."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.32 N2+ dissociative excitation rate',
@@ -28,4 +25,4 @@ def amjuel_h_2_2_32_n2_plus_dissociative_excitation_rate(T_edge: Any) -> Any:
     - Dissociative excitation, cross-section: [11] DeltaE = 8.4 eV, KER: max. of 6.4 eV at 120 eV,
     - el
     - KERnearly=0nearthreshold(i.e. pre-dissociation via various channels)."""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_32.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.32_N2-plus-dissociative-excitation", T_edge)

@@ -1,0 +1,25 @@
+schema_version: 1
+datatype: polynomialfit
+source: mavrin_coronal
+subject: He
+provenance: Mavrin 2018 coronal cooling-rate fit
+atomic_number: 2
+temperature_bin_borders:
+- 0.0
+- 100.0
+radc:
+- - -35.551
+  - 0.31469
+  - 0.10156
+  - -0.09373
+  - 0.02502
+# Mean-charge fit Zbar(T_e) from the same paper (Mavrin 2018, Table 2):
+# log10-binned polynomial in log10(T_e[keV]), ascending coefficients like
+# radc.  Charge intervals differ from the radiative (radc) bins, so they
+# carry their own borders.
+# He is fully stripped over 0.1-100 keV: constant Zbar = 2.
+charge_temperature_bin_borders:
+- 0.0
+- 100.0
+zc:
+- - 2.0

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fusdb.utils import trapezoid
+from fusdb.utils import volume_average
 
 from fusdb.relation import relation
 
@@ -27,7 +27,7 @@ def reaction_rate_ddn(n_D: float, sigmav_DDn: float, V_p: float, rho: float) -> 
     integrand = 0.5 * (n_D**2) * sigmav_DDn
 
     # Integrate the profile over the plasma volume.
-    return V_p * trapezoid(integrand, x=rho)
+    return V_p * volume_average(integrand, rho)
 
 
 @relation(
@@ -50,4 +50,4 @@ def reaction_rate_ddp(n_D: float, sigmav_DDp: float, V_p: float, rho: float) -> 
     integrand = 0.5 * (n_D**2) * sigmav_DDp
 
     # Integrate the profile over the plasma volume.
-    return V_p * trapezoid(integrand, x=rho)
+    return V_p * volume_average(integrand, rho)

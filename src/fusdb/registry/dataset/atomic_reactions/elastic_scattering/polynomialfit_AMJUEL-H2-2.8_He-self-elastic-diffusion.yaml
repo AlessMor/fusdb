@@ -1,0 +1,36 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.8
+subject: He-self-elastic-diffusion
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.8'
+reaction: 0.4D He+(1s) + He(1s21S) → He+(1s) + He(1s21S) diff.
+category: elastic_scattering
+species: He
+output: He_self_elastic_diffusion_rate
+relation_name: AMJUEL H.2 2.8 He self elastic diffusion rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-2.002066000000E+01'
+- '-8.176109000000E-02'
+- '-1.436536000000E-01'
+- '-1.526248000000E-02'
+- '1.239665000000E-02'
+- '3.669366000000E-04'
+- '-7.044353000000E-04'
+- '9.121888000000E-05'
+- '-3.350873000000E-06'
+amjuel_comments:
+- rate coef.
+- Maxwellian rate coefﬁcient vs. T +, with He at rest, obtained by taking the corresponding
+- He
+- Beam-Maxw. ratecoefﬁcientatEb=0.2eVandveriﬁcationbyindependentintegrationofcross-
+- section

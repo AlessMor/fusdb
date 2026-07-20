@@ -12,8 +12,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fusdb.utils import rho_average, volume_average
-from fusdb.registry import KEV_TO_J, RELATIONS
+from fusdb.utils import line_average, rho_average, volume_average
+from fusdb.registry import KEV_TO_J, RELATIONS, VARIABLES
 from fusdb.relationsystem import RelationSystem
 from fusdb.variable import Variable
 
@@ -36,7 +36,7 @@ def test_fixed_profile_conflicting_average_is_flagged_on_verify():
     profile = np.full(21, 15.0)  # volume-average 15
     system = _system(14.0, profile)  # supplied average disagrees
     result = system.run("verify")
-    assert not result["verified"]
+    assert not result["success"]
     assert not result["relation_status"][_CONSISTENCY]["verified"]
 
 
@@ -51,7 +51,7 @@ def test_reconcile_moves_supplied_average_to_the_profile_value():
     profile = np.full(21, 15.0)
     system = _system(14.0, profile)  # not fixed: reconcile is free to move it
     result = system.run("reconcile")
-    assert result["verified"]
+    assert result["success"]
     assert system.values["T_e_avg"] == pytest.approx(15.0, abs=1e-3)
 
 
@@ -73,6 +73,41 @@ def test_explicit_rho_average_relation_uses_straight_rho_average():
     rel = RELATIONS.get("Electron temperature rho-average")
     result = rel.evaluate({"T_e": profile, "rho": rho})
     assert result == pytest.approx(rho_average(profile, rho))
+
+
+def test_line_average_uses_normalized_minor_radius_definition():
+    rho = np.linspace(0.0, 1.0, 101)
+    profile = rho**2
+    assert line_average(profile, rho) == pytest.approx(1.0 / 3.0, rel=2e-4)
+
+
+def test_electron_density_profile_produces_conventional_line_average():
+    rho = np.linspace(0.0, 1.0, 101)
+    profile = 2.0 - rho
+    rel = RELATIONS.get("Electron density line-average")
+    assert rel.evaluate({"n_e": profile, "rho": rho}) == pytest.approx(1.5)
+    assert VARIABLES.resolve("n_e_la") == "n_la"
+
+
+def test_profile_line_average_provides_n_la():
+    # The registry n_la default was removed: the line-average relation is the
+    # one producer, so a supplied profile must yield the conventional
+    # (1/a) integral n_e dr value with no default in the pool.
+    rho = np.linspace(0.0, 1.0, 101)
+    profile = 2.0 - rho
+    variables = [
+        Variable("rho", value=rho, fixed=True),
+        Variable("n_e", value=profile, fixed=True),
+    ]
+    relations = [
+        RELATIONS.get("Electron density line-average"),
+        RELATIONS.get("Electron density volume-average consistency"),
+    ]
+    system = RelationSystem(variables, relations, name="line_average_provider_test")
+    result = system.run("verify")
+    assert result["success"]
+    system.complete(system.values)
+    assert system.values["n_la"] == pytest.approx(1.5)
 
 
 def test_thermal_pressure_has_volume_and_rho_averaged_outputs():

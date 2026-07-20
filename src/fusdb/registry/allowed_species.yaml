@@ -37,7 +37,7 @@ Imp:
   isotopic_mass_u: 12.0
 
 # Named radiating impurity species (Mavrin 2018 / Post-Jensen cooling-curve set).
-# CHECK added for impurity radiated power; coefficients in registry/atomic_radiation/.
+# CHECK added for impurity radiated power; coefficients in registry/dataset/radiation/.
 Li:
   full_name: lithium
   atomic_symbol: "Li"

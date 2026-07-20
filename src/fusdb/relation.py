@@ -307,13 +307,14 @@ class Relation:
 
         Shared by ``residual_vector`` and ``verify_status`` so the scale and
         tolerance derivation lives in one place; returns ``compare_numeric``'s
-        ``(ok, residual, violation)``.
+        ``(ok, residual, violation)``.  Scalar equality comparisons -- the
+        bulk of a full-space residual vector -- take a plain-float path with
+        arithmetic identical to :func:`compare_numeric`.
         """
         if out is not None and scales is not None:
             base_scale = scales.get(out, 1.0)
         else:
             base_scale = max(safe_max_abs(lhs), safe_max_abs(rhs), 1.0)
-        scale = np.maximum(np.maximum(np.abs(np.asarray(lhs, dtype=float)), np.abs(np.asarray(rhs, dtype=float))), base_scale)
         if out is not None and rel_tols and out in rel_tols:
             tol = float(rel_tols[out])
         else:
@@ -322,6 +323,13 @@ class Relation:
             atol = float(abs_tols[out])
         else:
             atol = self._variable_tolerance(out)[1]
+        if op == "==" and isinstance(lhs, float) and isinstance(rhs, float) and isinstance(base_scale, float):
+            scl = max(abs(lhs), abs(rhs), base_scale, 1.0e-300)
+            tol_width = max(atol, tol * scl, 1.0e-300)
+            diff = lhs - rhs
+            violation = abs(diff)
+            return violation <= tol_width, np.asarray([diff / tol_width]), np.asarray([violation])
+        scale = np.maximum(np.maximum(np.abs(np.asarray(lhs, dtype=float)), np.abs(np.asarray(rhs, dtype=float))), base_scale)
         return compare_numeric(lhs, op, rhs, scale=scale, rel_tol=tol, abs_tol=atol)
 
     def residual_vector(

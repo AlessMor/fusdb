@@ -37,56 +37,56 @@ _BN_TAGS = ("plasma", "tokamak", "process")
 
 @relation(name="Normalised beta limit (Wesson)", tags=_BN_TAGS, outputs="beta_norm_max")
 def calculate_beta_norm_max_wesson(internal_inductivity: float) -> Any:
-    """Wesson normalised-beta upper limit: 4 * li (DIII-D fit, beta_N >= 2.5).
+    """Wesson normalised-beta upper limit as a fraction: 0.04 * li.
 
     Adapted from PROCESS; see README.md section "Third-party Notices".
     """
     # CHECK
-    return 4 * internal_inductivity
+    return 0.04 * internal_inductivity
 
 
 @relation(name="Normalised beta limit (original)", tags=_BN_TAGS, outputs="beta_norm_max")
 def calculate_beta_norm_max_original(eps: float) -> Any:
-    """Original normalised-beta upper limit scaling.
+    """Original normalised-beta upper limit scaling, returned as a fraction.
 
     Adapted from PROCESS; see README.md section "Third-party Notices".
     """
     # CHECK
-    return 2.7 * (1.0 + 5.0 * eps**3.5)
+    return 0.01 * 2.7 * (1.0 + 5.0 * eps**3.5)
 
 
 @relation(name="Normalised beta limit (Menard)", tags=_BN_TAGS, outputs="beta_norm_max")
 def calculate_beta_norm_max_menard(eps: float) -> Any:
-    """Menard normalised-beta upper limit (spherical tokamak, f_BS ~ 50%).
+    """Menard normalised-beta upper limit as a fraction (spherical tokamak, f_BS ~ 50%).
 
     Adapted from PROCESS; see README.md section "Third-party Notices".
     """
     # CHECK
-    return 3.12 + 3.5 * eps**1.7
+    return 0.01 * (3.12 + 3.5 * eps**1.7)
 
 
 @relation(name="Normalised beta limit (Tholerus)", tags=_BN_TAGS, outputs="beta_norm_max")
 def calculate_beta_norm_max_thloreus(
     c_beta: float, pres_plasma_on_axis: float, p_th: float
 ) -> Any:
-    """Tholerus normalised-beta upper limit (STEP flat-top operational space);
+    """Tholerus normalised-beta upper limit as a fraction (STEP flat-top operational space);
     ``p_th`` is the volume-averaged plasma pressure.
 
     Adapted from PROCESS; see README.md section "Third-party Notices".
     """
     # CHECK
     fp = pres_plasma_on_axis / p_th
-    return 3.7 + ((c_beta / fp) * (12.5 - 3.5 * fp))
+    return 0.01 * (3.7 + ((c_beta / fp) * (12.5 - 3.5 * fp)))
 
 
 @relation(name="Normalised beta limit (Stambaugh)", tags=_BN_TAGS, outputs="beta_norm_max")
 def calculate_beta_norm_max_stambaugh(f_BS: float, kappa: float, A: float) -> Any:
-    """Stambaugh normalised-beta upper limit (steady-state tokamak equilibria).
+    """Stambaugh normalised-beta upper limit as a fraction (steady-state tokamak equilibria).
 
     Adapted from PROCESS; see README.md section "Third-party Notices".
     """
     # CHECK
-    return (
+    return 0.01 * (
         f_BS
         * 10
         * (-0.7748 + (1.2869 * kappa) - (0.2921 * kappa**2) + (0.0197 * kappa**3))

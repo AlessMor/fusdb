@@ -1,0 +1,37 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.53
+subject: Fe-plus-ionization
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.53'
+reaction: 2.26B1 e+Fe+ → e+Fe+++e
+category: ionization
+species: Fe_plus
+output: Fe_plus_ionization_rate
+relation_name: AMJUEL H.2 2.53 Fe+ ionization STRAHL rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+fit_error:
+  max_rel_pct: 0.2106
+  mean_rel_pct: 0.1105
+coefficients:
+- -3.437574762141D+01
+- 1.685181764677D+01
+- -7.911217139035D+00
+- 2.442620345655D+00
+- -5.072788444089D-01
+- 6.899131935535D-02
+- -5.866292819569D-03
+- 2.825378750379D-04
+- -5.881378739141D-06
+amjuel_comments:
+- Ionization Rate for single charged Iron Ions
+- 'Max. rel. Error: .2106 %'
+- 'Mean rel. Error: .1105 %'

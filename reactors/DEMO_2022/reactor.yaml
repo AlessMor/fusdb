@@ -29,7 +29,7 @@ variables:
   f_NI: 0.39
   f_CD: 0.05
   q95: 3.89
-  beta_N: 2.5
+  beta_N: 0.025
   T_avg:
     value: 12.49
     unit: keV

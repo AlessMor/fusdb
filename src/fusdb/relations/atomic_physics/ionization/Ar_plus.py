@@ -1,12 +1,9 @@
 """AMJUEL H.2 ionization fits for Ar_plus."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.51 Ar+ ionization STRAHL rate',
@@ -29,4 +26,4 @@ def amjuel_h_2_2_51_ar_plus_ionization_strahl_rate(T_edge: Any) -> Any:
     - Ionization Rate for single charged Argon Ions
     - Max. rel. Error: .3659 %
     - Mean rel. Error: .2214 %"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_51.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.51_Ar-plus-ionization", T_edge)

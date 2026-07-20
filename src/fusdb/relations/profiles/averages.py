@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 
 from fusdb.relation import relation
-from fusdb.utils import rho_average, volume_average
+from fusdb.utils import line_average, volume_average
 
 
 def _profile_average_residual(avg: Any, profile: Any, rho: Any) -> Any:
@@ -121,7 +121,7 @@ def impurity_density_volume_average(n_imp_avg: float, n_imp: Any, rho: Any) -> A
     outputs="B_rho_avg",
 )
 def magnetic_field_rho_average(B: Any, rho: Any) -> Any:
-    return rho_average(B, rho)
+    return line_average(B, rho)
 
 
 @relation(
@@ -130,7 +130,7 @@ def magnetic_field_rho_average(B: Any, rho: Any) -> Any:
     outputs="T_e_rho_avg",
 )
 def electron_temperature_rho_average(T_e: Any, rho: Any) -> Any:
-    return rho_average(T_e, rho)
+    return line_average(T_e, rho)
 
 
 @relation(
@@ -139,7 +139,7 @@ def electron_temperature_rho_average(T_e: Any, rho: Any) -> Any:
     outputs="T_i_rho_avg",
 )
 def ion_temperature_rho_average(T_i: Any, rho: Any) -> Any:
-    return rho_average(T_i, rho)
+    return line_average(T_i, rho)
 
 
 @relation(
@@ -148,7 +148,17 @@ def ion_temperature_rho_average(T_i: Any, rho: Any) -> Any:
     outputs="n_e_rho_avg",
 )
 def electron_density_rho_average(n_e: Any, rho: Any) -> Any:
-    return rho_average(n_e, rho)
+    return line_average(n_e, rho)
+
+
+@relation(
+    name="Electron density line-average",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="n_la",
+)
+def electron_density_line_average(n_e: Any, rho: Any) -> Any:
+    """Return ``(1/a) integral_0^a n_e(r) dr`` from a ``rho=r/a`` profile."""
+    return line_average(n_e, rho)
 
 
 @relation(
@@ -157,7 +167,7 @@ def electron_density_rho_average(n_e: Any, rho: Any) -> Any:
     outputs="n_i_rho_avg",
 )
 def ion_density_rho_average(n_i: Any, rho: Any) -> Any:
-    return rho_average(n_i, rho)
+    return line_average(n_i, rho)
 
 
 @relation(
@@ -166,7 +176,7 @@ def ion_density_rho_average(n_i: Any, rho: Any) -> Any:
     outputs="n_D_rho_avg",
 )
 def deuterium_density_rho_average(n_D: Any, rho: Any) -> Any:
-    return rho_average(n_D, rho)
+    return line_average(n_D, rho)
 
 
 @relation(
@@ -175,7 +185,7 @@ def deuterium_density_rho_average(n_D: Any, rho: Any) -> Any:
     outputs="n_T_rho_avg",
 )
 def tritium_density_rho_average(n_T: Any, rho: Any) -> Any:
-    return rho_average(n_T, rho)
+    return line_average(n_T, rho)
 
 
 @relation(
@@ -184,7 +194,7 @@ def tritium_density_rho_average(n_T: Any, rho: Any) -> Any:
     outputs="n_He3_rho_avg",
 )
 def helium3_density_rho_average(n_He3: Any, rho: Any) -> Any:
-    return rho_average(n_He3, rho)
+    return line_average(n_He3, rho)
 
 
 @relation(
@@ -193,7 +203,7 @@ def helium3_density_rho_average(n_He3: Any, rho: Any) -> Any:
     outputs="n_He4_rho_avg",
 )
 def helium4_density_rho_average(n_He4: Any, rho: Any) -> Any:
-    return rho_average(n_He4, rho)
+    return line_average(n_He4, rho)
 
 
 @relation(
@@ -202,4 +212,4 @@ def helium4_density_rho_average(n_He4: Any, rho: Any) -> Any:
     outputs="n_imp_rho_avg",
 )
 def impurity_density_rho_average(n_imp: Any, rho: Any) -> Any:
-    return rho_average(n_imp, rho)
+    return line_average(n_imp, rho)

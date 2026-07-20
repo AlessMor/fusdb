@@ -1,10 +1,4 @@
-"""Variable-table rendering for reactors, relation systems and solved columns.
-
-Presentation only: everything here reads reactors/systems through a small
-duck-typed surface (see :func:`_table_column`) and produces HTML or plain-text
-tables.  Kept out of :mod:`fusdb.reactor` so the domain modules do not depend
-on rendering code (``RelationSystem._repr_html_`` imports from here).
-"""
+"""Prepare and render variable tables for reactors, systems, and solve results."""
 
 from __future__ import annotations
 
@@ -15,6 +9,7 @@ from typing import Any, NamedTuple
 import numpy as np
 
 from ..registry import VARIABLES
+from .data import TableCell, TableData
 
 
 def _format_table_value(value: Any) -> str:
@@ -131,12 +126,18 @@ def _table_column(source: Any) -> SolvedColumn:
             {name: tuple(dict.fromkeys(names)) for name, names in relations.items()},
             getattr(source, "last_result", None) or {},
         )
-    # Reactor: its Variable records supply inputs/current values and tolerances.
+    # Reactor: its Variable records supply the declared inputs and tolerances;
+    # current values read through last_system's solved state when present (a
+    # Variable's own declaration never changes after a solve), falling back
+    # to the declaration itself for an unsolved reactor.
     records = source.variables.values()
+    last_system = getattr(source, "last_system", None)
+    solved = last_system.values if last_system is not None else {}
+    current = {v.name: solved.get(v.name, v.value) for v in records}
     return SolvedColumn(
         source.name,
         {v.name: v.input_value for v in records if v.input_value is not None},
-        {v.name: v.value for v in records if v.value is not None},
+        {name: value for name, value in current.items() if value is not None},
         {v.name: float(v.rel_tol or 0.0) for v in records},
         {v.name: float(v.abs_tol or 0.0) for v in records},
         frozenset(),
@@ -156,8 +157,8 @@ def _displayed_variable_names(columns: Iterable[SolvedColumn], variable_names: I
     return _sort_table_variable_names(names)
 
 
-def variables_table(*sources: Any, variable_names: Iterable[str] | None = None) -> str:
-    """Render current variable values for one or more reactors/systems as HTML.
+def variable_table_data(*sources: Any, variable_names: Iterable[str] | None = None) -> TableData:
+    """Prepare current variable values for HTML or plain-text presentation.
 
     Each positional source is a :class:`Reactor`, a :class:`RelationSystem`, or a
     :class:`SolvedColumn` (e.g. from :func:`fusdb.reactor.solve_reactors`);
@@ -167,61 +168,56 @@ def variables_table(*sources: Any, variable_names: Iterable[str] | None = None) 
     by solve success. ``variable_names`` overrides the row order/subset; when
     omitted, all active and user-supplied variables are shown.
 
-    Returns:
-        HTML ``<table>`` string.
+    The returned data contains the same solve-status and input/output change
+    information without committing to a renderer.
     """
     columns = [_table_column(source) for source in sources]
     ordered_names = _displayed_variable_names(columns, variable_names)
-
-    parts = ["<table style='border-collapse:collapse;font-size:0.8em'>"]
-    parts.append("<tr><th style='text-align:left;padding:2px 8px'>variable</th>")
-    for column in columns:
-        style = "padding:2px 8px"
-        if column.result:
-            style += f";color:{'#1EFF00' if column.result.get('success') else '#c00000'}"
-        parts.append(f"<th style='{style}'>{html.escape(column.name)}</th>")
-    parts.append("</tr>")
-
+    rows = []
     for name in ordered_names:
-        parts.append(
-            f"<tr><td style='text-align:left;padding:2px 8px;font-weight:bold'>"
-            f"{html.escape(name)}</td>"
-        )
+        cells = []
         for column in columns:
             background, color, text = _table_cell_display(
                 column.inputs.get(name), column.values.get(name),
                 column.rel_tols.get(name, 0.0), column.abs_tols.get(name, 0.0),
                 name in column.active_variable_names,
             )
-            style = f"padding:2px 8px;color:{color}"
-            if background:
-                style += f";background-color:{background}"
             rel_names = column.relation_names_by_variable.get(name, ())
-            title = (
-                f" title='{html.escape(chr(10).join(rel_names), quote=True)}'"
-                if rel_names
-                else ""
-            )
-            parts.append(f"<td style='{style}'{title}>{text}</td>")
+            cells.append(TableCell(text, foreground=color, background=background, tooltip="\n".join(rel_names)))
+        rows.append((name, cells))
+    header_colors = tuple(
+        "#1EFF00" if column.result.get("success") else "#c00000" if column.result else "#000000"
+        for column in columns
+    )
+    return TableData([column.name for column in columns], rows, header_colors)
+
+
+def render_table(data: TableData, *, format: str = "html", title: str | None = None) -> str:
+    """Render prepared table data as HTML or aligned plain text."""
+    if format == "html":
+        parts = ["<table style='border-collapse:collapse;font-size:0.8em'>"]
+        parts.append("<tr><th style='text-align:left;padding:2px 8px'>variable</th>")
+        for header, color in zip(data.headers, data.header_colors, strict=True):
+            parts.append(f"<th style='padding:2px 8px;color:{color}'>{html.escape(header)}</th>")
         parts.append("</tr>")
-    parts.append("</table>")
-    return "".join(parts)
-
-
-def _variables_text_table(source: Any, variable_names: Iterable[str] | None = None) -> str:
-    """Render one source's current variables as an aligned plain-text table."""
-    column = _table_column(source)
-    names = _displayed_variable_names([column], variable_names)
-    rows = []
-    for name in names:
-        current = column.values.get(name)
-        value = _format_table_value(current if current is not None else column.inputs.get(name))
-        unit = VARIABLES.get(name).unit if name in VARIABLES else ""
-        rows.append((name, value, unit))
-    name_w = max((len(name) for name, _, _ in rows), default=len(column.name))
-    value_w = max((len(value) for _, value, _ in rows), default=0)
-    lines = [column.name, "-" * (name_w + value_w + 2)]
-    for name, value, unit in rows:
-        line = f"{name:<{name_w}}  {value:>{value_w}}"
-        lines.append(f"{line}  {unit}" if unit else line)
+        for name, cells in data.rows:
+            parts.append(f"<tr><td style='text-align:left;padding:2px 8px;font-weight:bold'>{html.escape(name)}</td>")
+            for cell in cells:
+                style = f"padding:2px 8px;color:{cell.foreground}"
+                if cell.background:
+                    style += f";background-color:{cell.background}"
+                tooltip = f" title='{html.escape(cell.tooltip, quote=True)}'" if cell.tooltip else ""
+                parts.append(f"<td style='{style}'{tooltip}>{cell.text}</td>")
+            parts.append("</tr>")
+        parts.append("</table>")
+        return "".join(parts)
+    if format != "text":
+        raise ValueError("Table format must be 'html' or 'text'.")
+    if len(data.headers) != 1:
+        raise ValueError("Plain-text rendering requires exactly one table column.")
+    rows = [(name, cell.text.replace("<b>", "").replace("</b>", "").replace("&rarr;", "->")) for name, (cell,) in data.rows]
+    name_w = max((len(name) for name, _ in rows), default=len(title or data.headers[0]))
+    value_w = max((len(value) for _, value in rows), default=0)
+    lines = [title or data.headers[0], "-" * (name_w + value_w + 2)]
+    lines.extend(f"{name:<{name_w}}  {value:>{value_w}}" for name, value in rows)
     return "\n".join(lines)

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fusdb.utils import trapezoid
+from fusdb.utils import volume_average
 
 from fusdb.relation import relation
 
@@ -27,7 +27,7 @@ def reaction_rate_he3he3(n_He3: float, sigmav_He3He3: float, V_p: float, rho: fl
     integrand = 0.5 * (n_He3**2) * sigmav_He3He3
 
     # Integrate the profile over the plasma volume.
-    return V_p * trapezoid(integrand, x=rho)
+    return V_p * volume_average(integrand, rho)
 
 
 @relation(
@@ -51,7 +51,7 @@ def reaction_rate_the3_d(n_T: float, n_He3: float, sigmav_THe3_D: float, V_p: fl
     integrand = n_T * n_He3 * sigmav_THe3_D
 
     # Integrate the profile over the plasma volume.
-    return V_p * trapezoid(integrand, x=rho)
+    return V_p * volume_average(integrand, rho)
 
 
 @relation(
@@ -75,7 +75,7 @@ def reaction_rate_the3_np(n_T: float, n_He3: float, sigmav_THe3_np: float, V_p: 
     integrand = n_T * n_He3 * sigmav_THe3_np
 
     # Integrate the profile over the plasma volume.
-    return V_p * trapezoid(integrand, x=rho)
+    return V_p * volume_average(integrand, rho)
 
 
 @relation(
@@ -117,4 +117,4 @@ def reaction_rate_tt(n_T: float, sigmav_TT: float, V_p: float, rho: float) -> An
     integrand = 0.5 * (n_T**2) * sigmav_TT
 
     # Integrate the profile over the plasma volume.
-    return V_p * trapezoid(integrand, x=rho)
+    return V_p * volume_average(integrand, rho)

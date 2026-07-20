@@ -1,12 +1,9 @@
 """AMJUEL H.2 elastic scattering fits for Xe."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.15 Xe proton elastic total rate',
@@ -27,7 +24,7 @@ def amjuel_h_2_2_15_xe_proton_elastic_total_rate(T_edge: Any) -> Any:
     AMJUEL comments:
     - Maxwellianratecoefficientvs. Tp,withXeatrest,obtainedbytakingthecorrespondingBeam-
     - Maxw. ratecoefficientatEb=0.2eVandverificationbyindependentintegrationofcross-section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_15.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.15_Xe-proton-elastic-total", T_edge)
 
 
 @relation(
@@ -67,4 +64,4 @@ def amjuel_h_2_2_16_xe_proton_elastic_diffusion_rate(T_edge: Any) -> Any:
     - are
     - 1 2
     - the two temperatures."""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_16.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.16_Xe-proton-elastic-diffusion", T_edge)

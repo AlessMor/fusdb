@@ -1,12 +1,9 @@
 """AMJUEL H.2 dissociation fits for N2."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.28 N2 dissociation rate',
@@ -28,4 +25,4 @@ def amjuel_h_2_2_28_n2_dissociation_rate(T_edge: Any) -> Any:
     - Dissociation from ground state N , cross-section from [10], DeltaE =9.7527eV,KER:0.95eV
     - 2 el
     - (spectra with two peaks, at 0.8 and 1.1 eV resp.)"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_28.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.28_N2-dissociation", T_edge)

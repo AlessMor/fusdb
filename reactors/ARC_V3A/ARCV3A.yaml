@@ -13,15 +13,16 @@ tags:
 variables:
   R:
     value: 4.62
-    fixed: true
   a:
     value: 1.18
-    fixed: true
   eps: 0.26
   B0: 11.4
   I_p: 12e6
-  elongation: 1.8
-  triangularity: 0.65
+  elongation: 
+    value: 1.8
+  triangularity: 
+    value: 0.65
+  squareness: 0
   V_p: 189.0
   S_p: 257
   # P_RF,max, coupled : 50 MW

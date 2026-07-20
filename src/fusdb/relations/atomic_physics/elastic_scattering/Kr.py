@@ -1,12 +1,9 @@
 """AMJUEL H.2 elastic scattering fits for Kr."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.13 Kr proton elastic total rate',
@@ -29,7 +26,7 @@ def amjuel_h_2_2_13_kr_proton_elastic_total_rate(T_edge: Any) -> Any:
     - p
     - Maxw. rate coefficient at Eb=0.05 eV and verification by independent integration of cross-
     - section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_13.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.13_Kr-proton-elastic-total", T_edge)
 
 
 @relation(
@@ -52,4 +49,4 @@ def amjuel_h_2_2_14_kr_proton_elastic_diffusion_rate(T_edge: Any) -> Any:
     - Maxwellianratecoefficientvs. T ,withKratrest,obtainedbytakingthecorrespondingBeam-
     - p
     - Maxw. ratecoefficientatEb=0.1eVandverificationbyindependentintegrationofcross-section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_14.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.14_Kr-proton-elastic-diffusion", T_edge)

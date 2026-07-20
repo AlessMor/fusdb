@@ -57,13 +57,13 @@ def calc_effective_collisionality(n_e_avg: Any, T_e_avg: Any, R: Any, Z_eff: Any
 
 @relation(
     name="Electron density peaking (Angioni)",
-    tags=("plasma", "profile", "tokamak"),
-    outputs=("density_peaking", "n0"),
+    tags=("default", "plasma", "profile", "tokamak"),
+    outputs="density_peaking",
 )
 def calc_electron_density_peaking(
-    effective_collisionality: Any, beta_T: Any, electron_density_peaking_offset: Any, n_e_avg: Any
-) -> tuple[Any, Any]:
-    """Calculate the electron density peaking and on-axis (peak) electron density.
+    effective_collisionality: Any, beta_T: Any, electron_density_peaking_offset: Any
+) -> Any:
+    """Calculate the electron density peaking.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
 
@@ -71,26 +71,22 @@ def calc_electron_density_peaking(
         effective_collisionality: [~] :term:`glossary link<effective_collisionality>`
         beta_T: [~] :term:`glossary link<beta_toroidal>`
         electron_density_peaking_offset: [~] :term:`glossary link<electron_density_peaking_offset>`
-        n_e_avg: [1/m^3] :term:`glossary link<average_electron_density>`
-
     Returns:
-        density_peaking, peak_electron_density (n0)
+        density_peaking
     """
     # CHECK
-    density_peaking = calc_density_peaking(effective_collisionality, beta_T, nu_noffset=electron_density_peaking_offset)
-    peak_electron_density = n_e_avg * density_peaking
-    return density_peaking, peak_electron_density
+    return calc_density_peaking(effective_collisionality, beta_T, nu_noffset=electron_density_peaking_offset)
 
 
 @relation(
     name="Ion density peaking (Angioni)",
-    tags=("plasma", "profile", "tokamak"),
-    outputs=("ion_density_peaking", "n_i_peak"),
+    tags=("default", "plasma", "profile", "tokamak"),
+    outputs="ion_density_peaking",
 )
 def calc_ion_density_peaking(
-    effective_collisionality: Any, beta_T: Any, ion_density_peaking_offset: Any, n_e_avg: Any, dilution: Any
-) -> tuple[Any, Any]:
-    """Calculate the ion density peaking and on-axis (peak) fuel-ion density.
+    effective_collisionality: Any, beta_T: Any, ion_density_peaking_offset: Any
+) -> Any:
+    """Calculate the ion density peaking.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
 
@@ -102,13 +98,8 @@ def calc_ion_density_peaking(
         effective_collisionality: [~] :term:`glossary link<effective_collisionality>`
         beta_T: [~] :term:`glossary link<beta_toroidal>`
         ion_density_peaking_offset: [~] :term:`glossary link<ion_density_peaking_offset>`
-        n_e_avg: [1/m^3] :term:`glossary link<average_electron_density>`
-        dilution: [~] :term:`glossary link<dilution>`
-
     Returns:
-        ion_density_peaking, peak_fuel_ion_density (n_i_peak)
+        ion_density_peaking
     """
     # CHECK
-    ion_density_peaking = calc_density_peaking(effective_collisionality, beta_T, nu_noffset=ion_density_peaking_offset)
-    peak_fuel_ion_density = n_e_avg * dilution * ion_density_peaking
-    return ion_density_peaking, peak_fuel_ion_density
+    return calc_density_peaking(effective_collisionality, beta_T, nu_noffset=ion_density_peaking_offset)

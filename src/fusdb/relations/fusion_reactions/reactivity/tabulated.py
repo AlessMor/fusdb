@@ -7,8 +7,8 @@ from numpy import float64
 from numpy.typing import NDArray
 
 from fusdb.relation import relation
-from fusdb.registry.tabulated_reactivities import reactivity_from_reactivity_table
-from fusdb.registry.tabulated_reactivities import reactivity_from_xsection_table
+from fusdb.utils.datasets import reactivity_from_reactivity_table
+from fusdb.utils.datasets import reactivity_from_xsection_table
 
 
 @relation(
@@ -32,7 +32,7 @@ def sigmav_DD_NRL(
     """
     # Interpolate the tabulated total DD reactivity data.
     return reactivity_from_reactivity_table(
-        "DD_total_reactivity_NRL.yaml",
+        "reactivity_NRL_DD-total",
         T_i,
         interpolation_kind=interpolation_kind,
     )
@@ -55,7 +55,7 @@ def sigmav_DDn_ENDFB_VIII0(
         The DDn reactivity in m^3/s.
     """
     # Integrate the DDn ENDF/B-VIII.0 cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("DDn_xsection_ENDFB-VIII0.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII0_DDn", T_i)
 
 
 @relation(
@@ -75,7 +75,7 @@ def sigmav_DDp_ENDFB_VIII0(
         The DDp reactivity in m^3/s.
     """
     # Integrate the DDp ENDF/B-VIII.0 cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("DDp_xsection_ENDFB-VIII0.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII0_DDp", T_i)
 
 
 @relation(
@@ -115,7 +115,7 @@ def sigmav_DDn_ENDFB_VIII1(
         The DDn reactivity in m^3/s.
     """
     # Integrate the DDn ENDF/B-VIII.1 cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("DDn_xsection_ENDFB-VIII1.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII1_DDn", T_i)
 
 
 @relation(
@@ -135,7 +135,7 @@ def sigmav_DDp_ENDFB_VIII1(
         The DDp reactivity in m^3/s.
     """
     # Integrate the DDp ENDF/B-VIII.1 cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("DDp_xsection_ENDFB-VIII1.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII1_DDp", T_i)
 
 
 @relation(
@@ -179,7 +179,7 @@ def sigmav_DHe3_NRL(
     """
     # Interpolate the tabulated DHe3 reactivity data.
     return reactivity_from_reactivity_table(
-        "DHe3_reactivity_NRL.yaml",
+        "reactivity_NRL_DHe3",
         T_i,
         interpolation_kind=interpolation_kind,
     )
@@ -202,7 +202,7 @@ def sigmav_DHe3_ENDFB_VIII0(
         The DHe3 reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.0 DHe3 cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("DHe3_xsection_ENDFB-VIII0.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII0_DHe3", T_i)
 
 
 @relation(
@@ -222,7 +222,7 @@ def sigmav_DHe3_ENDFB_VIII1(
         The DHe3 reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.1 DHe3 cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("DHe3_xsection_ENDFB-VIII1.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII1_DHe3", T_i)
 
 
 @relation(
@@ -246,7 +246,7 @@ def sigmav_DT_NRL(
     """
     # Interpolate the tabulated DT reactivity data.
     return reactivity_from_reactivity_table(
-        "DT_reactivity_NRL.yaml",
+        "reactivity_NRL_DT",
         T_i,
         interpolation_kind=interpolation_kind,
     )
@@ -269,7 +269,7 @@ def sigmav_DT_ENDFB_VIII0(
         The DT reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.0 DT cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("DT_xsection_ENDFB-VIII0.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII0_DT", T_i)
 
 
 @relation(
@@ -289,7 +289,7 @@ def sigmav_DT_ENDFB_VIII1(
         The DT reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.1 DT cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("DT_xsection_ENDFB-VIII1.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII1_DT", T_i)
 
 
 @relation(
@@ -309,7 +309,7 @@ def sigmav_He3He3_ENDFB_VIII0(
         The He3He3 reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.0 He3He3 cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("He3He3_xsection_ENDFB-VIII0.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII0_He3He3", T_i)
 
 
 @relation(
@@ -329,7 +329,7 @@ def sigmav_He3He3_ENDFB_VIII1(
         The He3He3 reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.1 He3He3 cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("He3He3_xsection_ENDFB-VIII1.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII1_He3He3", T_i)
 
 
 @relation(
@@ -349,7 +349,7 @@ def sigmav_THe3_D_ENDFB_VIII0(
         The THe3_D reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.0 THe3_D cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("THe3D_xsection_ENDFB-VIII0.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII0_THe3D", T_i)
 
 
 @relation(
@@ -369,7 +369,7 @@ def sigmav_THe3_D_ENDFB_VIII1(
         The THe3_D reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.1 THe3_D cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("THe3D_xsection_ENDFB-VIII1.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII1_THe3D", T_i)
 
 
 @relation(
@@ -394,7 +394,7 @@ def sigmav_THe3_D_NRL(
     # Interpolate the total THe3 NRL rate and apply the implemented branch fraction.
     return (
         reactivity_from_reactivity_table(
-            "THe3_total_reactivity_NRL.yaml",
+            "reactivity_NRL_THe3-total",
             T_i,
             interpolation_kind=interpolation_kind,
         )
@@ -419,7 +419,7 @@ def sigmav_THe3_np_ENDFB_VIII0(
         The THe3_np reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.0 THe3_np cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("THe3n_xsection_ENDFB-VIII0.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII0_THe3n", T_i)
 
 
 @relation(
@@ -439,7 +439,7 @@ def sigmav_THe3_np_ENDFB_VIII1(
         The THe3_np reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.1 THe3_np cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("THe3n_xsection_ENDFB-VIII1.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII1_THe3n", T_i)
 
 
 @relation(
@@ -464,7 +464,7 @@ def sigmav_THe3_np_NRL(
     # Interpolate the total THe3 NRL rate and apply the implemented branch fraction.
     return (
         reactivity_from_reactivity_table(
-            "THe3_total_reactivity_NRL.yaml",
+            "reactivity_NRL_THe3-total",
             T_i,
             interpolation_kind=interpolation_kind,
         )
@@ -533,7 +533,7 @@ def sigmav_THe3_NRL(
     """
     # Interpolate the tabulated total THe3 reactivity data.
     return reactivity_from_reactivity_table(
-        "THe3_total_reactivity_NRL.yaml",
+        "reactivity_NRL_THe3-total",
         T_i,
         interpolation_kind=interpolation_kind,
     )
@@ -556,7 +556,7 @@ def sigmav_TT_ENDFB_VIII0(
         The TT reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.0 TT cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("TT_xsection_ENDFB-VIII0.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII0_TT", T_i)
 
 
 @relation(
@@ -576,7 +576,7 @@ def sigmav_TT_ENDFB_VIII1(
         The TT reactivity in m^3/s.
     """
     # Integrate the ENDF/B-VIII.1 TT cross-section table over a Maxwellian.
-    return reactivity_from_xsection_table("TT_xsection_ENDFB-VIII1.yaml", T_i)
+    return reactivity_from_xsection_table("xsection_ENDFB-VIII1_TT", T_i)
 
 
 @relation(
@@ -600,7 +600,7 @@ def sigmav_TT_NRL(
     """
     # Interpolate the tabulated TT reactivity data.
     return reactivity_from_reactivity_table(
-        "TT_reactivity_NRL.yaml",
+        "reactivity_NRL_TT",
         T_i,
         interpolation_kind=interpolation_kind,
     )

@@ -12,7 +12,6 @@ import yaml
 class ReactivityTableConfig:
     """Configuration for reactivity-table lookup and interpolation."""
 
-    table_dir: Path
     energy_grid_start_log10_kev: float
     energy_grid_stop_log10_kev: float
     energy_grid_num_points: int
@@ -34,7 +33,6 @@ class ReactivityTableConfig:
             raise TypeError("allowed_reactions.yaml settings.energy_grid must be a mapping.")
 
         return cls(
-            table_dir=(document_path.parent / str(settings.get("table_dir", "reactivity_tables"))).resolve(),
             energy_grid_start_log10_kev=float(energy_grid.get("start_log10_kev", 0.0)),
             energy_grid_stop_log10_kev=float(energy_grid.get("stop_log10_kev", 5.0)),
             energy_grid_num_points=int(energy_grid.get("num_points", 1000)),

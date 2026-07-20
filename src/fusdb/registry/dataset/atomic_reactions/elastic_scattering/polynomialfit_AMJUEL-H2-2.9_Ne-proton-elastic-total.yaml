@@ -1,0 +1,34 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.9
+subject: Ne-proton-elastic-total
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.9'
+reaction: 0.5T p+Ne → p+Netotalratecoef.
+category: elastic_scattering
+species: Ne
+output: Ne_proton_elastic_total_rate
+relation_name: AMJUEL H.2 2.9 Ne proton elastic total rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-1.919918000000E+01'
+- '2.302126000000E-01'
+- '-6.513570000000E-03'
+- '-2.016719000000E-02'
+- '-1.221527000000E-02'
+- '2.242603000000E-03'
+- '9.298891000000E-04'
+- '-2.398546000000E-04'
+- '1.462516000000E-05'
+amjuel_comments:
+- Maxwellianratecoefﬁcientvs. T ,withNeatrest,obtainedbytakingthecorrespondingBeam-
+- p
+- Maxw. ratecoefﬁcientatEb=0.2eVandveriﬁcationbyindependentintegrationofcross-section

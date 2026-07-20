@@ -1,15 +1,30 @@
 # fusdb-native transcription of the cfspopcon SPARC PRD case.
 #
-# Source: tests/cfspopcon_SPARC/input.yaml (cfspopcon schema) pinned at the
-# optimized PRD operating point taken from output/PRD.json coords
-# (average_electron_density = 25.0e19 m^-3, average_electron_temp = 9.13793 keV).
+# Source: tests/cfspopcon_SPARC/input.yaml (cfspopcon schema), the Primary
+# Reference Discharge from https://doi.org/10.1017/S0022377820001257.
 #
-# This reproduces the subset of cfspopcon's 110-step algorithm that maps onto
-# existing fusdb relations (geometry -> profiles -> stored energy -> confinement
-# block -> beta -> DT fusion power -> Greenwald / L-H). Missing-physics steps
-# (bootstrap, ohmic/resistivity, inductances & fluxes, two-point divertor,
-# collisionality, core-seeded radiation) are scaffolded undecorated under
-# src/fusdb/relations/ and are not run here. See the phase-1 plan for details.
+# This is the single fixture for the cfspopcon SPARC reproduction:
+#   * tests/cfspopcon_SPARC/test_sparc_prd.py reconciles it at the optimized PRD
+#     operating point (average_electron_density = 25.0e19 m^-3,
+#     average_electron_temp = 9.13793 keV) and compares against cfspopcon's
+#     reference output/PRD.json.
+#   * tests/test_popcon_mode.py and examples/popcon.ipynb scan
+#     average_electron_density x average_electron_temp and reconcile at every
+#     grid point.
+#
+# It is reconcile-native (no ordered recipe): dilution comes from
+# quasineutrality with a generic Z=6 impurity, the density peaking is derived
+# per point from collisionality (Angioni), and P_aux is the free degree of
+# freedom.  Every solved point is a simultaneously certified operating point,
+# which is what makes the density-temperature scan physical.  This mirrors the
+# cfspopcon algorithm in input.yaml far more closely than a fixed borrowed
+# operating point would.
+#
+# P_loss and tau_E are NOT tied by a dedicated relation; they are the two
+# unknowns of the confinement 2x2 structural block (IPB98(y,2) scaling +
+# energy-confinement balance W_th = P_loss * tau_E), solved simultaneously by
+# reconcile -- the same block cfspopcon's
+# ``solve_energy_confinement_scaling_for_input_power`` solves.
 
 metadata:
   id: SPARC_PRD_cfspopcon
@@ -18,23 +33,33 @@ metadata:
   year: 2020
   doi: 10.1017/S0022377820001257
   notes: >-
-    Phase-1 cfspopcon reproduction test point. Values use fusdb aliases and
-    unit-conversion; the ordered run mirrors the cfspopcon algorithm order.
+    cfspopcon SPARC PRD reproduction fixture. A generic Z=6 impurity fraction
+    supplies the PRD dilution through quasineutrality so density scans are
+    physical under reconcile; L-H uses cfspopcon's full Martin+Ryter scaling.
 
+
+# Same machine class as reactors/SPARC: restricts the reconcile candidate
+# pool (e.g. keeps spherical_tokamak shape scalings out).
+tags:
+- tokamak
+- compact_tokamak
+- h_mode
 
 variables:
   # --- Geometry / field (cfspopcon flat inputs, via aliases + units) ---
   major_radius: 1.85                 # R [m]
   magnetic_field_on_axis: 12.2       # B0 [T]
   inverse_aspect_ratio: 0.3081       # eps
+  minor_radius: 0.569985             # a = R * eps; anchors the R_max/R_min chain
   areal_elongation: 1.75             # kappa (areal)
+  separatrix_elongation: 1.96875     # kappa at the LCFS (feeds P_sync; NOT kappa)
   delta_95: 0.3                      # triangularity_psi95
   squareness: 0.0
   I_p:
     value: 8.7
     unit: MA
 
-  # --- Operating point (PRD coords) ---
+  # --- Operating point (PRD coords; the popcon axes) ---
   average_electron_density:
     value: 25.0
     unit: 1e19 m^-3
@@ -42,116 +67,258 @@ variables:
     value: 9.13793
     unit: keV
 
-  # --- Composition ---
-  f_D: 0.5
-  f_T: 0.5
-  # Dilution-adjusted average fuel-ion density. BORROWED from PRD
-  # average_ion_density pending the phase-2 zeff/dilution + atomic-data relation
-  # (cfspopcon dilutes n_e=25e19 -> n_i=21.36e19 via impurity charge states).
-  average_ion_density:
-    value: 21.3582
-    unit: 1e19 m^-3
+  # --- Composition: fuel + He + generic impurity, faithful to the real mix ---
+  # cfspopcon's impurity mix is Helium 6e-2, Oxygen 3.1e-3, Tungsten 1.5e-5 (of
+  # n_e), supplied below as the c_z concentrations.  The scalar ion-inventory
+  # anchor n_i_avg is DERIVED from them ("Ion density average from impurity
+  # concentrations (Mavrin)": n_i = n_e (1 - sum c_z (Zbar_z(T_e) - 1)),
+  # cfspopcon's own dilution structure), landing on cfspopcon's total ion
+  # inventory (22.94e19 vs 22.94e19 at the PRD point) -- the inventory enters
+  # the stored energy W = 3/2(n_e T_e + n_i T_i)V, which the confinement
+  # balance amplifies as P_loss ~ W^3.2.  The f-fractions below keep the
+  # SPECIES SPLIT of that inventory: He as f_He4, O+W folded into the generic
+  # Z=6 impurity sized to carry their quasineutrality charge
+  # (8*n_O + ~74*n_W = 6*n_Imp), so the fuel densities match cfspopcon's
+  # (n_D = 10.66e19 vs 10.68e19, n_fuel/n_e = 0.8541 vs 0.8543).
+  f_D: 0.464984
+  f_T: 0.464984
+  f_He4: 0.065331
+  f_Imp: 0.0047019
+  # Impurity concentrations n_z/n_e, transcribed from input.yaml's
+  # intrinsic_impurity_concentration (Helium 6.0e-2, Oxygen 3.1e-3, Tungsten
+  # 1.5e-5).  They drive (1) P_line via the radas coronal Lz tables (the
+  # reference's own radiation method, included below), (2) the derived Z_eff
+  # (Mavrin mean charges), and (3) the n_i_avg inventory anchor (see the
+  # composition note above).
+  c_He: 0.06
+  c_O: 0.0031
+  c_W: 1.5e-5
+  # cfspopcon's computed plasma volume (its separatrix shaping chain); fusdb's
+  # own geometry gives 19.62 m^3 (-0.9%), which the W^3.2 amplification would
+  # turn into a ~3% P_aux error, so the scan holds cfspopcon's value.
+  V_p: 19.7948
+  # Z_eff is DERIVED from the c_z concentrations above via "Effective charge
+  # from impurity concentrations (Mavrin)" (T-dependent Mavrin 2018 mean
+  # charges), reproducing cfspopcon's radas-based z_effective ~1.345 nearly
+  # flat across the grid (1.326-1.353; the Mavrin fit lands within ~1%).
+  # The single generic Z=6 impurity above reproduces the *dilution* (0.854)
+  # but would imply Z_eff = 1.874, which is why the f-based "Effective charge
+  # from ion fractions" default stays excluded below.
 
   # --- Profile shape factors ---
-  # temperature_peaking matches input.yaml (2.5); density_peaking BORROWED from
-  # the PRD electron-density profile peak/avg (37.54/25.0) pending the cfspopcon
-  # `prf` peaking model. fusdb generates parabolic (1-rho^2)^alpha profiles.
+  # density_peaking is deliberately NOT supplied: the Angioni peaking scaling
+  # (the same one cfspopcon's `prf` form uses) derives it per point from
+  # collisionality plus the input.yaml offsets. Supplying it as well would
+  # over-determine the scenario away from the PRD point.
+  # Both offsets are transcribed from input.yaml: the pointwise n_i ~ n_e
+  # profile ties are weak defaults (a decoupled ion side wins when derivable),
+  # so the ion profile carries its own Angioni peaking (~1.40) via the
+  # parabolic ion generator, anchored by the averages-level quasineutrality
+  # n_i_avg = n_e_avg / zbar -- exactly cfspopcon's structure, where the fuel
+  # peaks less than the electrons and the impurity fraction varies radially.
+  electron_density_peaking_offset: -0.1   # input.yaml
+  ion_density_peaking_offset: -0.2        # input.yaml
   temperature_peaking: 2.5
-  density_peaking: 1.5016
 
   # --- Confinement ---
   H98_y2: 1.0                        # confinement_time_scalar
 
-  # --- Non-DT fusion channels (pure-DT case): fixed at zero so the DT-only
-  #     total/neutron power relations close. ---
-  P_fus_DD:
-    value: 0.0
-    unit: W
-  P_fus_DHe3:
-    value: 0.0
-    unit: W
-  P_fus_TT:
-    value: 0.0
-    unit: W
-  P_fus_DDn_n:
-    value: 0.0
-    unit: W
+  # --- Heating coupling ---
+  # input.yaml fraction_of_external_power_coupled; makes P_aux_launched (and
+  # with it Q_cfspopcon = P_fus / (P_aux_launched + P_ohmic), cfspopcon's own
+  # gain definition) derivable from the absorbed P_aux the scan solves for.
+  fraction_of_external_power_coupled: 0.9
+
+  # --- SOL / divertor: extended two-point model (input.yaml's block) ---
+  # cfspopcon runs two_point_model_fixed_tet: the target electron temperature
+  # is HELD at 25 eV and the model computes the SOL power-loss (cooling)
+  # fraction required to reach it, then the target conditions from the
+  # (clamped-at-0) required fraction.  Supplying both target_electron_temp and
+  # required_target_electron_temp reproduces that structure; the "Target
+  # electron temperature" closure identity is excluded below because it only
+  # holds where the required cooling fraction is not clamped.
+  # kappa_e0 (2600) and sheath_heat_transmission_factor (7.5) are registry
+  # defaults equal to input.yaml's values, so they are not repeated here.
+  nesep_over_nebar: 0.3
+  fraction_of_P_SOL_to_divertor: 0.6
+  parallel_connection_length: 30.0    # m
+  toroidal_flux_expansion: 0.6974     # R_target / R_upstream
+  target_electron_temp:
+    value: 25.0
+    unit: eV
+  required_target_electron_temp:
+    value: 25.0
+    unit: eV
+
+  # NOTE: the secondary fusion channels (T-T, D-D, D-3He, D-D-n) are NOT pinned
+  # to zero. SPARC is a 50/50 D-T plasma (f_D = f_T), and fusdb models every
+  # reaction that composition produces from its own reactivity tables. cfspopcon
+  # computes only the D-T reaction (DTFusionBoschHale), so fusdb's total fusion
+  # power legitimately runs a little above cfspopcon here (the T-T channel is
+  # ~1.5 MW at the hot/dense corner, vs ~600 MW D-T) -- fusdb works as fusdb,
+  # rather than switching off physics to match the reference.
 
 relations:
   include:
-  - Inverse aspect ratio
-  - Aspect ratio
-  - Triangularity 95%
-  - Tokamak plasma cross-sectional surface
-  - Tokamak plasma volume
-  - Tokamak plasma poloidal length
-  - Tokamak plasma surface
-  - Average fuel mass number
-  - Default ion temperature average from plasma average temperature
-  - Default line averaged density from average density
+  # cfspopcon computes P_LH from the full Martin (2008) scaling plus the Ryter
+  # (2014) low-density branch; fusdb's default "L-H transition threshold power"
+  # is a simpler Martin-style scaling that runs ~35% high at this point and
+  # would push the PRD operating point below its own L-H threshold. Selecting
+  # the imported Martin+Ryter relation reproduces cfspopcon's P_LH.
+  - L-H transition threshold power (Martin-Ryter)
+  # cfspopcon normalises beta_poloidal to the outboard-midplane poloidal field
+  # B_pol_out_mid = mu0 I_p / (2 pi a) (circular cross-section, ignores
+  # elongation). fusdb's default "Poloidal beta" uses the elongation-corrected
+  # B_p, which is smaller and so gives a ~2.2x larger beta_p -- and since the
+  # bootstrap fraction scales with beta_p, that propagated into f_BS (+64%),
+  # the inductive current and P_ohmic (-20%). Selecting cfspopcon's convention
+  # reproduces its beta_poloidal and the whole ohmic chain.
+  - Poloidal beta (cfspopcon)
+  # Angioni density peaking (LANDED 2026-07-17, with the corrected flux-volume
+  # fusion integral): cfspopcon peaks the density with the Angioni
+  # collisionality scaling (offset -0.1, supplied above).  Activating it needs
+  # all of:
+  #   1. include "Electron density peaking (Angioni)" (electron only -- see the
+  #      ion-offset note in the variables block);
+  #   2. exclude "Electron/Ion density peaking from peak and average" (they
+  #      close the peaking circularly at a flat profile);
+  #   3. exclude "Default electron/ion density profile from average density" --
+  #      these FLAT defaults were the only forward-decidable producer of n_e, so
+  #      they pre-empted the peaked generator and pinned the density flat.
+  # The batched scan now certifies the peaked cycle (~979/1200; the rest is the
+  # genuinely infeasible cold/ignited fringe): density peaking lands within
+  # ~2% of cfspopcon grid-wide.
+  - Electron density peaking (Angioni)
+  # Ion peaking gets its own Angioni scaling (offset -0.2, input.yaml): the
+  # pointwise n_i ~ n_e ties are weak defaults, so the ion profile decouples
+  # (parabolic generator from n_i_avg + ion peaking, quasineutrality anchored
+  # at the averages) and the fuel peaks at ~1.40 like cfspopcon's, not at the
+  # electron ~1.50.
+  - Ion density peaking (Angioni)
+  # cfspopcon's confinement solve builds the stored energy from the volume
+  # averages alone -- W = 3/2 (n_e T_e + n_i T_i) V, no profile-correlation
+  # term -- while fusdb's default W_th integrates the actual peaked profiles
+  # (~+11% here).  The IPB98 balance amplifies stored-energy differences as
+  # P_loss ~ W^3.2, so matching cfspopcon's P_aux (and hence Q) requires its
+  # convention (fusdb's profile-consistent producers are excluded below).
+  - Plasma stored energy (cfspopcon)
+  # cfspopcon's ITER98y2 uses the volume-averaged density and the areal
+  # elongation; fusdb's PROCESS-faithful IPB98(y,2) uses the line average and
+  # the Kardaun-corrected kappa_IPB = V/(2 pi^2 R a^2) (~-4.5% here).  Same
+  # constant and exponents otherwise.  tau_E lands within 0.3% grid-wide on
+  # this form (the default form is excluded below).
+  - Energy confinement time ITER98y2 (cfspopcon)
+  # PROFILES: cfspopcon builds the 1-D profiles with its data-driven `prf`
+  # form; fusdb ships the port as "PRF electron/ion temperature profile"
+  # (see src/fusdb/relations/profiles/prf_profiles.py). The `prf` temperature
+  # shape reproduces cfspopcon's fusion power where the parabolic shape at the
+  # same peaking over-states it, so the scan runs on the PRF temperature
+  # generators (the parabolic gate defaults are excluded below). The density
+  # runs on the parabolic generator driven by the Angioni peaking below.
+  - PRF electron temperature profile
+  - PRF ion temperature profile
+  # cfspopcon sums P_rad = P_brem(Z_eff=1) + P_sync + P_line when an impurity
+  # radiation method is active: the Mavrin/radas L_z curves already include
+  # each impurity's own bremsstrahlung + recombination continuum, so the
+  # Z_eff-scaled bremsstrahlung would double-count it (the default relation is
+  # excluded below).
+  - Hydrogenic bremsstrahlung (cfspopcon)
+  # P_line from the radas (OpenADAS) coronal Lz tables -- cfspopcon's
+  # RadiationMethod.Radas, the method the reference dataset.nc was generated
+  # with -- instead of the default Mavrin-2018 polynomial fits (excluded
+  # below), removing the Mavrin-fit-vs-radas residual (was the dominant part
+  # of the ~14% P_radiation gap, largest for W).
+  - Impurity line radiation (radas coronal)
+  # The scalar quasineutrality anchor now runs on the c_z concentrations with
+  # the T-dependent Mavrin mean charges -- cfspopcon's own dilution structure
+  # (n_i = n_e * (1 - sum c_z (Zbar_z - 1))); it reproduces the He4+Z=6
+  # fold-in's inventory to <0.1% while deriving it from the real mix (the
+  # f-based quasineutrality producer is excluded below).
+  - Ion density average from impurity concentrations (Mavrin)
+  exclude:
+  # Parabolic gate defaults for T_e/T_i, superseded by the PRF generators.
   - Parabolic electron temperature profile
   - Parabolic ion temperature profile
-  - Parabolic electron density profile
-  - Parabolic ion density profile
-  - D density from ion density and D fraction
-  - T density from ion density and T fraction
-  - Thermal pressure
-  - Plasma stored energy from averages
-  - tau_E_iter_ipb98y2
-  - Energy confinement balance
-  - Toroidal beta
-  - Normalized beta
-  - DT reactivity BoschHale
-  - DT reaction rate
-  - DT alpha power
-  - DT neutron power
-  - DT fusion power
-  - Total fusion power
-  - Neutron fusion power
-  - Greenwald density limit
-  - Greenwald density fraction
+  # The n_i ~ n_e default would pre-empt the quasineutrality derivation and
+  # fight the supplied impurity fraction (the solver escapes by zeroing
+  # f_Imp); dilution must come from the composition, not the default.
+  - Default ion density average from plasma average density
+  # Superseded by "Ion density average from impurity concentrations (Mavrin)"
+  # above: n_i_avg comes from the c_z mix directly, not the f-fraction zbar.
+  - Ion density average from quasineutrality
+  # Simpler Martin-only L-H scaling, superseded here by the Martin+Ryter form.
   - L-H transition threshold power
-  order:
-  # 1. Geometry
-  - Inverse aspect ratio                 # eps -> A
-  - Aspect ratio                         # R, A -> a
-  - Triangularity 95%                    # delta_95 -> delta
-  - Tokamak plasma cross-sectional surface  # -> S_phi
-  - Tokamak plasma volume                # -> V_p
-  - Tokamak plasma poloidal length       # -> L_p
-  - Tokamak plasma surface               # -> A_p
-  # 2. Averages + profiles
-  - Average fuel mass number             # f_D, f_T -> afuel
-  - Default ion temperature average from plasma average temperature  # -> T_i_avg
-  - Default line averaged density from average density                # -> n_la
-  - Default ion temperature peaking from electron temperature peaking  # -> ion_temperature_peaking
-  - Default ion density peaking from electron density peaking           # -> ion_density_peaking
-  - Parabolic electron temperature profile   # -> T_e
-  - Parabolic ion temperature profile        # -> T_i (ion_temperature_peaking)
-  - Parabolic electron density profile       # -> n_e
-  - Parabolic ion density profile            # -> n_i (ion_density_peaking)
-  - D density from ion density and D fraction
-  - T density from ion density and T fraction
-  # 3. Pressure / stored energy
-  - Thermal pressure                     # -> p_th (volume-averaged pressure)
-  - Plasma stored energy from averages   # -> W_th = 3/2 * p_th * V_p
-  # 4. Confinement 2x2 block (cfspopcon "solve_energy_confinement_scaling_for_input_power"):
-  #    solve tau_E and P_loss simultaneously from W_th and the IPB98(y,2) scaling.
-  #    Solved by the shared block solver (_solve_initial_block), the same routine
-  #    reconcile uses for its initial computation.
-  - [tau_E_iter_ipb98y2, Energy confinement balance]
-  # 5. Beta
-  - Toroidal beta                        # -> beta_T
-  - Normalized beta                      # -> beta_N
-  # 6. DT fusion power
-  - DT reactivity BoschHale              # T_i -> sigmav_DT
-  - DT reaction rate                     # -> Rr_DT
-  - DT alpha power                       # -> P_fus_DT_alpha (= P_alpha)
-  - DT neutron power                     # -> P_fus_DT_n
-  - DT fusion power                      # -> P_fus_DT
-  - Total fusion power                   # -> P_fus
-  - Neutron fusion power                 # -> P_neutron
-  # 7. Operational limits
-  - Greenwald density limit              # -> n_GW
-  - Greenwald density fraction           # -> f_GW
-  - L-H transition threshold power       # -> P_LH
+  # Z_eff is supplied from cfspopcon's real impurity mix (see above); the f-based
+  # default would recompute it as 1.874 from the single generic Z=6 impurity and
+  # fight the supplied value.
+  - Effective charge from ion fractions
+  # Superseded by "Poloidal beta (cfspopcon)" above (different B_pol normalisation).
+  - Poloidal beta
+  # Superseded by "Hydrogenic bremsstrahlung (cfspopcon)" above: with the
+  # supplied c_z concentrations the P_line cooling curves carry the impurity
+  # continuum, so the Z_eff-scaled form would double-count it.
+  - Bremsstrahlung radiation
+  # Superseded by "Impurity line radiation (radas coronal)" above (the
+  # reference's own Lz source); the Mavrin polynomial fit stays the fusdb
+  # default elsewhere.
+  - Impurity line radiation (Mavrin coronal)
+  # Flat-peaking closures + flat default density profiles, superseded by the
+  # Angioni peaking recipe above (steps 2 and 3).
+  - Electron density peaking from peak and average
+  - Ion density peaking from peak and average
+  - Default electron density profile from average density
+  - Default ion density profile from average density
+  # Ion peaking has its own Angioni producer above; the ion=electron default
+  # would fight it (the solve compromises both peakings to a midpoint).
+  - Default ion density peaking from electron density peaking
+  # Pointwise constant-fractions quasineutrality tie (a weak default
+  # globally).  The compile's default-activation gate cannot see that the ion
+  # profile is derivable through the Angioni peaking *cycle* (nothing in a
+  # cycle is forward-decidable), so without this exclude the tie stays
+  # active and forces ion peaking == electron peaking (both compromise to the
+  # 1.445 midpoint of 1.50/1.40).  Quasineutrality is anchored at the
+  # averages level by "Ion density average from quasineutrality".
+  - Ion density from electron density and fuel fractions
+  # Profile-consistent stored-energy producers, superseded by cfspopcon's
+  # product-of-averages convention above.
+  - Plasma stored energy from averages
+  - Thermal stored energy
+  # PROCESS-faithful IPB98(y,2) (line-averaged density, kappa_IPB), superseded
+  # by cfspopcon's ITER98y2 form above.
+  - tau_E_iter_ipb98y2
+  # He3-burning channels (D-He3, T-He3, He3-He3): this fixture does not model
+  # He3 (n_He3 is inactive), so their reaction-rate relations prune, leaving
+  # their rate variables (Rr_DHe3, Rr_THe3_*, Rr_He3He3) as *unconstrained*
+  # free cores that the solver fills with arbitrary values -- producing a
+  # spurious ~1 MW of T-He3 power that is a numerical artifact, not physics.
+  # Excluding the leaf power relations that consume those rates lets the
+  # channels prune (the Total-fusion-power aggregator treats them as optional,
+  # defaulting to 0), so P_fus is the physical D-T + D-D + T-T sum -- the same
+  # base channels cfspopcon computes.  (Activating them at n_He3 = 0 instead
+  # would be correct but pulls in the whole He3 reactivity chain, ~40x slower.)
+  - D-He3 alpha power
+  - D-He3 proton power
+  - He3-He3 alpha power
+  - He3-He3 proton power
+  - T-He3 alpha+D alpha power
+  - T-He3 alpha+D deuteron power
+  - T-He3 alpha+n+p alpha power
+  - T-He3 alpha+n+p neutron power
+  - T-He3 alpha+n+p proton power
+  # Lengyel edge-seeding chain: L_int's canonical scale (~1e-28 W*m^3*eV^1.5)
+  # is numerically unsolvable as a least-squares DOF (any xtol step dwarfs
+  # it), and fusdb's L_int integrates the Mavrin coronal Lz where cfspopcon
+  # used radas noncoronal curves, so edge_impurity_concentration would not
+  # match the reference either way.  With T_sep now derivable the Ne default
+  # gate would self-activate, so all three producers are excluded and the
+  # Lengyel consumers prune.
+  - L_int cooling integral N
+  - L_int cooling integral Ne
+  - L_int cooling integral Ar
+  # The corrected-target-temperature closure T_t = T_t_basic * f_vol * f_other:
+  # cfspopcon's fixed-tet mode holds T_t = 25 eV and clamps the required
+  # cooling fraction at 0, so the identity fails exactly where the clamp
+  # engages; with T_t supplied it would over-determine the SOL block there.
+  - Target electron temperature
+  # (The KotovReiter momentum-loss fit -- input.yaml's choice -- is already
+  # the registry default gate; the five alternative fits stay off.)

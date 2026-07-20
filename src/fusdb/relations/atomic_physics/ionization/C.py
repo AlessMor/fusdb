@@ -1,12 +1,9 @@
 """AMJUEL H.2 ionization fits for C."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.42 C ionization STRAHL rate',
@@ -30,4 +27,4 @@ def amjuel_h_2_2_42_c_ionization_strahl_rate(T_edge: Any) -> Any:
     - <sigma*vrel>(Te)(cm**3/s),C -- > C+
     - Max. rel. Error: .3712 %
     - Mean rel. Error: .1458 %"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_42.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.42_C-ionization", T_edge)

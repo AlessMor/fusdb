@@ -1,19 +1,14 @@
-"""Reusable plotters and table renderers for fusdb.
+"""Backend-neutral plotting data and explicit Matplotlib/Bokeh renderers.
 
 Each module owns one representation used across the example notebooks:
 
-* :mod:`fusdb.plotting.reactivity`     -- fusion reactivity curves
-* :mod:`fusdb.plotting.atomic_physics` -- atomic & molecular rate-coefficient curves (Bokeh)
-* :mod:`fusdb.plotting.profiles`       -- radial plasma profiles
-* :mod:`fusdb.plotting.relation_graph` -- relation/variable network graph
-* :mod:`fusdb.plotting.curves`         -- generic x-y line/scan overlays
-* :mod:`fusdb.plotting.comparison`     -- grouped-bar metric comparison
-* :mod:`fusdb.plotting.maps`           -- 2-D parameter maps
-* :mod:`fusdb.plotting.popcon`         -- POPCON contour maps of popcon-mode scans
-* :mod:`fusdb.plotting.tables`         -- HTML/plain-text variable tables
-
-Every plotter accepts an optional ``ax`` and returns the matplotlib ``Axes``,
-so plots compose into figures the caller already owns.
+* :mod:`fusdb.plotting.data`       -- ``CurveSet``, ``FieldMap``, and ``TableData``
+* :mod:`fusdb.plotting.renderers`  -- explicit Matplotlib/Bokeh renderers
+* :mod:`fusdb.plotting.reactivity` -- fusion reactivity curve-data discovery
+* :mod:`fusdb.plotting.atomic_physics` -- interactive atomic-rate explorer
+* :mod:`fusdb.plotting.profiles`   -- radial profile curve-data builder
+* :mod:`fusdb.plotting.popcon`     -- POPCON field-map builder
+* :mod:`fusdb.plotting.tables`     -- variable-table preparation/rendering
 
 Submodules are imported lazily (PEP 562): the matplotlib/bokeh plotters need
 the ``plotting`` extra, while :mod:`fusdb.plotting.tables` is dependency-free
@@ -28,22 +23,26 @@ from typing import Any
 
 # Public name -> owning submodule; resolved on first attribute access.
 _EXPORTS = {
-    "plot_metric_comparison": "comparison",
-    "plot_curves": "curves",
+    "Curve": "data",
+    "CurveSet": "data",
+    "FieldMap": "data",
+    "TableCell": "data",
+    "TableData": "data",
     "figure_to_html": "export",
-    "plot_parameter_map": "maps",
-    "plot_popcon": "popcon",
-    "plot_profile_grid": "profiles",
-    "plot_profiles": "profiles",
-    "default_reactivities": "reactivity",
-    "plot_reactivity": "reactivity",
+    "bokeh_curve_set": "renderers",
+    "plot_curve_set": "renderers",
+    "plot_field_map": "renderers",
+    "popcon_field_map": "popcon",
+    "profile_curves": "profiles",
+    "reactivity_curves": "reactivity",
     "bokeh_relation_graph": "relation_graph",
     "build_relation_graph": "relation_graph",
     "build_relation_node_graph": "relation_graph",
     "build_variable_relation_graph": "relation_graph",
     "plot_relation_graph": "relation_graph",
     "relation_graph_html": "relation_graph",
-    "variables_table": "tables",
+    "variable_table_data": "tables",
+    "render_table": "tables",
     "SolvedColumn": "tables",
 }
 

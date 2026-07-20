@@ -1,12 +1,9 @@
 """AMJUEL H.2 elastic scattering fits for Ne."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.9 Ne proton elastic total rate',
@@ -28,7 +25,7 @@ def amjuel_h_2_2_9_ne_proton_elastic_total_rate(T_edge: Any) -> Any:
     - Maxwellianratecoefficientvs. T ,withNeatrest,obtainedbytakingthecorrespondingBeam-
     - p
     - Maxw. ratecoefficientatEb=0.2eVandverificationbyindependentintegrationofcross-section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_9.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.9_Ne-proton-elastic-total", T_edge)
 
 
 @relation(
@@ -51,4 +48,4 @@ def amjuel_h_2_2_10_ne_proton_elastic_diffusion_rate(T_edge: Any) -> Any:
     - Maxwellianratecoefficientvs. T ,withNeatrest,obtainedbytakingthecorrespondingBeam-
     - p
     - Maxw. ratecoefficientatEb=0.1eVandverificationbyindependentintegrationofcross-section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_10.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.10_Ne-proton-elastic-diffusion", T_edge)

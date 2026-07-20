@@ -1,12 +1,9 @@
 """AMJUEL H.2 elastic scattering fits for H."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.1 H proton elastic total rate',
@@ -28,7 +25,7 @@ def amjuel_h_2_2_1_h_proton_elastic_total_rate(T_edge: Any) -> Any:
     - Maxwellian rate coefficient vs. Tp, with H(1s) at rest, obtained by taking the corresponding
     - Beam-Maxw. rate coefficient at Eb=0.08 eV and verification by independent integration of
     - cross-section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_1.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.1_H-proton-elastic-total", T_edge)
 
 
 @relation(
@@ -51,4 +48,4 @@ def amjuel_h_2_2_2_h_proton_elastic_diffusion_rate(T_edge: Any) -> Any:
     - Maxwellian rate coefficient vs. Tp, with H(1s) at rest, obtained by taking the corresponding
     - Beam-Maxw. rate coefficient at Eb=0.08 eV and verification by independent integration of
     - cross-section"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_2.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.2_H-proton-elastic-diffusion", T_edge)

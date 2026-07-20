@@ -22,58 +22,6 @@ def calc_power_crossing_separatrix(P_in: Any, P_rad: Any) -> Any:
 
 
 @relation(
-    name="Separatrix power from power balance",
-    tags=("power_exhaust", "process"),
-    outputs="P_sep",
-)
-def calculate_separatrix_power(
-    f_p_alpha_plasma_deposited: Any,
-    P_alpha_total: Any,
-    P_non_alpha_charged: Any,
-    P_aux: Any,
-    P_ohmic: Any,
-    P_rad: Any,
-) -> Any:
-    """Calculate the power crossing the separatrix (P_sep) from the plasma
-    power balance.
-
-    Adapted from PROCESS; see README.md section "Third-party Notices".
-
-    PROCESS evaluates this sum in MW; it is linear (scale-invariant), so fusdb
-    evaluates it directly in W.
-
-    Parameters
-    ----------
-    f_p_alpha_plasma_deposited :
-        Fraction of alpha power deposited in plasma
-    P_alpha_total :
-        Total alpha power produced [W] (PROCESS p_alpha_total_mw)
-    P_non_alpha_charged :
-        Power from non-alpha charged particles [W] (PROCESS p_non_alpha_charged_mw)
-    P_aux :
-        Total power injected by heating and current drive [W]
-        (PROCESS p_hcd_injected_total_mw)
-    P_ohmic :
-        Ohmic heating power [W] (PROCESS p_plasma_ohmic_mw)
-    P_rad :
-        Radiated power from plasma [W] (PROCESS p_plasma_rad_mw)
-
-    Returns
-    -------
-    :
-        Power crossing the separatrix [W]
-    """
-    # CHECK
-    return (
-        f_p_alpha_plasma_deposited * P_alpha_total
-        + P_non_alpha_charged
-        + P_aux
-        + P_ohmic
-        - P_rad
-    )
-
-
-@relation(
     name="L-H transition threshold power (Martin-Ryter)",
     tags=("power_exhaust", "tokamak"),
     outputs="P_LH",
@@ -122,10 +70,12 @@ def calc_LH_transition_threshold_power(
     # Ryter 2014, equation 3 (low-density rollover)
     neMin19 = 0.7 * (plasma_current**0.34) * (B0**0.62) * (a**-0.95) * ((R / a) ** 0.4)
 
-    if n19 < neMin19:
-        P_LH_thresh = _calc_Martin_LH_threshold(electron_density=neMin19)
-        return 1.0e6 * (P_LH_thresh * (neMin19 / n19) ** 2.0) * confinement_threshold_scalar
-    P_LH_thresh = _calc_Martin_LH_threshold(electron_density=n19)
+    # Branch per element so the batched popcon namespace evaluates in one call.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        below = np.asarray(n19) < neMin19
+        low = _calc_Martin_LH_threshold(electron_density=neMin19) * (neMin19 / n19) ** 2.0
+        high = _calc_Martin_LH_threshold(electron_density=n19)
+    P_LH_thresh = np.where(below, low, high)
     return 1.0e6 * P_LH_thresh * confinement_threshold_scalar
 
 

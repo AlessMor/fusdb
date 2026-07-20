@@ -1,0 +1,36 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.6
+subject: H2-proton-elastic-diffusion
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.6'
+reaction: 0.3D p+H → p+H diff. ratecoef.
+category: elastic_scattering
+species: H2
+output: H2_proton_elastic_diffusion_rate
+relation_name: AMJUEL H.2 2.6 H2 proton elastic diffusion rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-1.914667000000E+01'
+- '7.511853000000E-03'
+- '-1.408236000000E-01'
+- '-7.208816000000E-03'
+- '1.464363000000E-02'
+- '5.237593000000E-05'
+- '-9.787576000000E-04'
+- '1.491343000000E-04'
+- '-6.478446000000E-06'
+amjuel_comments:
+- 2 2
+- Maxwellianratecoefﬁcientvs. T , withH atrest, obtainedbytakingthecorrespondingBeam-
+- p 2
+- Maxw. ratecoefﬁcientatEb=0.1eVandveriﬁcationbyindependentintegrationofcross-section
+- + 2 + 2

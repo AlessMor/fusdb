@@ -1,12 +1,9 @@
 """AMJUEL H.4 molecular-assisted recombination chain fits via H-."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h4_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h4_rate
 
 @relation(
     name='AMJUEL H.4 2.2.17r H2 MAR via H- rate',
@@ -35,7 +32,7 @@ def amjuel_h4_2_2_17r_h2_mar_via_h_rate(n_e_edge: Any, T_edge: Any) -> Any:
     - ne to turn it into a collision rate 1=s, and then with nH2(v=0) to turn it into a volumetric reaction
     - rate (cm-3s-1).
     """
-    return evaluate_amjuel_h4_rate(_DATA_DIR / "amjuel_h4_2_2_17r.yaml", n_e_edge, T_edge)
+    return evaluate_amjuel_h4_rate("polynomialfit_AMJUEL-H4-2.2.17r_H2-mar-via-h-minus", n_e_edge, T_edge)
 
 
 @relation(
@@ -61,4 +58,4 @@ def amjuel_h4_2_2_17d_h2_mad_via_h_rate(n_e_edge: Any, T_edge: Any) -> Any:
     - same conditions as for effective MAR rate coefﬁcient: ne = np; Te = Tp to remove np; Tp
     - dependence in second step, EH2 = 0:1 eV .
     """
-    return evaluate_amjuel_h4_rate(_DATA_DIR / "amjuel_h4_2_2_17d.yaml", n_e_edge, T_edge)
+    return evaluate_amjuel_h4_rate("polynomialfit_AMJUEL-H4-2.2.17d_H2-mad-via-h-minus", n_e_edge, T_edge)

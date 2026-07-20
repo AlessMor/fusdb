@@ -44,5 +44,5 @@ variables:
   nu_n_i: 1.33
   f_G: 0.37
   beta: 0.012
-  beta_N: 1.0
+  beta_N: 0.01
   P_sep_B0_R0: 191e6

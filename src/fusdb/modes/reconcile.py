@@ -34,6 +34,7 @@ def run(
     movement_eps: float = 0.1,
     relation_weight: float = 1.0,
     relation_weight_schedule: Iterable[float] | None = None,
+    initial_guesses: Any = None,
     verbose: int = 0,
     **_unused: Any,
 ) -> dict[str, Any]:
@@ -56,7 +57,14 @@ def run(
         return result
     # Initial guesses are precomputed by compile() (run() always compiles
     # before dispatching); reported here so the solver block records how many
-    # variables were seeded.
+    # variables were seeded.  Caller-supplied ``initial_guesses`` (a warm
+    # start, e.g. a neighbouring popcon point's solution) are merged on top
+    # HERE rather than before run(): the compile re-runs the seeding oracle
+    # and would silently wipe anything injected earlier.
+    if initial_guesses:
+        self.initial_guesses.update(
+            {name: value for name, value in dict(initial_guesses).items() if name not in self.fixed and value is not None}
+        )
     initial_values: dict[str, Any] = dict(self.initial_guesses)
     # If the current variable state already satisfies the compiled
     # active graph, reconcile is a no-op.  This makes ordered/reconcile

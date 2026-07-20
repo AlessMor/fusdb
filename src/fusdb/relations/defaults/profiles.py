@@ -7,16 +7,6 @@ from fusdb.relation import relation
 
 
 @relation(
-    name="Default line averaged density from average density",
-    tags=("default", "plasma", "confinement", "tokamak", "stellarator", "mirror"),
-    outputs="n_la",
-)
-def default_line_averaged_density_from_average_density(n_avg: float) -> float:
-    """Fallback tokamak approximation: line average equals volume average."""
-    return n_avg
-
-
-@relation(
     name="Default ion temperature profile from average temperature",
     tags=("default", "plasma", "profile", "tokamak", "stellarator", "mirror"),
     outputs="T_i",

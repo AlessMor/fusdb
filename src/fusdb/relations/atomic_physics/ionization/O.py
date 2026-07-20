@@ -1,12 +1,9 @@
 """AMJUEL H.2 ionization fits for O."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.46 O ionization STRAHL rate',
@@ -27,4 +24,4 @@ def amjuel_h_2_2_46_o_ionization_strahl_rate(T_edge: Any) -> Any:
     AMJUEL comments:
     - Ionization rate for neutral Oxygen Atoms
     - <sigma*vrel>(Te)(cm**3/s),O-->O+"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_46.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.46_O-ionization", T_edge)

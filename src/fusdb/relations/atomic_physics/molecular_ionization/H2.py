@@ -1,12 +1,9 @@
 """AMJUEL H.4 molecular ionization fits for H2."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h4_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h4_rate
 
 @relation(
     name='AMJUEL H.4 2.2.9 H2 molecular ionization rate',
@@ -30,4 +27,4 @@ def amjuel_h4_2_2_9_h2_molecular_ionization_rate(n_e_edge: Any, T_edge: Any) -> 
     AMJUEL comments:
     - 2
     """
-    return evaluate_amjuel_h4_rate(_DATA_DIR / "amjuel_h4_2_2_9.yaml", n_e_edge, T_edge)
+    return evaluate_amjuel_h4_rate("polynomialfit_AMJUEL-H4-2.2.9_H2-molecular-ionization", n_e_edge, T_edge)

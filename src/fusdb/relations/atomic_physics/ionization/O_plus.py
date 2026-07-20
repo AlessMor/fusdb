@@ -1,12 +1,9 @@
 """AMJUEL H.2 ionization fits for O_plus."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.47 O+ ionization STRAHL rate',
@@ -27,4 +24,4 @@ def amjuel_h_2_2_47_o_plus_ionization_strahl_rate(T_edge: Any) -> Any:
     AMJUEL comments:
     - Ionization rate for singly charged Oxygen Ions
     - Ionization Rate for neutral Neon Atoms"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_47.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.47_O-plus-ionization", T_edge)

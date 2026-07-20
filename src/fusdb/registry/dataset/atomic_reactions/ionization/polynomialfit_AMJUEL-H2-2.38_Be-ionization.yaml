@@ -1,0 +1,37 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.38
+subject: Be-ionization
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.38'
+reaction: 2.4B0 e+Be → e+Be++e
+category: ionization
+species: Be
+output: Be_ionization_rate
+relation_name: AMJUEL H.2 2.38 Be ionization STRAHL rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+fit_error:
+  max_rel_pct: 0.1411
+  mean_rel_pct: 0.0582
+coefficients:
+- -2.701191641765D+01
+- 9.882275334399D+00
+- -4.581384174259D+00
+- 1.463446005529D+00
+- -3.282155444497D-01
+- 4.895458945839D-02
+- -4.558103660501D-03
+- 2.382205094374D-04
+- -5.319547065990D-06
+amjuel_comments:
+- 'Max. rel. Error: .1411 %'
+- 'Mean rel. Error: .0582 %'
+- Ionization Rates for single charged Beryllium Ions

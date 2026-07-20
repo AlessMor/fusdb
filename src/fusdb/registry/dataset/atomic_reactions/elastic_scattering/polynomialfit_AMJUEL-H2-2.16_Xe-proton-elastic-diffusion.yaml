@@ -1,0 +1,49 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.16
+subject: Xe-proton-elastic-diffusion
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.16'
+reaction: 0.8D p+Xe → p+Xediff. ratecoef.
+category: elastic_scattering
+species: Xe
+output: Xe_proton_elastic_diffusion_rate
+relation_name: AMJUEL H.2 2.16 Xe proton elastic diffusion rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- '-1.903991000000E+01'
+- '2.089862000000E-01'
+- '-7.784350000000E-02'
+- '-1.756400000000E-02'
+- '5.522983000000E-03'
+- '9.448506000000E-04'
+- '-2.428668000000E-04'
+- '-5.632953000000E-08'
+- '1.296757000000E-06'
+amjuel_comments:
+- Maxwellianratecoefﬁcientvs. Tp,withXeatrest,obtainedbytakingthecorrespondingBeam-
+- Maxw. ratecoefﬁcientatEb=0.1eVandveriﬁcationbyindependentintegrationofcross-section
+- Data from Freeman and Jones [19], for comparison with old cases.
+- 'Note: Maxwellian rate coefﬁcients are taken at neutral particle energy = 0.0 eV vs. temperature'
+- '(electron or ion temp., resp.) of the Maxwellian f . I.e. :'
+- ∫ maxw
+- ⟨σv⟩ = d v σ(v )·v ·f (v )
+- p p p maxw p
+- Theionimpactratescanbescaledtodifferentisotopesandtoﬁniteneutralparticletemperatures
+- T byevaluating the ﬁts at an effective temperature T given by
+- n eff
+- T = MT + MT
+- eff M1 1 M2 2
+- Here M is the mass of the ion as used in the Freeman/Jones rate coefﬁcients, M and M are
+- 1 2
+- the masses of the two isotopes in the particular collision process considered, and T and T are
+- 1 2
+- the two temperatures.

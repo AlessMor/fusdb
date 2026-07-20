@@ -36,23 +36,25 @@ def result_from_certificate(
 ) -> dict[str, Any]:
     """Build a mode result dict from a verification certificate.
 
-    Shared by verify/reconcile/optimize so the common result shape (status,
-    residuals, certificate, graph and compiler views) is assembled in one
-    place.  ``solver`` and ``values`` are added only when supplied, and
-    ``extra`` overlays any mode-specific keys.
+    Shared by verify/reconcile/optimize so the one lean result shape is
+    assembled in one place: ``mode``/``success``/``termination``/``errors``/
+    ``warnings``, the per-relation ``relation_status``, the hoisted
+    certificate verdicts (``failed_relations``, ``max_residual``) and the
+    ``compiler_report``.  Everything in it is plain data (strings, numbers,
+    numpy arrays), so results pickle across process pools and save to HDF5
+    without a stripping pass.  ``solver`` and ``values`` are added only when
+    supplied, and ``extra`` overlays any mode-specific keys.
     """
     result = new_result(system, mode)
     result.update(
         {
             "relation_status": certificate["relation_status"],
-            "residuals": certificate["residuals"].tolist(),
             "errors": certificate["errors"],
             "warnings": certificate["warnings"],
             "termination": termination,
             "success": bool(certificate["verified"]),
-            "verified": bool(certificate["verified"]),
-            "certificate": {k: v for k, v in certificate.items() if k not in {"residuals", "values"}},
-            "relations": system.primary_relations,
+            "failed_relations": list(certificate["failed_relations"]),
+            "max_residual": float(certificate["max_residual"]),
         }
     )
     if include_values:

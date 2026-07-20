@@ -29,10 +29,18 @@ from the compile-time seeding oracle at the grid midpoint.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
+
+from fusdb.relationsystem import (
+    apply_completion_providers_batched,
+    coerce_batched,
+    relation_outputs,
+    slice_point,
+)
 
 from ._common import new_result, reject_unknown_options
 
@@ -164,11 +172,14 @@ def _free_cores(system: Any) -> list[tuple[tuple[str, ...], list[Any]]]:
     cores are searched.
     """
     unknowns: set[str] = {
-        name for name, role in system.variable_roles.items() if role == "core"
+        name for name, role in system.variable_roles.items() if role in ("core", "packed")
     }
     for block in system.structural_blocks:
         unknowns.update(block)
     unknowns -= set(system.fixed)
+    # Packed supplied inputs (movement-anchored scenario values) are not scan
+    # unknowns -- only the seeded free cores (e.g. a peaking factor closed by
+    # a coupled cycle) join the batched core search.
     unknowns = {name for name in unknowns if system.inputs.get(name) is None}
 
     touching = [
@@ -222,211 +233,10 @@ def _certify(system: Any, ns: dict[str, Any], cone_rels: Sequence[Any], cone_var
     return verified, relation_status, errors
 
 
-# ── Batched namespace machinery ──────────────────────────────────────────
-#
-# Shape discipline: scalars are (N, 1), profiles are (N, P), the rho grid
-# stays (P,).  Scalar x rho expressions inside relation code then broadcast
-# to (N, P) exactly as scalar x rho broadcasts to (P,) in the per-point
-# world, and profile reductions (trapezoid over the last axis) produce (N,)
-# which the write-time coercion restores to (N, 1).
-
-
-def _coerce_batched(value: Any, shape: int, n: int, profile_size: int) -> np.ndarray | None:
-    """Coerce one relation output to the batched layout, or ``None`` if it
-    cannot be interpreted for the registry shape."""
-    arr = np.asarray(value, dtype=float)
-    if shape == 0:
-        if arr.ndim == 0:
-            return np.full((n, 1), float(arr))
-        if arr.shape in ((n,), (n, 1)):
-            return arr.reshape(n, 1)
-        if arr.shape in ((1,), (1, 1)):
-            return np.full((n, 1), float(arr.reshape(-1)[0]))
-        return None
-    if arr.ndim == 0:
-        return np.full((n, profile_size), float(arr))
-    if arr.shape == (profile_size,):
-        return np.broadcast_to(arr, (n, profile_size)).copy()
-    if arr.shape == (n, profile_size):
-        return arr
-    if arr.shape in ((n, 1), (n,)):
-        return np.broadcast_to(arr.reshape(n, 1), (n, profile_size)).copy()
-    return None
-
-
-def _slice_point(system: Any, ns: Mapping[str, np.ndarray], index: int) -> dict[str, Any]:
-    """Extract one grid point's per-point solver namespace from the batch."""
-    out: dict[str, Any] = {}
-    for name, arr in ns.items():
-        if arr is None:
-            continue
-        if arr.ndim == 2 and arr.shape[1] == 1:
-            out[name] = float(arr[index, 0])
-        elif arr.ndim == 2:
-            out[name] = np.ascontiguousarray(arr[index])
-        elif arr.ndim == 1 and arr.shape[0] != 1:
-            # Unbatched shared arrays (the rho grid) pass through whole.
-            out[name] = arr
-        else:
-            out[name] = float(np.asarray(arr).reshape(-1)[0])
-    return out
-
-
-def _eval_pointwise(system: Any, rel: Any, ns: Mapping[str, np.ndarray], n: int, out_specs: Sequence[tuple[str, Any]]) -> dict[str, np.ndarray]:
-    """Evaluate one relation point-by-point; failed points contribute NaN."""
-    profile_size = system.profile_size
-    collected: dict[str, list[Any]] = {name: [] for name, _spec in out_specs}
-    with np.errstate(all="ignore"):
-        for index in range(n):
-            try:
-                mapped = rel.output_map(rel.evaluate(_slice_point(system, ns, index)))
-            except Exception:
-                mapped = {}
-            for name, _spec in out_specs:
-                collected[name].append(mapped.get(name))
-    out: dict[str, np.ndarray] = {}
-    for name, spec in out_specs:
-        if spec.shape == 0:
-            out[name] = np.asarray(
-                [np.nan if v is None else float(np.asarray(v, dtype=float).reshape(-1)[0]) for v in collected[name]],
-                dtype=float,
-            ).reshape(n, 1)
-        else:
-            rows = []
-            for v in collected[name]:
-                if v is None:
-                    rows.append(np.full(profile_size, np.nan))
-                else:
-                    arr = np.asarray(v, dtype=float)
-                    rows.append(np.broadcast_to(arr, (profile_size,)).astype(float) if arr.ndim == 0 else arr.reshape(-1)[:profile_size])
-            out[name] = np.vstack(rows)
-    return out
-
-
-def _matches_point(batched: np.ndarray, reference: Any, index: int) -> bool:
-    """Compare one batched row against a per-point recomputation."""
-    if reference is None:
-        return False
-    ref = np.asarray(reference, dtype=float).reshape(-1)
-    row = np.asarray(batched[index], dtype=float).reshape(-1)
-    if ref.size == 1 and row.size >= 1:
-        ref = np.broadcast_to(ref, row.shape)
-    if ref.shape != row.shape:
-        return False
-    return bool(np.allclose(row, ref, rtol=1.0e-9, atol=0.0, equal_nan=True))
-
-
-def _relation_outputs(
-    system: Any,
-    rel: Any,
-    ns: dict[str, np.ndarray],
-    n: int,
-    out_specs: Sequence[tuple[str, Any]],
-    trust: dict[str, str],
-) -> dict[str, np.ndarray]:
-    """Batched outputs of one relation, coerced to the batched layout.
-
-    Tries the vectorised call first (identical to the per-point completion
-    call, just with array values).  The result is accepted only if every
-    requested output coerces to the expected batched shape AND a two-point
-    spot check (first and last grid point recomputed per-point) matches --
-    this catches implementations whose internal reductions broadcast into
-    outer products or that silently collapse the batch to one point's value.
-    Anything else falls back to the point-by-point loop, where a failing
-    point contributes NaN and poisons only itself.  The verdict is cached per
-    relation for the scan (``trust``): broadcastability is a structural
-    property of the implementation, so the spot check runs once, not once
-    per solver iteration.
-    """
-    profile_size = system.profile_size
-    verdict = trust.get(rel.name)
-    if verdict == "pointwise":
-        return _eval_pointwise(system, rel, ns, n, out_specs)
-    with np.errstate(all="ignore"):
-        try:
-            mapped = rel.output_map(rel.evaluate(ns))
-        except Exception:
-            mapped = None
-    if mapped is not None:
-        coerced: dict[str, np.ndarray] = {}
-        for name, spec in out_specs:
-            arr = None if mapped.get(name) is None else _coerce_batched(mapped[name], spec.shape, n, profile_size)
-            if arr is None:
-                coerced = {}
-                break
-            coerced[name] = arr
-        if coerced:
-            if verdict == "batched":
-                return coerced
-            checks = (0, n - 1) if n > 1 else (0,)
-            reference: dict[int, dict[str, Any]] = {}
-            with np.errstate(all="ignore"):
-                for index in checks:
-                    try:
-                        reference[index] = rel.output_map(rel.evaluate(_slice_point(system, ns, index)))
-                    except Exception:
-                        reference[index] = {}
-            if all(
-                _matches_point(coerced[name], reference[index].get(name), index)
-                for name, _spec in out_specs
-                for index in checks
-            ):
-                trust[rel.name] = "batched"
-                return coerced
-    trust[rel.name] = "pointwise"
-    return _eval_pointwise(system, rel, ns, n, out_specs)
-
-
-def _replay_completion(system: Any, ns: dict[str, np.ndarray], n: int, trust: dict[str, str]) -> None:
-    """Run the compiled completion plan on the batched namespace, in place.
-
-    Mirrors :meth:`RelationSystem._apply_completion_providers`: providers in
-    dependency order, explicit providers recompute, defaults fill only
-    missing outputs, cyclic plans iterate to a fixed point.  The only
-    difference is the write-time coercion to the batched layout instead of
-    the per-point spec coercion; solver-domain projection is skipped here
-    because certification re-checks domains per point.
-    """
-    held = {name for name in system.inputs if system.inputs.get(name) is not None} | set(system.fixed)
-    for _pass in range(system._completion_passes):
-        changed = False
-        # Re-level shape-controlled profiles from their (possibly provider-
-        # updated) scalar averages, mirroring the profile stage of
-        # RelationSystem.complete().  A supplied profile is level-free: its
-        # shape is fixed but its level tracks its average, which may itself be
-        # a scan axis or be derived from one (e.g. T_i_avg = T_e_avg), so it
-        # must be rebuilt each pass rather than frozen at the compile midpoint.
-        for name, avg_name, shape, fixed_value in system._profile_specs:
-            if fixed_value is None and avg_name is not None and ns.get(avg_name) is not None:
-                relevelled = ns[avg_name] * np.asarray(shape, dtype=float)
-                if ns.get(name) is None or not np.array_equal(ns[name], relevelled):
-                    ns[name] = relevelled
-                    changed = True
-        for rel, only_missing, input_names, outs in system._provider_plan:
-            if any(ns.get(name) is None for name in input_names):
-                continue
-            # Supplied inputs are the scenario and are held exactly: a
-            # provider whose output is a held input never overwrites it and
-            # becomes a pure consistency check at certification.
-            writable = [
-                (out_name, spec)
-                for out_name, spec in outs
-                if out_name not in held and not (only_missing and ns.get(out_name) is not None)
-            ]
-            if not writable:
-                continue
-            outputs = _relation_outputs(system, rel, ns, n, writable, trust)
-            for out_name, _spec in writable:
-                arr = outputs.get(out_name)
-                if arr is None:
-                    continue
-                old = ns.get(out_name)
-                ns[out_name] = arr
-                if old is None or old.shape != arr.shape or not np.allclose(old, arr, rtol=0.0, atol=1.0e-300, equal_nan=True):
-                    changed = True
-        if not changed:
-            break
-
+# The batched namespace machinery (coerce/slice/trust/replay) lives next to
+# the per-point completion loop it mirrors -- see the "Batched completion"
+# section of fusdb.relationsystem for the shape discipline and the deliberate
+# differences from RelationSystem._apply_completion_providers.
 
 def _batched_base(system: Any, n: int) -> dict[str, np.ndarray]:
     """Batched pure-input namespace: inputs broadcast, profiles and constants
@@ -438,7 +248,7 @@ def _batched_base(system: Any, n: int) -> dict[str, np.ndarray]:
         if name == "rho":
             ns[name] = np.asarray(value, dtype=float)  # shared, unbatched
             continue
-        arr = _coerce_batched(value, spec.shape, n, profile_size)
+        arr = coerce_batched(value, spec.shape, n, profile_size)
         if arr is not None:
             ns[name] = arr
     # Profile stage: fixed profiles verbatim, shape-controlled from averages.
@@ -453,7 +263,7 @@ def _batched_base(system: Any, n: int) -> dict[str, np.ndarray]:
     for name, value in system._constant_defaults_solver.items():
         if ns.get(name) is None:
             spec = system.variable_registry.get(name)
-            arr = _coerce_batched(value, spec.shape, n, profile_size)
+            arr = coerce_batched(value, spec.shape, n, profile_size)
             if arr is not None:
                 ns[name] = arr
     return ns
@@ -464,7 +274,7 @@ def _outputless_rows(system: Any, rel: Any, ns: dict[str, np.ndarray], n: int, t
 
     ``evaluate()`` of such a relation *is* its scaled residual (e.g. the
     energy-confinement balance).  Same batched-first strategy with a
-    two-point spot check and per-point fallback as :func:`_relation_outputs`.
+    two-point spot check and per-point fallback as :func:`relation_outputs`.
     """
     key = rel.name
     if trust.get(key) != "pointwise":
@@ -482,11 +292,17 @@ def _outputless_rows(system: Any, rel: Any, ns: dict[str, np.ndarray], n: int, t
         if rows is not None:
             if trust.get(key) == "batched":
                 return rows
-            checks = (0, n - 1) if n > 1 else (0,)
+            # Spot-check on finite rows: a NaN row is a poisoned grid point
+            # whose per-point recomputation may raise instead of matching.
+            finite = np.flatnonzero(np.isfinite(rows[:, 0]))
+            if finite.size:
+                checks = tuple(dict.fromkeys((int(finite[0]), int(finite[-1]))))
+            else:
+                checks = (0, n - 1) if n > 1 else (0,)
             with np.errstate(all="ignore"):
                 try:
                     matches = all(
-                        np.allclose(rows[index], np.asarray(rel.evaluate(_slice_point(system, ns, index)), dtype=float).reshape(-1), rtol=1.0e-9, atol=0.0, equal_nan=True)
+                        np.allclose(rows[index], np.asarray(rel.evaluate(slice_point(system, ns, index)), dtype=float).reshape(-1), rtol=1.0e-9, atol=0.0, equal_nan=True)
                         for index in checks
                     )
                 except Exception:
@@ -495,14 +311,100 @@ def _outputless_rows(system: Any, rel: Any, ns: dict[str, np.ndarray], n: int, t
                 trust[key] = "batched"
                 return rows
         trust[key] = "pointwise"
+    needed = set(rel.variables) | set(getattr(rel, "constant_names", ()))
     values = np.full((n, 1), np.nan)
     with np.errstate(all="ignore"):
         for index in range(n):
             try:
-                values[index, 0] = float(np.asarray(rel.evaluate(_slice_point(system, ns, index)), dtype=float).reshape(-1)[0])
+                values[index, 0] = float(np.asarray(rel.evaluate(slice_point(system, ns, index, needed)), dtype=float).reshape(-1)[0])
             except Exception:
                 pass
     return values
+
+
+def _fill_packed_producibles(
+    system: Any, ns: dict[str, np.ndarray], n: int, trust: dict[str, str], dirty: set[str] | None = None
+) -> set[str]:
+    """Forward-fill packed unknowns that completion does not own each pass.
+
+    Two kinds of packed variable are refreshed here (a packed var is a solver
+    unknown reconcile would move, so the compile gives it no *mandatory*
+    provider):
+
+    * **profile-valued** ones (e.g. ``n_i`` under a soft composition) -- the
+      batched scan cannot pack profiles, so any active relation that outputs
+      them is evaluated forward;
+    * **scalars behind a default provider** (e.g. ``density_peaking`` behind
+      the Angioni scaling) -- their default provider is ``only_missing``, so
+      completion freezes them at the seed; recomputing them forward lets the
+      value track its cycle sibling that *is* a Gauss-Newton core (``beta_T``),
+      so the batched peaking cycle converges to the same fixed point reconcile
+      does (otherwise it stalls one Gauss-Seidel step short, ~2% off).
+
+    Scalar packed unknowns with no provider are the Gauss-Newton cores and are
+    left untouched -- the solver owns them.
+
+    ``dirty`` follows the :func:`apply_completion_providers_batched` contract:
+    only relations reading a touched variable (or missing an output) are
+    evaluated; ``None`` evaluates everything.  Returns the names written.
+    """
+    roles = system.variable_roles
+    default_produced = set(system.default_provider_by_output)
+    held = {name for name in system.inputs if system.inputs.get(name) is not None} | set(system.fixed)
+    wrote: set[str] = set()
+    for rel in system.relations:
+        outs = [
+            (out_name, system.variable_registry.get(out_name))
+            for out_name in rel.output_names
+            if roles.get(out_name) == "packed"
+            and out_name not in held
+            and (system.variable_registry.get(out_name).shape != 0 or out_name in default_produced)
+        ]
+        if not outs or any(ns.get(name) is None for name in rel.input_names):
+            continue
+        if (
+            dirty is not None
+            and all(ns.get(out_name) is not None for out_name, _spec in outs)
+            and dirty.isdisjoint(rel.input_names)
+            and dirty.isdisjoint(getattr(rel, "constant_names", ()))
+        ):
+            continue
+        outputs = relation_outputs(system, rel, ns, n, outs, trust)
+        for out_name, _spec in outs:
+            arr = outputs.get(out_name)
+            if arr is None:
+                continue
+            old = ns.get(out_name)
+            if old is None or old.shape != arr.shape or not np.allclose(old, arr, rtol=1e-12, atol=0.0, equal_nan=True):
+                ns[out_name] = arr
+                wrote.add(out_name)
+    return wrote
+
+
+def _refresh_batched(
+    system: Any, ns: dict[str, np.ndarray], n: int, trust: dict[str, str], dirty: set[str] | None = None
+) -> None:
+    """Completion replay plus the packed-profile fill, iterated to a fixpoint.
+
+    The packed-profile/peaking fill and the completion replay feed each other
+    (density_peaking -> n_e profile -> p_th -> beta_T -> density_peaking), so
+    they are alternated until neither writes a change.  The cap is generous
+    because the batched value must match a fully-coupled reconcile to solver
+    precision (the popcon consistency guarantee), which a few Gauss-Seidel
+    sweeps of a slowly-contracting cycle would miss.
+
+    ``dirty`` names what the caller changed since the previous refresh
+    (``None`` = everything); each stage passes on exactly what it wrote, so
+    untouched provider chains are skipped end to end.
+    """
+    changed = apply_completion_providers_batched(system, ns, n, trust, dirty=dirty)
+    fill_dirty = None if dirty is None else set(dirty) | changed
+    for _pass in range(30):
+        wrote = _fill_packed_producibles(system, ns, n, trust, dirty=fill_dirty)
+        if not wrote:
+            break
+        changed = apply_completion_providers_batched(system, ns, n, trust, dirty=set(wrote))
+        fill_dirty = set(wrote) | changed
 
 
 def _component_residual(system: Any, ns: dict[str, np.ndarray], rels: Sequence[Any], n: int, trust: dict[str, str]) -> np.ndarray:
@@ -527,7 +429,7 @@ def _component_residual(system: Any, ns: dict[str, np.ndarray], rels: Sequence[A
         ]
         if not out_specs:
             continue
-        outputs = _relation_outputs(system, rel, ns, n, out_specs, trust)
+        outputs = relation_outputs(system, rel, ns, n, out_specs, trust)
         with np.errstate(all="ignore"):
             for out_name, _spec in out_specs:
                 current = ns[out_name]
@@ -559,7 +461,20 @@ def _solve_cores_batched(
     between iterations.  Points that fail to converge keep their best state;
     certification is the arbiter."""
     provided = set(system.default_provider_by_output) | set(system.derived_provider_by_output)
-    for unknowns, rels in components:
+    # Every namespace write below is recorded in ``stale`` so each refresh
+    # replays only the cones downstream of what actually moved (the caller's
+    # full refresh established a consistent namespace before this solve).
+    stale: set[str] = set()
+
+    def refresh() -> None:
+        _refresh_batched(system, ns, n, trust, dirty=set(stale))
+        stale.clear()
+    # Components are coupled through provided intermediates (a singleton core
+    # like an average feeds the big power component's stored energy), so solve
+    # small components first and sweep the whole set twice: the second sweep
+    # re-solves every component against the others' settled values.
+    ordered = sorted(components, key=lambda item: len(item[0]))
+    for unknowns, rels in ordered * 2:
         cores = [name for name in unknowns if name not in provided and system.variable_registry.get(name).shape == 0]
         if not cores:
             continue
@@ -572,12 +487,13 @@ def _solve_cores_batched(
                 except Exception:
                     start = 1.0
                 ns[name] = np.full((n, 1), start)
+                stale.add(name)
 
         def clamp(index: int, arr: np.ndarray) -> np.ndarray:
             low, high = bounds[index]
             return np.clip(arr, low if np.isfinite(low) else -np.inf, high if np.isfinite(high) else np.inf)
 
-        _replay_completion(system, ns, n, trust)
+        refresh()
         residual = _component_residual(system, ns, rels, n, trust)
         if residual.shape[1] == 0:
             # No output-bearing enforced relation constrains this component;
@@ -606,11 +522,13 @@ def _solve_cores_batched(
             dz = 1.0e-6
             for j, name in enumerate(cores):
                 ns[name] = clamp(j, base_values[name] + dz * refs[j])
+                stale.add(name)
                 actual = (ns[name] - base_values[name]) / refs[j]
                 actual[actual == 0.0] = 1.0e-300
-                _replay_completion(system, ns, n, trust)
+                refresh()
                 jacobian[:, :, j] = (_component_residual(system, ns, rels, n, trust) - residual) / actual
                 ns[name] = base_values[name]
+                stale.add(name)
             jt = np.swapaxes(jacobian, 1, 2)
             jtj = jt @ jacobian
             jtr = (jt @ residual[:, :, None])[:, :, 0]
@@ -632,7 +550,8 @@ def _solve_cores_batched(
                     trial = base_values[name].copy()
                     trial[trial_mask, 0] = base_values[name][trial_mask, 0] - scale[trial_mask] * delta[trial_mask, j] * refs[j][trial_mask, 0]
                     ns[name] = clamp(j, trial)
-                _replay_completion(system, ns, n, trust)
+                    stale.add(name)
+                refresh()
                 trial_residual = _component_residual(system, ns, rels, n, trust)
                 trial_best = np.max(np.abs(trial_residual), axis=1)
                 newly = trial_mask & (trial_best < best)
@@ -644,10 +563,344 @@ def _solve_cores_batched(
                 scale = np.where(improved, scale, scale * 0.25)
             for name in cores:
                 ns[name] = base_values[name]
+                stale.add(name)
             damping = np.where(improved, np.minimum(damping * 2.0, 1.0), np.maximum(damping * 0.25, 1.0e-3))
             if not improved.any():
                 break
-        _replay_completion(system, ns, n, trust)
+        refresh()
+
+
+def _reconcile_point(
+    self: Any,
+    pins: Mapping[str, float],
+    seed: Mapping[str, Any] | None,
+    saved_inputs: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Reconcile one grid point as its own system, warm-started from ``seed``.
+
+    The point is a full reconcile -- the same path (and therefore the same
+    verification) any single scenario gets -- with the axes pinned and every
+    other input at the reactor's declared value.  ``seed`` (a previously solved
+    neighbour's values) is injected as the seeding oracle's initial guesses, so
+    a continuation step starts essentially at its answer.
+
+    The system is **not** recompiled per point: the active relation set depends
+    only on *which* variables are supplied, never on their numeric values, and
+    the axes are pinned for every cell -- so one compile (done by the caller)
+    serves the whole grid.
+    """
+    self.inputs.clear()
+    self.inputs.update(saved_inputs)
+    self.inputs.update(pins)
+    self.values.clear()
+    self.values.update(self.inputs)
+    if seed:
+        # Warm start: every free (non-pinned) value the neighbour solved for.
+        self.values.update(
+            {name: value for name, value in seed.items() if name not in pins and value is not None}
+        )
+        self.initial_guesses.update(
+            {name: value for name, value in seed.items() if name not in self.fixed and value is not None}
+        )
+    return self.run("reconcile")
+
+
+def _point_fields(system: Any, output_names: Sequence[str] | None) -> dict[str, float]:
+    """Extract the requested (or all scalar) solved values as public floats."""
+    values = system.values
+    names = output_names if output_names is not None else [
+        name for name in values if system.variable_registry.get(name).shape == 0
+    ]
+    out: dict[str, float] = {}
+    for name in names:
+        value = values.get(name)
+        if value is None:
+            continue
+        try:
+            out[name] = float(np.asarray(system.public_value(name, value), dtype=float).reshape(-1)[0])
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _system_spec(system: Any) -> dict[str, Any]:
+    """Picklable recipe to rebuild an equivalent system in a worker process.
+
+    Live systems cannot cross a process boundary (relation functions and parsed
+    constraints do not pickle), so a worker receives the record-level state --
+    supplied canonical values, fixed flags, tolerances -- plus registry relation
+    *names* and the raw constraint spec, and rebuilds from the shared registry.
+    """
+    return {
+        "name": system.name,
+        "variables": [
+            (
+                name,
+                system.inputs.get(name),
+                name in system.fixed,
+                system.rel_tols.get(name),
+                system.abs_tols.get(name),
+            )
+            for name in sorted(system.rel_tols)
+            if name != "rho"
+        ],
+        "relations": [rel.name for rel in system.candidate_primary_relations],
+        "constraints": system.constraints_spec,
+    }
+
+
+def _rebuild_system(spec: Mapping[str, Any]) -> Any:
+    from fusdb.registry import RELATIONS
+    from fusdb.relationsystem import RelationSystem
+    from fusdb.variable import Variable
+
+    variables = [
+        Variable(name, value=value, rel_tol=rel_tol, abs_tol=abs_tol, fixed=fixed)
+        for name, value, fixed, rel_tol, abs_tol in spec["variables"]
+    ]
+    relations = [RELATIONS.get(name) for name in spec["relations"]]
+    return RelationSystem(variables, relations, constraints=spec["constraints"], name=spec["name"])
+
+
+def _march_column(
+    system: Any,
+    pinned_inputs: Mapping[str, Any],
+    x_name: str,
+    x_value: float,
+    y_name: str,
+    y_values: np.ndarray,
+    iy0: int,
+    seed: Mapping[str, Any] | None,
+    output_names: Sequence[str] | None,
+) -> list[dict[str, Any]]:
+    """March one column up and down from its reference-row cell.
+
+    Each point warm-starts from the last *solved* point of its half-column
+    (falling back to the column's row seed), so a failed cell cannot poison its
+    children.  Returns one record per visited cell (the ``iy0`` cell itself
+    belongs to the reference row and is not re-solved here).
+    """
+    records: list[dict[str, Any]] = []
+    ny = int(y_values.size)
+    for direction in (range(iy0 + 1, ny), range(iy0 - 1, -1, -1)):
+        parent_seed = seed
+        for iy in direction:
+            pins = {x_name: float(x_value), y_name: float(y_values[iy])}
+            try:
+                point_result = _reconcile_point(system, pins, parent_seed, pinned_inputs)
+            except Exception as exc:  # a failed point never aborts the scan
+                records.append({"iy": iy, "success": False, "termination": f"reconcile raised: {exc}"})
+                continue
+            if not point_result.get("success"):
+                records.append({"iy": iy, "success": False, "termination": str(point_result.get("termination"))})
+                continue
+            parent_seed = dict(system.values)
+            records.append({"iy": iy, "success": True, "fields": _point_fields(system, output_names)})
+    return records
+
+
+def _pin_axes_and_compile(system: Any, x_name: str, x_mid: float, y_name: str, y_mid: float) -> dict[str, Any]:
+    """Pin both axes (midpoint values) and compile once; return the pinned inputs.
+
+    One compile serves the whole grid: the active relation set depends only on
+    *which* variables are supplied, never on their numeric values.
+    """
+    for name, value in ((x_name, x_mid), (y_name, y_mid)):
+        system.inputs[name] = float(value)
+        system.values[name] = float(value)
+        system.fixed.add(name)
+    system.compile()
+    return dict(system.inputs)
+
+
+def _pointwise_chunk_worker(task: tuple) -> list[dict[str, Any]]:
+    """Worker: rebuild the system once, then march a chunk of columns.
+
+    Top-level so it pickles for the process pool.  Returns the flat list of
+    cell records, each tagged with its ``ix``.
+    """
+    spec, x_name, y_name, y_values, iy0, columns, output_names = task
+    system = _rebuild_system(spec)
+    x_mid = float(columns[len(columns) // 2][1])
+    pinned_inputs = _pin_axes_and_compile(system, x_name, x_mid, y_name, float(y_values[iy0]))
+    records: list[dict[str, Any]] = []
+    for ix, x_value, seed in columns:
+        for record in _march_column(
+            system, pinned_inputs, x_name, x_value, y_name, y_values, iy0, seed, output_names
+        ):
+            record["ix"] = int(ix)
+            records.append(record)
+    return records
+
+
+def run_pointwise(
+    system: Any,
+    *,
+    x: Any = None,
+    y: Any = None,
+    outputs: Sequence[str] | None = None,
+    verbose: int = 0,
+    workers: int | None = None,
+    **_unused: Any,
+) -> dict[str, Any]:
+    """2-D scan where every point is its own reconciled, verified system.
+
+    Unlike the batched :func:`run`, each grid point is solved by a full
+    ``reconcile`` -- so it carries the same guarantee a single scenario does,
+    and nonlinear couplings the batched replay cannot close (notably the
+    density-peaking cycle ``density_peaking -> n_e -> p_th -> beta_T -> Angioni``)
+    are solved properly.
+
+    Points are visited by **continuation** from the reactor's own declared
+    operating point: the reference cell first, then its row (serial, each cell
+    warm-started from the neighbour just solved), then every column marched up
+    and down from its reference-row cell.  Columns are mutually independent, so
+    they run on a process pool (``workers``; ``None`` uses the CPU count,
+    ``0``/``1`` stays in-process).  Workers rebuild the system from a picklable
+    recipe -- live systems cannot cross a process boundary -- and each solves a
+    contiguous chunk of columns so the per-worker compile is amortised.
+
+    A point whose reconcile fails does not poison its children: they fall back
+    to the nearest solved seed (previous cell in the half-column, else the
+    column's reference-row solution).
+    """
+    self = system
+    result = new_result(self, "popcon")
+    if reject_unknown_options(result, _unused):
+        return result
+    if x is None or y is None:
+        result["errors"].append("popcon requires 'x' and 'y' axis specs.")
+        result["termination"] = "invalid options"
+        return result
+    try:
+        x_name, x_values = parse_axis(x, self.variable_registry)
+        y_name, y_values = parse_axis(y, self.variable_registry)
+    except Exception as exc:
+        result["errors"].append(str(exc))
+        result["termination"] = "invalid options"
+        return result
+    if x_name == y_name:
+        result["errors"].append(f"popcon axes must differ; both are {x_name!r}.")
+        result["termination"] = "invalid options"
+        return result
+
+    saved_inputs = dict(self.inputs)
+    saved_values = dict(self.values)
+    saved_fixed = set(self.fixed)
+
+    nx, ny = int(x_values.size), int(y_values.size)
+    # The reference cell is the grid cell closest to the reactor's own declared
+    # operating point -- a scenario that already reconciles -- so the very first
+    # solve starts from a physical state rather than a cold seed.
+    ix0 = int(np.argmin(np.abs(x_values - float(saved_inputs.get(x_name, x_values[nx // 2])))))
+    iy0 = int(np.argmin(np.abs(y_values - float(saved_inputs.get(y_name, y_values[ny // 2])))))
+
+    output_names = (
+        [self.variable_registry.resolve(str(name)) for name in outputs] if outputs is not None else None
+    )
+    fields: dict[str, np.ndarray] = {}
+    success = np.zeros((ny, nx), dtype=bool)
+    failures: list[dict[str, Any]] = []
+
+    def record_point(iy: int, ix: int, record: Mapping[str, Any]) -> None:
+        if not record.get("success"):
+            failures.append({"ix": int(ix), "iy": int(iy), "termination": str(record.get("termination"))})
+            return
+        success[iy, ix] = True
+        for name, value in record["fields"].items():
+            grid = fields.get(name)
+            if grid is None:
+                grid = fields[name] = np.full((ny, nx), np.nan)
+            grid[iy, ix] = value
+
+    try:
+        pinned_inputs = _pin_axes_and_compile(
+            self, x_name, float(x_values[nx // 2]), y_name, float(y_values[ny // 2])
+        )
+
+        # ── Phase A (serial): reference cell, then its row by continuation. ──
+        row_solutions: dict[int, dict[str, Any]] = {}
+        reference_solution: dict[str, Any] | None = None
+        row_order = [ix0, *range(ix0 + 1, nx), *range(ix0 - 1, -1, -1)]
+        for ix in row_order:
+            neighbour = ix - 1 if ix > ix0 else ix + 1
+            seed = row_solutions.get(neighbour) if ix != ix0 else None
+            if seed is None:
+                seed = reference_solution
+            pins = {x_name: float(x_values[ix]), y_name: float(y_values[iy0])}
+            try:
+                point_result = _reconcile_point(self, pins, seed, pinned_inputs)
+            except Exception as exc:
+                record_point(iy0, ix, {"success": False, "termination": f"reconcile raised: {exc}"})
+                continue
+            if not point_result.get("success"):
+                record_point(iy0, ix, {"success": False, "termination": str(point_result.get("termination"))})
+                continue
+            row_solutions[ix] = dict(self.values)
+            if reference_solution is None:
+                reference_solution = row_solutions[ix]
+            record_point(iy0, ix, {"success": True, "fields": _point_fields(self, output_names)})
+        if verbose:
+            print(f"popcon pointwise: reference row {len(row_solutions)}/{nx} solved")
+
+        # ── Phase B: columns, independent -> process pool (or in-process). ──
+        if ny > 1:
+            columns = [
+                (ix, float(x_values[ix]), row_solutions.get(ix) or reference_solution)
+                for ix in range(nx)
+            ]
+            pool_size = os.cpu_count() or 1 if workers is None else int(workers)
+            pool_size = max(1, min(pool_size, nx))
+            if pool_size == 1:
+                for ix, x_value, seed in columns:
+                    for record in _march_column(
+                        self, pinned_inputs, x_name, x_value, y_name, y_values, iy0, seed, output_names
+                    ):
+                        record_point(record["iy"], ix, record)
+            else:
+                from concurrent.futures import ProcessPoolExecutor
+
+                spec = _system_spec(self)
+                chunks = [columns[i::pool_size] for i in range(pool_size)]
+                tasks = [
+                    (spec, x_name, y_name, y_values, iy0, chunk, output_names)
+                    for chunk in chunks
+                    if chunk
+                ]
+                with ProcessPoolExecutor(max_workers=pool_size) as executor:
+                    for records in executor.map(_pointwise_chunk_worker, tasks):
+                        for record in records:
+                            record_point(record["iy"], record["ix"], record)
+        if verbose:
+            print(f"popcon pointwise: {int(success.sum())}/{nx * ny} points reconciled")
+    finally:
+        self.inputs.clear()
+        self.inputs.update(saved_inputs)
+        self.values.clear()
+        self.values.update(saved_values)
+        self.fixed.clear()
+        self.fixed.update(saved_fixed)
+        self.initial_guesses.clear()
+        self.compile()
+
+    n = nx * ny
+    n_ok = int(success.sum())
+    result.update(
+        {
+            "success": n_ok > 0,
+            "termination": f"popcon pointwise reconcile: {n_ok}/{n} points solved",
+            "n_points": n,
+            "n_failed": n - n_ok,
+            "popcon": {
+                "x": {"name": x_name, "values": x_values},
+                "y": {"name": y_name, "values": y_values},
+                "fields": fields,
+                "success": success,
+                "failures": failures,
+            },
+        }
+    )
+    return result
 
 
 def run(
@@ -657,9 +910,17 @@ def run(
     y: Any = None,
     outputs: Sequence[str] | None = None,
     verbose: int = 0,
+    solver: str = "batched",
+    workers: int | None = None,
     **_unused: Any,
 ) -> dict[str, Any]:
     """Batched 2-D scan: evaluate, solve the cores, certify every point.
+
+    ``solver="reconcile"`` instead runs :func:`run_pointwise`, where every grid
+    point is its own fully reconciled (and therefore verified) system,
+    warm-started by continuation from the reactor's declared operating point,
+    with the independent columns solved on a process pool (``workers``).
+    Slower, but it closes nonlinear couplings the batched replay cannot.
 
     Args:
         x: X-axis spec (see :func:`parse_axis`).
@@ -676,9 +937,15 @@ def run(
         point failed certification), the boolean ``success`` grid and a
         ``failures`` list naming each failed point's violated relations.
     """
+    if str(solver) == "reconcile":
+        return run_pointwise(system, x=x, y=y, outputs=outputs, verbose=verbose, workers=workers, **_unused)
     self = system
     result = new_result(self, "popcon")
     if reject_unknown_options(result, _unused):
+        return result
+    if str(solver) != "batched":
+        result["errors"].append(f"popcon solver must be 'batched' or 'reconcile', got {solver!r}.")
+        result["termination"] = "invalid options"
         return result
     if x is None or y is None:
         result["errors"].append("popcon requires 'x' and 'y' axis specs.")
@@ -752,7 +1019,7 @@ def run(
         ns[y_name] = flat_y.reshape(n, 1)
         if verbose:
             print(f"popcon batch: {n} points, {len(self._provider_plan)} providers, {len(components)} core components")
-        _replay_completion(self, ns, n, trust)
+        _refresh_batched(self, ns, n, trust)
         _solve_cores_batched(self, ns, components, n, trust)
 
         # Per-point certification through the same machinery as every other
@@ -762,7 +1029,7 @@ def run(
         failures: list[dict[str, Any]] = []
         for index in range(n):
             iy, ix = divmod(index, nx)
-            point = _slice_point(self, ns, index)
+            point = slice_point(self, ns, index)
             # The fixed-drift check compares against the pinned inputs, so
             # the axis inputs must hold this point's grid coordinates.
             self.inputs[x_name] = float(flat_x[index])

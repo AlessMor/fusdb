@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import textwrap
 
-from fusdb import Reactor, SolvedColumn, Variable, solve_reactors, variables_table
+import pytest
+
+from fusdb import Reactor, SolvedColumn, Variable, aspect_ratio, render_table, solve_reactors, variable_table_data
 
 
 def _reactor(name: str, radius: float) -> Reactor:
@@ -14,18 +16,18 @@ def _reactor(name: str, radius: float) -> Reactor:
     )
 
 
-def test_variables_table_renders_loaded_reactor_without_running_relations():
+def test_variable_table_data_renders_loaded_reactor_without_running_relations():
     reactor = _reactor("Example", 3.2)
     reactor.relations = lambda: (_ for _ in ()).throw(AssertionError("display should not select relations"))
 
-    html = variables_table(reactor)
+    html = render_table(variable_table_data(reactor))
 
     assert "Example" in html
     assert "3.2" in html
 
 
-def test_variables_table_combines_multiple_reactors():
-    html = variables_table(_reactor("A", 3.2), _reactor("B", 4.4))
+def test_variable_table_data_combines_multiple_reactors():
+    html = render_table(variable_table_data(_reactor("A", 3.2), _reactor("B", 4.4)))
 
     assert "A" in html
     assert "B" in html
@@ -33,19 +35,19 @@ def test_variables_table_combines_multiple_reactors():
     assert "4.4" in html
 
 
-def test_variables_table_can_display_existing_system_state():
+def test_variable_table_data_can_display_existing_system_state():
     reactor = _reactor("Solved", 3.2)
     reactor.relations = lambda: ()
     system = reactor.relation_system()
     system.values["R"] = 4.4
 
-    html = variables_table(system, variable_names=("R",))
+    html = render_table(variable_table_data(system, variable_names=("R",)))
 
     assert "Solved" in html
     assert "4.4" in html
 
 
-def test_variables_table_renders_solved_column_snapshot():
+def test_variable_table_data_renders_solved_column_snapshot():
     column = SolvedColumn(
         name="Snap",
         inputs={"R": 3.0},
@@ -57,7 +59,7 @@ def test_variables_table_renders_solved_column_snapshot():
         result={"success": True},
     )
 
-    html = variables_table(column)
+    html = render_table(variable_table_data(column))
 
     assert "Snap" in html
     assert "#1EFF00" in html  # success-coloured header
@@ -72,10 +74,65 @@ def test_run_absorbs_solved_values_and_keeps_last_system():
     reactor.run("verify")
 
     assert reactor.last_system is not None
-    # The solved value replaces the input entirely: value == input_value, and
-    # both mirror the solved system.
+    # Variable is immutable, so a run never rewrites the declaration; nothing
+    # moves it here (verify performs no solve) so the read-through .value
+    # still agrees with the declared value and with the solved system.
     assert reactor.R.value == reactor.last_system.values["R"]
-    assert reactor.R.input_value == reactor.R.value
+    assert reactor.R.declared.value == reactor.R.value
+
+
+def test_reconcile_moves_value_without_touching_the_declaration():
+    reactor = Reactor(
+        name="Move",
+        variables={
+            "R": Variable("R", value=3.0, fixed=True),
+            "a": Variable("a", value=1.0, fixed=True),
+            # Declared inconsistent with R/a=3.0 on purpose; only A can move
+            # (R and a are fixed), so reconcile is forced to correct A.
+            "A": Variable("A", value=5.0),
+        },
+    )
+    reactor.relations = lambda: (aspect_ratio,)
+
+    result = reactor.reconcile()
+
+    assert result["success"]
+    # The declaration is exactly what was supplied, forever -- a solve does
+    # not (and now cannot) rewrite it.
+    assert reactor.get_variable("A").declared.value == 5.0
+    # The read-through .value reflects the solved system instead, and it
+    # genuinely differs from the declaration here.
+    assert reactor.A.value == pytest.approx(3.0)
+    assert reactor.A.value != reactor.A.declared.value
+    assert reactor.A.value == reactor.last_system.values["A"]
+    # A fixed variable never moves: declared and solved agree trivially.
+    assert reactor.R.value == reactor.R.declared.value == 3.0
+
+    # The table path reads through _table_column's Reactor branch, which must
+    # show the solved value (3), not the frozen declaration (5). A Reactor
+    # column always reports no active variables, so the diff-colouring paths
+    # never fire for it -- this only checks which value is displayed.
+    html_after_solve = render_table(variable_table_data(reactor, variable_names=("A",)))
+    assert ">3<" in html_after_solve
+    assert ">5<" not in html_after_solve
+
+    # A later run starts from the same declarations again, not the solution.
+    second = reactor.reconcile()
+    assert second["success"]
+    assert reactor.get_variable("A").declared.value == 5.0
+
+    # restart_from_solution() is the explicit opt-in to continue from here.
+    reactor.restart_from_solution()
+    assert reactor.get_variable("A").declared.value == pytest.approx(3.0)
+
+
+def test_add_variable_rejects_a_solved_variable_view():
+    reactor = _reactor("Guard", 3.2)
+    reactor.relations = lambda: ()
+    reactor.run("verify")
+
+    with pytest.raises(TypeError):
+        reactor.add_variable(reactor.get_variable("R"))
 
 
 def _write_mini_reactor(directory, name: str) -> str:
@@ -108,4 +165,4 @@ def test_solve_reactors_runs_in_parallel_and_labels_duplicates(tmp_path):
     # Duplicate reactor names are disambiguated by their location.
     names = [column.name for column in columns]
     assert names == ["Mini (alpha/reactor.yaml)", "Mini (beta/reactor.yaml)"]
-    assert variables_table(*columns).startswith("<table")
+    assert render_table(variable_table_data(*columns)).startswith("<table")

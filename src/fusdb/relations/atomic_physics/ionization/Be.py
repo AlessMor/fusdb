@@ -1,12 +1,9 @@
 """AMJUEL H.2 ionization fits for Be."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.38 Be ionization STRAHL rate',
@@ -29,4 +26,4 @@ def amjuel_h_2_2_38_be_ionization_strahl_rate(T_edge: Any) -> Any:
     - Max. rel. Error: .1411 %
     - Mean rel. Error: .0582 %
     - Ionization Rates for single charged Beryllium Ions"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_38.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.38_Be-ionization", T_edge)

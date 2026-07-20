@@ -1,6 +1,4 @@
 settings:
-  table_dir: reactivity_tables
-
   energy_grid:
     start_log10_kev: 0.0
     stop_log10_kev: 5.0

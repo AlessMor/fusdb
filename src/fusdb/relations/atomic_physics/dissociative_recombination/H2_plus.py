@@ -1,12 +1,9 @@
 """AMJUEL H.2 dissociative recombination fits for H2_plus."""
 
-from pathlib import Path
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.relations.atomic_physics._amjuel import evaluate_amjuel_h2_rate
-
-_DATA_DIR = Path(__file__).resolve().parent
+from fusdb.utils.datasets import evaluate_amjuel_h2_rate
 
 @relation(
     name='AMJUEL H.2 2.22 H2+ dissociative recombination rate',
@@ -34,4 +31,4 @@ def amjuel_h_2_2_22_h2_plus_dissociative_recombination_rate(T_edge: Any) -> Any:
     - in
     - HYDHEL,forreferencepurposesonly.
     - Tmin 1.00e-01 <sv>(Tmin) 2.23e-07 <sv>max 2.23e-07 Error 3.30e-13"""
-    return evaluate_amjuel_h2_rate(_DATA_DIR / "amjuel_h2_2_22.yaml", T_edge)
+    return evaluate_amjuel_h2_rate("polynomialfit_AMJUEL-H2-2.22_H2-plus-dissociative-recombination", T_edge)

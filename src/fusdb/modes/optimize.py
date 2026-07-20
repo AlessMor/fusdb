@@ -49,6 +49,17 @@ def run(
         validation["termination"] = "no free variables; validation only"
         return validation
 
+    # One frozen residual-row layout for the whole solve (the single residual
+    # protocol, see RelationSystem.residual_layout): every constraint and
+    # movement evaluation fills exactly these rows, so a value that goes
+    # missing penalizes its own rows instead of changing the vector size.
+    try:
+        layout = self.residual_layout(self.unpack(x0), include_movement=bool(movement_weight))
+    except Exception as exc:
+        result["errors"].append(f"Residual initialization failed: {exc}")
+        result["termination"] = "initialization failed"
+        return result
+
     def objective_value(x: np.ndarray) -> float:
         values = self.unpack(x)
         if callable(objective):
@@ -59,16 +70,13 @@ def run(
         if sense == "maximize":
             val = -val
         if movement_weight:
-            move = self.movement_residuals(values)
+            move = self.layout_movement_rows(values, layout)
             val += float(movement_weight) * float(np.dot(move, move))
         return val
 
     def equality_residual(x: np.ndarray) -> np.ndarray:
         values = self.unpack(x)
-        residuals, errors = self.solver_residual_vector(values)
-        if errors:
-            return np.full(max(1, residuals.size), 1.0e6, dtype=float)
-        return residuals
+        return self.layout_relation_rows(values, layout)
 
     constraints = [NonlinearConstraint(equality_residual, -1e-8, 1e-8)]
     try:

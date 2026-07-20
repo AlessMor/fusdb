@@ -2,6 +2,8 @@
 
 from typing import Any
 
+import numpy as np
+
 from fusdb.relation import relation
 
 
@@ -46,7 +48,37 @@ def physics_gain_factor(
     Returns:
         physics_gain_factor: Physics gain factor [dimensionless]
     """
-    return P_fus / P_aux
+    # Q_sci has domain [0, inf): a negative value would mean P_aux < 0 (the
+    # plasma is past ignition and would need power *removed* to stay in steady
+    # state). Floor at the domain lower limit rather than emit a negative gain.
+    return np.maximum(P_fus / P_aux, 0.0)
+
+
+@relation(
+    name='Fusion gain (cfspopcon)',
+    tags=('fusion_power',),
+    outputs='Q_cfspopcon',
+)
+def cfspopcon_gain_factor(
+    P_fus: float, P_aux_launched: float, P_ohmic: float) -> Any:
+    """Return cfspopcon's fusion gain Q = P_fus / (P_aux_launched + P_ohmic).
+
+    Adapted from cfspopcon; see README.md section "Third-party Notices".
+    cfspopcon divides the fusion power by the *launched* external power,
+    which counts ohmic heating alongside the launched auxiliary power
+    (its dataset P_external equals P_aux_launched + P_ohmic exactly).
+    Unlike Q_sci (absorbed-power convention), the denominator keeps the
+    ohmic term, so the gain stays finite where P_aux reaches zero.
+
+    Args:
+        P_fus: Fusion power [W]
+        P_aux_launched: Launched auxiliary heating power [W]
+        P_ohmic: Ohmic heating power [W]
+
+    Returns:
+        Q_cfspopcon: Fusion gain on cfspopcon's launched-power convention [dimensionless]
+    """
+    return P_fus / (P_aux_launched + P_ohmic)
 
 
 @relation(

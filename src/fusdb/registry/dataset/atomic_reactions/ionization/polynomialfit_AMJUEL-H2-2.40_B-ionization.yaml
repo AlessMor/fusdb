@@ -1,0 +1,32 @@
+schema_version: 1
+datatype: polynomialfit
+source: AMJUEL-H2-2.40
+subject: B-ionization
+database: AMJUEL
+amjuel_section: H.2
+amjuel_subsection: '2.40'
+reaction: 2.5B0 e+B → e+B++e
+category: ionization
+species: B
+output: B_ionization_rate
+relation_name: AMJUEL H.2 2.40 B ionization STRAHL rate
+inputs:
+  temperature: T_edge
+input_units:
+  T_edge: keV
+  amjuel_temperature: eV
+output_unit: m^3/s
+source_output_unit: cm^3/s
+formula: ln(<sigma v>) = sum_i b_i * ln(T_eV)^i
+coefficients:
+- -2.652112807432D+01
+- 8.818502481012D+00
+- -3.832208851779D+00
+- 1.206778920817D+00
+- -2.766330884306D-01
+- 4.255759023412D-02
+- -4.078840883672D-03
+- 2.185455019432D-04
+- -4.985646766233D-06
+amjuel_comments:
+- Ionization Rates for neutral Boron Atoms

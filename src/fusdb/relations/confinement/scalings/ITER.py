@@ -893,6 +893,72 @@ def tau_E_iter_ipb98y2(
 
 
 @relation(
+    name="Energy confinement time ITER98y2 (cfspopcon)",
+    tags=("confinement", "h_mode"),
+    outputs="tau_E",
+)
+def tau_E_iter98y2_cfspopcon(
+    H98_y2: float,
+    I_p: float,
+    b_plasma_toroidal_on_axis: float,
+    n_e_avg: float,
+    p_plasma_loss: float,
+    rmajor: float,
+    kappa: float,
+    aspect: float,
+    afuel: float,
+) -> float:
+    """ITER98y2 ELMy H-mode confinement time on cfspopcon's conventions.
+
+    Adapted from cfspopcon; see README.md section "Third-party Notices".
+
+    Same constant and exponents as :func:`tau_E_iter_ipb98y2`, but with the two
+    input conventions cfspopcon's ``energy_confinement_scalings.yaml`` uses for
+    ITER98y2:
+
+    * the density factor takes the *volume-averaged* electron density
+      (``average_electron_density``), not the line average;
+    * the elongation factor takes the *areal* elongation ``kappa_A``, not the
+      Kardaun-corrected ``kappa_IPB = V / (2 pi^2 R a^2)``.
+
+    Each is a few-percent difference (``kappa_IPB/kappa_A ~ 0.94`` here, and the
+    line average runs above the volume average once the density peaks), and the
+    ``W = P_loss * tau_E`` balance amplifies them as ``P_loss ~ W^3.2``, so
+    reproducing cfspopcon's auxiliary power requires its exact form.  The
+    ``confinement_time_scalar`` H-factor multiplies the scaling directly.
+
+    Args:
+        H98_y2: Confinement enhancement factor (cfspopcon confinement_time_scalar) [~]
+        I_p: Plasma current [A]
+        b_plasma_toroidal_on_axis: Toroidal magnetic field on axis [T]
+        n_e_avg: Volume-averaged electron density [m^-3]
+        p_plasma_loss: Loss power [W]
+        rmajor: Plasma major radius [m]
+        kappa: Areal elongation [~]
+        aspect: Aspect ratio [~]
+        afuel: Fuel atomic mass number [amu]
+
+    Returns:
+        tau_E: ITER98y2 confinement time [s]
+    """
+    pcur = I_p / 1.0e6
+    p_plasma_loss_mw = p_plasma_loss / 1.0e6
+    dn19 = n_e_avg / 1.0e19
+    return (
+        H98_y2
+        * 0.0562e0
+        * pcur**0.93e0
+        * b_plasma_toroidal_on_axis**0.15e0
+        * dn19**0.41e0
+        * p_plasma_loss_mw ** (-0.69e0)
+        * rmajor**1.97e0
+        * kappa**0.78e0
+        * aspect ** (-0.58e0)
+        * afuel**0.19e0
+    )
+
+
+@relation(
     name="iter_ipb98y2_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",

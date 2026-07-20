@@ -3,7 +3,7 @@
 from typing import Any
 
 import numpy as np
-from fusdb.utils import trapezoid
+from fusdb.utils import volume_average
 
 from fusdb.relation import relation
 
@@ -32,9 +32,8 @@ def calc_synchrotron_radiation(
     with gamma_T=2, alpha_n=0.5, alpha_T=1.
 
     Note: cfspopcon volume-weights the profile integral (sum(f*2*rho*drho)*V);
-    fusdb integrates uniformly in rho (V_p*trapezoid), matching the existing
-    Bremsstrahlung relation -- the two radiated-power channels share that
-    approximation.
+    fusdb uses the equivalent flux-volume weighting (V_p*volume_average),
+    matching the Bremsstrahlung, impurity-line and fusion-rate relations.
 
     Args:
         rho: [~] :term:`glossary link<rho>`
@@ -84,7 +83,7 @@ def calc_synchrotron_radiation(
         )
         p_sync = 6.25e-3 * ne20 * T_e * B0**2 * Phi * 1e6  # [W/m^3]
     p_sync = np.where(np.isfinite(p_sync), p_sync, 0.0)
-    return V_p * trapezoid(p_sync, x=rho)
+    return V_p * volume_average(p_sync, rho)
 
 
 @relation(

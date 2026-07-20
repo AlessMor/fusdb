@@ -15,7 +15,6 @@ variables:
     fixed: true
   A:
     value: 9.8
-    fixed: true
   V_p: 425
   S_p: 327
   B0: 9.0

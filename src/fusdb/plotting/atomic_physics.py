@@ -33,6 +33,8 @@ from ._bokeh import (
     validate_axis_limits,
     write_html,
 )
+from .data import Curve, CurveSet
+from .renderers import bokeh_curve_set
 
 # Display order of the process categories (relation subpackage names) and the
 # species filter buttons (hydrogenic first, so the default selection is leading).
@@ -229,7 +231,6 @@ def atomic_physics_app(
     from bokeh.layouts import column
     from bokeh.models import (
         CheckboxButtonGroup,
-        ColumnDataSource,
         CustomJS,
         HoverTool,
         Legend,
@@ -258,9 +259,7 @@ def atomic_physics_app(
     species_labels = sorted({item.species for item in series}, key=lambda s: _order(SPECIES_ORDER, s))
     initial_species = {label for label in species_labels if label in HYDROGENIC_SPECIES} or set(species_labels)
 
-    renderers = []
-    density_sources = []
-    legend_items: list = []
+    curves = []
     for item in series:
         if item.density_dependent:
             columns = {
@@ -270,7 +269,6 @@ def atomic_physics_app(
             columns["y"] = columns[f"y{DEFAULT_DENSITY_EXPONENT}"]
         else:
             columns = {"y": _rate_curve(item.relation, temperature_keV)}
-        source = ColumnDataSource({"x": temperature_eV.astype(np.float32), **columns})
         hover_name = " — ".join(
             part
             for part in (
@@ -281,21 +279,26 @@ def atomic_physics_app(
             )
             if part
         )
-        visible = item.species in initial_species
-        renderer = plot.line(
-            "x",
-            "y",
-            source=source,
-            name=hover_name,
-            line_width=2.0,
-            color=CATEGORY_COLORS.get(item.category, "#222222"),
-            visible=visible,
+        curves.append(
+            Curve(
+                temperature_eV.astype(np.float32),
+                columns.pop("y"),
+                f"{item.label} [H.4]" if item.density_dependent else item.label,
+                style={"line_width": 2.0, "color": CATEGORY_COLORS.get(item.category, "#222222")},
+                metadata={"category": item.category, "species": item.species, "hover_name": hover_name, "density_dependent": item.density_dependent},
+                columns=columns,
+            )
         )
-        if item.density_dependent:
-            density_sources.append(source)
-        renderers.append(renderer)
-        legend_label = f"{item.label} [H.4]" if item.density_dependent else item.label
-        legend_items.append(LegendItem(label=legend_label, renderers=[renderer], visible=visible))
+    data = CurveSet(curves, xlabel="Electron temperature [eV]", ylabel="⟨σv⟩ [m^3/s]", xscale="log", yscale="log")
+    _plot, renderers, sources = bokeh_curve_set(data, plot=plot, legend=False)
+    density_sources = [source for curve, source in zip(data.curves, sources, strict=True) if curve.metadata["density_dependent"]]
+    legend_items = [
+        LegendItem(label=curve.label, renderers=[renderer], visible=curve.metadata["species"] in initial_species)
+        for curve, renderer in zip(data.curves, renderers, strict=True)
+    ]
+    for curve, renderer in zip(data.curves, renderers, strict=True):
+        renderer.visible = curve.metadata["species"] in initial_species
+        renderer.name = curve.metadata["hover_name"]
 
     plot.add_layout(
         Legend(items=legend_items, click_policy="hide", label_text_font_size="8pt", spacing=0), "right"
@@ -339,8 +342,8 @@ for (const source of sources) {
         species_selector,
         category_labels,
         species_labels,
-        [item.category for item in series],
-        [item.species for item in series],
+        [curve.metadata["category"] for curve in data.curves],
+        [curve.metadata["species"] for curve in data.curves],
         renderers,
         legend_items,
         status,
