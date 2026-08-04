@@ -1,0 +1,17 @@
+# Reactivity-table lookup and interpolation settings.
+# Read by registry/reactivity_config.py.  Reaction stoichiometry and
+# product energies live in reactions.yaml.
+settings:
+  energy_grid:
+    start_log10_kev: 0.0
+    stop_log10_kev: 5.0
+    num_points: 1000
+
+  allowed_interpolation_kinds:
+    - pchip
+    - linear
+    - nearest
+    - zero
+    - slinear
+    - quadratic
+    - cubic

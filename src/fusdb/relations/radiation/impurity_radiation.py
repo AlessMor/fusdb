@@ -32,6 +32,7 @@ from numpy.polynomial.polynomial import polyval
 from fusdb.utils import trapezoid, volume_average
 
 from fusdb.relation import relation
+from fusdb.registry import SPECIES
 from fusdb.registry.dataset import load_dataset
 
 _MAVRIN_T_MIN, _MAVRIN_T_MAX = 0.1, 100.0  # Mavrin 2018 coronal validity [keV]
@@ -59,7 +60,7 @@ def _binned_log10_Lz(Te: np.ndarray, bins: Any, radc: Any) -> np.ndarray:
 @relation(
     name="Impurity line radiation (Mavrin coronal)",
     tags=("power_balance",),
-    outputs="P_line",
+    outputs="P_cool_imp",
 )
 def calc_impurity_line_radiation_mavrin_coronal(
     n_e: Any, T_e: Any, rho: Any, V_p: Any,
@@ -88,7 +89,7 @@ def calc_impurity_line_radiation_mavrin_coronal(
 @relation(
     name="Impurity line radiation (Post-Jensen)",
     tags=("power_balance",),
-    outputs="P_line",
+    outputs="P_cool_imp",
 )
 def calc_impurity_line_radiation_post_jensen(
     n_e: Any, T_e: Any, rho: Any, V_p: Any,
@@ -118,7 +119,7 @@ def calc_impurity_line_radiation_post_jensen(
 @relation(
     name="Impurity line radiation (Mavrin noncoronal)",
     tags=("power_balance",),
-    outputs="P_line",
+    outputs="P_cool_imp",
 )
 def calc_impurity_line_radiation_mavrin_noncoronal(
     n_e: Any, T_e: Any, rho: Any, V_p: Any, impurity_residence_time: Any,
@@ -170,14 +171,13 @@ def calc_impurity_line_radiation_mavrin_noncoronal(
 # alternative to the Mavrin/Post-Jensen polynomial fits. The tables were
 # extracted programmatically (no transcription) into
 # per-species ``coolingcurve_PROCESS_coronal_*`` datasets. Gated (Mavrin coronal
-# stays the default). Species: the 10 for which PROCESS has data AND fusdb has a
-# concentration variable (no Li in PROCESS's set).
+# stays the default). Supported species are declared per element in
+# species.yaml ``atomic_data`` (no Li in PROCESS's set).
 
 # PROCESS overwrites pimpden with the *raw* endpoint Lz outside the table range
 # (unit-inconsistent -- it drops the n_e^2 factor -- but negligible there since
 # Bremsstrahlung dominates at high Te). This port instead relies on np.interp's
 # natural endpoint clamping so the n_e^2 scaling is preserved. (# CHECK)
-_PROCESS_LZ_SPECIES = ("He", "Be", "C", "N", "O", "Ne", "Ar", "Kr", "Xe", "W")
 
 
 def _process_coronal_Lz(symbol: str, Te_keV: np.ndarray) -> np.ndarray:
@@ -196,7 +196,7 @@ def _process_coronal_Lz(symbol: str, Te_keV: np.ndarray) -> np.ndarray:
 @relation(
     name="Impurity line radiation (PROCESS coronal tables)",
     tags=("power_balance", "process"),
-    outputs="P_line",
+    outputs="P_cool_imp",
 )
 def calc_impurity_line_radiation_process_coronal(
     n_e: Any, T_e: Any, rho: Any, V_p: Any,
@@ -226,6 +226,60 @@ def calc_impurity_line_radiation_process_coronal(
     return V_p * volume_average(q_rad, rho)
 
 
+# ── uniform species sum (PROCESS bookkeeping) ────────────────────────────────
+# PROCESS does not carry a separate bremsstrahlung term at all: its species
+# array starts at index 1 = Hydrogen (Z=1) and runs the SAME cooling-curve
+# machinery for every element, with P_rad = sum_species + P_sync
+# (models/physics/impurity_radiation.py, radiation_power.py).  The relations
+# below reproduce that bookkeeping.
+#
+# Why it is the correct generalisation: P_s = n_e n_s Lz_s(T_e) reduces exactly
+# to Z_s^2-weighted bremsstrahlung once a species is fully stripped, so one loop
+# degenerates to Z_eff-weighted brems in the core with no fuel special case.
+# That removes the hydrogenic-vs-impurity split which produced the negative
+# ``P_line`` defect, and it fixes a real weighting error: the hydrogenic
+# bremsstrahlung relation weights by n_e^2, i.e. it assumes every electron is
+# paired with a Z=1 ion, over-counting that term by 1/c_H (~+15% at 10-15%
+# dilution) while the impurity path already uses n_e * n_z.
+
+
+@relation(
+    name="Species-sum radiated power (PROCESS coronal tables)",
+    tags=("power_balance", "process"),
+    outputs="P_rad_species",
+)
+def calc_radiated_power_species_sum_process_coronal(
+    n_e: Any, T_e: Any, rho: Any, V_p: Any,
+    c_H: Any = 0.0, c_He: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0,
+    c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_Xe: Any = 0.0,
+    c_W: Any = 0.0,
+) -> Any:
+    """Total radiated power over ALL species -- fuel, ash and impurities --
+    from PROCESS's tabulated coronal Lz curves.
+
+    Adapted from PROCESS; see README.md section "Third-party Notices".
+
+    Identical assembly to the impurity-only relations above (q = n_e^2 * sum_s
+    c_s Lz_s, integrated V_p * volume_average over rho); the only difference is
+    that hydrogen is one of the species.  Each Lz already contains line,
+    recombination and bremsstrahlung, so no separate brems term is added --
+    adding one would double-count.  Synchrotron is NOT included; it is not a
+    two-body collisional process and stays its own term.
+    """
+    # CHECK
+    concentrations = {"H": c_H, "He": c_He, "Be": c_Be, "C": c_C, "N": c_N, "O": c_O,
+                      "Ne": c_Ne, "Ar": c_Ar, "Kr": c_Kr, "Xe": c_Xe, "W": c_W}
+    Te = np.asarray(T_e, dtype=float)
+    c_times_Lz = np.zeros_like(Te)
+    for symbol, concentration in concentrations.items():
+        if float(concentration) == 0.0:
+            continue
+        Lz = _process_coronal_Lz(symbol, Te)  # [W*m^3]
+        c_times_Lz = c_times_Lz + concentration * Lz
+    q_rad = np.nan_to_num(np.asarray(n_e, dtype=float) ** 2 * c_times_Lz, nan=0.0)
+    return V_p * volume_average(q_rad, rho)
+
+
 # ── radas coronal Lz (cfspopcon's Radas radiation method) ─────────────────────
 # Adapted from cfspopcon; see README.md section "Third-party Notices".
 # cfspopcon's reference radiation method interpolates radas-generated
@@ -234,10 +288,10 @@ def calc_impurity_line_radiation_process_coronal(
 # The per-species ``coolingcurve_radas_coronal_*`` datasets carry the full 2-D
 # Lz(Te, ne) tables verbatim (100 log-spaced temperatures x 50 log-spaced
 # densities), evaluated with the same log-log bicubic spline cfspopcon uses.
-# Gated (Mavrin coronal stays the default).  Species: the 10 with radas data
-# AND a fusdb concentration variable (Kr's coronal_Lz is all-zero in the
-# source radas_dir, so it is omitted and c_Kr does not contribute).
-_RADAS_LZ_SPECIES = ("He", "Li", "Be", "C", "N", "O", "Ne", "Ar", "Xe", "W")
+# Gated (Mavrin coronal stays the default).  Supported species are declared per
+# element in species.yaml ``atomic_data`` (Kr's coronal_Lz is all-zero
+# in the source radas_dir, so it is omitted there and c_Kr does not contribute).
+_RADAS_LZ_SPECIES = SPECIES.with_atomic_data("coolingcurve_radas_coronal")
 
 
 @lru_cache(maxsize=None)
@@ -305,7 +359,7 @@ for _sym in _RADAS_LZ_SPECIES:
 @relation(
     name="Impurity line radiation (radas coronal)",
     tags=("power_balance",),
-    outputs="P_line",
+    outputs="P_cool_imp",
 )
 def calc_impurity_line_radiation_radas_coronal(
     n_e: Any, T_e: Any, rho: Any, V_p: Any,

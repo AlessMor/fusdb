@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import logging
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Iterable
@@ -11,6 +12,8 @@ from ..relation import REGISTERED_RELATIONS, Relation, canonicalize_relation
 from ..utils import normalize_tags
 from .tag_registry import TAGS, TagRegistry
 from .variable_registry import VARIABLES, VariableRegistry
+
+logger = logging.getLogger(__name__)
 
 
 class RelationRegistry:
@@ -22,7 +25,13 @@ class RelationRegistry:
     is later compiled.
     """
 
-    def __init__(self, relations: Iterable[Relation] = (), *, variable_registry: VariableRegistry = VARIABLES) -> None:
+    def __init__(
+        self,
+        relations: Iterable[Relation] = (),
+        *,
+        variable_registry: VariableRegistry = VARIABLES,
+        tag_registry: TagRegistry = TAGS,
+    ) -> None:
         by_name: dict[str, Relation] = {}
         by_function: dict[str, Relation] = {}
         # A relation is addressable by either its user-facing ``name`` or its
@@ -42,6 +51,21 @@ class RelationRegistry:
                         f"relation {owner.name!r}; relation names and function names must be unique."
                     )
                 owners[identifier] = rel
+            # Every relation tag must be declared in allowed_tags.yaml.  An
+            # undeclared tag is silently ignored by ``relation_matches``, so a
+            # typo (``profile_shapes`` for ``profile_shape``) does not fail --
+            # it makes the relation globally active, and the damage shows up
+            # later as physics drift on an unrelated reactor.  Declared-but-
+            # non-filtering tags belong in the ``descriptive`` group.
+            unknown = tuple(tag for tag in normalize_tags(rel.tags) if tag not in tag_registry.allowed)
+            if unknown:
+                raise ValueError(
+                    f"Relation {rel.name!r} declares tag(s) "
+                    f"{', '.join(repr(tag) for tag in unknown)} that are not in allowed_tags.yaml. "
+                    "Add each to a group there: a selection group (device, confinement_mode, "
+                    "internal) if it should filter which reactors see the relation, or "
+                    "'descriptive' if it is documentation or a code-read role marker."
+                )
             # Validate against the variable registry (rejects alias-degenerate
             # relations) and store the canonicalized relation, so every relation
             # leaving the registry already uses canonical variable names.
@@ -133,7 +157,49 @@ class RelationRegistry:
         selected_by_name = {rel.name: rel for rel in selected}
         for name in include_names:
             rel = self._resolve(name)
+            # An include that is absent from a ``default_relation`` list for one
+            # of its own outputs is overriding the registry's preferred provider
+            # set for that variable.  That is a legitimate thing to do -- it is
+            # how a fixture selects a convention -- but it is a modelling
+            # decision, so it must not be silent.
+            if rel.name not in selected_by_name:
+                overridden = [
+                    out for out in rel.output_names
+                    if out in allowed_by_output and rel.name not in allowed_by_output[out]
+                ]
+                if overridden:
+                    logger.warning(
+                        "Included relation %r is not a preferred provider of %s; it overrides "
+                        "the default_relation set declared in variables.yaml (%s). This is "
+                        "allowed, but the preferred provider(s) remain active alongside it "
+                        "unless excluded.",
+                        rel.name,
+                        ", ".join(repr(out) for out in overridden),
+                        "; ".join(
+                            f"{out}: {sorted(allowed_by_output[out])}" for out in overridden
+                        ),
+                    )
             selected_by_name.setdefault(rel.name, rel)
+        # Exclusion is silent by design when it matches nothing, which hides both
+        # a misspelled name and a relation that some earlier gate had already
+        # dropped -- in either case the author believes they removed something
+        # and did not.
+        for item in (exclude or ()):
+            try:
+                canonical = self._resolve(item).name
+            except KeyError:
+                logger.warning(
+                    "relations.exclude names %r, which is not a known relation "
+                    "(neither a relation name nor a decorated function name); nothing excluded.",
+                    str(item),
+                )
+                continue
+            if canonical not in selected_by_name:
+                logger.warning(
+                    "relations.exclude names %r, which was not active anyway "
+                    "(not selected by tags/default_relation, or already excluded); nothing to remove.",
+                    canonical,
+                )
         for name in exclude_set:
             selected_by_name.pop(name, None)
 

@@ -5,7 +5,7 @@
     <!-- <p class="home-hero__eyebrow">Fusion reactor scenario database and solver</p> -->
     <h1>fusdb</h1>
     <p class="home-hero__lead">
-      A lightweight and extensible database for nucelar fusion data and relations used for reactor analysis.
+      A lightweight and extensible database for nuclear fusion data and relations used for reactor analysis.
     </p>
   </div>
 </section>

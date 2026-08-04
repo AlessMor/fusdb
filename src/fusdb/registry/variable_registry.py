@@ -279,22 +279,67 @@ class VariableSpec:
                 magnitudes.append(float(np.max(np.abs(finite))))
         return max(magnitudes)
 
+    @property
+    def movement_is_multiplicative(self) -> bool:
+        """Whether movement is measured in decades rather than absolute units.
+
+        True when the physical domain excludes zero from below -- ``(0, inf)``
+        and friends -- so the quantity is strictly positive and ``log(x/x0)``
+        is always defined.  It matters because the absolute metric is *bounded*
+        for a collapse toward zero: ``|x - x0|`` can never exceed ``x0``, so
+        driving a positive input to 1e-12 costs at most ``x0/width = 1/rel_tol``
+        tolerance widths -- no more than doubling it, and with no gradient left
+        to pull it back.  The log metric is unbounded there instead.
+
+        Variables whose domain *includes* zero (``f_He4``, every ``c_*``) keep
+        the absolute metric: zero is a legitimate value for them, and any
+        metric that stays finite at zero necessarily bounds the collapse.
+        """
+        lower, _upper, lower_inclusive, _upper_inclusive = self.domain
+        if lower is None:
+            return False
+        return lower > 0.0 or (lower == 0.0 and not lower_inclusive)
+
+    def movement_log_width(self, width: float, reference: Any) -> float | None:
+        """Deadzone half-width in log space, or None to use absolute movement.
+
+        ``log1p(width / |reference|)`` is the log-distance spanned by one
+        absolute tolerance width at the reference, so the two metrics agree to
+        first order for small deviations and the deadzone boundary does not
+        move; only the far field changes.
+        """
+        if not self.movement_is_multiplicative:
+            return None
+        ref = np.asarray(reference, dtype=float).reshape(-1)
+        ref = ref[np.isfinite(ref)]
+        if ref.size == 0 or np.any(ref <= 0.0):
+            return None
+        log_width = float(np.log1p(width / float(np.min(np.abs(ref)))))
+        return log_width if log_width > 0.0 else None
+
     def movement_excess(self, current: Any, reference: Any, rel_tol: float, abs_tol: float) -> float:
         """Return this input's worst movement past its tolerance band.
 
-        The deadzone excess ``max(|value - input| / tolerance - 1, 0)`` reduced
-        over the variable's points to its worst point: zero while the input
-        stays within tolerance, growing once it crosses.  This is the
-        per-input quantity the reconcile objective drives toward zero for as
-        many inputs as possible.
+        The deadzone excess ``max(distance - 1, 0)`` reduced over the
+        variable's points to its worst point: zero while the input stays within
+        tolerance, growing once it crosses.  This is the per-input quantity the
+        reconcile objective drives toward zero for as many inputs as possible.
+
+        ``distance`` is ``|value - input| / tolerance``, or the multiplicative
+        ``|log(value / input)| / log_width`` for strictly-positive variables
+        (see :attr:`movement_is_multiplicative`).
         """
         cur = np.asarray(current, dtype=float).reshape(-1)
         ref = np.asarray(reference, dtype=float).reshape(-1)
         if cur.size == 0 or cur.shape != ref.shape:
             return 0.0
         width = self.tolerance_width(self.scale_of(rel_tol, abs_tol, reference), rel_tol, abs_tol)
-        tol = np.maximum(np.broadcast_to(width, cur.shape), 1.0e-300)
-        return float(np.max(np.maximum(np.abs(cur - ref) / tol - 1.0, 0.0)))
+        log_width = self.movement_log_width(float(np.max(width)), reference)
+        if log_width is not None and bool(np.all(cur > 0.0)):
+            distance = np.abs(np.log(cur / ref)) / log_width
+        else:
+            distance = np.abs(cur - ref) / np.maximum(np.broadcast_to(width, cur.shape), 1.0e-300)
+        return float(np.max(np.maximum(distance - 1.0, 0.0)))
 
     def domain_violation_rows(self, value: Any, rel_tol: float, abs_tol: float) -> list[np.ndarray]:
         """Return tolerance-normalized physical-domain violation rows.
@@ -378,8 +423,8 @@ class VariableRegistry:
             validate_solver_domain(str(name), domain, solver_domain)
             constraints = parse_constraint_specs(entry.get("constraints"))
             description = entry.get("description", "")
-            if isinstance(description, list):
-                description = " ".join(str(item) for item in description)
+            if not isinstance(description, str):
+                raise TypeError(f"Variable {name!r}: description must be a string, got {type(description).__name__}.")
             rel_tol = float(entry.get("rel_tol", entry.get("rel_tol_defaultpervar", rel_tol_default)))
             abs_tol = float(entry.get("abs_tol", abs_tol_default))
             default_relation = entry.get("default_relation", ()) or ()
@@ -409,7 +454,7 @@ class VariableRegistry:
                     domain=domain,
                     solver_domain=solver_domain,
                     constraints=constraints,
-                    description=str(description),
+                    description=description,
                     rel_tol=rel_tol,
                     abs_tol=abs_tol,
                     average_variable=None if average_variable is None else str(average_variable),

@@ -84,8 +84,8 @@ def _fg(eps: Any, beta_p: Any, li: Any) -> Any:
     return -(1 / eps) + np.log(8 / eps) * sum1 - sum2 + (beta_p + li / 2) * _fg_sum_ce(eps)
 
 
-def _fh(eps: Any, kappa: Any) -> Any:
-    return -1 + ((kappa * _B[0]) / np.sqrt(eps)) * (0.5 + _fh_sum_cb(eps))
+def _fh(eps: Any, kappa_areal: Any) -> Any:
+    return -1 + ((kappa_areal * _B[0]) / np.sqrt(eps)) * (0.5 + _fh_sum_cb(eps))
 
 
 @relation(
@@ -93,14 +93,14 @@ def _fh(eps: Any, kappa: Any) -> Any:
     tags=("plasma", "current_drive", "tokamak"),
     outputs="external_inductance",
 )
-def calc_external_inductance(eps: Any, kappa: Any, beta_p: Any, R: Any, internal_inductivity: Any) -> Any:
+def calc_external_inductance(eps: Any, kappa_areal: Any, beta_p: Any, R: Any, internal_inductivity: Any) -> Any:
     """External self-inductance of the plasma (Barr 2018, eq. 13).
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
 
     Args:
         eps: [~] :term:`glossary link<inverse_aspect_ratio>`
-        kappa: [~] :term:`glossary link<areal_elongation>`
+        kappa_areal: [~] :term:`glossary link<areal_elongation>`
         beta_p: [~] :term:`glossary link<beta_poloidal>`
         R: [m] :term:`glossary link<major_radius>`
         internal_inductivity: [~] :term:`glossary link<internal_inductivity>`
@@ -111,7 +111,7 @@ def calc_external_inductance(eps: Any, kappa: Any, beta_p: Any, R: Any, internal
     # CHECK
     fa = _fa(eps, beta_p, internal_inductivity)
     fb = _fb(eps)
-    return MU0 * R * fa * (1 - eps) / ((1 - eps) + kappa * fb)
+    return MU0 * R * fa * (1 - eps) / ((1 - eps) + kappa_areal * fb)
 
 
 @relation(
@@ -119,7 +119,7 @@ def calc_external_inductance(eps: Any, kappa: Any, beta_p: Any, R: Any, internal
     tags=("plasma", "current_drive", "tokamak"),
     outputs="vertical_field_mutual_inductance",
 )
-def calc_vertical_field_mutual_inductance(eps: Any, kappa: Any) -> Any:
+def calc_vertical_field_mutual_inductance(eps: Any, kappa_areal: Any) -> Any:
     """Mutual inductance linking the surface to the vertical field (Barr 2018, eq. 15).
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
@@ -127,7 +127,7 @@ def calc_vertical_field_mutual_inductance(eps: Any, kappa: Any) -> Any:
     # CHECK
     fc = _fc(eps)
     fd = _fd(eps)
-    return (1 - eps) ** 2 / ((1 - eps) ** 2 * fc + fd * np.sqrt(kappa))
+    return (1 - eps) ** 2 / ((1 - eps) ** 2 * fc + fd * np.sqrt(kappa_areal))
 
 
 @relation(
@@ -136,7 +136,7 @@ def calc_vertical_field_mutual_inductance(eps: Any, kappa: Any) -> Any:
     outputs="invmu_0_dLedR",
 )
 def calc_invmu_0_dLedR(
-    eps: Any, kappa: Any, beta_p: Any, internal_inductivity: Any, external_inductance: Any, R: Any
+    eps: Any, kappa_areal: Any, beta_p: Any, internal_inductivity: Any, external_inductance: Any, R: Any
 ) -> Any:
     """(1/mu_0) d(external inductance)/dR (Barr 2018, eq. 21).
 
@@ -146,8 +146,8 @@ def calc_invmu_0_dLedR(
     fa = _fa(eps, beta_p, internal_inductivity)
     fb = _fb(eps)
     fg = _fg(eps, beta_p, internal_inductivity)
-    fh = _fh(eps, kappa)
-    denom = (1 - eps) + kappa * fb
+    fh = _fh(eps, kappa_areal)
+    denom = (1 - eps) + kappa_areal * fb
     return (1 / MU0) * (
         MU0 * eps * (1 - eps) * fa * fh / (denom**2)
         - MU0 * eps * (1 - eps) * fg / denom

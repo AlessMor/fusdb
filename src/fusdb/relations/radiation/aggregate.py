@@ -20,6 +20,23 @@ def total_radiated_power(
 
 
 @relation(
+    name='Total radiated power (species sum)',
+    tags=('power_balance', 'process'),
+    outputs='P_rad',
+)
+def total_radiated_power_species_sum(P_rad_species: float, P_sync: float) -> Any:
+    """Return total radiated power as the all-species sum plus synchrotron.
+
+    PROCESS's bookkeeping: every species -- fuel, ash and impurities -- carries
+    its own line + recombination + bremsstrahlung through one cooling curve, so
+    there is no separate ``P_brem``/``P_line`` split to reconcile.  Opt in by
+    name; ``Total radiated power`` above stays the default (see P_rad's
+    ``default_relation`` gate in variables.yaml).
+    """
+    return P_rad_species + P_sync
+
+
+@relation(
     name='Core radiated power fraction',
     tags=('power_balance',),
     outputs='f_rad',

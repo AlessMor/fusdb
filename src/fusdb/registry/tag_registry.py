@@ -17,6 +17,16 @@ import yaml
 from ..utils import normalize_tag, normalize_tags
 
 
+#: Group whose tags are declared but carry no selection meaning.  They enter
+#: :attr:`TagRegistry.allowed` -- so relation tags can be validated at registry
+#: build -- but never :attr:`TagRegistry.tag_to_group`, so
+#: :meth:`TagRegistry.relation_matches` ignores them exactly as it ignores an
+#: undeclared tag.  Declaring a descriptive tag in a *matching* group instead
+#: would require every reactor to declare it and would exclude every relation
+#: carrying it.
+DESCRIPTIVE_GROUP = "descriptive"
+
+
 class TagRegistry:
     """Registry of allowed tags and group-wise relation matching."""
 
@@ -35,6 +45,8 @@ class TagRegistry:
 
     def _register(self, tag: str, *, group: str, parents: tuple[str, ...]) -> None:
         self.allowed.add(tag)
+        if group == DESCRIPTIVE_GROUP:
+            return
         self.tag_to_group[tag] = group
         self.parents.setdefault(tag, set()).update(parents)
 

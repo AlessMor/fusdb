@@ -1,0 +1,235 @@
+## Allowed species: elements at the top level, isotopes nested under them.
+##
+## EVERY ROW HERE IS A FULLY IONISED SPECIES -- a bare nucleus.  `atomic_number`
+## is the nuclear charge Z, i.e. the charge when completely stripped, and
+## `atomic_mass`/`isotopic_mass_u` are nuclear masses.  Fuel and ash (H/D/T,
+## He3/He4) are assumed fully stripped in the core, which is what makes
+## quasineutrality and the fusion rates exact.
+##
+## Impurities are the subtle case and the reason no charge state appears here:
+## an impurity's actual charge is Zbar(T_e), a CONTINUOUS function from the
+## Mavrin/radas fits (see `atomic_data`), not an integer.  So the row is the
+## nucleus and the ionisation state is a relation, never a row.  Neutral atoms,
+## partially-ionised charge states and molecules therefore do NOT belong in this
+## file -- see the note at the bottom.
+##
+## The two keyings the code needs are expressed structurally rather than by a
+## pointer field:
+##   - the ELEMENT is the top-level key.  Atomic data -- radas/Mavrin Lz(T_e)
+##     and Zbar(T_e) -- is set by electronic structure, so it is stated once
+##     here and every isotope of the element shares it.
+##   - the ISOTOPE is a key under `isotopes:`.  It states only what differs
+##     from its element (mass number, isotopic mass) and INHERITS everything
+##     else; anything it does state overrides the element.
+## Both element and isotope rows are species: `SPECIES["He"]` is helium,
+## `SPECIES["He4"]` is helium-4.  Impurities have no `isotopes:` block because
+## nothing in fusdb resolves them isotopically.
+##
+## `symbol` is row identity, not a physical property, so it is the one field
+## that never inherits.  It may be a single spelling or a list of accepted
+## ones; every entry resolves to the same species (`SPECIES["H3"]` is tritium).
+## It defaults to the row key, and works on ELEMENT rows as well as isotope
+## ones (`SPECIES["p"]` is hydrogen).  The row's own key must come first.
+##
+## `atomic_data` lists the per-species datasets available in
+## registry/dataset/radiation/, by their `{datatype}_{source}` stem; the
+## dataset id is that stem plus `_{symbol}`.  It is the single source for which
+## species each radiation/mean-charge method supports, and
+## tests/test_species_registry.py asserts it matches the files on disk.
+
+n:
+  # Not an element: the free neutron, a product of DT/DD/TT/THe3.  It carries no
+  # atomic number and no atomic data, but it is a reaction participant and so
+  # must be a species.
+  symbol: [n, neutron]
+  full_name: neutron
+  atomic_number: 0
+  atomic_mass: 1
+  isotopic_mass_u: 1.00866
+
+H:
+  full_name: hydrogen
+  atomic_number: 1
+  # No mass fields: like helium, the element row is the ELEMENT -- all three
+  # isotopes together -- and natural hydrogen is never used as a species.  It
+  # exists to carry the atomic data and to be the denominator of the isotopic
+  # fractions: `c_H` is per element (n_H/n_e), `f_p`/`f_D`/`f_T` split it.
+  # Radiation is set by nuclear charge and charge state, not mass, so p, D and
+  # T inherit this and radiate identically per ion.  Only the PROCESS family
+  # tabulates hydrogen -- the Mavrin fits and radas curves both start at He.
+  atomic_data:
+    - coolingcurve_PROCESS_coronal
+  isotopes:
+    p:
+      # `p`: a fully-ionised hydrogen atom IS a proton, so the fusion products
+      # spelled `p` in reactions.yaml resolve to PROTIUM, not to the element.
+      # These aliases sit here and NOT on the element row: `SPECIES["p"]` must
+      # mean the light isotope, never "all hydrogen", or `n_p` would silently
+      # answer with `c_H`'s inventory.
+      symbol: [p, protium]
+      full_name: protium
+      atomic_mass: 1
+      isotopic_mass_u: 1.008
+    D:
+      # NOT `H2`/`H_2`: the AMJUEL datasets and plotting use those for molecular
+      # hydrogen.  Deuterium is 2H.
+      symbol: [D, 2H, 2_H]
+      full_name: deuterium
+      atomic_mass: 2
+      isotopic_mass_u: 2.014
+    T:
+      symbol: [T, H3, 3H, H_3, 3_H]
+      full_name: tritium
+      atomic_mass: 3
+      isotopic_mass_u: 3.016
+
+He:
+  full_name: helium
+  atomic_number: 2
+  # No mass fields: natural-abundance helium is never used as a species, only
+  # its isotopes are.  The element row exists to carry the atomic data.
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - polynomialfit_mavrin_noncoronal
+    - polynomialfit_post_jensen
+    - coolingcurve_PROCESS_coronal
+    - coolingcurve_radas_coronal
+  isotopes:
+    He3:
+      symbol: [He3, 3He, He_3, 3_He]
+      full_name: helium-3
+      atomic_mass: 3
+      isotopic_mass_u: 3.016
+    He4:
+      symbol: [He4, 4He, He_4, 4_He]
+      full_name: helium-4
+      atomic_mass: 4
+      isotopic_mass_u: 4.003
+
+# Named impurity species, in atomic-number order.  Most carry Mavrin 2018 /
+# Post-Jensen cooling curves (see `atomic_data`); B and Fe are here because they
+# appear in the AMJUEL atomic-reaction datasets and, for Fe, in the `c_Fe`
+# variable, not because they radiate.
+# CHECK added for impurity radiated power; coefficients in registry/dataset/radiation/.
+Li:
+  full_name: lithium
+  atomic_number: 3
+  atomic_mass: 7
+  isotopic_mass_u: 6.941
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - polynomialfit_mavrin_noncoronal
+    - coolingcurve_radas_coronal
+Be:
+  full_name: beryllium
+  atomic_number: 4
+  atomic_mass: 9
+  isotopic_mass_u: 9.012
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - polynomialfit_mavrin_noncoronal
+    - polynomialfit_post_jensen
+    - coolingcurve_PROCESS_coronal
+    - coolingcurve_radas_coronal
+B:
+  full_name: boron
+  atomic_number: 5
+  atomic_mass: 11
+  isotopic_mass_u: 10.811
+C:
+  full_name: carbon
+  atomic_number: 6
+  atomic_mass: 12
+  isotopic_mass_u: 12.011
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - polynomialfit_mavrin_noncoronal
+    - polynomialfit_post_jensen
+    - coolingcurve_PROCESS_coronal
+    - coolingcurve_radas_coronal
+N:
+  full_name: nitrogen
+  atomic_number: 7
+  atomic_mass: 14
+  isotopic_mass_u: 14.007
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - polynomialfit_mavrin_noncoronal
+    - coolingcurve_PROCESS_coronal
+    - coolingcurve_radas_coronal
+O:
+  full_name: oxygen
+  atomic_number: 8
+  atomic_mass: 16
+  isotopic_mass_u: 15.999
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - polynomialfit_mavrin_noncoronal
+    - polynomialfit_post_jensen
+    - coolingcurve_PROCESS_coronal
+    - coolingcurve_radas_coronal
+Ne:
+  full_name: neon
+  atomic_number: 10
+  atomic_mass: 20
+  isotopic_mass_u: 20.180
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - polynomialfit_mavrin_noncoronal
+    - coolingcurve_PROCESS_coronal
+    - coolingcurve_radas_coronal
+Ar:
+  full_name: argon
+  atomic_number: 18
+  atomic_mass: 40
+  isotopic_mass_u: 39.948
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - polynomialfit_mavrin_noncoronal
+    - polynomialfit_post_jensen
+    - coolingcurve_PROCESS_coronal
+    - coolingcurve_radas_coronal
+Fe:
+  full_name: iron
+  atomic_number: 26
+  atomic_mass: 56
+  isotopic_mass_u: 55.845
+Kr:
+  full_name: krypton
+  atomic_number: 36
+  atomic_mass: 84
+  isotopic_mass_u: 83.798
+  # No radas entry: krypton's coronal_Lz is all-zero in the source radas_dir.
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - coolingcurve_PROCESS_coronal
+Xe:
+  full_name: xenon
+  atomic_number: 54
+  atomic_mass: 131
+  isotopic_mass_u: 131.293
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - coolingcurve_PROCESS_coronal
+    - coolingcurve_radas_coronal
+W:
+  full_name: tungsten
+  atomic_number: 74
+  atomic_mass: 184
+  isotopic_mass_u: 183.84
+  atomic_data:
+    - polynomialfit_mavrin_coronal
+    - polynomialfit_post_jensen
+    - coolingcurve_PROCESS_coronal
+    - coolingcurve_radas_coronal
+
+# ── Charge states, neutrals and molecules ────────────────────────────────────
+# Deliberately absent.  fusdb never tracks a density of a charge state: in the
+# core the charge is the continuous Zbar(T_e), and on the edge/AMJUEL side the
+# labels (`C_plus`, `H2`, `H2_plus`, ...) name a REACTION, not a plasma
+# constituent -- they arrive as dataset metadata and as `*_rate` variables in
+# variables.yaml, which is the right namespace for them.  Adding a row per
+# (element, charge) would also be combinatorial: W alone has 74.
+#
+# TODO(low): add specific data for each species (radas data as in cfspopcon?)
+# TODO(high): include mass in kg

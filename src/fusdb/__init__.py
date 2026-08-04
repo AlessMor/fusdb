@@ -6,7 +6,7 @@ from .io import load_result, save_result
 from .relation import Relation, RelationSolveError, RelationUnderdeterminedError, RelationVerificationError, constraint_from_expression, relation
 from .relationsystem import RelationSystem
 from .variable import Variable
-from .reactor import Reactor, solve_reactors
+from .reactor import Reactor, run_many, solve_reactors
 from .plotting.tables import SolvedColumn, render_table, variable_table_data
 from .registry import RELATIONS, SPECIES, TAGS, VARIABLES, RelationRegistry, SpeciesRegistry, TagRegistry, VariableRegistry
 
@@ -43,6 +43,7 @@ __all__ = [
     "SolvedColumn",
     "load_result",
     "save_result",
+    "run_many",
     "solve_reactors",
     "variable_table_data",
     "render_table",

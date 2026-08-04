@@ -5,8 +5,9 @@ from fusdb.relation import relation
 
 @relation(
     name="neo_alcator_confinement_time",
-    tags=("confinement", "ohmic_mode", "regime_default"),
+    tags=("confinement", "ohmic_mode", "confinement_mode_default"),
     outputs="tau_E",
+    h_factor="H_neo_alcator",
 )
 def neo_alcator_confinement_time(
     n_avg: float, rminor: float, rmajor: float, qstar: float
@@ -51,7 +52,7 @@ def cfspopcon_loc_confinement_time(
     H98_y2: float,
     n_avg: float,
     qstar: float,
-    kappa: float,
+    kappa_areal: float,
     eps: float,
     R: float,
 ) -> float:
@@ -73,7 +74,7 @@ def cfspopcon_loc_confinement_time(
         * 0.0070
         * (n_avg / 1.0e19) ** 1.0
         * qstar**1.0
-        * kappa**0.5
+        * kappa_areal**0.5
         * eps**1.0
         * R**3.0
     )

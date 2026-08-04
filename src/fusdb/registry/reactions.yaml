@@ -1,0 +1,85 @@
+# Fusion reaction stoichiometry and product energies.
+#
+# This file is the single source for *what each reaction consumes and produces*
+# and *how its energy is partitioned over the products*.  It deliberately does
+# NOT name relations or variables: relation selection lives in the @relation
+# decorators and in variables.yaml `default_relation`, and duplicating it here
+# is what made the previous allowed_reactions.yaml rot into dead metadata.
+#
+# Consumers:
+#   - registry/reaction_registry.py derives the *_ENERGY_J constants used by
+#     relations/fusion_reactions/power/*.py (runtime).
+#   - tests/test_reaction_stoichiometry.py asserts that the hand-written
+#     coefficients in composition/densities.py::plasma_balance_ode and in
+#     fusion_reactions/neutronics.py agree with the multisets below (audit).
+#
+# Reactants and products are MULTISETS: [D, D] and [n, n, He4] carry the factor
+# of two that the balance ODE and the neutron rate apply by hand.
+#
+# Energies are given per (reaction, product species) and are the TOTAL carried
+# by that species per reaction -- TT's `n: 7.54 MeV` is shared by both neutrons.
+# Two spellings are allowed, and the split is historical rather than cosmetic:
+#   J:    verbatim joules.  DT/DD/DHe3 were tabulated with a pre-2019
+#         elementary charge, so MeV x MEV_TO_J would shift them by ~1e-7
+#         relative.  Kept exactly as they were to preserve published results.
+#   MeV:  converted with the current MEV_TO_J.
+# TODO: add references for these energies (carried over from constants.py).
+
+DT:
+  reactants: [D, T]
+  products: [n, He4]
+  energies:
+    He4: {J: 5.6076218e-13}
+    n: {J: 2.2590689e-12}
+  total_energy: {J: 2.8198311e-12}
+
+DDn:
+  reactants: [D, D]
+  products: [n, He3]
+  energies:
+    He3: {J: 1.3137848e-13}
+    n: {J: 3.9253334e-13}
+
+DDp:
+  reactants: [D, D]
+  products: [p, T]
+  energies:
+    T: {J: 1.6182e-13}
+    p: {J: 4.8385734e-13}
+
+DHe3:
+  reactants: [D, He3]
+  products: [p, He4]
+  energies:
+    He4: {J: 5.7678388e-13}
+    p: {J: 2.3551998e-12}
+
+TT:
+  reactants: [T, T]
+  products: [n, n, He4]
+  energies:
+    He4: {MeV: 3.76}
+    n: {MeV: 7.54}
+
+He3He3:
+  reactants: [He3, He3]
+  products: [p, p, He4]
+  energies:
+    He4: {MeV: 3.67}
+    p: {MeV: 9.19}
+
+THe3_D:
+  reactants: [T, He3]
+  products: [D, He4]
+  energies:
+    He4: {MeV: 4.8}
+    D: {MeV: 9.5}
+
+THe3_np:
+  reactants: [T, He3]
+  products: [n, p, He4]
+  # 12.1 MeV split by mass fraction: He4 takes 1/6, the n+p pair 5/12 each.
+  energies:
+    He4: {MeV: 2.0166666666666666}
+    p: {MeV: 5.041666666666667}
+    n: {MeV: 5.041666666666667}

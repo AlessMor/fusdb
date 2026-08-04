@@ -56,6 +56,12 @@ def run(system: Any, order: Iterable[Any] | None = None, *, passes: int = 1, **_
             rel = _ordered_single_relation(self, item)
             executed.append(rel.name)
             known = {name: values[name] for name in rel.variables if name in values and values[name] is not None}
+            # Framework-supplied constants (the rho grid) are not relation
+            # variables but must reach evaluation, so the relation uses this
+            # system's grid rather than its standalone default (S3).
+            for name in rel.constant_names:
+                if values.get(name) is not None:
+                    known[name] = values[name]
             missing = [name for name in rel.variables if name not in known]
             try:
                 if not missing:

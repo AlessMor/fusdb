@@ -259,10 +259,40 @@ def calculate_asdex_new_density_limit(
 
     outputs='n_SUDO',
 )
-def sudo_density_limit(P_loss: float, B0: float, R: float, a: float) -> Any:
-    """Return Sudo density limit in 1/m^3 for stellarators."""
+def sudo_density_limit(P_loss: float, B0: float, R: float, a: float, n_e_avg: float, n_la: float) -> Any:
+    """Return Sudo density limit in 1/m^3 for stellarators.
+
+    S. Sudo, Y. Takeiri, H. Zushi et al., "Scalings of Energy Confinement and
+    Density Limit in Stellarator/Heliotron Devices", Nuclear Fusion 30, 11
+    (1990): ``n_c [1e20 m^-3] = 0.25 sqrt(P B / (R a^2))`` with P in MW, B in T
+    and R, a in m.
+
+    The square root covers the whole group.  It was previously omitted, which
+    overstated the limit by sqrt(P B / (R a^2)) -- a factor of ~16 at STELLARIS
+    conditions.
+
+    The scaling bounds the LINE-AVERAGED density, so the result is rescaled by
+    ``n_e_avg / n_la`` to give a bound on the volume-averaged density -- which
+    is what ``n_avg`` means in the fraction and margin below.  This mirrors
+    PROCESS (``models/stellarator/density_limits.py``), which applies the same
+    ratio for the same reason.  The equivalent volume-averaged bound therefore
+    depends on the profile peaking, as it must.
+    """
     P_loss_MW = P_loss / 1e6
-    return 1e20 * 0.25 * P_loss_MW * B0 / (R * a**2)
+    line_averaged_limit = 1e20 * 0.25 * np.sqrt(P_loss_MW * B0 / (R * a**2))
+    return line_averaged_limit * n_e_avg / n_la
+
+
+@relation(
+    name='Sudo density fraction',
+    tags=('plasma', 'stellarator'),
+
+    outputs='f_SUDO',
+)
+def sudo_density_fraction(n_SUDO: float, n_avg: float) -> Any:
+    """Return fraction of Sudo density limit."""
+    f_SUDO = n_avg / n_SUDO
+    return f_SUDO
 
 
 @relation(

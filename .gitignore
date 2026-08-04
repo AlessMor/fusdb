@@ -45,6 +45,7 @@ pip-delete-this-directory.txt
 *.sublime-project
 *.sublime-workspace
 .claude/
+.parley/
 
 # Agent/tool local state
 AGENTS.md

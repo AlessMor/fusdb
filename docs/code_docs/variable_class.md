@@ -12,6 +12,7 @@ Related pages:
 - [Reactor Class](reactor_class.md)
 - [Relation Class](relation_class.md)
 - [RelationSystem](relationsystem_class.md)
+- [Responsibility Model](responsibility_model.md) — why the declaration is frozen
 
 ## Class Structure
 

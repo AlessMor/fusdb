@@ -7,8 +7,9 @@ from fusdb.relation import relation
 
 @relation(
     name="iter_89p_confinement_time",
-    tags=("confinement", "l_mode", "regime_default"),
+    tags=("confinement", "l_mode", "confinement_mode_default"),
     outputs="tau_E",
+    h_factor="H89_P",
 )
 def iter_89p_confinement_time(
     I_p: float,
@@ -78,6 +79,7 @@ def iter_89p_confinement_time(
     name="iter_89_0_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_iter_89_0",
 )
 def iter_89_0_confinement_time(
     I_p: float,
@@ -152,6 +154,7 @@ def iter_89_0_confinement_time(
     name="iter_h90_p_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_iter_h90_p",
 )
 def iter_h90_p_confinement_time(
     I_p: float,
@@ -217,6 +220,7 @@ def iter_h90_p_confinement_time(
     name="minimum_of_iter_89p_and_iter_89_0_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H89_P",
 )
 def minimum_of_iter_89p_and_iter_89_0_confinement_time(
     I_p: float,
@@ -283,6 +287,7 @@ def minimum_of_iter_89p_and_iter_89_0_confinement_time(
     name="iter_h90_p_amended_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_iter_h90_p_amended",
 )
 def iter_h90_p_amended_confinement_time(
     I_p: float,
@@ -338,6 +343,7 @@ def iter_h90_p_amended_confinement_time(
     name="iter_93h_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_iter_93h",
 )
 def iter_93h_confinement_time(
     I_p: float,
@@ -403,6 +409,7 @@ def iter_93h_confinement_time(
     name="iter_h97p_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_iter_h97p",
 )
 def iter_h97p_confinement_time(
     I_p: float,
@@ -469,6 +476,7 @@ def iter_h97p_confinement_time(
     name="iter_h97p_elmy_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_iter_h97p_elmy",
 )
 def iter_h97p_elmy_confinement_time(
     I_p: float,
@@ -539,6 +547,7 @@ def iter_h97p_elmy_confinement_time(
     name="iter_96p_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_iter_96p",
 )
 def iter_96p_confinement_time(
     I_p: float,
@@ -608,6 +617,7 @@ def iter_96p_confinement_time(
     name="iter_pb98py_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_iter_pb98py",
 )
 def iter_pb98py_confinement_time(
     I_p: float,
@@ -615,7 +625,7 @@ def iter_pb98py_confinement_time(
     n_la: float,
     p_plasma_loss: float,
     rmajor: float,
-    kappa: float,
+    kappa_ipb: float,
     aspect: float,
     afuel: float,
 ) -> float:
@@ -634,8 +644,12 @@ def iter_pb98py_confinement_time(
         Net Heating power [MW]
     rmajor :
         Plasma major radius [m]
-    kappa :
-        Plasma separatrix elongation
+    kappa_ipb :
+        Volume-equivalent elongation, V_p / (2 pi^2 R a^2).
+        PROCESS names this parameter ``kappa`` and its docstring calls it the
+        separatrix elongation, but the dispatcher passes
+        ``self.data.physics.kappa_ipb`` into it (confinement_time.py:650) --
+        the parameter name is wrong upstream, the call site is authoritative.
     aspect :
         Aspect ratio
     afuel :
@@ -657,7 +671,7 @@ def iter_pb98py_confinement_time(
         * dnla19**0.4e0
         * p_plasma_loss_mw ** (-0.66e0)
         * rmajor**2
-        * kappa**0.75e0
+        * kappa_ipb**0.75e0
         * aspect ** (-0.66e0)
         * afuel**0.2e0
     )
@@ -667,6 +681,7 @@ def iter_pb98py_confinement_time(
     name="iter_ipb98y_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_iter_ipb98y",
 )
 def iter_ipb98y_confinement_time(
     I_p: float,
@@ -744,6 +759,7 @@ def iter_ipb98y_confinement_time(
     name="iter_ipb98y1_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_iter_ipb98y1",
 )
 def iter_ipb98y1_confinement_time(
     I_p: float,
@@ -818,8 +834,9 @@ def iter_ipb98y1_confinement_time(
 
 @relation(
     name="tau_E_iter_ipb98y2",
-    tags=("confinement", "h_mode", "regime_default"),
+    tags=("confinement", "h_mode", "confinement_mode_default"),
     outputs="tau_E",
+    h_factor="H98_y2",
 )
 def tau_E_iter_ipb98y2(
     I_p: float,
@@ -904,7 +921,7 @@ def tau_E_iter98y2_cfspopcon(
     n_e_avg: float,
     p_plasma_loss: float,
     rmajor: float,
-    kappa: float,
+    kappa_areal: float,
     aspect: float,
     afuel: float,
 ) -> float:
@@ -934,7 +951,7 @@ def tau_E_iter98y2_cfspopcon(
         n_e_avg: Volume-averaged electron density [m^-3]
         p_plasma_loss: Loss power [W]
         rmajor: Plasma major radius [m]
-        kappa: Areal elongation [~]
+        kappa_areal: Areal elongation [~]
         aspect: Aspect ratio [~]
         afuel: Fuel atomic mass number [amu]
 
@@ -952,7 +969,7 @@ def tau_E_iter98y2_cfspopcon(
         * dn19**0.41e0
         * p_plasma_loss_mw ** (-0.69e0)
         * rmajor**1.97e0
-        * kappa**0.78e0
+        * kappa_areal**0.78e0
         * aspect ** (-0.58e0)
         * afuel**0.19e0
     )
@@ -962,6 +979,7 @@ def tau_E_iter98y2_cfspopcon(
     name="iter_ipb98y2_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H98_y2",
 )
 def iter_ipb98y2_confinement_time(
     I_p: float,
@@ -1038,6 +1056,7 @@ def iter_ipb98y2_confinement_time(
     name="iter_ipb98y3_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_iter_ipb98y3",
 )
 def iter_ipb98y3_confinement_time(
     I_p: float,
@@ -1114,6 +1133,7 @@ def iter_ipb98y3_confinement_time(
     name="iter_ipb98y4_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_iter_ipb98y4",
 )
 def iter_ipb98y4_confinement_time(
     I_p: float,
@@ -1190,6 +1210,7 @@ def iter_ipb98y4_confinement_time(
     name="itpa20_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_itpa20",
 )
 def itpa20_confinement_time(
     I_p: float,
@@ -1267,6 +1288,7 @@ def itpa20_confinement_time(
     name="itpa20_il_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_itpa20_il",
 )
 def itpa20_il_confinement_time(
     I_p: float,
@@ -1348,7 +1370,7 @@ def cfspopcon_iter89p_confinement_time(
     P_loss: float,
     R: float,
     eps: float,
-    kappa_ipb: float,
+    kappa: float,
     n_avg: float,
 ) -> float:
     """Calculate the ITER89P confinement time scaling.
@@ -1365,6 +1387,13 @@ def cfspopcon_iter89p_confinement_time(
           different factor of a_R is because we use inverse_aspect_ratio=a/R
           instead of a. R^1.2 a^0.3 = R^1.5 inverse_aspect_ratio^0.3.
         - Regime: L-Mode
+        - Elongation: cfspopcon puts this scaling's 0.5 exponent on
+          ``separatrix_elongation_alpha``, NOT ``areal_elongation_alpha``
+          (energy_confinement_scalings.yaml, ITER89P).  It therefore takes
+          fusdb's ``kappa``, which IS the separatrix elongation
+          (kappa == kappa_sep == kappa_geom at psi_N = 1).  Do not "correct"
+          this to ``kappa_separatrix``: that variable is redundant with
+          ``kappa`` and is scheduled to be merged into it.
     """
     return (
         H98_y2
@@ -1375,7 +1404,7 @@ def cfspopcon_iter89p_confinement_time(
         * (P_loss / 1.0e6) ** (-0.5)
         * R**1.5
         * eps**0.3
-        * kappa_ipb**0.5
+        * kappa**0.5
         * (n_avg / 1.0e19) ** 0.1
     )
 
@@ -1393,7 +1422,7 @@ def cfspopcon_iter89p_ka_confinement_time(
     P_loss: float,
     R: float,
     eps: float,
-    kappa: float,
+    kappa_areal: float,
     n_avg: float,
 ) -> float:
     """Calculate the ITER89P_ka confinement time scaling.
@@ -1422,7 +1451,7 @@ def cfspopcon_iter89p_ka_confinement_time(
         * (P_loss / 1.0e6) ** (-0.5)
         * R**1.5
         * eps**0.3
-        * kappa**0.5
+        * kappa_areal**0.5
         * (n_avg / 1.0e19) ** 0.1
     )
 
@@ -1440,7 +1469,7 @@ def cfspopcon_itpa_2018_std5_gls_confinement_time(
     P_loss: float,
     R: float,
     eps: float,
-    kappa: float,
+    kappa_areal: float,
     n_avg: float,
 ) -> float:
     """Calculate the ITPA_2018_STD5_GLS confinement time scaling.
@@ -1465,7 +1494,7 @@ def cfspopcon_itpa_2018_std5_gls_confinement_time(
         * (P_loss / 1.0e6) ** (-0.78)
         * R**1.6
         * eps ** (-0.052)
-        * kappa**0.88
+        * kappa_areal**0.88
         * (n_avg / 1.0e19) ** 0.21
     )
 
@@ -1483,7 +1512,7 @@ def cfspopcon_itpa_2018_std5_ols_confinement_time(
     P_loss: float,
     R: float,
     eps: float,
-    kappa: float,
+    kappa_areal: float,
     n_avg: float,
 ) -> float:
     """Calculate the ITPA_2018_STD5_OLS confinement time scaling.
@@ -1508,7 +1537,7 @@ def cfspopcon_itpa_2018_std5_ols_confinement_time(
         * (P_loss / 1.0e6) ** (-0.71)
         * R**1.5
         * eps ** (-0.043)
-        * kappa**0.8
+        * kappa_areal**0.8
         * (n_avg / 1.0e19) ** 0.19
     )
 
@@ -1526,7 +1555,7 @@ def cfspopcon_itpa_2018_std5_sel1_gls_confinement_time(
     P_loss: float,
     R: float,
     eps: float,
-    kappa: float,
+    kappa_areal: float,
     n_avg: float,
 ) -> float:
     """Calculate the ITPA_2018_STD5_SEL1_GLS confinement time scaling.
@@ -1551,7 +1580,7 @@ def cfspopcon_itpa_2018_std5_sel1_gls_confinement_time(
         * (P_loss / 1.0e6) ** (-0.79)
         * R**1.5
         * eps ** (-0.38)
-        * kappa**1.9
+        * kappa_areal**1.9
         * (n_avg / 1.0e19) ** 0.17
     )
 
@@ -1569,7 +1598,7 @@ def cfspopcon_itpa_2018_std5_sel1_ols_confinement_time(
     P_loss: float,
     R: float,
     eps: float,
-    kappa: float,
+    kappa_areal: float,
     n_avg: float,
 ) -> float:
     """Calculate the ITPA_2018_STD5_SEL1_OLS confinement time scaling.
@@ -1594,7 +1623,7 @@ def cfspopcon_itpa_2018_std5_sel1_ols_confinement_time(
         * (P_loss / 1.0e6) ** (-0.71)
         * R**1.2
         * eps ** (-0.32)
-        * kappa**1.1
+        * kappa_areal**1.1
         * (n_avg / 1.0e19) ** 0.13
     )
 
@@ -1612,7 +1641,7 @@ def cfspopcon_itpa_2018_std5_sel1_wls_confinement_time(
     P_loss: float,
     R: float,
     eps: float,
-    kappa: float,
+    kappa_areal: float,
     n_avg: float,
 ) -> float:
     """Calculate the ITPA_2018_STD5_SEL1_WLS confinement time scaling.
@@ -1637,7 +1666,7 @@ def cfspopcon_itpa_2018_std5_sel1_wls_confinement_time(
         * (P_loss / 1.0e6) ** (-0.64)
         * R**1.3
         * eps ** (-0.46)
-        * kappa**1.3
+        * kappa_areal**1.3
         * (n_avg / 1.0e19) ** 0.19
     )
 
@@ -1655,7 +1684,7 @@ def cfspopcon_itpa_2018_std5_wls_confinement_time(
     P_loss: float,
     R: float,
     eps: float,
-    kappa: float,
+    kappa_areal: float,
     n_avg: float,
 ) -> float:
     """Calculate the ITPA_2018_STD5_WLS confinement time scaling.
@@ -1680,7 +1709,7 @@ def cfspopcon_itpa_2018_std5_wls_confinement_time(
         * (P_loss / 1.0e6) ** (-0.64)
         * R**1.7
         * eps**0.093
-        * kappa**0.79
+        * kappa_areal**0.79
         * (n_avg / 1.0e19) ** 0.29
     )
 
@@ -1738,7 +1767,7 @@ def cfspopcon_itpa20_il_confinement_time(
     R: float,
     delta_95: float,
     delta: float,
-    kappa: float,
+    kappa_areal: float,
     n_avg: float,
 ) -> float:
     """Calculate the ITPA20_IL confinement time scaling.
@@ -1763,7 +1792,7 @@ def cfspopcon_itpa20_il_confinement_time(
         * (P_loss / 1.0e6) ** (-0.644)
         * R**1.19
         * (1.0 + np.mean([delta_95, delta])) ** 0.56
-        * kappa**0.67
+        * kappa_areal**0.67
         * (n_avg / 1.0e19) ** 0.15
     )
 
@@ -1783,7 +1812,7 @@ def cfspopcon_itpa20_std5_confinement_time(
     delta_95: float,
     delta: float,
     eps: float,
-    kappa: float,
+    kappa_areal: float,
     n_avg: float,
 ) -> float:
     """Calculate the ITPA20_STD5 confinement time scaling.
@@ -1809,6 +1838,6 @@ def cfspopcon_itpa20_std5_confinement_time(
         * R**1.71
         * (1.0 + np.mean([delta_95, delta])) ** 0.36
         * eps**0.35
-        * kappa**0.80
+        * kappa_areal**0.80
         * (n_avg / 1.0e19) ** 0.24
     )

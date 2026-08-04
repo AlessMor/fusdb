@@ -17,6 +17,7 @@ from scipy.optimize import least_squares
 from . import verify as verify_mode
 from .verify import verify_values
 from ._common import (
+    diagnostics_block,
     new_result,
     record_uninitialized_failure,
     reject_unknown_options,
@@ -35,6 +36,7 @@ def run(
     relation_weight: float = 1.0,
     relation_weight_schedule: Iterable[float] | None = None,
     initial_guesses: Any = None,
+    exact: bool = False,
     verbose: int = 0,
     **_unused: Any,
 ) -> dict[str, Any]:
@@ -49,9 +51,29 @@ def run(
     controls aggressiveness (smaller = sparser, less stable); ``movement_weight``
     scales the movement term.  The solved-state input deviations are returned as
     ``inputs_beyond_tolerance``.
+
+    Two strengths of input anchoring exist, chosen at ingestion:
+
+    * **fixed** values are pinned exactly -- they are never solver unknowns,
+      and final verification fails if a solved state contradicts them;
+    * **supplied** (non-fixed) inputs are movement-anchored: free inside
+      their tolerance band, penalised beyond it as above.
+
+    ``exact=True`` removes the free tolerance band from the *objective*:
+    supplied inputs are penalised from the first deviation (in tolerance
+    units), so a consistent system reconciles with essentially no input
+    movement and an inconsistent one distributes the smallest movement the
+    relations allow.  This is only well-posed when the system is square or
+    underdetermined -- over-determined inconsistent inputs have no exact
+    solution, which is what tolerances exist to absorb.  The
+    ``inputs_beyond_tolerance`` report keeps its tolerance-based meaning
+    either way.
     """
     self = system
     mode = "reconcile"
+    # exact=True drops the movement deadzone in every objective term; the
+    # residual, the IRLS weights and the grouped Jacobian must all agree.
+    deadzone = not exact
     result = new_result(self, mode)
     if reject_unknown_options(result, _unused):
         return result
@@ -92,7 +114,10 @@ def run(
             termination="already verified; no reconcile solve",
             solver=solver,
             include_values=True,
-            extra={"uninitialized_free_variables": []},
+            extra={
+                "uninitialized_free_variables": [],
+                "diagnostics": diagnostics_block(self, verbose=verbose),
+            },
         )
 
     try:
@@ -141,6 +166,10 @@ def run(
     # exactly these rows -- a missing value penalizes its own rows -- so the
     # vector size SciPy sees can never drift mid-solve.
     layout: dict[str, Any] = {}
+    # First few whole-stage residual failures (S10a): the solver keeps running
+    # on the 1e12 barrier, but the original causes survive into diagnostics
+    # instead of an unexplained "did not converge".
+    residual_failures: list[str] = []
 
     def residual_function(x: np.ndarray) -> np.ndarray:
         nonlocal residual_calls, residual_eval_time_s
@@ -155,13 +184,15 @@ def run(
             if domain_rows.size:
                 blocks.append(current_relation_weight * domain_rows)
             if layout["movement_names"] is not None:
-                blocks.append(current_movement_weight * self.layout_movement_rows(values, layout, irls_weights))
+                blocks.append(current_movement_weight * self.layout_movement_rows(values, layout, irls_weights, deadzone=deadzone))
             parts = [block for block in blocks if block.size]
             out = np.concatenate(parts) if parts else np.empty(0, dtype=float)
             if out.size != size or not np.all(np.isfinite(out)):
                 return np.full(size, 1.0e12, dtype=float)
             return out
-        except Exception:
+        except Exception as exc:
+            if len(residual_failures) < 5:
+                residual_failures.append(f"{type(exc).__name__}: {exc}")
             return np.full(size, 1.0e12, dtype=float)
         finally:
             residual_eval_time_s += time.perf_counter() - t0
@@ -286,6 +317,7 @@ def run(
                     movement_weight=current_movement_weight,
                     irls_weights=irls_weights,
                     residual_function=residual_function,
+                    deadzone=deadzone,
                 )
                 jac_sparsity = plan["sparsity"]
                 jac_sparsity_used = True
@@ -357,7 +389,7 @@ def run(
                 if prev_beyond == 0:
                     break
                 # Reweight from the latest solution, then re-solve warm-started.
-                irls_weights = self.movement_weights(completed_values, eps=float(movement_eps))
+                irls_weights = self.movement_weights(completed_values, eps=float(movement_eps), deadzone=deadzone)
                 entry = run_stage(f"irls_{irls_index}", stage_max_nfev=irls_max_nfev, include_movement=True)
                 new_beyond = len(inputs_beyond_tolerance(self, completed_values))
                 entry["inputs_beyond_tolerance"] = new_beyond
@@ -405,7 +437,10 @@ def run(
         termination=str(solve_result.message),
         solver=solver,
         include_values=True,
-        extra={"uninitialized_free_variables": list(self.uninitialized_free_variables)},
+        extra={
+            "uninitialized_free_variables": list(self.uninitialized_free_variables),
+            "diagnostics": diagnostics_block(self, residual_failures=residual_failures, verbose=verbose),
+        },
     )
 
     # There is no separate candidate/final variable state. The latest solve output
@@ -433,6 +468,7 @@ def grouped_jacobian(
     movement_weight: float,
     irls_weights: Mapping[str, float],
     residual_function: Any,
+    deadzone: bool = True,
 ):
     """Return the grouped two-point-difference Jacobian callable for one stage.
 
@@ -467,7 +503,7 @@ def grouped_jacobian(
             blocks0.append(rows if rows.size == rdim else np.full(rdim, 1.0e12, dtype=float))
         domain0 = system.layout_domain_rows(values0, layout)
         move0 = (
-            system.layout_movement_rows(values0, layout, irls_weights)
+            system.layout_movement_rows(values0, layout, irls_weights, deadzone=deadzone)
             if include_movement
             else np.empty(0, dtype=float)
         )
@@ -505,7 +541,7 @@ def grouped_jacobian(
                 domain_new = system.layout_domain_rows(ns, layout)
                 df[total:total + domain0.size] = relation_weight * (domain_new - domain0)
                 if move0.size:
-                    move_new = system.layout_movement_rows(ns, layout, irls_weights)
+                    move_new = system.layout_movement_rows(ns, layout, irls_weights, deadzone=deadzone)
                     df[total + domain0.size:] = movement_weight * (move_new - move0)
             except Exception:
                 if f0_weighted is None:

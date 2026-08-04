@@ -15,6 +15,7 @@ device:
       - conventional_tokamak
   - stellarator
   - mirror
+  - polomac
 
 # Confinement regimes, listed in threshold-escalation order (lowest heating
 # power first): the Reactor regime driver reads this order when it has to
@@ -25,8 +26,55 @@ confinement_mode:
   - h_mode
   - i_mode
 
-# Relations the regime driver includes by name. No reactor declares an
-# `internal` tag, so a relation tagged here is never picked up by automatic
-# tag selection -- it is reachable only via an explicit relations.include.
+# Relations reached only by an explicit relations.include. No reactor declares
+# an `internal` tag, so a relation tagged here is never picked up by automatic
+# tag selection.
+#   - confinement_mode_threshold : sustainment thresholds, added by name by the
+#     confinement-mode driver. They are JUDGES, not constraints: the driver
+#     solves with them switched off (`include_guards=False`) and evaluates them
+#     on the solved values to decide whether the discrete mode tag must change.
+#     Auto-selecting them would let a threshold shape the solution it exists to
+#     judge.
+#   - profile_shape  : profile SHAPE generators (parabolic, PRF). A profile is
+#     avg x shape, and the shape is a modelling choice, so it is opt-in: the
+#     default is the uniform profile at the average value (the `default`-tagged
+#     fallbacks in relations/defaults/profiles.py), and a supplied profile
+#     overrides both. Without this, a shape generator silently pre-empted the
+#     uniform fallback wherever its peaking factor happened to be derivable --
+#     which landed inconsistently, e.g. parabolic ions but uniform electrons on
+#     the same reactor.
 internal:
-  - regime_guard
+  - confinement_mode_threshold
+  - profile_shape
+
+# Tags that carry NO selection meaning. They are declared here only so relation
+# tags can be validated at registry build (a typo like `profile_shapes` would
+# otherwise silently make a relation globally active), and they are deliberately
+# kept OUT of the group-matching machinery: a descriptive tag never filters, and
+# a reactor never has to declare one to reach a relation that carries it.
+#
+# `default` and `confinement_mode_default` are read by code
+# (`is_default_relation`, the confinement-mode driver) but still do not filter,
+# so they live here too -- declaring them in a matching group would require every
+# reactor to declare them and would exclude every relation that carries one.
+descriptive:
+  - default
+  - confinement_mode_default
+  - atomic_physics
+  - auxiliary_power
+  - collisionality
+  - composition
+  - confinement
+  - constraint
+  - current_drive
+  - fusion_power
+  - geometry
+  - inverse
+  - loc
+  - neutronics
+  - plasma
+  - power_balance
+  - power_exhaust
+  - process
+  - profile
+  - stability

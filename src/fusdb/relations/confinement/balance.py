@@ -9,22 +9,6 @@ from fusdb.registry import KEV_TO_J
 
 
 @relation(
-    name="Plasma stored energy from averages",
-    tags=("plasma", "confinement"),
-    outputs="W_th",
-)
-def calc_plasma_stored_energy(p_th: float, V_p: float) -> Any:
-    """Return thermal stored energy from volume-averaged thermal pressure.
-
-    The relation keeps the historical name so existing reactor files that
-    include ``Plasma stored energy from averages`` keep working, but the stored
-    energy definition is the profile-consistent volume integral:
-    ``W_th = 3/2 * <p_th>_V * V_p``.
-    """
-    return 1.5 * p_th * V_p
-
-
-@relation(
     name="Energy confinement balance",
     tags=("confinement", "power_balance", "plasma"),
 )
@@ -75,7 +59,7 @@ def plasma_stored_energy_cfspopcon(
 
     cfspopcon's ``calc_plasma_stored_energy`` builds the stored energy that
     feeds its tau_E/P_in confinement solve from the *volume averages* alone:
-    ``W = 3/2 (<n_e><T_e> + (<n_i> + <n_imp>)<T_i>) V_p`` -- it carries no
+    ``W = 3/2 (<n_e><T_e> + <n_i><T_i>) V_p`` -- it carries no
     profile-correlation term.  fusdb's default producers integrate the actual
     profiles (``3/2 <p_th>_V V_p`` with ``p_th = <n(rho) T(rho)>``), which runs
     higher when peaked density and temperature correlate on axis; the IPB98-type

@@ -9,6 +9,7 @@ from fusdb.relation import relation
     name="mirnov_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_mirnov",
 )
 def mirnov_confinement_time(rminor: float, kappa95: float, I_p: float) -> float:
     """Calculate the Mirnov scaling (H-mode) confinement time
@@ -43,6 +44,7 @@ def mirnov_confinement_time(rminor: float, kappa95: float, I_p: float) -> float:
     name="murari_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_murari",
 )
 def murari_confinement_time(
     I_p: float,
@@ -114,6 +116,7 @@ def murari_confinement_time(
     name="shimomura_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_shimomura",
 )
 def shimomura_confinement_time(
     rmajor: float,
@@ -162,6 +165,7 @@ def shimomura_confinement_time(
     name="riedel_h_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_riedel_h",
 )
 def riedel_h_confinement_time(
     I_p: float,
@@ -226,6 +230,7 @@ def riedel_h_confinement_time(
     name="valovic_elmy_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_valovic_elmy",
 )
 def valovic_elmy_confinement_time(
     I_p: float,
@@ -286,6 +291,7 @@ def valovic_elmy_confinement_time(
     name="lang_high_density_confinement_time",
     tags=("confinement", "h_mode"),
     outputs="tau_E",
+    h_factor="H_lang_high_density",
 )
 def lang_high_density_confinement_time(
     I_p: float,
@@ -376,7 +382,7 @@ def cfspopcon_h_ds03_confinement_time(
     P_loss: float,
     R: float,
     eps: float,
-    kappa_ipb: float,
+    kappa: float,
     afuel: float,
 ) -> float:
     """Calculate the H_DS03 confinement time scaling.
@@ -394,6 +400,13 @@ def cfspopcon_h_ds03_confinement_time(
           (a/major_radius)^0.3
         - mass_ratio_alpha note: a_M, isotope mass scaling
         - Regime: H-mode
+        - Elongation: cfspopcon puts this scaling's 0.75 exponent on
+          ``separatrix_elongation_alpha``, NOT ``areal_elongation_alpha``
+          (energy_confinement_scalings.yaml, H_DS03).  It therefore takes
+          fusdb's ``kappa``, which IS the separatrix elongation
+          (kappa == kappa_sep == kappa_geom at psi_N = 1).  Do not "correct"
+          this to ``kappa_separatrix``: that variable is redundant with
+          ``kappa`` and is scheduled to be merged into it.
     """
     return (
         H98_y2
@@ -404,6 +417,6 @@ def cfspopcon_h_ds03_confinement_time(
         * (P_loss / 1.0e6) ** (-0.55)
         * R**2.11
         * eps**0.3
-        * kappa_ipb**0.75
+        * kappa**0.75
         * afuel**0.14
     )

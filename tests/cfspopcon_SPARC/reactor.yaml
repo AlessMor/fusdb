@@ -51,10 +51,41 @@ variables:
   magnetic_field_on_axis: 12.2       # B0 [T]
   inverse_aspect_ratio: 0.3081       # eps
   minor_radius: 0.569985             # a = R * eps; anchors the R_max/R_min chain
-  areal_elongation: 1.75             # kappa (areal)
-  separatrix_elongation: 1.96875     # kappa at the LCFS (feeds P_sync; NOT kappa)
+  areal_elongation: 1.75             # kappa_areal = S_phi/(pi a^2)
+  separatrix_elongation: 1.96875     # kappa_separatrix (feeds P_sync)
+  # `kappa` SHOULD be 1.96875 here -- kappa == kappa_sep == kappa_geom(psi_N = 1),
+  # and cfspopcon's own input.yaml relates the two by
+  # `elongation_ratio_sep_to_areal: 1.125` (1.75 * 1.125 = 1.96875).  It is held
+  # at the AREAL value instead because 1.96875 was MEASURED to break this fixture
+  # both ways (2026-07-31):
+  #   * keeping fusdb's Sauter cross-section -> S_phi 1.9465, V_p 21.82 against
+  #     cfspopcon's 19.7948 (+10%), popcon scan 0/1200;
+  #   * excluding it so S_phi = pi a^2 kappa_areal -> geometry correct (S_phi
+  #     1.7910, V_p 20.12) and the single point solves cleanly, but `kappa` then
+  #     drives almost nothing, becomes an unconstrained direction, and the popcon
+  #     scan is still 0/1200.
+  # Root cause: fusdb's Sauter shape gives kappa_areal/kappa = 1 - 0.1274 delta^2
+  # ~= 0.988 at squareness 0, whereas cfspopcon asserts 1/1.125 = 0.889.  The two
+  # shape models genuinely disagree, so this fixture cannot carry both elongations
+  # at their true values until that is reconciled.  Tracked as an open issue.
+  elongation: 1.75
   delta_95: 0.3                      # triangularity_psi95
   squareness: 0.0
+  # input.yaml elongation_ratio_areal_to_psi95: cfspopcon's kappa_95 =
+  # areal_elongation / 1.025 = 1.7073 (its "Elongation at psi95..." relation is
+  # selected below), vs fusdb's default IPDG89 kappa/1.12 = 1.5625.  kappa_95
+  # flows through q_cyl -> internal_inductivity -> internal_inductance, so
+  # adopting cfspopcon's value makes internal_inductance exact and the CS-flux
+  # consumption (and hence the flat-top duration) match on the feasible region.
+  # It also raises flux_needed toward the total_flux_available_from_CS = 35 Wb
+  # budget, so the LOW-density side crosses flux_needed > 35 -> a NEGATIVE
+  # flat-top (there beta_p is small, so the subtracted poloidal_field_flux gives
+  # little assistance and the CS cannot even cover rampup).  That is an
+  # infeasible operating point, so fusdb does not certify it (max_flattop_
+  # duration's domain is [0, inf) -- fusdb reports feasibility, where cfspopcon
+  # instead reports the negative -9.6..+74 s value); the certified region
+  # therefore shrinks ~1024 -> ~768, all within cfspopcon's feasible region.
+  elongation_ratio_areal_to_psi95: 1.025
   I_p:
     value: 8.7
     unit: MA
@@ -76,14 +107,13 @@ variables:
   # inventory (22.94e19 vs 22.94e19 at the PRD point) -- the inventory enters
   # the stored energy W = 3/2(n_e T_e + n_i T_i)V, which the confinement
   # balance amplifies as P_loss ~ W^3.2.  The f-fractions below keep the
-  # SPECIES SPLIT of that inventory: He as f_He4, O+W folded into the generic
-  # Z=6 impurity sized to carry their quasineutrality charge
-  # (8*n_O + ~74*n_W = 6*n_Imp), so the fuel densities match cfspopcon's
-  # (n_D = 10.66e19 vs 10.68e19, n_fuel/n_e = 0.8541 vs 0.8543).
+  # SPECIES SPLIT of that inventory: He as f_He4.  O and W are carried only as
+  # c_O/c_W below -- the generic Z=6 f_Imp they used to be folded into has been
+  # retired, since a single pseudo-species cannot be both charge-consistent
+  # (linear in Z, which set the dilution) and Z^2-consistent (which set Z_eff).
   f_D: 0.464984
   f_T: 0.464984
   f_He4: 0.065331
-  f_Imp: 0.0047019
   # Impurity concentrations n_z/n_e, transcribed from input.yaml's
   # intrinsic_impurity_concentration (Helium 6.0e-2, Oxygen 3.1e-3, Tungsten
   # 1.5e-5).  They drive (1) P_line via the radas coronal Lz tables (the
@@ -129,6 +159,18 @@ variables:
   # gain definition) derivable from the absorbed P_aux the scan solves for.
   fraction_of_external_power_coupled: 0.9
 
+  # --- Flux consumption / flat-top ---
+  # cfspopcon's flux relations are byte-identical to fusdb's; the reference's
+  # resistive_flux = ejima * mu0 * I_p * R uses input.yaml's ejima_coefficient
+  # 0.6 (NOT fusdb's 0.4 registry default), so without this the flux_needed_
+  # from_CS_over_rampup ran ~14% low (a missing input, not a modelling gap).
+  ejima_coefficient: 0.6
+  # input.yaml total_flux_available_from_CS; closes the flat-top budget
+  # max_flattop_duration = (total_flux - flux_needed) / loop_voltage.
+  total_flux_available_from_CS:
+    value: 35.0
+    unit: Wb
+
   # --- SOL / divertor: extended two-point model (input.yaml's block) ---
   # cfspopcon runs two_point_model_fixed_tet: the target electron temperature
   # is HELD at 25 eV and the model computes the SOL power-loss (cooling)
@@ -160,6 +202,21 @@ variables:
 
 relations:
   include:
+  # cfspopcon derives the fuel dilution from the impurity side and counts
+  # only D and T as fuel (its glossary: "Fuel-species concentration as a
+  # fraction of the electron density, n_DT/n_e").  That is exact for
+  # cfspopcon -- no He3 fuel, all helium an impurity -- but a simplification
+  # in fusdb, whose default counts He3 as fuel at Z = 2 and protium as ash.
+  # `dilution` is compared against cfspopcon's reference in _compare.py, so
+  # the comparison must use cfspopcon's own definition.
+  - Fuel dilution from impurity concentrations (cfspopcon)
+  # cfspopcon's kappa_95 = areal_elongation / 1.025 (1.7073), vs fusdb's IPDG89
+  # kappa/1.12 (1.5625).  kappa_95 feeds only q_cyl here (the active
+  # f_shaping/q_star uses kappa+delta_95, not kappa_95; the SepOS quantities it
+  # also feeds are uncompared diagnostic leaves), so selecting it makes the
+  # internal_inductance / flux_needed / flat-top chain match cfspopcon without
+  # touching the resistive/collisionality chain.
+  - Elongation at psi95 from areal elongation (cfspopcon)
   # cfspopcon computes P_LH from the full Martin (2008) scaling plus the Ryter
   # (2014) low-density branch; fusdb's default "L-H transition threshold power"
   # is a simpler Martin-style scaling that runs ~35% high at this point and
@@ -174,6 +231,15 @@ relations:
   # the inductive current and P_ohmic (-20%). Selecting cfspopcon's convention
   # reproduces its beta_poloidal and the whole ohmic chain.
   - Poloidal beta (cfspopcon)
+  # cfspopcon's average_total_pressure is the undiluted product of averages
+  # n_e(T_e+T_i) (no dilution, no profile integral) -- inconsistent with its
+  # own stored energy, but it is what its whole beta chain is built on.
+  # Selecting it (and the beta_N form below) reproduces p_th/beta_T/beta/
+  # beta_p/beta_N and, through beta_p, the bootstrap fraction.  fusdb's
+  # profile-integrated "Thermal pressure" stays the default elsewhere.
+  - Average total pressure (cfspopcon)
+  # cfspopcon normalises beta_total (not beta_T) for normalized_beta.
+  - Normalized beta (cfspopcon)
   # Angioni density peaking (LANDED 2026-07-17, with the corrected flux-volume
   # fusion integral): cfspopcon peaks the density with the Angioni
   # collisionality scaling (offset -0.1, supplied above).  Activating it needs
@@ -217,12 +283,30 @@ relations:
   # runs on the parabolic generator driven by the Angioni peaking below.
   - PRF electron temperature profile
   - PRF ion temperature profile
+  # The density runs on the parabolic generator driven by the Angioni peaking
+  # above.  Profile SHAPE generators are opt-in (tag `profile_shape`), so this
+  # names them explicitly; without them the density would fall back to the
+  # uniform-at-average default.
+  - Parabolic electron density profile
+  - Parabolic ion density profile
   # cfspopcon sums P_rad = P_brem(Z_eff=1) + P_sync + P_line when an impurity
-  # radiation method is active: the Mavrin/radas L_z curves already include
-  # each impurity's own bremsstrahlung + recombination continuum, so the
-  # Z_eff-scaled bremsstrahlung would double-count it (the default relation is
-  # excluded below).
+  # cfspopcon's radiation decomposition, selected as a PAIR: it pairs the L_z
+  # total with a HYDROGENIC-only bremsstrahlung, so the impurities' own
+  # bremsstrahlung rides inside its impurity-radiation term rather than inside
+  # P_brem.  fusdb's default instead makes P_brem the TOTAL bremsstrahlung and
+  # derives P_line from the cooling rate, which is the cleaner split but is not
+  # what this reference computes -- and cfspopcon's hydrogenic law is not the
+  # Z_eff=1 limit of fusdb's total-bremsstrahlung law, so the two are not
+  # interchangeable term by term.
   - Hydrogenic bremsstrahlung (cfspopcon)
+  - Line radiation equals impurity cooling rate (cfspopcon convention)
+  # derived from the impurity cooling rate by removing the bremsstrahlung P_brem
+  # already carries (see "Line radiation from impurity cooling rate").  The
+  # hydrogenic-only override that used to live here was compensating for the old
+  # semantics, where the Mavrin/radas L_z total was assigned straight to P_line
+  # and so double-counted the impurities' own bremsstrahlung.  With the split done
+  # properly the override is not just unnecessary but wrong -- it would drop the
+  # impurity bremsstrahlung from P_rad entirely.
   # P_line from the radas (OpenADAS) coronal Lz tables -- cfspopcon's
   # RadiationMethod.Radas, the method the reference dataset.nc was generated
   # with -- instead of the default Mavrin-2018 polynomial fits (excluded
@@ -236,24 +320,30 @@ relations:
   # f-based quasineutrality producer is excluded below).
   - Ion density average from impurity concentrations (Mavrin)
   exclude:
+  - Areal elongation from cross-section
+  # Superseded by "Elongation at psi95 from areal elongation (cfspopcon)" above
+  # `include` ADDS, so fusdb's derived P_line would stay active alongside the
+  # cfspopcon-convention identity selected above and over-determine P_line.
+  - Line radiation from impurity cooling rate
+  # (fixed IPDG89 kappa/1.12 vs cfspopcon's areal/psi95 ratio input).
+  - Elongation 95%
   # Parabolic gate defaults for T_e/T_i, superseded by the PRF generators.
   - Parabolic electron temperature profile
   - Parabolic ion temperature profile
   # The n_i ~ n_e default would pre-empt the quasineutrality derivation and
   # fight the supplied impurity fraction (the solver escapes by zeroing
-  # f_Imp); dilution must come from the composition, not the default.
+  # impurity content); dilution must come from the composition, not the default.
   - Default ion density average from plasma average density
   # Superseded by "Ion density average from impurity concentrations (Mavrin)"
   # above: n_i_avg comes from the c_z mix directly, not the f-fraction zbar.
   - Ion density average from quasineutrality
   # Simpler Martin-only L-H scaling, superseded here by the Martin+Ryter form.
   - L-H transition threshold power
-  # Z_eff is supplied from cfspopcon's real impurity mix (see above); the f-based
-  # default would recompute it as 1.874 from the single generic Z=6 impurity and
-  # fight the supplied value.
-  - Effective charge from ion fractions
   # Superseded by "Poloidal beta (cfspopcon)" above (different B_pol normalisation).
   - Poloidal beta
+  # Superseded by the cfspopcon pressure/beta_N forms above.
+  - Thermal pressure
+  - Normalized beta
   # Superseded by "Hydrogenic bremsstrahlung (cfspopcon)" above: with the
   # supplied c_z concentrations the P_line cooling curves carry the impurity
   # continuum, so the Z_eff-scaled form would double-count it.
@@ -281,7 +371,6 @@ relations:
   - Ion density from electron density and fuel fractions
   # Profile-consistent stored-energy producers, superseded by cfspopcon's
   # product-of-averages convention above.
-  - Plasma stored energy from averages
   - Thermal stored energy
   # PROCESS-faithful IPB98(y,2) (line-averaged density, kappa_IPB), superseded
   # by cfspopcon's ITER98y2 form above.

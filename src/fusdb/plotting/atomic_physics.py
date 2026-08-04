@@ -16,7 +16,6 @@ extra to use the interactive app.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import Any, NamedTuple
 
 import numpy as np
@@ -24,14 +23,11 @@ import numpy as np
 from fusdb.registry import RELATIONS
 
 from ._bokeh import (
-    axis_limit_controls,
-    labeled_row,
+    explorer_layout,
     link_two_filter_visibility,
     log_grid,
     log_log_figure,
-    model_html,
     validate_axis_limits,
-    write_html,
 )
 from .data import Curve, CurveSet
 from .renderers import bokeh_curve_set
@@ -226,14 +222,12 @@ def atomic_physics_app(
         height: Plot height in pixels.
 
     Returns:
-        A Bokeh layout model (embed with :func:`render_atomic_physics_app_html`).
+        A Bokeh layout model suitable for ``show()`` or ``bokeh.embed.file_html()``.
     """
-    from bokeh.layouts import column
     from bokeh.models import (
         CheckboxButtonGroup,
         CustomJS,
         HoverTool,
-        Legend,
         LegendItem,
         Slider,
     )
@@ -300,9 +294,6 @@ def atomic_physics_app(
         renderer.visible = curve.metadata["species"] in initial_species
         renderer.name = curve.metadata["hover_name"]
 
-    plot.add_layout(
-        Legend(items=legend_items, click_policy="hide", label_text_font_size="8pt", spacing=0), "right"
-    )
     plot.add_tools(HoverTool(tooltips=[("", "$name"), ("T_e", "$x eV"), ("rate", "$y m^3/s")], line_policy="nearest"))
 
     category_selector = CheckboxButtonGroup(
@@ -336,7 +327,18 @@ for (const source of sources) {
 """,
         ),
     )
-    limit_widgets, status = axis_limit_controls(plot, x_limits, y_limits)
+    layout, status = explorer_layout(
+        plot,
+        legend_items=legend_items,
+        option_controls=(
+            ("Density", density_slider),
+            ("Processes", category_selector),
+            ("Species", species_selector),
+        ),
+        x_limits=x_limits,
+        y_limits=y_limits,
+        legend_kwargs={"label_text_font_size": "8pt", "spacing": 0},
+    )
     link_two_filter_visibility(
         category_selector,
         species_selector,
@@ -349,24 +351,4 @@ for (const source of sources) {
         status,
     )
 
-    return column(
-        plot,
-        labeled_row("Density", density_slider),
-        labeled_row("Processes", category_selector),
-        labeled_row("Species", species_selector),
-        labeled_row("Limits", *limit_widgets),
-        sizing_mode="stretch_width",
-    )
-
-
-def render_atomic_physics_app_html(*, title: str = "Atomic Physics Rate Plotter", **kwargs: Any) -> str:
-    """Return a self-contained interactive HTML document (BokehJS from CDN).
-
-    ``**kwargs`` are forwarded to :func:`atomic_physics_app`.
-    """
-    return model_html(atomic_physics_app(**kwargs), title)
-
-
-def save_atomic_physics_app_html(path: str | Path, **kwargs: Any) -> Path:
-    """Write the interactive atomic-physics plotter HTML to ``path`` and return it."""
-    return write_html(path, render_atomic_physics_app_html(**kwargs))
+    return layout

@@ -9,8 +9,39 @@ the pure formatting/validation helpers take none.
 
 from __future__ import annotations
 
+import logging
+from collections import Counter
 from collections.abc import Mapping
 from typing import Any
+
+logger = logging.getLogger("fusdb")
+
+
+def diagnostics_block(system: Any, *, residual_failures: Any = (), verbose: int = 0) -> dict[str, Any]:
+    """One consolidated diagnostics view for a result (D2).
+
+    Folds the signals that were previously scattered -- first recorded causes
+    behind residual barriers and skipped completion providers (S10a),
+    under-determined profile levels (S9), and the per-variable data-origin
+    summary (D3) -- into a single block.  With ``verbose`` it also emits the
+    summary through the ``fusdb`` logger; the result dict stays the record.
+    """
+    roles = system.reported_roles()
+    block = {
+        "residual_failures": list(residual_failures),
+        "completion_errors": dict(getattr(system, "completion_errors", {}) or {}),
+        "underdetermined_profiles": sorted(getattr(system, "underdetermined_profiles", []) or []),
+        "role_summary": dict(Counter(roles.values())),
+    }
+    if verbose:
+        logger.info(
+            "diagnostics: roles=%s underdetermined=%s residual_failures=%d completion_errors=%d",
+            block["role_summary"],
+            block["underdetermined_profiles"] or "none",
+            len(block["residual_failures"]),
+            len(block["completion_errors"]),
+        )
+    return block
 
 
 def new_result(system: Any, mode: str) -> dict[str, Any]:

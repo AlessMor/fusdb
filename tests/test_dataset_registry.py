@@ -31,7 +31,7 @@ def test_all_packaged_datasets_use_common_envelope_and_canonical_name():
         "xsection": 16,
         "reactivity": 5,
         "polynomialfit": 87,
-        "coolingcurve": 20,  # 10 PROCESS + 10 radas coronal (no radas Kr: all-zero source table)
+        "coolingcurve": 21,  # 11 PROCESS + 10 radas coronal (no radas Kr: all-zero source table)
     }
 
 

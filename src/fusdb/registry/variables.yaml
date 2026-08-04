@@ -1,5 +1,4 @@
 # Aliases from CFSPOPCON, PROCESS plasma-physics variables, and OpenPOPCON added with inline source comments
-
 defaults:
   rel_tol: 0.001
   abs_tol: 0.0
@@ -9,10 +8,8 @@ R:  # OpenPOPCON src/openpopcon.py
   - major_radius  # CFSPOPCON variables.yaml
   - rmajor  # PROCESS physics_variables.py
   default_unit: m
-  description:
-  - Major radius.
+  description: Major radius.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 a:  # OpenPOPCON src/openpopcon.py
   aliases:
@@ -20,42 +17,53 @@ a:  # OpenPOPCON src/openpopcon.py
   - r_minor
   - rminor  # PROCESS physics_variables.py
   default_unit: m
-  description:
-  - Minor radius.
+  description: Minor radius.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 A:
   default_unit: dimensionless
   aliases:
   - aspect_ratio
   - aspect  # PROCESS physics_variables.py
-  description:
-  - Aspect ratio (R/a).
-  domain: (0, inf)
-  solver_domain: '[1e-12, 30]'
+  description: Aspect ratio (R/a).
+  domain: '(1, 30]'
+  # Solver bound must sit INSIDE the domain: A = R/a is > 1 by definition, so
+  # the old '[1e-12, 30]' lower bound was outside it and the registry refused
+  # to load.  Smallest reactor aspect ratio in reactors/ is STEP_2024 at ~1.8.
   abs_tol: 0.001
 eps:  # PROCESS physics_variables.py
   default_unit: dimensionless
   aliases:
   - epsilon
   - inverse_aspect_ratio  # CFSPOPCON variables.yaml
-  description:
-  - Inverse aspect ratio (a/R).
+  description: Inverse aspect ratio (a/R).
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 kappa:  # OpenPOPCON src/openpopcon.py; PROCESS physics_variables.py
   default_unit: dimensionless
   aliases:
   - elongation
-  - areal_elongation  # CFSPOPCON variables.yaml
-  description:
-  - Elongation.
-  domain: (0, inf)
+  - k_geom
+  - kappa_geom
+  - kappa_geometric
+  description: >-
+    GEOMETRIC elongation of the last closed flux surface, b/a, with
+    a = (R_max - R_min)/2 the horizontal minor radius and b = (Z_max - Z_min)/2
+    the vertical half-height of the SMOOTH shape parameterisation. This is the
+    elongation fusdb's Sauter cross-section consumes, and the one PROCESS takes
+    as its `kappa` input. It is deliberately NOT kappa_separatrix: a diverted
+    separatrix carries an X-point extension that raises Z_max without adding
+    cross-sectional area, which a smooth parameterisation cannot represent. The
+    two coincide when there is no X-point, which is what the default relation
+    `Separatrix elongation from geometric elongation` assumes. See
+    :cite:`zohm_2015`.
+  domain: '(0, 10]'
   solver_domain: '[0.1, 10]'
   abs_tol: 0.001
-  default: 1.0
+  # No default: a circular plasma (kappa = 1.0) is not a weaker assumption than
+  # none, it is a wrong one -- and as a seeded packed input it made S_phi
+  # forward-decidable FROM kappa, so a supplied kappa_areal could never
+  # back-solve kappa through the cross-section.  See NOTES.md.
   # CHECK gate: pre-existing producers stay the defaults; the PROCESS shape
   # scalings (STAR, Zohm, MAST, FIESTA, inductance, Menard-1997) are opt-in.
   default_relation:
@@ -64,34 +72,83 @@ kappa:  # OpenPOPCON src/openpopcon.py; PROCESS physics_variables.py
 # NOT a kappa alias: the elongation at the separatrix differs from the areal
 # elongation (SPARC: 1.97 vs 1.75); aliasing them silently overwrites kappa
 # when a reactor supplies both.  Feeds the synchrotron radiation relation.
-separatrix_elongation:  # CHECK imported from cfspopcon (radiated_power/synchrotron); supplied or set from geometry
+kappa_separatrix:  # CHECK imported from cfspopcon (radiated_power/synchrotron); supplied or set from geometry
   default_unit: dimensionless
-  description:
-  - Plasma elongation at the separatrix.
-  domain: (0, inf)
+  aliases:
+  - separatrix_elongation  # CFSPOPCON variables.yaml
+  - k_sep
+  - kappa_sep
+  description: >-
+    ACTUAL elongation of the separatrix, (Z_max - Z_min)/(R_max - R_min)
+    measured on the real last closed flux surface INCLUDING the X-point
+    extension of a diverted plasma. This is what a magnetics reconstruction
+    reports and what cfspopcon calls ``separatrix_elongation``. It exceeds the
+    geometric ``kappa`` whenever the plasma is diverted -- cfspopcon's SPARC
+    gives 1.96875 against an areal 1.75, a ratio no smooth shape parameterisation
+    reproduces (Sauter at squareness 0 gives only 1/(1 - 0.1274 delta^2)).
+    Falls back to ``kappa`` when the device does not declare it.
+  domain: '(0, 10]'
   solver_domain: '[0.1, 10]'
   abs_tol: 0.001
+  default_relation:
+  - Separatrix elongation from geometric elongation
 kappa_95:
   aliases:
   - kappa95  # PROCESS physics_variables.py
+  - k_95
   - elongation_psi95  # CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Elongation at 95% flux surface.
-  domain: (0, inf)
+  description: >-
+    GEOMETRIC elongation at the 95% poloidal-flux surface, psi_N = 0.95. Sits
+    inside the separatrix, so it is unaffected by the X-point extension that
+    separates ``kappa`` from ``kappa_separatrix``, and is the elongation the
+    current-profile and L-H fits are evaluated at (PROCESS ``kappa95``,
+    cfspopcon ``elongation_psi95``).
+  domain: '(0, 10]'
   solver_domain: '[0.1, 10]'
   abs_tol: 0.001
   # CHECK gate: IPDG89 kappa/1.12 stays the default; the PROCESS CREATE
-  # EU-DEMO fit is opt-in.
+  # EU-DEMO fit and the cfspopcon areal/psi95-ratio form are opt-in.
+  #
+  # NOTE 2026-07-31: cutting this to the single `Elongation 95%` entry (the
+  # `density_peaking` fix applied here) WAS implemented and measured, and it
+  # REGRESSED the sweep -- reverted, see .claude/scratchpad.md. The free
+  # `elongation_ratio_areal_to_psi95` does prune as intended, but removing that
+  # degree of freedom pushes the disagreement onto real inputs:
+  #   ARC_V0  >tol 13 -> 16, nfev 38 -> 435, 6.3s -> 29.8s
+  #   STEP    >tol 11 -> 13
+  #   sweep total 18.4s -> 61.3s   (pytest unchanged at 292/5)
+  # STEP's kappa/kappa_95 conflict (169/124 tolerances) is PRE-EXISTING and is
+  # NOT rescued by the second entry -- it is present either way.
   default_relation:
   - Elongation 95%
+  - Elongation at psi95 from areal elongation (cfspopcon)
+elongation_ratio_sep_to_geom:
+  default_unit: dimensionless
+  description: >-
+    Ratio of the ACTUAL separatrix elongation to the GEOMETRIC one,
+    kappa_separatrix / kappa. It is 1.0 for a limited or X-point-free plasma and
+    rises with the X-point extension of a diverted one -- cfspopcon's SPARC
+    implies ~1.11 against fusdb's geometric kappa, and carries the same quantity
+    against the areal elongation as `elongation_ratio_sep_to_areal: 1.125`.
+    Defaults to 1.0, which is a PENALIZED input, not a pin: a device that
+    declares both elongations determines it instead, and a device that declares
+    neither never activates it.
+  domain: '(0, 3]'
+  solver_domain: '[0.5, 3]'
+  abs_tol: 0.001
+  default: 1.0
+elongation_ratio_areal_to_psi95:  # CHECK imported from cfspopcon (geometry/analytical)
+  default_unit: dimensionless
+  description: Ratio of the areal elongation to the 95%-flux-surface elongation (kappa_areal / kappa_95); cfspopcon geometry input.
+  domain: (0, inf)
+  abs_tol: 0.001
 delta:  # OpenPOPCON src/openpopcon.py
   default_unit: dimensionless
   aliases:
   - triangularity
   - triang  # PROCESS physics_variables.py
-  description:
-  - Core triangularity.
+  description: Core triangularity.
   domain: '[-1, 1]'
   abs_tol: 0.001
   default: 0.0
@@ -105,9 +162,10 @@ delta_95:
   aliases:
   - triangularity_psi95
   - triang95  # CHECK PROCESS name (plasma_geometry); PROCESS physics_variables.py
-  description:
-  - Triangularity at 95% flux surface.
-  domain: '[0, 1]'
+  description: Triangularity at 95% flux surface.
+  # Negative triangularity is a real configuration, and `delta` (= 1.5 delta_95)
+  # already allows it, so the domain matches delta's rather than clipping at 0.
+  domain: '[-1, 1]'
   abs_tol: 0.001
 V_p:
   nominal: 100.0
@@ -116,10 +174,8 @@ V_p:
   - plasma_volume  # CFSPOPCON variables.yaml
   - vol_plasma  # CHECK PROCESS name (plasma_geometry); PROCESS physics_variables.py
   - V  # OpenPOPCON src/openpopcon.py
-  description:
-  - Plasma volume.
+  description: Plasma volume.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0
   # CHECK gate: Sauter volume stays the default; the PROCESS arcs volume is opt-in.
   default_relation:
@@ -131,10 +187,8 @@ A_p:
   - surface_area
   - S_p
   - a_plasma_surface  # CHECK PROCESS name (density_limit); PROCESS physics_variables.py
-  description:
-  - Surface area around the LCFS in the toroidal and poloidal direction.
+  description: Surface area around the LCFS in the toroidal and poloidal direction.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
   # CHECK gate: Sauter surface stays the default; the PROCESS arcs surface is opt-in.
   default_relation:
@@ -143,10 +197,8 @@ S_fw:
   default_unit: m^2
   aliases:
   - A_fw
-  description:
-  - First wall surface area.
+  description: First wall surface area.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
   default: A_p
 S_phi:
@@ -155,10 +207,8 @@ S_phi:
   - plasma_cross_section
   - S_cross
   - a_plasma_poloidal  # CHECK PROCESS name (plasma_geometry); PROCESS physics_variables.py
-  description:
-  - Surface of the plasma cross-section in the radial and poloidal direction.
+  description: Surface of the plasma cross-section in the radial and poloidal direction.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
   # CHECK gate: Sauter cross-section stays the default; the PROCESS arcs
   # cross-section and simplified-squareness Sauter variant are opt-in.
@@ -169,10 +219,8 @@ L_p:
   aliases:
   - poloidal_circumference  # CFSPOPCON variables.yaml
   - len_plasma_poloidal  # CHECK PROCESS name (plasma_fields); PROCESS physics_variables.py
-  description:
-  - Poloidal length around the plasma cross-section.
+  description: Poloidal length around the plasma cross-section.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
   # CHECK gate: Sauter poloidal length stays the default; the PROCESS arcs
   # perimeter and simplified-squareness Sauter variant are opt-in.
@@ -183,46 +231,36 @@ squareness:
   aliases:
   - xi
   - plasma_square  # CHECK PROCESS name (plasma_geometry); PROCESS physics_variables.py
-  description:
-  - Squareness (xi).
+  description: Squareness (xi).
   domain: '[-0.5, 0.5]'
   abs_tol: 0.001
   default: 0.0
 R_min:
   default_unit: m
-  description:
-  - Inboard major radius extent from the center of the torus.
+  description: Inboard major radius extent from the center of the torus.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 R_max:
   default_unit: m
-  description:
-  - Outboard major radius extent from the center of the torus.
+  description: Outboard major radius extent from the center of the torus.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 Z_min:
   default_unit: m
-  description:
-  - Lower vertical extent.
+  description: Lower vertical extent.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 Z_max:
   default_unit: m
-  description:
-  - Upper vertical extent.
+  description: Upper vertical extent.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 B:
   default_unit: T
-  description:
-  - Magnetic field (profile over radial direction).
+  description: Magnetic field (profile over radial direction).
   shape: 1
   average_variable: B_avg
-  domain: '[0, inf)'
+  domain: '[0, 30]'
   abs_tol: 0.001
   solver_domain: '[1e-12, 30]'
 B_avg:
@@ -230,9 +268,8 @@ B_avg:
   aliases:
   - B_vol_avg
   - average_magnetic_field  # fusdb legacy alias
-  description:
-  - Volume-averaged magnetic field.
-  domain: '[0, inf)'
+  description: Volume-averaged magnetic field.
+  domain: '[0, 30]'
   abs_tol: 0.001
   solver_domain: '[1e-12, 30]'
 B_rho_avg:
@@ -242,16 +279,14 @@ B_rho_avg:
   - B_line_avg
   - line_average_B
   - rho_average_magnetic_field
-  description:
-  - Radial line-averaged magnetic field (the straight average over rho).
-  domain: '[0, inf)'
+  description: Radial line-averaged magnetic field (the straight average over rho).
+  domain: '[0, 30]'
   abs_tol: 0.001
   solver_domain: '[1e-12, 30]'
 B_profile_max:
   default_unit: T
-  description:
-  - Maximum magnetic-field value on the supplied/reconstructed radial profile.
-  domain: '[0, inf)'
+  description: Maximum magnetic-field value on the supplied/reconstructed radial profile.
+  domain: '[0, 30]'
   abs_tol: 0.001
   solver_domain: '[1e-12, 30]'
 B0:  # OpenPOPCON src/openpopcon.py
@@ -259,24 +294,20 @@ B0:  # OpenPOPCON src/openpopcon.py
   aliases:
   - magnetic_field_on_axis  # CFSPOPCON variables.yaml
   - b_plasma_toroidal_on_axis  # PROCESS physics_variables.py
-  description:
-  - Toroidal field on axis.
-  domain: (0, inf)
-  solver_domain: '[1e-12, 30]'
+  description: Toroidal field on axis.
+  domain: '(0, 30]'
   abs_tol: 0.001
 B_max:
   default_unit: T
-  description:
-  - Peak field on coil.
+  description: Peak field on coil.
   abs_tol: 0.001
   solver_domain: '[1e-12, 30]'
 B_p:
   default_unit: T
   aliases:
   - b_plasma_surface_poloidal_average  # CHECK PROCESS name (plasma_fields); PROCESS physics_variables.py
-  description:
-  - Poloidal field.
-  domain: '[0, inf)'
+  description: Poloidal field.
+  domain: '[0, 30]'
   solver_domain: '[1e-12, 30]'
   abs_tol: 0.001
   # CHECK gate: the Ampere surface-average stays the default; the Peng/STAR TART
@@ -288,8 +319,7 @@ I_p:
   aliases:
   - plasma_current  # CHECK PROCESS name (plasma_fields); PROCESS uses amperes; CFSPOPCON variables.yaml; PROCESS physics_variables.py
   - Ip  # OpenPOPCON src/openpopcon.py
-  description:
-  - Plasma current.
+  description: Plasma current.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000.0
@@ -297,11 +327,9 @@ f_BS:
   default_unit: dimensionless
   aliases:
   - bootstrap_fraction  # CFSPOPCON variables.yaml
-  description:
-  - Bootstrap current fraction.
+  description: Bootstrap current fraction.
   domain: '[0, 1]'
   abs_tol: 0.001
-  solver_domain: '[0, 1]'
   # CHECK gate: the cfspopcon Gi (2014) bootstrap stays the default; the PROCESS
   # scalings (ITER-89, Sakai, ARIES, Andrade, Hoang, Wong, Gi-II, Sugiyama L/H,
   # Nevins, Wilson, Sauter) are off unless explicitly included.
@@ -311,26 +339,20 @@ f_NI:
   aliases:
   - f_c_plasma_non_inductive  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Non-inductive current fraction.
+  description: Non-inductive current fraction.
   domain: '[0, 1]'
   abs_tol: 0.001
-  solver_domain: '[0, 1]'
 f_CD:
   aliases:
   - f_c_plasma_auxiliary  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Driven current fraction (excluding bootstrap).
+  description: Driven current fraction (excluding bootstrap).
   domain: '[0, 1]'
   abs_tol: 0.001
-  solver_domain: '[0, 1]'
 q95:  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Safety factor at 95% flux surface.
-  domain: (0, inf)
-  solver_domain: '[1e-12, 50]'
+  description: Safety factor at 95% flux surface.
+  domain: '(0, 50]'
   abs_tol: 0.001
 q_cyl:
   aliases:
@@ -338,26 +360,20 @@ q_cyl:
   - q_cylindrical
   - q_I
   default_unit: dimensionless
-  description:
-  - Cylindrical edge safety factor.
-  domain: (0, inf)
-  solver_domain: '[1e-12, 50]'
+  description: Cylindrical edge safety factor.
+  domain: '(0, 50]'
   abs_tol: 0.001
 qstar:  # PROCESS physics_variables.py
   aliases:
   - q_star  # CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Equivalent cylindrical edge safety factor.
-  domain: (0, inf)
-  solver_domain: '[1e-12, 50]'
+  description: Equivalent cylindrical edge safety factor.
+  domain: '(0, 50]'
   abs_tol: 0.001
 f_shaping:  # CHECK imported from cfspopcon (plasma_current/safety_factor)
   default_unit: dimensionless
-  description:
-  - Plasma shaping function used in the q_star/plasma-current relation (ITER Physics Basis Ch.1 Eq. A-11).
-  domain: (0, inf)
-  solver_domain: '[1e-12, 100]'
+  description: Plasma shaping function used in the q_star/plasma-current relation (ITER Physics Basis Ch.1 Eq. A-11).
+  domain: '(0, 100]'
   abs_tol: 0.001
   # CHECK gate: the cfspopcon IPB shaping function stays the default; the PROCESS
   # fq scalings (Peng, Todd I/II, Connor-Hastie, Sauter, FIESTA) are opt-in.
@@ -365,22 +381,17 @@ f_shaping:  # CHECK imported from cfspopcon (plasma_current/safety_factor)
   - Plasma shaping function for q_star
 q_a:
   default_unit: dimensionless
-  description:
-  - Edge safety factor.
-  domain: (0, inf)
-  solver_domain: '[1e-12, 50]'
+  description: Edge safety factor.
+  domain: '(0, 50]'
   abs_tol: 0.001
 q_min:
   default_unit: dimensionless
-  description:
-  - Minimum safety factor.
-  domain: (0, inf)
-  solver_domain: '[1e-12, 50]'
+  description: Minimum safety factor.
+  domain: '(0, 50]'
   abs_tol: 0.001
 li:
   default_unit: dimensionless
-  description:
-  - Internal inductance.
+  description: Internal inductance.
   abs_tol: 0.001
 beta_N:
   default_unit: dimensionless
@@ -389,57 +400,54 @@ beta_N:
   - normalized_beta  # CFSPOPCON variables.yaml
   - beta_norm_total  # PROCESS physics_variables.py
   - BetaN  # OpenPOPCON src/openpopcon.py
-  description:
-  - Normalized beta stored as a fraction (literature beta_N=3.9 is 0.039 here).
-  domain: '[0, inf)'
+  description: Normalized beta stored as a fraction (literature beta_N=3.9 is 0.039 here).
+  domain: '[0, 0.2]'
   abs_tol: 0.0002
-  solver_domain: '[0, 0.2]'
+  # CHECK gate: fusdb normalises beta_T (Troyon) by default; cfspopcon's
+  # beta_total form is opt-in (avoids a second tag-matched producer elsewhere).
+  default_relation:
+  - Normalized beta
 beta:
   default_unit: dimensionless
   aliases:
   - beta_total  # CFSPOPCON variables.yaml
   - beta_total_vol_avg  # PROCESS physics_variables.py
-  description:
-  - Total beta.
-  domain: '[0, inf)'
+  description: Total beta.
+  domain: '[0, 1]'
   abs_tol: 0.0001
-  solver_domain: '[0, 1]'
 beta_T:
   default_unit: dimensionless
   aliases:
   - beta_toroidal  # CFSPOPCON variables.yaml
   - beta_toroidal_vol_avg  # PROCESS physics_variables.py
-  description:
-  - Toroidal beta (fraction).
-  domain: '[0, inf)'
-  solver_domain: '[0, 1]'
+  description: Toroidal beta (fraction).
+  domain: '[0, 1]'
   abs_tol: 0.0001
 beta_p:
   default_unit: dimensionless
   aliases:
   - beta_poloidal  # CFSPOPCON variables.yaml
   - beta_poloidal_vol_avg  # PROCESS physics_variables.py
-  description:
-  - Poloidal beta.
-  domain: '[0, inf)'
-  solver_domain: '[0, 10]'
+  description: Poloidal beta.
+  domain: '[0, 10]'
   abs_tol: 0.001
+  # CHECK gate: fusdb's elongation-corrected B_p form is the default;
+  # cfspopcon's outboard-midplane B_pol normalisation is opt-in (avoids a
+  # second tag-matched producer elsewhere).
+  default_relation:
+  - Poloidal beta
 beta_limit:
   default_unit: dimensionless
-  description:
-  - Troyon beta limit.
-  domain: '[0, inf)'
+  description: Troyon beta limit.
+  domain: '[0, 1]'
   abs_tol: 0.0001
-  solver_domain: '[0, 1]'
 troyon_margin:
   default_unit: dimensionless
-  description:
-  - Margin to the Troyon beta limit.
+  description: Margin to the Troyon beta limit.
   abs_tol: 0.0001
 p_th:
   default_unit: Pa
-  description:
-  - Volume-averaged thermal pressure.
+  description: Volume-averaged thermal pressure.
   aliases:
   - p_th_avg
   - p_th_vol_avg
@@ -448,10 +456,14 @@ p_th:
   - average_total_pressure  # CFSPOPCON variables.yaml
   - pres_plasma_thermal_vol_avg  # PROCESS physics_variables.py
   abs_tol: 1000.0
+  # CHECK gate: fusdb's profile-integrated "Thermal pressure" is the default;
+  # cfspopcon's undiluted product-of-averages form is opt-in (keeps it from
+  # tag-matching as a second, conflicting p_th producer in other reactors).
+  default_relation:
+  - Thermal pressure
 p_th_rho_avg:
   default_unit: Pa
-  description:
-  - Straight-rho averaged thermal pressure.
+  description: Straight-rho averaged thermal pressure.
   aliases:
   - p_tot_rho_avg
   - rho_average_total_pressure
@@ -461,15 +473,18 @@ p_peak:
   aliases:
   - peak_pressure  # CFSPOPCON variables.yaml
   - pres_plasma_thermal_on_axis  # PROCESS physics_variables.py
-  description:
-  - Peak pressure.
+  description: Peak pressure.
   abs_tol: 1000.0
 W_th:
   default_unit: J
-  description:
-  - Thermal stored energy.
+  description: Thermal stored energy.
   domain: '[0, inf)'
   abs_tol: 1000000.0
+  # CHECK gate: fusdb's profile-integrated 3/2 <p_th>_V V_p is the default;
+  # cfspopcon's product-of-averages form is opt-in (keeps it from tag-matching
+  # as a second, conflicting W_th producer in other reactors).
+  default_relation:
+  - Thermal stored energy
 T_e_avg:
   aliases:
   - T_avg
@@ -479,10 +494,8 @@ T_e_avg:
   - ten
   - temp_plasma_electron_vol_avg_kev  # PROCESS physics_variables.py
   default_unit: keV
-  description:
-  - Volume-averaged electron temperature.
-  domain: (0, inf)
-  solver_domain: '[1e-12, 300]'
+  description: Volume-averaged electron temperature.
+  domain: '(0, 300]'
   abs_tol: 0.05
 T_e_rho_avg:
   aliases:
@@ -493,19 +506,16 @@ T_e_rho_avg:
   - rho_average_electron_temp
   - temp_plasma_electron_line_avg_kev  # PROCESS physics_variables.py
   default_unit: keV
-  description:
-  - Radial line-averaged electron temperature (the straight average over rho).
-  domain: (0, inf)
-  solver_domain: '[1e-12, 300]'
+  description: Radial line-averaged electron temperature (the straight average over rho).
+  domain: '(0, 300]'
   abs_tol: 0.05
 T_sep:
   aliases:
   - separatrix_electron_temp  # CFSPOPCON variables.yaml
   - temp_plasma_separatrix_kev  # PROCESS physics_variables.py
   default_unit: keV
-  description:
-  - Separatrix electron temperature.
-  domain: '[0, inf)'
+  description: Separatrix electron temperature.
+  domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
 T_edge:
@@ -513,19 +523,15 @@ T_edge:
   - edge_electron_temp  # CFSPOPCON variables.yaml
   - edge_electron_temperature  # CFSPOPCON variables.yaml
   default_unit: keV
-  description:
-  - Edge collision temperature used by AMJUEL H.2 atomic-physics rate fits.
-  domain: (0, inf)
-  solver_domain: '[1e-12, 300]'
+  description: Edge collision temperature used by AMJUEL H.2 atomic-physics rate fits.
+  domain: '(0, 300]'
   abs_tol: 1.0e-4
 n_e_edge:
   aliases:
   - edge_electron_density  # CFSPOPCON variables.yaml
   default_unit: 1/m^3
-  description:
-  - Edge electron density used by AMJUEL H.4 atomic-physics rate fits.
+  description: Edge electron density used by AMJUEL H.4 atomic-physics rate fits.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
 T_e:
   nominal: 5.0
@@ -534,11 +540,10 @@ T_e:
   - electron_temp_profile  # CFSPOPCON variables.yaml
   - Te_prof  # OpenPOPCON src/openpopcon.py
   default_unit: keV
-  description:
-  - Electron temperature.
+  description: Electron temperature.
   shape: 1
   average_variable: T_e_avg
-  domain: '[0, inf)'
+  domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
   default_relation:
@@ -550,10 +555,8 @@ T0:
   - temp_plasma_electron_on_axis_kev  # CHECK PROCESS name (radiation_power); PROCESS uses keV; PROCESS physics_variables.py
   - peak_electron_temp  # CFSPOPCON variables.yaml
   default_unit: keV
-  description:
-  - On-axis/peak electron temperature.
-  domain: (0, inf)
-  solver_domain: '[1e-12, 300]'
+  description: On-axis/peak electron temperature.
+  domain: '(0, 300]'
   abs_tol: 0.05
 T_i:
   nominal: 5.0
@@ -562,11 +565,10 @@ T_i:
   - ion_temp_profile  # CFSPOPCON variables.yaml
   - Ti_prof  # OpenPOPCON src/openpopcon.py
   default_unit: keV
-  description:
-  - Ion temperature.
+  description: Ion temperature.
   shape: 1
   average_variable: T_i_avg
-  domain: '[0, inf)'
+  domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
   default_relation:
@@ -578,9 +580,8 @@ T_i_avg:
   - T_i_vol_avg
   - average_ion_temp  # CFSPOPCON variables.yaml
   - temp_plasma_ion_vol_avg_kev  # PROCESS physics_variables.py
-  description:
-  - Volume-averaged ion temperature.
-  domain: '[0, inf)'
+  description: Volume-averaged ion temperature.
+  domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
 T_i_rho_avg:
@@ -591,30 +592,33 @@ T_i_rho_avg:
   - line_average_T_i
   - rho_average_ion_temp
   - temp_plasma_ion_density_weighted_kev  # PROCESS physics_variables.py
-  description:
-  - Radial line-averaged ion temperature (the straight average over rho).
-  domain: '[0, inf)'
+  description: Radial line-averaged ion temperature (the straight average over rho).
+  domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
 T_i_peak:
   aliases:
   - peak_ion_temp  # CFSPOPCON variables.yaml
   - temp_plasma_ion_on_axis_kev  # PROCESS physics_variables.py
+  - T_i_0  # Helios (on-axis notation)
   default_unit: keV
-  description:
-  - On-axis/peak ion temperature.
-  domain: '[0, inf)'
+  description: On-axis/peak ion temperature.
+  domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
 ion_to_electron_temp_ratio:  # CFSPOPCON variables.yaml
   aliases:
   - f_temp_plasma_ion_electron  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Ratio of volume-averaged ion temperature to electron temperature.
+  description: Ratio of volume-averaged ion temperature to electron temperature.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
+  # Default lives HERE rather than as a kwarg default in the three relations
+  # that consume it.  Verified byte-identical across all 10 solving reactors:
+  # safe only because this scalar is already determined by an active relation
+  # everywhere, so the default never becomes a packed unknown.  Most kwarg
+  # defaults CANNOT move this way -- see .claude/scratchpad.md.
+  default: 1.0
 n_e_avg:
   aliases:
   - n_avg
@@ -623,28 +627,23 @@ n_e_avg:
   - average_electron_density  # CFSPOPCON variables.yaml
   - nd_plasma_electrons_vol_avg  # PROCESS physics_variables.py
   default_unit: 1/m^3
-  description:
-  - Volume-averaged electron density.
+  description: Volume-averaged electron density.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
 n_e_rho_avg:
   aliases:
   - n_rho_avg
   - rho_average_electron_density
   default_unit: 1/m^3
-  description:
-  - Radial line-averaged electron density (legacy duplicate of n_la).
+  description: Radial line-averaged electron density (legacy duplicate of n_la).
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
 n_sep:
   aliases:
   - separatrix_electron_density  # CFSPOPCON variables.yaml
   - nd_plasma_separatrix_electron  # PROCESS physics_variables.py
   default_unit: 1/m^3
-  description:
-  - Separatrix electron density.
+  description: Separatrix electron density.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
@@ -653,10 +652,8 @@ nesep_over_nebar:  # CHECK imported from cfspopcon (scrape_off_layer/separatrix_
   aliases:
   - prn1  # CHECK PROCESS name (density_limit); PROCESS defines prn1 = nesep/dene
   - f_nd_plasma_separatrix_greenwald  # PROCESS physics_variables.py
-  description:
-  - Ratio of separatrix electron density to volume-averaged electron density.
+  description: Ratio of separatrix electron density to volume-averaged electron density.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 n_i_avg:
   aliases:
@@ -665,15 +662,32 @@ n_i_avg:
   - nd_plasma_ions_total_vol_avg  # PROCESS physics_variables.py
   - nd_plasma_fuel_ions_vol_avg  # PROCESS physics_variables.py
   default_unit: 1/m^3
-  description:
-  - Volume-averaged ion (fuel) density, distinct from the electron average when
-    impurity dilution is present.
+  # DEFINITION (pinned 2026-08-01): n_i counts the FUSION ions only -- p, D, T,
+  # He3, He4, the five species that carry a particle balance.  Impurities are
+  # NOT included; they enter separately through their c_z = n_z/n_e knobs.
+  # This matches `Ion density from tracked species densities` and is the
+  # denominator every f_X fraction divides by.
+  description: >-
+    Volume-averaged fusion-ion density (p + D + T + He3 + He4), distinct from
+    the electron average when impurity dilution is present.  Excludes
+    impurities, which are carried as c_z concentrations relative to n_e.
+  # ATTEMPTED 2026-08-01 and REVERTED: replacing both entries with a single
+  # "Ion density average from full charge balance" (fuel zbar AND impurity
+  # term) WRECKED the sweep -- n_i/n_e 4.1e6 on ARC_V3A, 900 on SPARC, Z_eff
+  # collapsed to 1.000 nearly everywhere, STEP 0 -> 15 failed relations.  The
+  # two halves are NOT simply multiplicative; the Z_eff/xenon coupling runs
+  # through the quasineutrality entry.  See .claude/scratchpad.md.
   default_relation:
   - Ion density average from quasineutrality
   - Default ion density average from plasma average density
-  - Ion density average from impurity concentrations (Mavrin)
+  # NOT whitelisted: "Ion density average from impurity concentrations (Mavrin)".
+  # It is algebraically identical to the quasineutrality form once
+  # c_z = sum over that element's isotopes (both give n_i/n_e = 1/(1+f_He) for a
+  # D/T+He plasma), but only when c_He actually carries the helium.  With c_He at
+  # its 0.0 default it asserts n_i_avg = n_e_avg, i.e. zbar = 1, which forces the
+  # ash to zero and makes quasineutrality unsatisfiable.  Reactors that want the
+  # cfspopcon convention name it in `include` (see tests/cfspopcon_SPARC).
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
 n_i_rho_avg:
   aliases:
@@ -682,21 +696,18 @@ n_i_rho_avg:
   - line_average_n_i
   - rho_average_ion_density
   default_unit: 1/m^3
-  description:
-  - Radial line-averaged ion density (the straight average over rho).
+  description: Radial line-averaged ion density (the straight average over rho).
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
 n0:
   aliases:
   - n_e_peak
   - nd_plasma_electron_on_axis  # CHECK PROCESS name (radiation_power); PROCESS physics_variables.py
   - peak_electron_density  # CFSPOPCON variables.yaml
+  - n_e_0  # Helios (on-axis notation)
   default_unit: 1/m^3
-  description:
-  - On-axis electron density.
+  description: On-axis electron density.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e+18
 n_e:
   nominal: 1.0e20
@@ -705,13 +716,11 @@ n_e:
   - electron_density_profile  # CFSPOPCON variables.yaml
   - ne_prof  # OpenPOPCON src/openpopcon.py
   default_unit: 1/m^3
-  description:
-  - Electron density.
+  description: Electron density.
   shape: 1
   average_variable: n_e_avg
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
   default_relation:
   - Parabolic electron density profile
   - Default electron density profile from average density
@@ -721,13 +730,12 @@ n_i:
   - fuel_ion_density_profile  # CFSPOPCON variables.yaml
   - ni_prof  # OpenPOPCON src/openpopcon.py
   default_unit: 1/m^3
-  description:
-  - Ion density.
+  # See n_i_avg: FUSION ions only (p, D, T, He3, He4); impurities excluded.
+  description: Fusion-ion density profile (p + D + T + He3 + He4).
   shape: 1
   average_variable: n_i_avg
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
   default_relation:
   - Parabolic ion density profile
   - Ion density from electron density and fuel fractions
@@ -737,18 +745,15 @@ n_i_peak:
   - peak_fuel_ion_density  # CFSPOPCON variables.yaml
   - nd_plasma_ions_on_axis  # PROCESS physics_variables.py
   default_unit: 1/m^3
-  description:
-  - On-axis/peak ion density.
+  description: On-axis/peak ion density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_i_tau_E_T_i:
   default_unit: keV*s/m^3
   aliases:
   - fusion_triple_product  # CFSPOPCON variables.yaml
   - nTtau  # PROCESS physics_variables.py
-  description:
-  - Fusion triple product from peak ion density, temperature, and confinement.
+  description: Fusion triple product from peak ion density, temperature, and confinement.
   domain: '[0, inf)'
   abs_tol: 1.0e+19
 n_GW:
@@ -756,37 +761,39 @@ n_GW:
   aliases:
   - greenwald_density_limit  # CFSPOPCON variables.yaml
   - n_GR  # OpenPOPCON src/openpopcon.py
-  description:
-  - Greenwald density limit.
+  description: Greenwald density limit.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e+18
 n_SUDO:
   default_unit: 1/m^3
-  description:
-  - Sudo density limit.
+  description: Sudo density limit.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
+f_SUDO:
+  # Stellarator counterpart of f_GW.  Values above 1 are physical -- LHD operates
+  # routinely above the Sudo limit -- so the domain is not capped at 1.
+  aliases:
+  - f_Sudo  # Helios
+  default_unit: dimensionless
+  description: Sudo fraction (average density over the Sudo density limit).
+  domain: '[0, inf)'
+  abs_tol: 0.001
 f_GW:
   default_unit: dimensionless
   aliases:
   - greenwald_fraction  # CFSPOPCON variables.yaml
   - f_nd_plasma_greenwald  # PROCESS physics_variables.py
-  description:
-  - Greenwald fraction.
+  - f_G  # SPARC PRD Table 1
+  description: Greenwald fraction.
   domain: '[0, inf)'
   abs_tol: 0.001
-  solver_domain: '[0, inf)'
 greenwald_margin:
   default_unit: 1/m^3
-  description:
-  - Margin to the Greenwald density limit.
+  description: Margin to the Greenwald density limit.
   abs_tol: 1.0e+18
 sudo_margin:
   default_unit: 1/m^3
-  description:
-  - Margin to the Sudo density limit.
+  description: Margin to the Sudo density limit.
   abs_tol: 1.0e+18
 Z_eff:
   nominal: 1.5
@@ -796,40 +803,36 @@ Z_eff:
   - n_charge_plasma_effective_vol_avg  # PROCESS physics_variables.py
   - n_charge_plasma_effective_profile  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Effective charge.
+  description: Effective charge.
   domain: '[0, inf)'
   abs_tol: 0.001
+  # ONE definition (2026-08-01). The two entries this replaces were partial
+  # statements enforced SIMULTANEOUSLY: one had the fuel and no impurities, the
+  # other the impurities with the fuel assumed Z=1 (so helium ash was missing).
   default_relation:
-  - Effective charge from ion fractions
-  - Effective charge from impurity concentrations (Mavrin)
+  - Effective charge from all species
 Z_bar:
   aliases:
   - mean_ion_charge_state  # CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Mean ion charge state.
+  description: Mean ion charge state.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 n_D:
   default_unit: 1/m^3
-  description:
-  - Deuterium ion density profile.
+  description: Deuterium ion density profile.
   shape: 1
   average_variable: n_D_avg
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_D_avg:
   default_unit: 1/m^3
   aliases:
   - n_D_vol_avg
-  description:
-  - Volume-averaged deuterium ion density.
+  description: Volume-averaged deuterium ion density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_D_rho_avg:
   default_unit: 1/m^3
   aliases:
@@ -837,36 +840,28 @@ n_D_rho_avg:
   - n_D_line_avg
   - line_average_n_D
   - rho_average_deuterium_density
-  description:
-  - Radial line-averaged deuterium ion density (the straight average over rho).
+  description: Radial line-averaged deuterium ion density (the straight average over rho).
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_D_peak:
   default_unit: 1/m^3
-  description:
-  - Maximum deuterium ion density on the supplied/reconstructed radial profile.
+  description: Maximum deuterium ion density on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_T:
   default_unit: 1/m^3
-  description:
-  - Tritium ion density profile.
+  description: Tritium ion density profile.
   shape: 1
   average_variable: n_T_avg
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_T_avg:
   default_unit: 1/m^3
   aliases:
   - n_T_vol_avg
-  description:
-  - Volume-averaged tritium ion density.
+  description: Volume-averaged tritium ion density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_T_rho_avg:
   default_unit: 1/m^3
   aliases:
@@ -874,36 +869,28 @@ n_T_rho_avg:
   - n_T_line_avg
   - line_average_n_T
   - rho_average_tritium_density
-  description:
-  - Radial line-averaged tritium ion density (the straight average over rho).
+  description: Radial line-averaged tritium ion density (the straight average over rho).
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_T_peak:
   default_unit: 1/m^3
-  description:
-  - Maximum tritium ion density on the supplied/reconstructed radial profile.
+  description: Maximum tritium ion density on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_He3:
   default_unit: 1/m^3
-  description:
-  - Helium-3 ion density profile.
+  description: Helium-3 ion density profile.
   shape: 1
   average_variable: n_He3_avg
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_He3_avg:
   default_unit: 1/m^3
   aliases:
   - n_He3_vol_avg
-  description:
-  - Volume-averaged helium-3 ion density.
+  description: Volume-averaged helium-3 ion density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_He3_rho_avg:
   default_unit: 1/m^3
   aliases:
@@ -911,37 +898,47 @@ n_He3_rho_avg:
   - n_He3_line_avg
   - line_average_n_He3
   - rho_average_helium3_density
-  description:
-  - Radial line-averaged helium-3 ion density (the straight average over rho).
+  description: Radial line-averaged helium-3 ion density (the straight average over rho).
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_He3_peak:
   default_unit: 1/m^3
-  description:
-  - Maximum helium-3 ion density on the supplied/reconstructed radial profile.
+  description: Maximum helium-3 ion density on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_He4:
   default_unit: 1/m^3
-  description:
-  - Helium-4 ion density profile.
+  description: Helium-4 ion density profile.
   shape: 1
   average_variable: n_He4_avg
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_He4_avg:
   default_unit: 1/m^3
   aliases:
   - n_He4_vol_avg
   - nd_plasma_alphas_vol_avg  # PROCESS physics_variables.py
-  description:
-  - Volume-averaged helium-4 ion density.
+  description: Volume-averaged helium-4 ion density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
+n_p:
+  # PROTONS, i.e. fully-ionised protium in the core -- named n_p rather than
+  # n_H to stress that this is the ion, not neutral or molecular hydrogen.
+  # A fusion PRODUCT as much as a fuel: DDp, DHe3, He3He3 and THe3_np all yield
+  # protons, so on a D-He3 machine this is a primary ash channel.
+  default_unit: 1/m^3
+  description: Proton (ionised protium) density profile.
+  shape: 1
+  average_variable: n_p_avg
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+n_p_avg:
+  default_unit: 1/m^3
+  aliases:
+  - n_p_vol_avg
+  description: Volume-averaged proton density.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
 n_He4_rho_avg:
   default_unit: 1/m^3
   aliases:
@@ -949,65 +946,21 @@ n_He4_rho_avg:
   - n_He4_line_avg
   - line_average_n_He4
   - rho_average_helium4_density
-  description:
-  - Radial line-averaged helium-4 ion density (the straight average over rho).
+  description: Radial line-averaged helium-4 ion density (the straight average over rho).
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 n_He4_peak:
   default_unit: 1/m^3
-  description:
-  - Maximum helium-4 ion density on the supplied/reconstructed radial profile.
+  description: Maximum helium-4 ion density on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
-n_imp:
-  default_unit: 1/m^3
-  description:
-  - Generic impurity ion density profile.
-  shape: 1
-  average_variable: n_imp_avg
-  domain: '[0, inf)'
-  abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
-n_imp_avg:
-  default_unit: 1/m^3
-  aliases:
-  - n_imp_vol_avg
-  - nd_plasma_impurities_vol_avg  # PROCESS physics_variables.py
-  description:
-  - Volume-averaged generic impurity ion density.
-  domain: '[0, inf)'
-  abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
-n_imp_rho_avg:
-  default_unit: 1/m^3
-  aliases:
-  - n_imp_la
-  - n_imp_line_avg
-  - line_average_n_imp
-  - rho_average_impurity_density
-  description:
-  - Radial line-averaged generic impurity ion density (the straight average over rho).
-  domain: '[0, inf)'
-  abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
-n_imp_peak:
-  default_unit: 1/m^3
-  description:
-  - Maximum generic impurity ion density on the supplied/reconstructed radial profile.
-  domain: '[0, inf)'
-  abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
 f_D:
   aliases:
   - f_plasma_fuel_deuterium  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Core deuterium ion fraction, enforced by n_D = f_D * n_i.
+  description: Core deuterium ion fraction, enforced by n_D = f_D * n_i.
   domain: '[0, 1]'
   abs_tol: 0.001
-  solver_domain: '[0, 1]'
   default: 0.5
   default_requires: tau_p
 f_T:
@@ -1015,114 +968,248 @@ f_T:
   - f_plasma_fuel_tritium  # PROCESS physics_variables.py
   - heavier_fuel_species_fraction  # CFSPOPCON variables.yaml; DT context only
   default_unit: dimensionless
-  description:
-  - Core tritium ion fraction, enforced by n_T = f_T * n_i.
+  description: Core tritium ion fraction, enforced by n_T = f_T * n_i.
   domain: '[0, 1]'
   abs_tol: 0.001
-  solver_domain: '[0, 1]'
   default: 0.5
   default_requires: tau_p
 f_He3:  # PROCESS physics_variables.py
   aliases:
   - f_plasma_fuel_helium3  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Core helium-3 ion fraction, enforced by n_He3 = f_He3 * n_i.
+  description: Core helium-3 ion fraction, enforced by n_He3 = f_He3 * n_i.
   domain: '[0, 1]'
   abs_tol: 0.001
-  solver_domain: '[0, 1]'
   default: 0.0
   default_requires: tau_p
 f_He4:
   default_unit: dimensionless
-  description:
-  - Core helium-4 ion fraction, enforced by n_He4 = f_He4 * n_i.
+  description: Core helium-4 ion fraction, enforced by n_He4 = f_He4 * n_i.
   domain: '[0, 1]'
   abs_tol: 0.001
-  solver_domain: '[0, 1]'
   default: 0.0
   default_requires: tau_p
-f_Imp:
+f_p:
+  # Protons are ASH, not fuel: like f_He3/f_He4 this is gated on tau_p, so a
+  # reactor with no ash balance holds it at EXACTLY zero and the D-T results
+  # that predate proton tracking are unchanged.
   default_unit: dimensionless
-  description:
-  - Core generic impurity ion fraction, enforced by n_imp = f_Imp * n_i.
+  description: Core proton (ionised protium) fraction, enforced by n_p = f_p * n_i.
   domain: '[0, 1]'
   abs_tol: 0.001
-  solver_domain: '[0, 1]'
   default: 0.0
   default_requires: tau_p
-# Per-species impurity concentrations (n_imp/n_e) for line radiation.
-# CHECK imported from cfspopcon (Mavrin/Post-Jensen impurity radiated power).
+chi_e:
+  aliases:
+  - mean_ion_charge
+  default_unit: dimensionless
+  # THE bridge between the two composition denominators.  f_s = n_s/n_i is what
+  # the particle balance moves; c_s = n_s/n_e is what the atomic data needs; and
+  #     c_s = f_s / chi_e            chi_e = n_e/n_i = sum_s Z_s f_s
+  # is the single scalar relating them.  It is the mean charge PER ION, and is
+  # NOT Z_eff: Z_eff is quadratic in the charge (sum_s Z_s^2 c_s), chi_e linear.
+  #
+  # It had no registry variable before, so four separate relations re-derived it
+  # inline and each truncated it differently -- every one of them dropping the
+  # impurity electrons and so pinning n_i/n_e to 1 on an impurity-seeded
+  # machine.  That truncation is the recorded root cause of the A1 failures
+  # (see .claude/scratchpad.md).  Naming it is the fix.
+  description: >-
+    Mean charge per ion, n_e/n_i = sum_s Z_s f_s.  Relates the two composition
+    denominators: c_s = f_s / chi_e.  Equals 1 for a pure hydrogenic plasma.
+  domain: '[1, inf)'
+  abs_tol: 0.001
+c_H:
+  # Hydrogenic counterpart of the c_* impurity concentrations, so that a single
+  # species loop can cover the fuel on the same footing as the impurities.
+  # Isotopes collapse: radiation is set by nuclear charge and charge state, not
+  # mass, so D, T and protium share one Z=1 cooling curve and one concentration.
+  default_unit: dimensionless
+  description: Hydrogenic (D+T+H) ion concentration n_H/n_e for radiation.
+  # NOT bounded above at 1: an undiluted D-T plasma sits EXACTLY on that
+  # boundary, so f_D + f_T rounding to 1 + 2e-9 (ARC_V0, measured) trips it and
+  # fails the reconcile. A domain edge must never sit on the nominal operating
+  # point of a derived quantity.
+  domain: '[0, inf)'
+  abs_tol: 0.001
 c_He:
   default_unit: dimensionless
-  description: ['Helium concentration n_He/n_e for line radiation.']
+  description: Helium concentration n_He/n_e for line radiation.
   domain: '[0, 1]'
+  # Mirrors f_He4: the zero default only applies when there is no ash
+  # balance (no tau_p).  With tau_p the helium is solved and c_He is derived
+  # from it ("Helium concentration from ash densities"); holding it at 0 would
+  # force n_He3_avg + n_He4_avg to zero through that link.
+  #
+  # ATTEMPTED 2026-08-01 and REVERTED: removing this gate does NOT make helium
+  # radiate.  c_He is a kwarg CONSTANT in the radiation relations, so it prunes
+  # to None rather than deriving from the bridge; making it positional instead
+  # turns it into a free packed variable that runs away (measured 0.796, i.e.
+  # 80% helium, P_rad 276 vs PROCESS 213 MW), and a `default_relation`
+  # whitelist on the bridge did not reclaim it either.  See .claude/scratchpad.md.
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
 c_Li:
   default_unit: dimensionless
-  description: ['Lithium concentration n_Li/n_e for line radiation.']
+  description: Lithium concentration n_Li/n_e for line radiation.
   domain: '[0, 1]'
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
 c_Be:
   default_unit: dimensionless
-  description: ['Beryllium concentration n_Be/n_e for line radiation.']
+  description: Beryllium concentration n_Be/n_e for line radiation.
   domain: '[0, 1]'
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
 c_C:
   default_unit: dimensionless
-  description: ['Carbon concentration n_C/n_e for line radiation.']
+  description: Carbon concentration n_C/n_e for line radiation.
   domain: '[0, 1]'
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
 c_N:
   default_unit: dimensionless
-  description: ['Nitrogen concentration n_N/n_e for line radiation.']
+  description: Nitrogen concentration n_N/n_e for line radiation.
   domain: '[0, 1]'
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
 c_O:
   default_unit: dimensionless
-  description: ['Oxygen concentration n_O/n_e for line radiation.']
+  description: Oxygen concentration n_O/n_e for line radiation.
   domain: '[0, 1]'
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
 c_Ne:
   default_unit: dimensionless
-  description: ['Neon concentration n_Ne/n_e for line radiation.']
+  description: Neon concentration n_Ne/n_e for line radiation.
   domain: '[0, 1]'
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
 c_Ar:
   default_unit: dimensionless
-  description: ['Argon concentration n_Ar/n_e for line radiation.']
+  description: Argon concentration n_Ar/n_e for line radiation.
   domain: '[0, 1]'
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
 c_Kr:
   default_unit: dimensionless
-  description: ['Krypton concentration n_Kr/n_e for line radiation.']
+  description: Krypton concentration n_Kr/n_e for line radiation.
   domain: '[0, 1]'
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
 c_Xe:
   default_unit: dimensionless
-  description: ['Xenon concentration n_Xe/n_e for line radiation.']
+  description: Xenon concentration n_Xe/n_e for line radiation.
   domain: '[0, 1]'
   default: 0.0
+  # Gated on tau_p like every other impurity.  Xenon USED to be gated on Z_eff,
+  # which made it the designated free knob: a declared Z_eff was treated as
+  # evidence that xenon is present, and the solver inverted the Z_eff equation
+  # for it.  That is what let a reactor declaring only a Z_eff silently acquire
+  # a xenon inventory it never specified -- and it is the cycle every failed
+  # composition attempt ran through (c_Xe -> composition -> Z_eff -> c_Xe).
+  #
+  # A reactor is now 100% fuel plus its own declared impurities: an impurity
+  # concentration is SUPPLIED or EXACTLY ZERO.  A machine that declares a Z_eff
+  # but neither a composition nor a tau_p will therefore report that Z_eff as
+  # inconsistent instead of manufacturing xenon to reach it.  That inconsistency
+  # is the honest answer -- the reactor really has not said what is radiating.
+  default_requires: tau_p
   abs_tol: 0.001
 c_W:
   default_unit: dimensionless
-  description: ['Tungsten concentration n_W/n_e for line radiation.']
+  description: Tungsten concentration n_W/n_e for line radiation.
   domain: '[0, 1]'
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
+# -- mean ionisation states ------------------------------------------------
+# Zbar_X is the mean charge state of element X: sum_q q*n_{X,q} / sum_q n_{X,q}.
+# It is the ONE place the coronal-equilibrium assumption lives.  Every charge
+# moment of the composition reads it -- quasineutrality (sum_X c_X Zbar_X) and
+# Z_eff (sum_X c_X Zbar_X^2) -- so a reactor that knows its own charge states
+# can supply Zbar_X and override the fit, which was impossible while the fit
+# was called inline inside each relation.
+#
+# NOT an effective charge: Z_eff is QUADRATIC in the charge, Zbar is LINEAR.
+#
+# No registry `default`: the Mavrin producer determines these.  A default here
+# was TRIED and reverted -- gated on c_X it fired on every element (an impurity
+# that is seeded rather than supplied is in neither `supplied` nor
+# `base_forward`, relationsystem.py:858), which silently replaced the coronal
+# charge with the bare atomic number: Zbar_Xe 48.7 -> 54, and the solver then
+# inverted for 23% less xenon while Z_eff still matched its declared value.
+#
+# Hydrogen has no Mavrin entry (the fits start at He) and is fully stripped at
+# any temperature fusdb models, so it enters every moment at Zbar = 1 exactly
+# and needs no variable.
+Zbar_He:
+  default_unit: dimensionless
+  description: Mean ionisation state of He (sum_q q n_q / sum_q n_q).
+  domain: '[0, 2]'
+  abs_tol: 0.01
+Zbar_Li:
+  default_unit: dimensionless
+  description: Mean ionisation state of Li (sum_q q n_q / sum_q n_q).
+  domain: '[0, 3]'
+  abs_tol: 0.01
+Zbar_Be:
+  default_unit: dimensionless
+  description: Mean ionisation state of Be (sum_q q n_q / sum_q n_q).
+  domain: '[0, 4]'
+  abs_tol: 0.01
+Zbar_C:
+  default_unit: dimensionless
+  description: Mean ionisation state of C (sum_q q n_q / sum_q n_q).
+  domain: '[0, 6]'
+  abs_tol: 0.01
+Zbar_N:
+  default_unit: dimensionless
+  description: Mean ionisation state of N (sum_q q n_q / sum_q n_q).
+  domain: '[0, 7]'
+  abs_tol: 0.01
+Zbar_O:
+  default_unit: dimensionless
+  description: Mean ionisation state of O (sum_q q n_q / sum_q n_q).
+  domain: '[0, 8]'
+  abs_tol: 0.01
+Zbar_Ne:
+  default_unit: dimensionless
+  description: Mean ionisation state of Ne (sum_q q n_q / sum_q n_q).
+  domain: '[0, 10]'
+  abs_tol: 0.01
+Zbar_Ar:
+  default_unit: dimensionless
+  description: Mean ionisation state of Ar (sum_q q n_q / sum_q n_q).
+  domain: '[0, 18]'
+  abs_tol: 0.01
+Zbar_Kr:
+  default_unit: dimensionless
+  description: Mean ionisation state of Kr (sum_q q n_q / sum_q n_q).
+  domain: '[0, 36]'
+  abs_tol: 0.01
+Zbar_Xe:
+  default_unit: dimensionless
+  description: Mean ionisation state of Xe (sum_q q n_q / sum_q n_q).
+  domain: '[0, 54]'
+  abs_tol: 0.01
+Zbar_W:
+  default_unit: dimensionless
+  description: Mean ionisation state of W (sum_q q n_q / sum_q n_q).
+  domain: '[0, 74]'
+  abs_tol: 0.01
 TBR:
   default_unit: dimensionless
-  description:
-  - Tritium breeding ratio.
+  description: Tritium breeding ratio.
   domain: '[0, inf)'
   abs_tol: 0.001
 tau_E:
@@ -1133,40 +1220,30 @@ tau_E:
   - tauE_scalinglaw  # OpenPOPCON src/openpopcon.py
   - tauE_H98  # OpenPOPCON src/openpopcon.py
   - tauE_H89  # OpenPOPCON src/openpopcon.py
-  description:
-  - Energy confinement time.
+  description: Energy confinement time.
   default_relation:
   - tau_E_iter_ipb98y2
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.005
 nu_star:
   default_unit: dimensionless
-  description:
-  - Normalized collisionality.
+  description: Normalized collisionality.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 nu_ee:
   default_unit: 1/s
-  description:
-  - Electron-electron collision frequency.
+  description: Electron-electron collision frequency.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0
 nu_ei:
   default_unit: 1/s
-  description:
-  - Electron-ion collision frequency.
+  description: Electron-ion collision frequency.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0
 rho_star:
   default_unit: dimensionless
-  description:
-  - Normalized gyroradius.
+  description: Normalized gyroradius.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 rho_L:
   aliases:
@@ -1174,112 +1251,84 @@ rho_L:
   - gyroradius  # CFSPOPCON variables.yaml
   - ion_larmor_radius
   default_unit: m
-  description:
-  - Ion Larmor radius.
+  description: Ion Larmor radius.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-6
 alpha_t:  # CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Turbulence parameter.
+  description: Turbulence parameter.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 edge_collisionality:  # CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Edge collisionality.
+  description: Edge collisionality.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 tau_p:
   default_unit: s
-  description:
-  - Particle confinement time (generic).
+  description: Particle confinement time (generic).
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.005
 tau_p_D:
   default_unit: s
-  description:
-  - Deuterium particle confinement time.
+  description: Deuterium particle confinement time.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.005
 tau_p_T:
   default_unit: s
-  description:
-  - Tritium particle confinement time.
+  description: Tritium particle confinement time.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.005
 tau_p_He3:
   default_unit: s
-  description:
-  - Helium-3 particle confinement time.
+  description: Helium-3 particle confinement time.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.005
 tau_p_He4:
   default_unit: s
-  description:
-  - Helium-4 particle confinement time.
+  description: Helium-4 particle confinement time.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
-  abs_tol: 0.005
-tau_p_Imp:
-  default_unit: s
-  description:
-  - Generic impurity particle confinement time.
-  domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.005
 tau_pulse:
   default_unit: s
-  description:
-  - Pulse length.
+  description: Pulse length.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.005
 H89:
   default_unit: dimensionless
-  description:
-  - H89 confinement enhancement factor.
+  description: H89 confinement enhancement factor.
   abs_tol: 0.001
 H98_y2:
   aliases:
   - H98y2  # CFSPOPCON variables.yaml
+  - H_98y2  # SPARC PRD Table 1
   default_unit: dimensionless
-  description:
-  - H98(y,2) confinement enhancement factor.
+  description: H98(y,2) confinement enhancement factor, applied to the IPB98(y,2)
+    scalings. Composes with the generic H_factor.
+  domain: '[0, inf)'
   abs_tol: 0.001
+  default: 1.0
 G89:
   default_unit: dimensionless
-  description:
-  - G89 gain factor.
+  description: G89 gain factor.
   abs_tol: 0.001
 P_fus:
   default_unit: W
   aliases:
   - P_fusion  # CFSPOPCON variables.yaml
   - p_fusion_total_mw  # PROCESS physics_variables.py
-  description:
-  - Fusion power.
+  description: Fusion power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 Rr_DT:
   default_unit: 1/s
-  description:
-  - D-T fusion reaction rate (volume-integrated).
+  description: D-T fusion reaction rate (volume-integrated).
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000000000.0
 sigmav_DT:
   default_unit: m^3/s
-  description:
-  - D-T fusion reactivity.
+  description: D-T fusion reactivity.
   shape: 1
   default_relation:
   - DT reactivity BoschHale
@@ -1287,21 +1336,18 @@ sigmav_DT:
   abs_tol: 1.0e-26
 sigmav_DT_peak:
   default_unit: m^3/s
-  description:
-  - Maximum D-T fusion reactivity on the supplied/reconstructed radial profile.
+  description: Maximum D-T fusion reactivity on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e-26
 Rr_DDn:
   default_unit: 1/s
-  description:
-  - D-D fusion reaction rate (He3+n branch).
+  description: D-D fusion reaction rate (He3+n branch).
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000000000.0
 sigmav_DDn:
   default_unit: m^3/s
-  description:
-  - D-D (He3+n) branch reactivity.
+  description: D-D (He3+n) branch reactivity.
   shape: 1
   default_relation:
   - DDn reactivity BoschHale
@@ -1309,14 +1355,12 @@ sigmav_DDn:
   abs_tol: 1.0e-26
 sigmav_DDn_peak:
   default_unit: m^3/s
-  description:
-  - Maximum D-D (He3+n) branch reactivity on the supplied/reconstructed radial profile.
+  description: Maximum D-D (He3+n) branch reactivity on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e-26
 sigmav_DD:
   default_unit: m^3/s
-  description:
-  - Total D-D fusion reactivity.
+  description: Total D-D fusion reactivity.
   shape: 1
   default_relation:
   - DD reactivity BoschHale
@@ -1324,21 +1368,18 @@ sigmav_DD:
   abs_tol: 1.0e-26
 sigmav_DD_peak:
   default_unit: m^3/s
-  description:
-  - Maximum total D-D fusion reactivity on the supplied/reconstructed radial profile.
+  description: Maximum total D-D fusion reactivity on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e-26
 Rr_DDp:
   default_unit: 1/s
-  description:
-  - D-D fusion reaction rate (T+p branch).
+  description: D-D fusion reaction rate (T+p branch).
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000000000.0
 sigmav_DDp:
   default_unit: m^3/s
-  description:
-  - D-D (T+p) branch reactivity.
+  description: D-D (T+p) branch reactivity.
   shape: 1
   default_relation:
   - DDp reactivity BoschHale
@@ -1346,21 +1387,18 @@ sigmav_DDp:
   abs_tol: 1.0e-26
 sigmav_DDp_peak:
   default_unit: m^3/s
-  description:
-  - Maximum D-D (T+p) branch reactivity on the supplied/reconstructed radial profile.
+  description: Maximum D-D (T+p) branch reactivity on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e-26
 Rr_DHe3:
   default_unit: 1/s
-  description:
-  - D-He3 fusion reaction rate.
+  description: D-He3 fusion reaction rate.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000000000.0
 sigmav_DHe3:
   default_unit: m^3/s
-  description:
-  - D-He3 fusion reactivity.
+  description: D-He3 fusion reactivity.
   shape: 1
   default_relation:
   - DHe3 reactivity BoschHale
@@ -1368,21 +1406,18 @@ sigmav_DHe3:
   abs_tol: 1.0e-26
 sigmav_DHe3_peak:
   default_unit: m^3/s
-  description:
-  - Maximum D-He3 fusion reactivity on the supplied/reconstructed radial profile.
+  description: Maximum D-He3 fusion reactivity on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e-26
 Rr_TT:
   default_unit: 1/s
-  description:
-  - T-T fusion reaction rate.
+  description: T-T fusion reaction rate.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000000000.0
 sigmav_TT:
   default_unit: m^3/s
-  description:
-  - T-T fusion reactivity.
+  description: T-T fusion reactivity.
   shape: 1
   default_relation:
   - TT reactivity CF88
@@ -1390,21 +1425,18 @@ sigmav_TT:
   abs_tol: 1.0e-26
 sigmav_TT_peak:
   default_unit: m^3/s
-  description:
-  - Maximum T-T fusion reactivity on the supplied/reconstructed radial profile.
+  description: Maximum T-T fusion reactivity on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e-26
 Rr_He3He3:
   default_unit: 1/s
-  description:
-  - He3-He3 fusion reaction rate.
+  description: He3-He3 fusion reaction rate.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000000000.0
 sigmav_He3He3:
   default_unit: m^3/s
-  description:
-  - He3-He3 fusion reactivity.
+  description: He3-He3 fusion reactivity.
   shape: 1
   default_relation:
   - He3He3 reactivity CF88
@@ -1412,35 +1444,30 @@ sigmav_He3He3:
   abs_tol: 1.0e-26
 sigmav_He3He3_peak:
   default_unit: m^3/s
-  description:
-  - Maximum He3-He3 fusion reactivity on the supplied/reconstructed radial profile.
+  description: Maximum He3-He3 fusion reactivity on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e-26
 Rr_THe3:
   default_unit: 1/s
-  description:
-  - T-He3 fusion reaction rate.
+  description: T-He3 fusion reaction rate.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000000000.0
 Rr_THe3_D:
   default_unit: 1/s
-  description:
-  - T-He3 fusion reaction rate for the alpha + D branch.
+  description: T-He3 fusion reaction rate for the alpha + D branch.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000000000.0
 Rr_THe3_np:
   default_unit: 1/s
-  description:
-  - T-He3 fusion reaction rate for the alpha + n + p branch.
+  description: T-He3 fusion reaction rate for the alpha + n + p branch.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000000000.0
 sigmav_THe3:
   default_unit: m^3/s
-  description:
-  - T-He3 fusion reactivity.
+  description: T-He3 fusion reactivity.
   shape: 1
   default_relation:
   - THe3 reactivity CF88
@@ -1448,14 +1475,12 @@ sigmav_THe3:
   abs_tol: 1.0e-26
 sigmav_THe3_peak:
   default_unit: m^3/s
-  description:
-  - Maximum total T-He3 fusion reactivity on the supplied/reconstructed radial profile.
+  description: Maximum total T-He3 fusion reactivity on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e-26
 sigmav_THe3_D:
   default_unit: m^3/s
-  description:
-  - T-He3 branch reactivity for T + He3 -> alpha + D.
+  description: T-He3 branch reactivity for T + He3 -> alpha + D.
   shape: 1
   default_relation:
   - THe3_D reactivity CF88
@@ -1463,14 +1488,12 @@ sigmav_THe3_D:
   abs_tol: 1.0e-26
 sigmav_THe3_D_peak:
   default_unit: m^3/s
-  description:
-  - Maximum T-He3 alpha+D branch reactivity on the supplied/reconstructed radial profile.
+  description: Maximum T-He3 alpha+D branch reactivity on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e-26
 sigmav_THe3_np:
   default_unit: m^3/s
-  description:
-  - T-He3 branch reactivity for T + He3 -> alpha + n + p.
+  description: T-He3 branch reactivity for T + He3 -> alpha + n + p.
   shape: 1
   default_relation:
   - THe3_np reactivity CF88
@@ -1478,427 +1501,310 @@ sigmav_THe3_np:
   abs_tol: 1.0e-26
 sigmav_THe3_np_peak:
   default_unit: m^3/s
-  description:
-  - Maximum T-He3 alpha+n+p branch reactivity on the supplied/reconstructed radial profile.
+  description: Maximum T-He3 alpha+n+p branch reactivity on the supplied/reconstructed radial profile.
   domain: '[0, inf)'
   abs_tol: 1.0e-26
 Ar_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Ar ionization.
+  description: AMJUEL H.2 rate coefficient for Ar ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Ar_plus_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Ar plus ionization.
+  description: AMJUEL H.2 rate coefficient for Ar plus ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Ar_proton_elastic_diffusion_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Ar proton elastic diffusion.
+  description: AMJUEL H.2 rate coefficient for Ar proton elastic diffusion.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Ar_proton_elastic_total_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Ar proton elastic total.
+  description: AMJUEL H.2 rate coefficient for Ar proton elastic total.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 B_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for B ionization.
+  description: AMJUEL H.2 rate coefficient for B ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 B_plus_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for B plus ionization.
+  description: AMJUEL H.2 rate coefficient for B plus ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Be_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Be ionization.
+  description: AMJUEL H.2 rate coefficient for Be ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Be_plus_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Be plus ionization.
+  description: AMJUEL H.2 rate coefficient for Be plus ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 C_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for C ionization.
+  description: AMJUEL H.2 rate coefficient for C ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 C_plus_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for C plus ionization.
+  description: AMJUEL H.2 rate coefficient for C plus ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Fe_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Fe ionization.
+  description: AMJUEL H.2 rate coefficient for Fe ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Fe_plus_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Fe plus ionization.
+  description: AMJUEL H.2 rate coefficient for Fe plus ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_charge_exchange_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H2 charge exchange.
+  description: AMJUEL H.2 rate coefficient for H2 charge exchange.
   default_relation:
   - AMJUEL H.2 2.26 H2 charge exchange rate
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_dissociation_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H2 dissociation.
+  description: AMJUEL H.2 rate coefficient for H2 dissociation.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_dissociation_via_h_minus_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H2 dissociation via h minus.
+  description: AMJUEL H.2 rate coefficient for H2 dissociation via h minus.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_dissociative_attachment_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H2 dissociative attachment.
+  description: AMJUEL H.2 rate coefficient for H2 dissociative attachment.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_dissociative_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.4 rate coefficient for H2 dissociative ionization.
+  description: AMJUEL H.4 rate coefficient for H2 dissociative ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_mad_via_h2_plus_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.4 rate coefficient for H2 molecular-assisted dissociation via H2+.
+  description: AMJUEL H.4 rate coefficient for H2 molecular-assisted dissociation via H2+.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_mad_via_h_minus_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.4 rate coefficient for H2 molecular-assisted dissociation via H-.
+  description: AMJUEL H.4 rate coefficient for H2 molecular-assisted dissociation via H-.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_mai_via_h2_plus_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.4 rate coefficient for H2 molecular-assisted ionization via H2+.
+  description: AMJUEL H.4 rate coefficient for H2 molecular-assisted ionization via H2+.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_mar_via_h2_plus_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.4 rate coefficient for H2 molecular-assisted recombination via H2+.
+  description: AMJUEL H.4 rate coefficient for H2 molecular-assisted recombination via H2+.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_mar_via_h_minus_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.4 rate coefficient for H2 molecular-assisted recombination via H-.
+  description: AMJUEL H.4 rate coefficient for H2 molecular-assisted recombination via H-.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_molecular_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.4 rate coefficient for H2 molecular ionization.
+  description: AMJUEL H.4 rate coefficient for H2 molecular ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_plus_dissociative_recombination_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H2 plus dissociative recombination.
+  description: AMJUEL H.2 rate coefficient for H2 plus dissociative recombination.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_proton_elastic_diffusion_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H2 proton elastic diffusion.
+  description: AMJUEL H.2 rate coefficient for H2 proton elastic diffusion.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H2_proton_elastic_total_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H2 proton elastic total.
+  description: AMJUEL H.2 rate coefficient for H2 proton elastic total.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H_charge_exchange_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H charge exchange.
+  description: AMJUEL H.2 rate coefficient for H charge exchange.
   default_relation:
   - AMJUEL H.2 2.25 H charge exchange Langevin rate
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H ionization.
+  description: AMJUEL H.2 rate coefficient for H ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H_proton_elastic_diffusion_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H proton elastic diffusion.
+  description: AMJUEL H.2 rate coefficient for H proton elastic diffusion.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H_proton_elastic_total_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H proton elastic total.
+  description: AMJUEL H.2 rate coefficient for H proton elastic total.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H_proton_impact_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for H proton impact ionization.
+  description: AMJUEL H.2 rate coefficient for H proton impact ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 H_recombination_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.4 rate coefficient for H recombination (radiative + three-body).
+  description: AMJUEL H.4 rate coefficient for H recombination (radiative + three-body).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 He_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for He ionization.
+  description: AMJUEL H.2 rate coefficient for He ionization.
   default_relation:
   - AMJUEL H.2 2.36 He ionization STRAHL rate
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 He_plus_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for He plus ionization.
+  description: AMJUEL H.2 rate coefficient for He plus ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 He_proton_elastic_diffusion_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for He proton elastic diffusion.
+  description: AMJUEL H.2 rate coefficient for He proton elastic diffusion.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 He_proton_elastic_total_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for He proton elastic total.
+  description: AMJUEL H.2 rate coefficient for He proton elastic total.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 He_self_elastic_diffusion_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for He self elastic diffusion.
+  description: AMJUEL H.2 rate coefficient for He self elastic diffusion.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 He_self_elastic_total_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for He self elastic total.
+  description: AMJUEL H.2 rate coefficient for He self elastic total.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Kr_proton_elastic_diffusion_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Kr proton elastic diffusion.
+  description: AMJUEL H.2 rate coefficient for Kr proton elastic diffusion.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Kr_proton_elastic_total_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Kr proton elastic total.
+  description: AMJUEL H.2 rate coefficient for Kr proton elastic total.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 N2_dissociation_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for N2 dissociation.
+  description: AMJUEL H.2 rate coefficient for N2 dissociation.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 N2_dissociative_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for N2 dissociative ionization.
+  description: AMJUEL H.2 rate coefficient for N2 dissociative ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 N2_molecular_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for N2 molecular ionization.
+  description: AMJUEL H.2 rate coefficient for N2 molecular ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 N2_plus_dissociative_excitation_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for N2 plus dissociative excitation.
+  description: AMJUEL H.2 rate coefficient for N2 plus dissociative excitation.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 N2_plus_dissociative_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for N2 plus dissociative ionization.
+  description: AMJUEL H.2 rate coefficient for N2 plus dissociative ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 N2_plus_dissociative_recombination_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for N2 plus dissociative recombination.
+  description: AMJUEL H.2 rate coefficient for N2 plus dissociative recombination.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 N2_plus_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for N2 plus ionization.
+  description: AMJUEL H.2 rate coefficient for N2 plus ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 N_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for N ionization.
+  description: AMJUEL H.2 rate coefficient for N ionization.
   default_relation:
   - AMJUEL H.2 2.45 N ionization Brook rate
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Ne_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Ne ionization.
+  description: AMJUEL H.2 rate coefficient for Ne ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Ne_plus_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Ne plus ionization.
+  description: AMJUEL H.2 rate coefficient for Ne plus ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Ne_proton_elastic_diffusion_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Ne proton elastic diffusion.
+  description: AMJUEL H.2 rate coefficient for Ne proton elastic diffusion.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Ne_proton_elastic_total_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Ne proton elastic total.
+  description: AMJUEL H.2 rate coefficient for Ne proton elastic total.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 O_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for O ionization.
+  description: AMJUEL H.2 rate coefficient for O ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 O_plus_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for O plus ionization.
+  description: AMJUEL H.2 rate coefficient for O plus ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 W_ionization_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for W ionization.
+  description: AMJUEL H.2 rate coefficient for W ionization.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Xe_proton_elastic_diffusion_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Xe proton elastic diffusion.
+  description: AMJUEL H.2 rate coefficient for Xe proton elastic diffusion.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 Xe_proton_elastic_total_rate:
   default_unit: m^3/s
-  description:
-  - AMJUEL H.2 rate coefficient for Xe proton elastic total.
+  description: AMJUEL H.2 rate coefficient for Xe proton elastic total.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e-30
 P_fus_DT:
   aliases:
   - p_dt_total_mw  # PROCESS physics_variables.py
   - p_plasma_dt_mw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Total D-T fusion power.
+  description: Total D-T fusion power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DT_alpha:
   aliases:
   - P_alpha_DT
@@ -1906,335 +1812,260 @@ P_fus_DT_alpha:
   - p_alpha_total_mw  # PROCESS physics_variables.py
   - p_plasma_alpha_mw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Alpha power from D-T fusion.
+  description: Alpha power from D-T fusion.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DT_n:
   default_unit: W
-  description:
-  - Neutron power from D-T fusion.
+  description: Neutron power from D-T fusion.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DD:
   aliases:
   - p_dd_total_mw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Total D-D fusion power.
+  description: Total D-D fusion power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DDn:
   default_unit: W
-  description:
-  - D-D fusion power from the He3+n branch.
+  description: D-D fusion power from the He3+n branch.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DDn_He3:
   aliases:
   - P_He3_DD
   default_unit: W
-  description:
-  - Helium-3 power from D-D fusion (He3+n branch).
+  description: Helium-3 power from D-D fusion (He3+n branch).
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DDn_n:
   default_unit: W
-  description:
-  - Neutron power from D-D fusion (He3+n branch).
+  description: Neutron power from D-D fusion (He3+n branch).
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DDp:
   default_unit: W
-  description:
-  - D-D fusion power from the T+p branch.
+  description: D-D fusion power from the T+p branch.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DDp_T:
   aliases:
   - P_T_DD
   default_unit: W
-  description:
-  - Triton power from D-D fusion (T+p branch).
+  description: Triton power from D-D fusion (T+p branch).
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DDp_p:
   aliases:
   - P_p_DD
   default_unit: W
-  description:
-  - Proton power from D-D fusion (T+p branch).
+  description: Proton power from D-D fusion (T+p branch).
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DHe3:
   aliases:
   - p_dhe3_total_mw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Total D-He3 fusion power.
+  description: Total D-He3 fusion power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DHe3_alpha:
   aliases:
   - P_alpha_DHe3
   default_unit: W
-  description:
-  - Alpha power from D-He3 fusion.
+  description: Alpha power from D-He3 fusion.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_DHe3_p:
   aliases:
   - P_p_DHe3
   default_unit: W
-  description:
-  - Proton power from D-He3 fusion.
+  description: Proton power from D-He3 fusion.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_He3He3:
   default_unit: W
-  description:
-  - Total He3-He3 fusion power.
+  description: Total He3-He3 fusion power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_He3He3_alpha:
   aliases:
   - P_alpha_He3He3
   default_unit: W
-  description:
-  - Alpha power from He3-He3 fusion.
+  description: Alpha power from He3-He3 fusion.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_He3He3_p:
   aliases:
   - P_p_He3He3
   default_unit: W
-  description:
-  - Combined proton power from He3-He3 fusion.
+  description: Combined proton power from He3-He3 fusion.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_TT:
   default_unit: W
-  description:
-  - Total T-T fusion power.
+  description: Total T-T fusion power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_TT_alpha:
   aliases:
   - P_alpha_TT
   default_unit: W
-  description:
-  - Alpha power from T-T fusion.
+  description: Alpha power from T-T fusion.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_TT_n:
   default_unit: W
-  description:
-  - Combined neutron power from T-T fusion.
+  description: Combined neutron power from T-T fusion.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_THe3:
   default_unit: W
-  description:
-  - Total T-He3 fusion power.
+  description: Total T-He3 fusion power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_THe3_D:
   default_unit: W
-  description:
-  - T-He3 fusion power from the alpha+D branch.
+  description: T-He3 fusion power from the alpha+D branch.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_THe3_D_alpha:
   aliases:
   - P_alpha_THe3_D
   default_unit: W
-  description:
-  - Alpha power from the T-He3 alpha+D branch.
+  description: Alpha power from the T-He3 alpha+D branch.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_THe3_D_D:
   aliases:
   - P_D_THe3_D
   default_unit: W
-  description:
-  - Deuteron power from the T-He3 alpha+D branch.
+  description: Deuteron power from the T-He3 alpha+D branch.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_THe3_np:
   default_unit: W
-  description:
-  - T-He3 fusion power from the alpha+n+p branch.
+  description: T-He3 fusion power from the alpha+n+p branch.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_THe3_np_alpha:
   aliases:
   - P_alpha_THe3_np
   default_unit: W
-  description:
-  - Alpha power from the T-He3 alpha+n+p branch.
+  description: Alpha power from the T-He3 alpha+n+p branch.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_THe3_np_n:
   default_unit: W
-  description:
-  - Neutron power from the T-He3 alpha+n+p branch.
+  description: Neutron power from the T-He3 alpha+n+p branch.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_THe3_np_p:
   aliases:
   - P_p_THe3_np
   default_unit: W
-  description:
-  - Proton power from the T-He3 alpha+n+p branch.
+  description: Proton power from the T-He3 alpha+n+p branch.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_charged:
   aliases:
   - p_charged_particle_mw  # PROCESS physics_variables.py
   - p_non_alpha_charged_mw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Charged-particle fusion power.
+  description: Charged-particle fusion power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_neutron:  # CFSPOPCON variables.yaml
   aliases:
   - p_neutron_total_mw  # PROCESS physics_variables.py
   - p_plasma_neutron_mw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Neutron fusion power.
+  description: Neutron fusion power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 neutron_rate:  # CHECK imported from cfspopcon (fusion_reaction/neutron_flux_to_walls); CFSPOPCON variables.yaml
   default_unit: 1/s
-  description:
-  - Total neutron production rate, summed over all neutron-producing fusion channels.
+  description: Total neutron production rate, summed over all neutron-producing fusion channels.
   domain: '[0, inf)'
   abs_tol: 10000000000.0
-  solver_domain: '[0, inf)'
 P_th_tot:
+  # Plant thermal power delivered to the power cycle, not a plasma
+  # quantity -- it pairs with P_elec_tot/P_e_net below.  No relation produces
+  # or consumes it; it is declaration-only.
+  aliases:
+  - P_therm  # Helios
   default_unit: W
-  description:
-  - Total thermal power.
+  description: Total thermal power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_elec_tot:
   aliases:
   - P_e_net
   default_unit: W
-  description:
-  - Gross electric power.
+  description: Gross electric power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_fus_el:
   default_unit: W
-  description:
-  - Electric power output.
+  description: Electric power output.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_aux:
   default_unit: W
   aliases:
   - P_auxiliary_absorbed  # CFSPOPCON variables.yaml
   - P_aux_absorbed  # fusdb legacy alias
-  description:
-  - Total auxiliary heating power absorbed by the plasma.
+  description: Total auxiliary heating power absorbed by the plasma.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000000.0
 P_aux_el:
   default_unit: W
-  description:
-  - Electrical power required by the auxiliary systems.
+  description: Electrical power required by the auxiliary systems.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000000.0
 P_ohmic:  # CFSPOPCON variables.yaml
   aliases:
   - p_plasma_ohmic_mw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Ohmic heating power.
+  description: Ohmic heating power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 inductive_plasma_current:  # CHECK imported from cfspopcon (plasma_current); cfspopcon uses MA, fusdb uses A
   default_unit: A
   aliases:
   - I_inductive  # fusdb legacy alias
   - f_c_plasma_inductive  # PROCESS physics_variables.py
-  description:
-  - Inductively-driven plasma current.
+  description: Inductively-driven plasma current.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 10000.0
 spitzer_resistivity:  # CHECK imported from cfspopcon (plasma_current/resistive_heating)
   default_unit: ohm*m
-  description:
-  - Parallel Spitzer loop resistivity.
+  description: Parallel Spitzer loop resistivity.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e-12
 neoclassical_loop_resistivity:  # CHECK imported from cfspopcon (plasma_current/resistive_heating); CFSPOPCON variables.yaml
   default_unit: ohm*m
-  description:
-  - Neoclassical loop resistivity including impurity ions and trapped-particle enhancement.
+  description: Neoclassical loop resistivity including impurity ions and trapped-particle enhancement.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e-12
 trapped_particle_fraction:  # CHECK imported from cfspopcon (plasma_current/resistive_heating)
   default_unit: dimensionless
-  description:
-  - Resistivity enhancement factor due to trapped particles.
+  description: Resistivity enhancement factor due to trapped particles.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 resistivity_trapped_enhancement_method:  # CHECK imported from cfspopcon (plasma_current/resistive_heating); method selector 1/2/3
   default_unit: dimensionless
-  description:
-  - Selector for the trapped-particle resistivity-enhancement model (1, 2, or 3).
+  description: Selector for the trapped-particle resistivity-enhancement model (1, 2, or 3).
   default: 3
   abs_tol: 0.001
 current_relaxation_time:  # CHECK imported from cfspopcon (plasma_current/resistive_heating)
   aliases:
   - t_plasma_res_diffusion  # PROCESS physics_variables.py
   default_unit: s
-  description:
-  - Current relaxation (resistive diffusion) time.
+  description: Current relaxation (resistive diffusion) time.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 loop_voltage:  # CHECK imported from cfspopcon (plasma_current/resistive_heating)
   default_unit: V
@@ -2242,20 +2073,16 @@ loop_voltage:  # CHECK imported from cfspopcon (plasma_current/resistive_heating
   - V_loop  # fusdb legacy alias
   - Vloop  # OpenPOPCON src/openpopcon.py
   - v_plasma_loop_burn  # PROCESS physics_variables.py
-  description:
-  - Toroidal loop voltage at flat-top.
+  description: Toroidal loop voltage at flat-top.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 # --- Flux consumption (cfspopcon plasma_current/flux_consumption) -------------
 internal_inductivity:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: dimensionless
   aliases:
   - ind_plasma_internal_norm  # CHECK PROCESS name (plasma_geometry); PROCESS li(3); PROCESS physics_variables.py
-  description:
-  - Normalised internal inductance of the plasma.
+  description: Normalised internal inductance of the plasma.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
   # CHECK gate: the cfspopcon Wesson inductivity stays the default; the PROCESS
   # Menard spherical-tokamak fit is opt-in.
@@ -2265,15 +2092,13 @@ safety_factor_on_axis:  # CHECK imported from cfspopcon (plasma_current/flux_con
   default_unit: dimensionless
   aliases:
   - q0  # PROCESS physics_variables.py
-  description:
-  - Safety factor on the magnetic axis.
+  description: Safety factor on the magnetic axis.
   domain: (0, inf)
   default: 1.0
   abs_tol: 0.001
 internal_inductance:  # CHECK imported from cfspopcon (plasma_current/flux_consumption); CFSPOPCON variables.yaml
   default_unit: H
-  description:
-  - Internal self-inductance of the plasma.
+  description: Internal self-inductance of the plasma.
   domain: (0, inf)
   solver_domain: '[1e-30, inf)'
   abs_tol: 1.0e-9
@@ -2283,148 +2108,123 @@ internal_inductance:  # CHECK imported from cfspopcon (plasma_current/flux_consu
   - Internal inductance (cylindrical)
 external_inductance:  # CHECK imported from cfspopcon (plasma_current/flux_consumption); producer in the Barr sub-model; CFSPOPCON variables.yaml
   default_unit: H
-  description:
-  - External self-inductance of the plasma.
+  description: External self-inductance of the plasma.
   domain: (0, inf)
   solver_domain: '[1e-30, inf)'
   abs_tol: 1.0e-9
 vertical_field_mutual_inductance:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: dimensionless
-  description:
-  - Mutual inductance linking the plasma surface to the vertical field.
+  description: Mutual inductance linking the plasma surface to the vertical field.
   domain: (0, inf)
   abs_tol: 0.001
 invmu_0_dLedR:  # CHECK imported from cfspopcon (plasma_current/flux_consumption); Barr 2018 eq.21
   default_unit: dimensionless
-  description:
-  - (1/mu_0) d(external inductance)/dR term in the Barr vertical-field model.
+  description: (1/mu_0) d(external inductance)/dR term in the Barr vertical-field model.
   abs_tol: 0.001
 vertical_magnetic_field:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: T
-  description:
-  - Vertical magnetic field required for radial force balance.
+  description: Vertical magnetic field required for radial force balance.
   abs_tol: 0.001
 ejima_coefficient:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: dimensionless
-  description:
-  - Ejima coefficient for resistive flux consumption during ramp-up.
+  description: Ejima coefficient for resistive flux consumption during ramp-up.
   domain: (0, inf)
   default: 0.4
   abs_tol: 0.001
 internal_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption); CFSPOPCON variables.yaml
   default_unit: Wb
-  description:
-  - Flux due to the plasma current and internal inductance.
+  description: Flux due to the plasma current and internal inductance.
   domain: '[0, inf)'
   abs_tol: 0.001
 external_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption); CFSPOPCON variables.yaml
   default_unit: Wb
-  description:
-  - Surface flux generated by the plasma current (external inductance).
+  description: Surface flux generated by the plasma current (external inductance).
   domain: '[0, inf)'
   abs_tol: 0.001
 resistive_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption); CFSPOPCON variables.yaml
   default_unit: Wb
-  description:
-  - Resistive flux consumed over the current ramp-up (Ejima).
+  description: Resistive flux consumed over the current ramp-up (Ejima).
   domain: '[0, inf)'
   abs_tol: 0.001
 poloidal_field_flux:  # CHECK imported from cfspopcon (plasma_current/flux_consumption); CFSPOPCON variables.yaml
   default_unit: Wb
-  description:
-  - Surface flux contribution from the vertical (poloidal-field-coil) field.
+  description: Surface flux contribution from the vertical (poloidal-field-coil) field.
   abs_tol: 0.001
 flux_needed_from_CS_over_rampup:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: Wb
-  description:
-  - Total flux needed from the central solenoid over the ramp-up.
+  description: Total flux needed from the central solenoid over the ramp-up.
   abs_tol: 0.001
 total_flux_available_from_CS:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: Wb
-  description:
-  - Total flux available from the central solenoid.
+  description: Total flux available from the central solenoid.
   domain: '[0, inf)'
   abs_tol: 0.001
 max_flattop_duration:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
   default_unit: s
-  description:
-  - Maximum flat-top duration that can be driven by the central solenoid.
+  description: Maximum flat-top duration that can be driven by the central solenoid.
+  # [0, inf), CLOSED at 0: a zero flat-top is a valid (marginal) operating
+  # point -- flux_needed exactly exhausts the CS budget -- and certifies.  Only
+  # a STRICTLY negative flat-top, max_flattop = (total_flux_available_from_CS -
+  # flux_needed)/loop_voltage < 0 (the CS cannot even supply the rampup flux),
+  # is a genuinely infeasible operating point, and is correctly not certified
+  # rather than reported as a value (cfspopcon reports the negative instead).
   domain: '[0, inf)'
   abs_tol: 0.001
 breakdown_flux_consumption:  # CHECK imported from cfspopcon (plasma_current/flux_consumption); CFSPOPCON variables.yaml
   default_unit: Wb
-  description:
-  - Resistive flux required for plasma breakdown.
+  description: Resistive flux required for plasma breakdown.
   abs_tol: 0.001
 P_heating:
   default_unit: W
-  description:
-  - Total plasma heating power (ohmic + charged fusion + auxiliary).
+  description: Total plasma heating power (ohmic + charged fusion + auxiliary).
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 eta_th:
   default_unit: dimensionless
-  description:
-  - Plant thermal/electric efficiency.
+  description: Plant thermal/electric efficiency.
   domain: '[0, 1]'
   abs_tol: 0.001
-  solver_domain: '[0, 1]'
 Q_e:
   default_unit: dimensionless
-  description:
-  - Electric power multiplication.
+  description: Electric power multiplication.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
 P_wall:
   default_unit: W/m^2
-  description:
-  - Fusion power wall loading.
+  description: Fusion power wall loading.
   domain: '[0, inf)'
   abs_tol: 1000.0
 q_wall:
   default_unit: W/m^2
-  description:
-  - Neutron wall loading.
+  description: Neutron wall loading.
   domain: '[0, inf)'
   abs_tol: 10
-  solver_domain: '[0, inf)'
 P_NBI:
   default_unit: W
-  description:
-  - Neutral beam injected power.
+  description: Neutral beam injected power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_LHCD:
   default_unit: W
-  description:
-  - Lower hybrid coupled power.
+  description: Lower hybrid coupled power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_ICRF:
   default_unit: W
-  description:
-  - ICRF coupled power.
+  description: ICRF coupled power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_ECRH:
   default_unit: W
-  description:
-  - ECRH coupled power.
+  description: ECRH coupled power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_OL_thresh:
   default_unit: W
-  description:
-  - Ohmic-L transition threshold power.
+  description: Ohmic-L transition threshold power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
   default_relation:
   - Ohmic-L transition threshold power
 P_LH:
@@ -2432,44 +2232,35 @@ P_LH:
   aliases:
   - P_LH_thresh  # CFSPOPCON variables.yaml
   - p_l_h_threshold_mw  # PROCESS physics_variables.py
-  description:
-  - L-H transition threshold power.
+  description: L-H transition threshold power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
   # CHECK gate: keep fusdb's simplified relation as the default producer; the full
   # cfspopcon Martin+Ryter version is off unless explicitly included.
   default_relation:
   - L-H transition threshold power
 P_LI_thresh:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power); CFSPOPCON variables.yaml
   default_unit: W
-  description:
-  - L-I transition threshold power.
+  description: L-I transition threshold power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
   # CHECK gate: HubbardNF17 is the default I-mode threshold scaling; AUG and
   # HubbardNF12 are off unless explicitly included.
   default_relation:
   - L-I transition threshold power HubbardNF17
 ratio_of_P_SOL_to_P_LH:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power)
   default_unit: dimensionless
-  description:
-  - Ratio of power crossing the separatrix to the L-H threshold power.
+  description: Ratio of power crossing the separatrix to the L-H threshold power.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 ratio_of_P_SOL_to_P_LI:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power)
   default_unit: dimensionless
-  description:
-  - Ratio of power crossing the separatrix to the L-I threshold power.
+  description: Ratio of power crossing the separatrix to the L-I threshold power.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 confinement_threshold_scalar:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power)
   default_unit: dimensionless
-  description:
-  - Multiplicative tuning factor applied to the L-H / L-I threshold power scalings.
+  description: Multiplicative tuning factor applied to the L-H / L-I threshold power scalings.
   default: 1.0
   abs_tol: 0.001
 P_sep:
@@ -2478,19 +2269,21 @@ P_sep:
   - power_crossing_separatrix  # CFSPOPCON variables.yaml
   - p_plasma_separatrix_mw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Power across the separatrix.
+  description: Power across the separatrix.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
+  # Gate: fusdb's own "Power crossing the separatrix" (P_in - P_rad) stays the
+  # default.  The PROCESS form takes the total radiation off the HEATING power
+  # instead, which differs once the core-radiation-corrected loss power is in
+  # play; it is opt-in.
+  default_relation:
+  - Power crossing the separatrix
 lambda_q:  # CHECK imported from cfspopcon (scrape_off_layer/lambda_q); cfspopcon uses mm, fusdb uses m; CFSPOPCON variables.yaml
   default_unit: m
   aliases:
   - heat_flux_decay_length  # fusdb legacy alias
-  description:
-  - Scrape-off-layer heat-flux decay length.
+  description: Scrape-off-layer heat-flux decay length.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e-5
   # CHECK gate: Eich regression 15 is the default (cfspopcon's SPARC choice); the
   # Brunner / Eich-9 / Eich-14 scalings are off unless explicitly included.
@@ -2500,15 +2293,12 @@ B_pol_out_mid:  # CHECK imported from cfspopcon (scrape_off_layer)
   default_unit: T
   aliases:
   - B_pol_omp  # CFSPOPCON variables.yaml
-  description:
-  - Poloidal magnetic field at the outboard midplane.
+  description: Poloidal magnetic field at the outboard midplane.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 lambda_q_factor:  # CHECK imported from cfspopcon (scrape_off_layer/lambda_q); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Multiplicative tuning factor applied to the lambda_q scalings.
+  description: Multiplicative tuning factor applied to the lambda_q scalings.
   domain: (0, inf)
   default: 1.0
   abs_tol: 0.001
@@ -2517,15 +2307,12 @@ B_t_out_mid:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_densit
   aliases:
   - B_tor_omp  # CFSPOPCON variables.yaml
   - b_plasma_outboard_toroidal  # CHECK PROCESS name (plasma_fields); same formula R*B0/(R+a); PROCESS physics_variables.py
-  description:
-  - Toroidal magnetic field at the outboard midplane.
+  description: Toroidal magnetic field at the outboard midplane.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 fieldline_pitch_at_omp:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_density); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Ratio of total to poloidal field (B_total / B_poloidal) at the outboard midplane.
+  description: Ratio of total to poloidal field (B_total / B_poloidal) at the outboard midplane.
   domain: (0, inf)
   solver_domain: '[1, inf)'
   abs_tol: 0.001
@@ -2533,89 +2320,72 @@ fraction_of_P_SOL_to_divertor:  # CHECK imported from cfspopcon (scrape_off_laye
   aliases:
   - f_p_div_lower  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Fraction of the scrape-off-layer power directed to the divertor target considered.
+  description: Fraction of the scrape-off-layer power directed to the divertor target considered.
   domain: '[0, 1]'
   abs_tol: 0.001
 q_parallel:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_density); cfspopcon displays GW/m^2; CFSPOPCON variables.yaml
   default_unit: W/m^2
   aliases:
   - parallel_heat_flux_density  # CFSPOPCON variables.yaml
-  description:
-  - Parallel heat-flux density entering the flux tube at the outboard midplane.
+  description: Parallel heat-flux density entering the flux tube at the outboard midplane.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000.0
 q_perp:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_density); cfspopcon displays MW/m^2; CFSPOPCON variables.yaml
   default_unit: W/m^2
   aliases:
   - perpendicular_heat_flux_density  # CFSPOPCON variables.yaml
-  description:
-  - Perpendicular heat-flux density at the outboard midplane.
+  description: Perpendicular heat-flux density at the outboard midplane.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000.0
 PB_over_R:  # CHECK imported from cfspopcon (metrics/heat_exhaust_metrics)
   default_unit: W*T/m
-  description:
-  - Heat-exhaust proxy P_sep * B0 / R0 (scales like the parallel heat flux into the SOL).
+  aliases:
+  - P_sep_B0_R0  # SPARC PRD Table 1
+  description: Heat-exhaust proxy P_sep * B0 / R0 (scales like the parallel heat flux into the SOL).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0
 PBpRnSq:  # CHECK imported from cfspopcon (metrics/heat_exhaust_metrics); CFSPOPCON variables.yaml
   default_unit: W*T*m^5
-  description:
-  - Heat-exhaust proxy P_sep * (B0/q_star) / R0 / n_e^2 (scales like the detachment impurity fraction).
+  description: Heat-exhaust proxy P_sep * (B0/q_star) / R0 / n_e^2 (scales like the detachment impurity fraction).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
 # --- SOL two-point model (cfspopcon scrape_off_layer/two_point_model) ---------
 parallel_connection_length:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON variables.yaml
   default_unit: m
-  description:
-  - Parallel connection length from the outboard midplane to the target.
+  description: Parallel connection length from the outboard midplane to the target.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 kappa_e0:  # CHECK imported from cfspopcon (two_point_model); eV-based Spitzer-Harm constant
   default_unit: W/(eV^3.5*m)
-  description:
-  - Electron heat-conductivity constant (Spitzer-Harm), q_par = kappa_e0 T_e^2.5 dT/dx.
+  description: Electron heat-conductivity constant (Spitzer-Harm), q_par = kappa_e0 T_e^2.5 dT/dx.
   domain: (0, inf)
   default: 2600.0
   abs_tol: 1.0
 toroidal_flux_expansion:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: dimensionless
-  description:
-  - Toroidal flux expansion R_target / R_upstream.
+  description: Toroidal flux expansion R_target / R_upstream.
   domain: (0, inf)
   abs_tol: 0.001
 sheath_heat_transmission_factor:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: dimensionless
-  description:
-  - Sheath heat transmission coefficient (gamma).
+  description: Sheath heat transmission coefficient (gamma).
   domain: (0, inf)
   default: 7.5
   abs_tol: 0.001
 SOL_conduction_fraction:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: dimensionless
-  description:
-  - Fraction of the SOL power transported by electron conduction.
+  description: Fraction of the SOL power transported by electron conduction.
   domain: '[0, 1]'
   default: 1.0
   abs_tol: 0.001
 SOL_power_loss_fraction:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: dimensionless
-  description:
-  - Fraction of the parallel heat flux lost (cooled) along the SOL (f_cooling).
+  description: Fraction of the parallel heat flux lost (cooled) along the SOL (f_cooling).
   domain: '[0, 1]'
-  solver_domain: '[0, 1]'
   abs_tol: 0.001
 SOL_momentum_loss_fraction:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: dimensionless
-  description:
-  - Fraction of momentum lost along the SOL (f_mom-loss).
+  description: Fraction of momentum lost along the SOL (f_mom-loss).
   domain: '[0, 1]'
-  solver_domain: '[0, 1]'
   abs_tol: 0.001
   # CHECK gate: KotovReiter is the default (cfspopcon's SPARC choice); the Sang /
   # Jarvinen / Moulton / PerezH / PerezL fits are off unless explicitly included.
@@ -2623,187 +2393,157 @@ SOL_momentum_loss_fraction:  # CHECK imported from cfspopcon (two_point_model)
   - SOL momentum loss fraction KotovReiter
 upstream_total_pressure:  # CHECK imported from cfspopcon (two_point_model); cfspopcon uses atm, fusdb uses Pa
   default_unit: Pa
-  description:
-  - Total (electron + ion) upstream SOL pressure.
+  description: Total (electron + ion) upstream SOL pressure.
   domain: '[0, inf)'
   abs_tol: 1.0
 target_q_parallel:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON variables.yaml
   default_unit: W/m^2
-  description:
-  - Parallel heat-flux density reaching the divertor target.
+  description: Parallel heat-flux density reaching the divertor target.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000.0
 target_electron_temp:  # CHECK imported from cfspopcon (two_point_model); cfspopcon uses eV, fusdb uses keV
   default_unit: keV
-  description:
-  - Electron temperature at the divertor target.
-  domain: '[0, inf)'
+  description: Electron temperature at the divertor target.
+  domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
   abs_tol: 1.0e-4
 target_electron_temp_basic:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: keV
-  description:
-  - Target electron temperature from the basic two-point model (before corrections).
+  description: Target electron temperature from the basic two-point model (before corrections).
   domain: '[0, inf)'
   abs_tol: 1.0e-4
 target_electron_density:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: 1/m^3
-  description:
-  - Electron density at the divertor target.
+  description: Electron density at the divertor target.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
 target_electron_density_basic:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: 1/m^3
-  description:
-  - Target electron density from the basic two-point model (before corrections).
+  description: Target electron density from the basic two-point model (before corrections).
   domain: '[0, inf)'
   abs_tol: 1.0e+18
 target_electron_flux:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: 1/(m^2*s)
-  description:
-  - Electron flux to the divertor target.
+  description: Electron flux to the divertor target.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
 target_electron_flux_basic:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: 1/(m^2*s)
-  description:
-  - Target electron flux from the basic two-point model (before corrections).
+  description: Target electron flux from the basic two-point model (before corrections).
   domain: '[0, inf)'
   abs_tol: 1.0e+18
 f_vol_loss_target_electron_temp:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Volume-loss correction factor for the target electron temperature.
+  description: Volume-loss correction factor for the target electron temperature.
   domain: '[0, inf)'
   abs_tol: 0.001
 f_vol_loss_target_electron_density:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Volume-loss correction factor for the target electron density.
+  description: Volume-loss correction factor for the target electron density.
   domain: '[0, inf)'
   abs_tol: 0.001
 f_vol_loss_target_electron_flux:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Volume-loss correction factor for the target electron flux.
+  description: Volume-loss correction factor for the target electron flux.
   domain: '[0, inf)'
   abs_tol: 0.001
 f_other_target_electron_temp:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: dimensionless
-  description:
-  - Non-volume-loss correction factor for the target electron temperature.
+  description: Non-volume-loss correction factor for the target electron temperature.
   domain: '[0, inf)'
   abs_tol: 0.001
 f_other_target_electron_density:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: dimensionless
-  description:
-  - Non-volume-loss correction factor for the target electron density.
+  description: Non-volume-loss correction factor for the target electron density.
   domain: '[0, inf)'
   abs_tol: 0.001
 f_other_target_electron_flux:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: dimensionless
-  description:
-  - Non-volume-loss correction factor for the target electron flux.
+  description: Non-volume-loss correction factor for the target electron flux.
   domain: '[0, inf)'
   abs_tol: 0.001
 target_ratio_of_ion_to_electron_temp:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Ratio of ion to electron temperature at the target (tau_t).
+  description: Ratio of ion to electron temperature at the target (tau_t).
   domain: (0, inf)
   default: 1.0
   abs_tol: 0.001
 target_ratio_of_electron_to_ion_density:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Ratio of electron to total-ion density at the target (z_t).
+  description: Ratio of electron to total-ion density at the target (z_t).
   domain: (0, inf)
   default: 1.0
   abs_tol: 0.001
 target_mach_number:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: dimensionless
-  description:
-  - Parallel ion Mach number at the target.
+  description: Parallel ion Mach number at the target.
   domain: (0, inf)
   default: 1.0
   abs_tol: 0.001
 upstream_ratio_of_ion_to_electron_temp:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Ratio of ion to electron temperature upstream.
+  description: Ratio of ion to electron temperature upstream.
   domain: (0, inf)
   default: 1.0
   abs_tol: 0.001
 upstream_ratio_of_electron_to_ion_density:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Ratio of electron to total-ion density upstream.
+  description: Ratio of electron to total-ion density upstream.
   domain: (0, inf)
   default: 1.0
   abs_tol: 0.001
 upstream_mach_number:  # CHECK imported from cfspopcon (two_point_model)
   default_unit: dimensionless
-  description:
-  - Parallel ion Mach number upstream.
+  description: Parallel ion Mach number upstream.
   domain: '[0, inf)'
   default: 0.0
   abs_tol: 0.001
 required_target_electron_temp:  # CHECK imported from cfspopcon (two_point_model/required_power_loss_fraction)
   default_unit: keV
-  description:
-  - Desired electron temperature at the divertor target.
-  domain: '[0, inf)'
+  description: Desired electron temperature at the divertor target.
+  domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
   abs_tol: 1.0e-4
 ionization_volume:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
   default_unit: m^3
-  description:
-  - Divertor ionization volume.
+  description: Divertor ionization volume.
   domain: (0, inf)
   abs_tol: 0.001
 wall_temperature:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
   default_unit: K
-  description:
-  - First-wall temperature (sets the neutral thermal velocity).
+  description: First-wall temperature (sets the neutral thermal velocity).
   domain: (0, inf)
   default: 300.0
   abs_tol: 1.0
 ratio_of_molecular_to_ion_mass:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Ratio of neutral molecular mass to average ion mass.
+  description: Ratio of neutral molecular mass to average ion mass.
   domain: (0, inf)
   default: 2.0
   abs_tol: 0.001
 neutral_flux_density_factor:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models); CFSPOPCON variables.yaml
   default_unit: 1/(m^2*s*Pa)
-  description:
-  - Conversion factor from neutral flux density to neutral pressure.
+  description: Conversion factor from neutral flux density to neutral pressure.
   domain: (0, inf)
   abs_tol: 1.0e15
 target_neutral_pressure:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models); kallenbach producer deferred
   default_unit: Pa
-  description:
-  - Neutral pressure at the divertor target.
+  description: Neutral pressure at the divertor target.
   domain: '[0, inf)'
   abs_tol: 0.001
 separatrix_power_transient:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
   default_unit: W
-  description:
-  - Transient power step across the separatrix driving reattachment.
+  description: Transient power step across the separatrix driving reattachment.
   domain: (0, inf)
   abs_tol: 1000000.0
 ionization_volume_density_factor:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
   default_unit: dimensionless
-  description:
-  - Ratio of the ionization-volume-averaged density to the target electron density.
+  description: Ratio of the ionization-volume-averaged density to the target electron density.
   domain: (0, inf)
   abs_tol: 0.001
 reattachment_time:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
   default_unit: s
-  description:
-  - Time for a detachment front to reattach toward the target after a power transient.
+  description: Time for a detachment front to reattach toward the target after a power transient.
   domain: '[0, inf)'
   abs_tol: 0.001
 # --- Separatrix operational space (cfspopcon separatrix_operational_space) -----
@@ -2811,74 +2551,62 @@ critical_alpha_MHD:  # CHECK imported from cfspopcon (separatrix_operational_spa
   aliases:
   - alpha_crit  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Critical normalized pressure-gradient (alpha_MHD) for the SepOS model.
+  description: Critical normalized pressure-gradient (alpha_MHD) for the SepOS model.
   domain: (0, inf)
   abs_tol: 0.001
 poloidal_sound_larmor_radius:  # CHECK imported from cfspopcon (separatrix_operational_space); CFSPOPCON variables.yaml
   default_unit: m
-  description:
-  - Poloidally-averaged ion sound Larmor radius (rho_s_pol).
+  description: Poloidally-averaged ion sound Larmor radius (rho_s_pol).
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 1.0e-6
 SepOS_LH_transition:  # CHECK imported from cfspopcon (separatrix_operational_space)
   default_unit: dimensionless
-  description:
-  - SepOS L-H transition condition (>1 H-mode, <1 L-mode).
+  description: SepOS L-H transition condition (>1 H-mode, <1 L-mode).
   domain: '[0, inf)'
   abs_tol: 0.001
 SepOS_MHD_limit:  # CHECK imported from cfspopcon (separatrix_operational_space)
   default_unit: dimensionless
-  description:
-  - SepOS ideal-MHD limit condition (>1 above the soft limit).
+  description: SepOS ideal-MHD limit condition (>1 above the soft limit).
   domain: '[0, inf)'
   abs_tol: 0.001
 SepOS_density_limit:  # CHECK imported from cfspopcon (separatrix_operational_space)
   default_unit: dimensionless
-  description:
-  - SepOS L-mode density-limit condition (>1 disrupts unless above the L-H transition).
+  description: SepOS L-mode density-limit condition (>1 disrupts unless above the L-H transition).
   domain: '[0, inf)'
   abs_tol: 0.001
 ion_heat_diffusivity:  # CHECK imported from cfspopcon (separatrix_operational_space)
   default_unit: m^2/s
-  description:
-  - Ion heat diffusivity at the separatrix.
+  description: Ion heat diffusivity at the separatrix.
   domain: (0, inf)
   abs_tol: 0.001
 temp_scale_length_ratio:  # CHECK imported from cfspopcon (separatrix_operational_space); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Ratio of electron to ion temperature gradient scale lengths (L_Te / L_Ti).
+  description: Ratio of electron to ion temperature gradient scale lengths (L_Te / L_Ti).
   domain: (0, inf)
   default: 1.0
   abs_tol: 0.001
 sustainment_power_in_ion_channel:  # CHECK imported from cfspopcon (separatrix_operational_space)
   default_unit: W
-  description:
-  - Power crossing the separatrix carried by the ion channel.
+  description: Power crossing the separatrix carried by the ion channel.
   domain: '[0, inf)'
   abs_tol: 1000000.0
 sustainment_power_in_electron_channel:  # CHECK imported from cfspopcon (separatrix_operational_space)
   default_unit: W
-  description:
-  - Power crossing the separatrix carried by the electron channel.
+  description: Power crossing the separatrix carried by the electron channel.
   domain: '[0, inf)'
   abs_tol: 1000000.0
 P_sep_over_R:
   aliases:
   - p_plasma_separatrix_rmajor_mw  # PROCESS physics_variables.py
   default_unit: W/m
-  description:
-  - P_sep divided by major radius.
+  description: P_sep divided by major radius.
   domain: '[0, inf)'
   abs_tol: 100000.0
 P_sep_B_over_q95AR:
   aliases:
   - p_div_bt_q_aspect_rmajor_mw  # PROCESS physics_variables.py
   default_unit: W*T/m
-  description:
-  - P_sep * B0 / (q95 * A * R).
+  description: P_sep * B0 / (q95 * A * R).
   domain: '[0, inf)'
   abs_tol: 100000.0
 P_loss:
@@ -2887,47 +2615,116 @@ P_loss:
   - p_plasma_loss_mw  # PROCESS physics_variables.py
   - pscalingmw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Power loss across the plasma boundary.
+  description: Power loss across the plasma boundary.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000000.0
+  # Gate: fusdb's own form stays the default everywhere.  The PROCESS variant
+  # (core-radiation-corrected) is opt-in via relation_include.
+  default_relation:
+  - Plasma loss power
+P_rad_core:  # PROCESS radiation_power.py
+  aliases:
+  - p_plasma_inner_rad_mw  # PROCESS physics_variables.py
+  default_unit: W
+  description: Radiated power from inside radius_plasma_core_norm (PROCESS core/edge split).
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+P_rad_edge:  # PROCESS radiation_power.py
+  aliases:
+  - p_plasma_outer_rad_mw  # PROCESS physics_variables.py
+  default_unit: W
+  description: Radiated power from outside radius_plasma_core_norm (PROCESS core/edge split).
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+radius_plasma_core_norm:  # PROCESS impurity_radiation_variables.py
+  default_unit: dimensionless
+  description: Normalised radius bounding the 'core' region for the radiation split.
+  domain: '(0, 1]'
+  default: 0.75
+f_p_plasma_core_rad_reduction:  # PROCESS impurity_radiation_variables.py
+  default_unit: dimensionless
+  description: Fraction of core-region radiation subtracted from the heating power balance.
+  domain: '[0, 1]'
+  default: 0.6
 P_loss_explicit:
   default_unit: W
-  description:
-  - Explicit plasma loss power assembled from exhaust and radiation.
+  description: Explicit plasma loss power assembled from exhaust and radiation.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
 P_brem:
   default_unit: W
   aliases:
   - P_bremsstrahlung
   - P_rad_bremsstrahlung  # CFSPOPCON variables.yaml
   - P_rad_hydrogen_bremsstrahlung  # CFSPOPCON variables.yaml
-  description:
-  - Bremsstrahlung radiated power.
+  description: Bremsstrahlung radiated power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
+  # CHECK gate: fusdb's Z_eff-scaled "Bremsstrahlung radiation" is the default;
+  # cfspopcon's hydrogenic (Z_eff=1) form is opt-in, since it is only correct
+  # alongside impurity cooling curves that already carry the impurity continuum
+  # (selecting both would double-count it).  Both SPARC fixtures include the
+  # cfspopcon form and exclude this one by name.
+  # ONE producer: the HYDROGENIC (fuel-only) bremsstrahlung.  The impurities'
+  # own bremsstrahlung is already inside the cooling-rate L_z total that
+  # `P_cool_imp` carries, so the fuel-only form is the term that composes:
+  #     P_rad = P_sync + P_brem(fuel) + P_cool_imp
+  # The previous default made `P_brem` the TOTAL bremsstrahlung and then
+  # SUBTRACTED the impurity part back out of the L_z total to form `P_line`.
+  # That subtraction is structurally non-positive whenever a reactor has no
+  # impurities -- P_cool_imp is then exactly 0 while P_brem_imp is a small
+  # positive number -- so `P_line` went negative and tripped its [0, inf)
+  # domain on DEMO_2022 and STEP_2024.  Taking each term as its own source
+  # natively provides it removes the subtraction entirely.
+  # `Bremsstrahlung radiation` (Z_eff-weighted TOTAL) stays available by name.
+  default_relation:
+  - Hydrogenic bremsstrahlung (cfspopcon)
+P_cool_imp:
+  default_unit: W
+  aliases:
+  - P_rad_impurity  # CFSPOPCON variables.yaml
+  description: TOTAL impurity radiated power from a cooling-rate (L_z) table --
+    line, recombination continuum and the impurities' own bremsstrahlung, all
+    together. This is what Mavrin/radas/Post-Jensen/PROCESS L_z curves return, so
+    they produce this rather than P_line; P_line is then derived from it by
+    removing the bremsstrahlung already accounted for in P_brem.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  # CHECK gate (moved here from P_line, which these relations used to produce):
+  # Mavrin coronal is the default impurity-radiation method; the noncoronal,
+  # Post-Jensen, PROCESS-table and radas fits are off unless explicitly included.
+  default_relation:
+  - Impurity line radiation (Mavrin coronal)
+P_brem_imp:
+  default_unit: W
+  description: Bremsstrahlung radiated by the impurities alone, i.e. the total
+    bremsstrahlung less its hydrogenic part.
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
 P_line:
   default_unit: W
   aliases:
   - P_rad_line
-  - P_rad_impurity  # CFSPOPCON variables.yaml
-  description:
-  - Line radiated power.
+  description: Line radiated power (recombination continuum included -- the L_z
+    tables it is derived from do not separate the two). Bremsstrahlung is NOT
+    included; that is P_brem, which is the TOTAL bremsstrahlung.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
-  # CHECK gate: Mavrin coronal is the default impurity-radiation method; the
-  # noncoronal and Post-Jensen fits are off unless explicitly included.
+  # P_line now has exactly one producer: it is DERIVED from the impurity cooling
+  # rate by removing the bremsstrahlung that P_brem already carries.  The
+  # method-selection gate that used to live here (Mavrin coronal vs noncoronal vs
+  # Post-Jensen vs ...) moved to P_cool_imp, which is what those relations now
+  # produce.
+  # ONE producer: the cooling-rate total itself, NOT the total minus the
+  # impurity bremsstrahlung.  Cooling-rate tables (Mavrin, radas, Post-Jensen)
+  # return line + recombination continuum + the impurities' own bremsstrahlung
+  # together, and that whole quantity is what pairs with a fuel-only P_brem.
+  # See the note on P_brem above for why the subtracting form was retired.
   default_relation:
-  - Impurity line radiation (Mavrin coronal)
+  - Line radiation equals impurity cooling rate (cfspopcon convention)
 impurity_residence_time:  # CHECK imported from cfspopcon (Mavrin noncoronal radiated power); CFSPOPCON variables.yaml
   default_unit: s
-  description:
-  - Impurity residence time (sets ne*tau for the non-coronal cooling curves).
+  description: Impurity residence time (sets ne*tau for the non-coronal cooling curves).
   domain: (0, inf)
   abs_tol: 0.001
 Lz:  # CHECK imported from cfspopcon (radas coronal_Lz tables); cooling factor
@@ -2935,9 +2732,7 @@ Lz:  # CHECK imported from cfspopcon (radas coronal_Lz tables); cooling factor
   aliases:
   - cooling_factor
   - cooling_curve
-  description:
-  - Coronal radiative cooling factor Lz(T_e, n_e) of a single impurity species
-    (radiated power density = n_e * n_z * Lz).
+  description: Coronal radiative cooling factor Lz(T_e, n_e) of a single impurity species (radiated power density = n_e * n_z * Lz).
   shape: 1
   domain: '[0, inf)'
   abs_tol: 1.0e-40
@@ -2948,8 +2743,7 @@ Lz:  # CHECK imported from cfspopcon (radas coronal_Lz tables); cooling factor
   - Radas coronal cooling factor W
 L_int:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc); Lengyel cooling integral
   default_unit: W*m^3*eV^1.5
-  description:
-  - Cooling-curve integral int(Lz*sqrt(Te) dTe) between target and separatrix temperature.
+  description: Cooling-curve integral int(Lz*sqrt(Te) dTe) between target and separatrix temperature.
   domain: (0, inf)
   # Physical scale is ~1e-31..1e-27 (Lz ~1e-32 W*m^3 x sqrt(Te_eV) x a few hundred eV);
   # without an explicit bound the open (0, inf) domain is clamped at the generic
@@ -2961,27 +2755,23 @@ L_int:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc); Lengyel
   - L_int cooling integral Ne
 edge_impurity_concentration:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Edge impurity concentration required to cool the SOL (Lengyel model).
+  description: Edge impurity concentration required to cool the SOL (Lengyel model).
   domain: '[0, inf)'
   abs_tol: 0.001
 edge_impurity_concentration_in_core:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Edge impurity concentration referred to the core (edge concentration / enrichment).
+  description: Edge impurity concentration referred to the core (edge concentration / enrichment).
   domain: '[0, inf)'
   abs_tol: 0.001
 edge_impurity_enrichment:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Edge-to-core enrichment factor of the seeded edge impurity.
+  description: Edge-to-core enrichment factor of the seeded edge impurity.
   domain: (0, inf)
   default: 1.0
   abs_tol: 0.001
 lengyel_overestimation_factor:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc)
   default_unit: dimensionless
-  description:
-  - Empirical correction dividing the Lengyel edge-impurity concentration (Moulton 2021).
+  description: Empirical correction dividing the Lengyel edge-impurity concentration (Moulton 2021).
   domain: (0, inf)
   default: 1.0
   abs_tol: 0.001
@@ -2991,55 +2781,59 @@ P_sync:
   - P_rad_synchrotron  # CFSPOPCON variables.yaml
   - p_plasma_sync_mw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Synchrotron radiated power.
+  description: Synchrotron radiated power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
   # CHECK gate: the cfspopcon profile-integrated synchrotron relation stays the
   # default; the PROCESS Albajar-Fidone total-power fit is off unless included.
   default_relation:
   - Synchrotron radiation
+P_rad_species:
+  # Line + recombination + bremsstrahlung summed over EVERY species (fuel, ash
+  # and impurities) from one cooling-curve family.  The alternative to the
+  # P_brem + P_line split; see P_rad's gate below.
+  default_unit: W
+  description: Total radiated power from all species (excludes synchrotron).
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
 P_rad:
   aliases:
   - P_radiation  # CFSPOPCON variables.yaml
   - p_plasma_rad_mw  # PROCESS physics_variables.py
   default_unit: W
-  description:
-  - Core radiated power (or total if not separated).
+  description: Core radiated power (or total if not separated).
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
+  # GATE (added with the species-sum alternative): P_rad had NO whitelist, so a
+  # second producer would have been enforced SIMULTANEOUSLY with the
+  # P_brem+P_line+P_sync form rather than replacing it.  The split stays the
+  # default; the uniform species sum is opt-in by name.
+  default_relation:
+  - Total radiated power
 f_rad:  # CHECK imported from cfspopcon (radiated_power/basic_algorithms)
   default_unit: dimensionless
   aliases:
   - core_radiated_power_fraction  # CFSPOPCON variables.yaml
   - rad_fraction_total  # PROCESS physics_variables.py
-  description:
-  - Core radiated power fraction (P_rad / P_in).
+  description: Core radiated power fraction (P_rad / P_in).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 min_P_radiation:  # CHECK imported from cfspopcon (impurities/core_radiator_conc); CFSPOPCON variables.yaml
   default_unit: W
-  description:
-  - Minimum required core radiated power (target for core impurity seeding).
+  description: Minimum required core radiated power (target for core impurity seeding).
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  solver_domain: '[0, inf)'
   # CHECK gate: fraction-based target is the default; the LH-factor target is opt-in.
   default_relation:
   - Minimum radiated power from fraction
 minimum_core_radiated_fraction:  # CHECK imported from cfspopcon (impurities/core_radiator_conc); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Minimum core radiated power expressed as a fraction of the input power.
+  description: Minimum core radiated power expressed as a fraction of the input power.
   domain: '[0, 1]'
   abs_tol: 0.001
 maximum_P_LH_factor_for_P_SOL:  # CHECK imported from cfspopcon (impurities/core_radiator_conc); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Maximum allowed ratio of power crossing the separatrix to the L-H threshold power.
+  description: Maximum allowed ratio of power crossing the separatrix to the L-H threshold power.
   domain: (0, inf)
   abs_tol: 0.001
 Q_sci:
@@ -3047,22 +2841,19 @@ Q_sci:
   - Q
   - Q_phy
   default_unit: dimensionless
-  description:
-  - scientific gain factor Q
+  description: scientific gain factor Q
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
 Q_eng:
   default_unit: dimensionless
-  description:
-  - engineering gain factor Q_eng.
+  description: engineering gain factor Q_eng.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
 Q_cfspopcon:
   default_unit: dimensionless
-  description:
-  - fusion gain on cfspopcon's launched-power convention, P_fus / (P_aux_launched + P_ohmic).
+  description: fusion gain on cfspopcon's launched-power convention, P_fus / (P_aux_launched + P_ohmic).
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
@@ -3073,29 +2864,58 @@ n_la:
   - line_average_n_e
   - nd_plasma_electron_line  # PROCESS physics_variables.py
   default_unit: 1/m^3
-  description:
-  - Line-averaged electron density.
+  description: Line-averaged electron density.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
-  solver_domain: '[0, inf)'
-kappa_ipb:
+kappa_areal:
   default_unit: dimensionless
-  description:
-  - IPB-specific elongation at separatrix.
+  aliases:
+  - kappa_a
+  - areal_elongation  # CFSPOPCON variables.yaml
+  description: Areal elongation, S_phi / (pi a^2) -- the elongation of the equivalent
+    ellipse with the same horizontal minor radius a and the same poloidal
+    cross-sectional area. This is the ITER Physics Basis kappa_A, and the elongation
+    cfspopcon calls ``areal_elongation``. Distinct from kappa_ipb (volume-equivalent)
+    and from kappa (geometric b/a). See :cite:`zohm_2015`.
+  domain: '(0, 10]'
   abs_tol: 0.001
   solver_domain: '[0.1, 10]'
+  default_relation:
+  - Areal elongation from cross-section
+kappa_ipb:
+  default_unit: dimensionless
+  aliases:
+  - kappa_IPB
+  description: >-
+    EFFECTIVE elongation required by the IPB98 implementation,
+    V_p / (2 pi^2 R a^2) -- volume-equivalent, sometimes called Kardaun-corrected.
+    Defined by what the IPB98(y,x) and ITPA20 fits were regressed against rather
+    than by the geometry alone, which is why it is a separate variable from
+    kappa_areal: the two coincide only for a plain ellipse and differ by ~2% at
+    typical design points. See :cite:`zohm_2015`.
+  domain: '(0, 10]'
+  abs_tol: 0.001
+  solver_domain: '[0.1, 10]'
+afuel_total:  # PROCESS physics_variables.py
+  aliases:
+  - m_ions_total_amu  # PROCESS physics_variables.py
+  default_unit: amu
+  description: Mass-averaged mass of ALL plasma ions, impurities and helium ash
+    included. Distinct from afuel, which is the FUEL ion mass -- PROCESS uses
+    m_fuel_amu in the confinement scalings and m_ions_total_amu in the L-H
+    thresholds, and they differ by ~9% at reactor conditions.
+  domain: (0, inf)
+  abs_tol: 0.001
+
 afuel:
   aliases:
   - average_ion_mass  # CFSPOPCON variables.yaml
   - aion
   - M_i  # OpenPOPCON src/openpopcon.py
   - m_fuel_amu  # PROCESS physics_variables.py
-  - m_ions_total_amu  # PROCESS physics_variables.py
   default_unit: amu
-  description:
-  - Average fuel mass number (D/T/He3 only).
+  description: Average fuel mass number (D/T/He3 only).
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 rho:
   aliases:
@@ -3103,55 +2923,82 @@ rho:
   - r_over_a
   default_unit: dimensionless
   shape: 1
-  description:
-  - Normalized minor-radius coordinate used for 1D profiles.
+  description: Normalized minor-radius coordinate used for 1D profiles.
   domain: '[0, 1]'
   abs_tol: 0.001
 temperature_peaking:
   default_unit: dimensionless
-  description:
-  - Peak-to-average electron-temperature profile peaking factor. Sets the electron
-    temperature profile; the ion profile uses ion_temperature_peaking (which
-    defaults to this value).
-  domain: '[1, inf)'
-  solver_domain: '[1, inf)'
+  aliases:
+  - nu_T_e  # SPARC PRD Table 1 (electron temperature peaking)
+  description: Peak-to-average electron-temperature profile peaking factor. Sets the electron temperature profile; the ion profile uses ion_temperature_peaking (which defaults to this value).
+  # Peaking is NOT bounded below at 1: a HOLLOW profile (peak below the
+  # volume average) is physical -- it occurs at the very centre of the core
+  # in real discharges -- and is admissible as long as the density itself
+  # stays positive.  The `[1, inf)` bound this replaces was introduced only
+  # to carry the `max(..., 1.0)` clamps that used to sit inside the relation
+  # bodies (clamps make a relation non-invertible), but it over-stated the
+  # physics and failed reactors whose profile came out marginally hollow
+  # (ARC_V3A at 1 - 4.2e-12, SPARC at 1 - 4.4e-5).
+  domain: (0, inf)
+  solver_domain: '[1e-6, inf)'
   rel_tol: 0.05
   abs_tol: 0.001
 ion_temperature_peaking:  # ion temperature peaking; defaults to temperature_peaking unless set
   default_unit: dimensionless
-  description:
-  - Peak-to-average ion-temperature profile peaking factor. Defaults to the
-    (electron) temperature_peaking; supply it for an independent ion temperature
-    profile.
-  domain: '[1, inf)'
-  solver_domain: '[1, inf)'
+  description: Peak-to-average ion-temperature profile peaking factor. Defaults to the (electron) temperature_peaking; supply it for an independent ion temperature profile.
+  # Peaking is NOT bounded below at 1: a HOLLOW profile (peak below the
+  # volume average) is physical -- it occurs at the very centre of the core
+  # in real discharges -- and is admissible as long as the density itself
+  # stays positive.  The `[1, inf)` bound this replaces was introduced only
+  # to carry the `max(..., 1.0)` clamps that used to sit inside the relation
+  # bodies (clamps make a relation non-invertible), but it over-stated the
+  # physics and failed reactors whose profile came out marginally hollow
+  # (ARC_V3A at 1 - 4.2e-12, SPARC at 1 - 4.4e-5).
+  domain: (0, inf)
+  solver_domain: '[1e-6, inf)'
   rel_tol: 0.05
   abs_tol: 0.001
 density_peaking:  # electron density peaking; alias electron_density_peaking (cfspopcon name)
   aliases:
   - electron_density_peaking  # CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Peak-to-average electron-density profile peaking factor. Sets the electron
-    density profile; the ion profile uses ion_density_peaking (which defaults to
-    this value).
-  domain: '[1, inf)'
-  solver_domain: '[1, inf)'
+  description: Peak-to-average electron-density profile peaking factor. Sets the electron density profile; the ion profile uses ion_density_peaking (which defaults to this value).
+  # Peaking is NOT bounded below at 1: a HOLLOW profile (peak below the
+  # volume average) is physical -- it occurs at the very centre of the core
+  # in real discharges -- and is admissible as long as the density itself
+  # stays positive.  The `[1, inf)` bound this replaces was introduced only
+  # to carry the `max(..., 1.0)` clamps that used to sit inside the relation
+  # bodies (clamps make a relation non-invertible), but it over-stated the
+  # physics and failed reactors whose profile came out marginally hollow
+  # (ARC_V3A at 1 - 4.2e-12, SPARC at 1 - 4.4e-5).
+  domain: (0, inf)
+  solver_domain: '[1e-6, inf)'
   rel_tol: 0.05
   abs_tol: 0.001
-  # Gates duplicate producers: profile-derived peaking wins when peak/average
-  # values are available; Angioni is the fallback default.
+  # One producer: the definitional peak/average ratio.  ``default_relation`` is
+  # the set of relations enforced together, not a preference list, so listing the
+  # empirical Angioni scaling here activated it ALONGSIDE the ratio -- as a
+  # constraint with no output, whose only free variable (the unbounded
+  # ``electron_density_peaking_offset``) then absorbed the disagreement between
+  # them.  Angioni is opted into by name (see tests/cfspopcon_SPARC), which
+  # bypasses this whitelist.
   default_relation:
   - Electron density peaking from peak and average
-  - Electron density peaking (Angioni)
 ion_density_peaking:  # ion density peaking; defaults to density_peaking unless set; CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Peak-to-average ion-density profile peaking factor. Defaults to the electron
-    density_peaking; supply it (or include the Angioni ion variant) for an
-    independent ion density profile.
-  domain: '[1, inf)'
-  solver_domain: '[1, inf)'
+  aliases:
+  - nu_n_i  # SPARC PRD Table 1
+  description: Peak-to-average ion-density profile peaking factor. Defaults to the electron density_peaking; supply it (or include the Angioni ion variant) for an independent ion density profile.
+  # Peaking is NOT bounded below at 1: a HOLLOW profile (peak below the
+  # volume average) is physical -- it occurs at the very centre of the core
+  # in real discharges -- and is admissible as long as the density itself
+  # stays positive.  The `[1, inf)` bound this replaces was introduced only
+  # to carry the `max(..., 1.0)` clamps that used to sit inside the relation
+  # bodies (clamps make a relation non-invertible), but it over-stated the
+  # physics and failed reactors whose profile came out marginally hollow
+  # (ARC_V3A at 1 - 4.2e-12, SPARC at 1 - 4.4e-5).
+  domain: (0, inf)
+  solver_domain: '[1e-6, inf)'
   rel_tol: 0.05
   abs_tol: 0.001
   # Gates producers: profile-derived peaking wins when peak/average values are
@@ -3162,87 +3009,90 @@ ion_density_peaking:  # ion density peaking; defaults to density_peaking unless 
   - Default ion density peaking from electron density peaking
 effective_collisionality:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Effective collisionality used in the Angioni density-peaking scaling.
+  aliases:
+  - nu_eff  # SPARC PRD Table 1
+  description: Effective collisionality used in the Angioni density-peaking scaling.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 electron_density_peaking_offset:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Scalar offset added to the Angioni electron density-peaking scaling.
+  description: Scalar offset added to the Angioni electron density-peaking scaling.
   default: 0.0
   abs_tol: 0.001
 ion_density_peaking_offset:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking); CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Scalar offset added to the Angioni ion density-peaking scaling.
+  description: Scalar offset added to the Angioni ion density-peaking scaling.
   default: 0.0
   abs_tol: 0.001
-dilution:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking); n_i/n_e, supplied or set by composition; CFSPOPCON variables.yaml
+dilution:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking); CFSPOPCON variables.yaml
   aliases:
+  - fuel_dilution
   - plasma_dilution  # OpenPOPCON src/openpopcon.py
   default_unit: dimensionless
-  description:
-  - Fuel-ion dilution, the ratio of fuel-ion to electron density (n_i / n_e).
+  # TERMINOLOGY: f_X are FRACTIONS (n_X/n_i), c_X are CONCENTRATIONS (n_X/n_e),
+  # and this is the FUEL DILUTION -- the fuel share of the electron density.
+  #
+  # It is NOT `c_H` and NOT `n_i/n_e`.  c_H is the HYDROGENIC concentration
+  # (p + D + T)/n_e; the fuel dilution drops protium (ash) and adds He3 (fuel,
+  # at Z = 2).  They coincide only when there is no protium and no He3, which
+  # is every D-T case in the suite -- so the distinction is invisible in the
+  # tests and must be kept straight by definition rather than by measurement.
+  # PROCESS does not use the concept at all.
+  description: >-
+    FUEL DILUTION: the fuel share of the electron density,
+    (n_D + n_T + 2 n_He3) / n_e, charge-weighted so He3 enters at Z = 2.
+    Counts He3 as FUEL and protium as ASH, so it is neither the hydrogenic
+    concentration c_H (p + D + T) nor n_i/n_e.
   domain: (0, 1]
-  solver_domain: '[1e-12, 1]'
   abs_tol: 0.001
+  # cfspopcon's form counts only D and T and derives them from the impurity
+  # concentrations (1 - sum_X c_X Zbar_X).  That is faithful THERE -- cfspopcon
+  # has no He3 fuel and treats all helium as an impurity -- but it is a
+  # SIMPLIFICATION here, so it is not the default; tests/cfspopcon_SPARC selects
+  # it by name so that comparison uses cfspopcon's own definition.
+  default_relation:
+  - Fuel dilution from fuel fractions
 P_in:  # CFSPOPCON variables.yaml
   default_unit: W
-  description:
-  - Total input heating power.
+  description: Total input heating power.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000000.0
 P_external:  # CFSPOPCON variables.yaml
   default_unit: W
-  description:
-  - External heating power (input power minus charged-particle fusion power).
+  description: External heating power (input power minus charged-particle fusion power).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000000.0
 P_aux_launched:
   aliases:
   - P_auxiliary_launched  # CFSPOPCON variables.yaml
   default_unit: W
-  description:
-  - Auxiliary heating power launched toward the plasma (before coupling losses).
+  description: Auxiliary heating power launched toward the plasma (before coupling losses).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000000.0
 fraction_of_external_power_coupled:
   default_unit: dimensionless
-  description:
-  - Fraction of launched external heating power coupled to (absorbed by) the plasma.
+  description: Fraction of launched external heating power coupled to (absorbed by) the plasma.
   domain: '[0, 1]'
-  solver_domain: '[0, 1]'
   abs_tol: 0.001
 iotabar:
   default_unit: dimensionless
-  description:
-  - Rotational transform (iota-bar) used by stellarator confinement scalings.
+  description: Rotational transform (iota-bar) used by stellarator confinement scalings.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 # --- PROCESS physics.py (cherry-pick) -----------------------------------------
 f_pfirsch_schluter:  # CHECK imported from PROCESS (physics.py, ps_fraction_scene)
   default_unit: dimensionless
-  description:
-  - Pfirsch-Schluter current fraction.
+  description: Pfirsch-Schluter current fraction.
   domain: '[-1, 1]'
-  solver_domain: '[-1, 1]'
   abs_tol: 0.001
 P_ie_equilibration:  # CHECK imported from PROCESS (physics.py, rether)
   default_unit: W/m^3
-  description:
-  - Ion-electron equilibration power density.
+  description: Ion-electron equilibration power density.
   domain: '[-inf, inf]'
   abs_tol: 100.0
 debye_length:  # CHECK imported from PROCESS (physics.py, DetailedPhysics)
   default_unit: m
-  description:
-  - Electron Debye length.
+  description: Electron Debye length.
   domain: (0, inf)
   solver_domain: '[1e-30, inf)'
   abs_tol: 1.0e-9
@@ -3250,28 +3100,22 @@ beta_norm_max:  # CHECK imported from PROCESS (physics.py, PlasmaBeta); PROCESS 
   aliases:
   - beta_vol_avg_max  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Normalised-beta upper limit (beta_N_max) as a fraction from the selected scaling.
-  domain: '[0, inf)'
-  solver_domain: '[0, 0.2]'
+  description: Normalised-beta upper limit (beta_N_max) as a fraction from the selected scaling.
+  domain: '[0, 0.2]'
   abs_tol: 0.0002
   # CHECK gate: Wesson is the default; original/Menard/Tholerus/Stambaugh opt-in.
   default_relation:
   - Normalised beta limit (Wesson)
 c_beta:  # CHECK imported from PROCESS (physics.py, Tholerus beta limit); PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Pressure-peaking coefficient for the Tholerus normalised-beta limit.
+  description: Pressure-peaking coefficient for the Tholerus normalised-beta limit.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 # --- PROCESS current_drive ----------------------------------------------------
 eta_cd:  # CHECK imported from PROCESS (current_drive); PROCESS physics_variables.py
   default_unit: A/W
-  description:
-  - Absolute current-drive efficiency (A/W) from the selected HCD method.
+  description: Absolute current-drive efficiency (A/W) from the selected HCD method.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
   # CHECK gate: NBI ITER-1990 is the arbitrary default; the LH/IC/EC/EBW and
   # simplified-NBI scalings are off unless explicitly included. REVIEW: pick a
@@ -3280,146 +3124,109 @@ eta_cd:  # CHECK imported from PROCESS (current_drive); PROCESS physics_variable
   - Current drive efficiency NBI ITER-1990
 eta_cd_norm:  # CHECK imported from PROCESS (current_drive); PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Normalised current-drive efficiency gamma (10^20 A/Wm^2).
+  description: Normalised current-drive efficiency gamma (10^20 A/Wm^2).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 eta_cd_dimensionless:  # CHECK imported from PROCESS (current_drive); PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Dimensionless current-drive efficiency zeta (Poli/Luce).
+  description: Dimensionless current-drive efficiency zeta (Poli/Luce).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 c_hcd_driven:  # CHECK imported from PROCESS (current_drive)
   default_unit: A
-  description:
-  - Plasma current driven by an auxiliary heating system.
+  description: Plasma current driven by an auxiliary heating system.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 10000.0
 p_hcd_injected:  # CHECK imported from PROCESS (current_drive)
   default_unit: W
-  description:
-  - Power injected by an auxiliary heating & current-drive system.
+  description: Power injected by an auxiliary heating & current-drive system.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000000.0
 temp_plasma_electron_density_weighted:  # CHECK imported from PROCESS (current_drive); density-weighted Te
   default_unit: keV
-  description:
-  - Density-weighted average electron temperature.
-  domain: '[0, inf)'
-  solver_domain: '[0, 300]'
+  description: Density-weighted average electron temperature.
+  domain: '[0, 300]'
   abs_tol: 0.05
 dlamee:  # CHECK imported from PROCESS (current_drive, EC Fenstermacher); PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Electron-electron Coulomb logarithm (PROCESS dlamee).
+  description: Electron-electron Coulomb logarithm (PROCESS dlamee).
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 n_ecrh_harmonic:  # CHECK imported from PROCESS (current_drive); PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Electron-cyclotron / EBW harmonic number.
+  description: Electron-cyclotron / EBW harmonic number.
   domain: (0, inf)
   solver_domain: '[1, inf)'
   default: 1.0
   abs_tol: 0.001
 i_ecrh_wave_mode:  # CHECK imported from PROCESS (current_drive); 0=O-mode, 1=X-mode
   default_unit: dimensionless
-  description:
-  - Electron-cyclotron cut-off wave-mode switch (0 = O-mode, 1 = X-mode).
+  description: Electron-cyclotron cut-off wave-mode switch (0 = O-mode, 1 = X-mode).
   domain: '[0, 1]'
-  solver_domain: '[0, 1]'
   default: 0.0
   abs_tol: 0.001
 xi_ebw:  # CHECK imported from PROCESS (current_drive, EBW Freethy)
   default_unit: dimensionless
-  description:
-  - Electron-Bernstein-wave current-drive scaling factor.
+  description: Electron-Bernstein-wave current-drive scaling factor.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 m_beam_amu:  # CHECK imported from PROCESS (current_drive, NBI); PROCESS physics_variables.py
   default_unit: amu
-  description:
-  - Neutral-beam ion mass.
+  description: Neutral-beam ion mass.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 e_beam_kev:  # CHECK imported from PROCESS (current_drive, NBI)
   default_unit: keV
-  description:
-  - Neutral-beam energy.
+  description: Neutral-beam energy.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
 f_radius_beam_tangency_rmajor:  # CHECK imported from PROCESS (current_drive, NBI)
   default_unit: dimensionless
-  description:
-  - Neutral-beam tangency radius divided by the plasma major radius.
+  description: Neutral-beam tangency radius divided by the plasma major radius.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 0.001
 fshine:  # CHECK imported from PROCESS (current_drive, NBI)
   default_unit: dimensionless
-  description:
-  - Neutral-beam shine-through fraction.
+  description: Neutral-beam shine-through fraction.
   domain: '[0, 1]'
-  solver_domain: '[0, 1]'
   abs_tol: 0.001
 beam_stopping_cross_section:  # CHECK imported from PROCESS (current_drive, sigbeam)
   default_unit: m^2
-  description:
-  - Neutral-beam stopping cross-section (Janev-Boley-Post).
+  description: Neutral-beam stopping cross-section (Janev-Boley-Post).
   domain: (0, inf)
   solver_domain: '[1e-30, inf)'
   abs_tol: 1.0e-23
 beam_ion_coulomb_log:  # CHECK imported from PROCESS (current_drive, xlmbdabi)
   default_unit: dimensionless
-  description:
-  - Beam-ion (fast-ion / background-ion) Coulomb logarithm.
+  description: Beam-ion (fast-ion / background-ion) Coulomb logarithm.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 f_p_beam_injected_ions:  # CHECK imported from PROCESS (current_drive, cfnbi)
   default_unit: dimensionless
-  description:
-  - Fraction of neutral-beam power coupled to the ions.
+  description: Fraction of neutral-beam power coupled to the ions.
   domain: '[0, 1]'
-  solver_domain: '[0, 1]'
   abs_tol: 0.001
 n_charge_plasma_effective_mass_weighted_vol_avg:  # CHECK imported from PROCESS (current_drive, cfnbi)
   default_unit: dimensionless
-  description:
-  - Mass-weighted plasma effective charge.
+  description: Mass-weighted plasma effective charge.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 dlamie:  # CHECK imported from PROCESS (current_drive); ion-electron Coulomb log; PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Ion-electron Coulomb logarithm.
+  description: Ion-electron Coulomb logarithm.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 c_Fe:  # CHECK imported from PROCESS (current_drive, sigbeam); iron concentration n_Fe/n_e
   default_unit: dimensionless
-  description:
-  - Iron concentration (n_Fe / n_e) for the beam stopping cross-section.
+  description: Iron concentration (n_Fe / n_e) for the beam stopping cross-section.
   domain: '[0, 1]'
-  solver_domain: '[0, 1]'
   default: 0.0
+  default_requires: tau_p
   abs_tol: 0.001
 cosang:  # CHECK imported from PROCESS (current_drive, eccdef)
   default_unit: dimensionless
-  description:
-  - Cosine of the poloidal angle at which ECCD takes place (+1 outboard).
+  description: Cosine of the poloidal angle at which ECCD takes place (+1 outboard).
   domain: '[-1, 1]'
-  solver_domain: '[-1, 1]'
   default: 1.0
   abs_tol: 0.001
 # --- PROCESS bootstrap_current ------------------------------------------------
@@ -3427,73 +3234,56 @@ beta_thermal_poloidal:  # CHECK imported from PROCESS (bootstrap_current, Wilson
   aliases:
   - beta_thermal_poloidal_vol_avg  # PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Thermal component of the poloidal beta.
-  domain: '[0, inf)'
-  solver_domain: '[0, 10]'
+  description: Thermal component of the poloidal beta.
+  domain: '[0, 10]'
   abs_tol: 0.001
 radius_plasma_pedestal_density_norm:  # CHECK imported from PROCESS (bootstrap_current, Sugiyama H)
   default_unit: dimensionless
-  description:
-  - Normalised plasma radius of the density pedestal.
+  description: Normalised plasma radius of the density pedestal.
   domain: (0, 1]
   solver_domain: '[1e-3, 1]'
   abs_tol: 0.001
 nd_plasma_pedestal_electron:  # CHECK imported from PROCESS (bootstrap_current, Sugiyama H)
   default_unit: 1/m^3
-  description:
-  - Electron number density at the pedestal.
+  description: Electron number density at the pedestal.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e+18
 temp_plasma_pedestal_kev:  # CHECK imported from PROCESS (bootstrap_current, Sugiyama H)
   default_unit: keV
-  description:
-  - Electron temperature at the pedestal.
-  domain: '[0, inf)'
-  solver_domain: '[0, 300]'
+  description: Electron temperature at the pedestal.
+  domain: '[0, 300]'
   abs_tol: 0.05
 j_plasma_on_axis:  # CHECK imported from PROCESS (plasma_profiles); PROCESS physics_variables.py
   default_unit: A/m^2
-  description:
-  - Central (on-axis) plasma current density (parabolic current profile).
+  description: Central (on-axis) plasma current density (parabolic current profile).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1000.0
 # --- PROCESS plasma_current ---------------------------------------------------
 alphaj:  # CHECK imported from PROCESS (plasma_current); current profile index; PROCESS physics_variables.py
   aliases:
   - j_alpha2  # OpenPOPCON src/openpopcon.py
   default_unit: dimensionless
-  description:
-  - Current profile index (Connor-Hastie plasma-current model).
+  description: Current profile index (Connor-Hastie plasma-current model).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   default: 1.0  # CHECK PROCESS initial value
   abs_tol: 0.001
 alphap:  # CHECK imported from PROCESS (plasma_current); pressure profile index; PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Pressure profile index (Connor-Hastie plasma-current model).
+  description: Pressure profile index (Connor-Hastie plasma-current model).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   default: 0.0  # CHECK PROCESS initial value
   abs_tol: 0.001
 pres_plasma_on_axis:  # CHECK imported from PROCESS (plasma_current)
   default_unit: Pa
-  description:
-  - Central (on-axis) plasma pressure.
+  description: Central (on-axis) plasma pressure.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0
 f_diamagnetic:  # CHECK imported from PROCESS (plasma_current)
   aliases:
   - f_c_plasma_diamagnetic
   default_unit: dimensionless
-  description:
-  - Diamagnetic current fraction.
+  description: Diamagnetic current fraction.
   domain: '[0, 1]'
-  solver_domain: '[0, 1]'
   abs_tol: 0.001
   # CHECK gate: SCENE is the default (PROCESS's recommended non-trivial option);
   # the Hender tight-aspect-ratio fit is opt-in.
@@ -3504,50 +3294,38 @@ A_p_out:  # CHECK imported from PROCESS (plasma_geometry)
   aliases:
   - a_plasma_surface_outboard
   default_unit: m^2
-  description:
-  - Outboard plasma surface area (intersecting-arcs model).
+  description: Outboard plasma surface area (intersecting-arcs model).
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.1
 q95_min:  # CHECK imported from PROCESS (plasma_geometry); STAR-code ST scaling; PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Minimum safe q95 from the STAR-code spherical-tokamak scaling.
+  description: Minimum safe q95 from the STAR-code spherical-tokamak scaling.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 fkzohm:  # CHECK imported from PROCESS (plasma_geometry); PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Adjustment factor on the Zohm ITER elongation scaling.
+  description: Adjustment factor on the Zohm ITER elongation scaling.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   default: 1.0  # CHECK PROCESS initial value
   abs_tol: 0.001
 m_s_limit:  # CHECK imported from PROCESS (plasma_geometry); PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Margin to vertical stability criterion (CREATE EU-DEMO elongation fit).
+  description: Margin to vertical stability criterion (CREATE EU-DEMO elongation fit).
   domain: '[0, 1]'
-  solver_domain: '[0, 1]'
   default: 0.3  # CHECK PROCESS initial value
   abs_tol: 0.001
 # --- PROCESS density_limit ----------------------------------------------------
 p_perp_edge:  # CHECK imported from PROCESS (density_limit); PROCESS p_perp is MW/m^2, fusdb W/m^2
   default_unit: W/m^2
-  description:
-  - Power per unit area crossing the plasma edge (excludes radiation and neutrons).
+  description: Power per unit area crossing the plasma edge (excludes radiation and neutrons).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 100.0
 n_e_max:  # CHECK imported from PROCESS (density_limit)
   aliases:
   - nd_plasma_electrons_max
   default_unit: 1/m^3
-  description:
-  - Average electron density limit from the selected density-limit scaling.
+  description: Average electron density limit from the selected density-limit scaling.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   abs_tol: 1.0e+18
   # CHECK gate: ASDEX New is the default (PROCESS i_density_limit = 8 initial
   # value); the other six scalings are off unless explicitly included. The
@@ -3560,11 +3338,8 @@ alphan:  # CHECK imported from PROCESS (radiation_power); density profile index,
   - ne_alpha2  # OpenPOPCON src/openpopcon.py
   - ni_alpha2  # OpenPOPCON src/openpopcon.py
   default_unit: dimensionless
-  description:
-  - Density profile index (PROCESS parabolic profile form). Distinct from
-    density_peaking; not the SepOS turbulence parameter alpha_t.
+  description: Density profile index (PROCESS parabolic profile form). Distinct from density_peaking; not the SepOS turbulence parameter alpha_t.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   default: 0.25  # CHECK PROCESS initial value
   abs_tol: 0.001
 alphat:  # CHECK imported from PROCESS (radiation_power); temperature profile index, T = T0*(1-rho^tbeta)^alphat; PROCESS physics_variables.py
@@ -3572,11 +3347,8 @@ alphat:  # CHECK imported from PROCESS (radiation_power); temperature profile in
   - Te_alpha2  # OpenPOPCON src/openpopcon.py
   - Ti_alpha2  # OpenPOPCON src/openpopcon.py
   default_unit: dimensionless
-  description:
-  - Temperature profile index (PROCESS parabolic profile form). Not the SepOS
-    turbulence parameter alpha_t.
+  description: Temperature profile index (PROCESS parabolic profile form). Not the SepOS turbulence parameter alpha_t.
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   default: 0.5  # CHECK PROCESS initial value
   abs_tol: 0.001
 tbeta:  # CHECK imported from PROCESS (radiation_power); temperature profile inner index; PROCESS physics_variables.py
@@ -3584,18 +3356,14 @@ tbeta:  # CHECK imported from PROCESS (radiation_power); temperature profile inn
   - Te_alpha1  # OpenPOPCON src/openpopcon.py
   - Ti_alpha1  # OpenPOPCON src/openpopcon.py
   default_unit: dimensionless
-  description:
-  - Temperature profile inner index (rho**tbeta in the PROCESS profile form).
+  description: Temperature profile inner index (rho**tbeta in the PROCESS profile form).
   domain: '[0, inf)'
-  solver_domain: '[0, inf)'
   default: 2.0  # CHECK PROCESS initial value
   abs_tol: 0.001
 f_sync_reflect:  # CHECK imported from PROCESS (radiation_power); PROCESS physics_variables.py
   default_unit: dimensionless
-  description:
-  - Fraction of synchrotron radiation reflected by the wall.
+  description: Fraction of synchrotron radiation reflected by the wall.
   domain: '[0, 1]'
-  solver_domain: '[0, 1]'
   default: 0.6  # CHECK PROCESS initial value
   abs_tol: 0.001
 # --- PROCESS plasma_fields --------------------------------------------------
@@ -3603,19 +3371,15 @@ B_t_in_mid:  # CHECK imported from PROCESS (plasma_fields); PROCESS physics_vari
   default_unit: T
   aliases:
   - b_plasma_inboard_toroidal  # PROCESS physics_variables.py
-  description:
-  - Toroidal magnetic field at the inboard midplane.
+  description: Toroidal magnetic field at the inboard midplane.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 B_total:  # CHECK imported from PROCESS (plasma_fields); PROCESS physics_variables.py
   default_unit: T
   aliases:
   - b_plasma_total  # PROCESS physics_variables.py
-  description:
-  - Total magnetic field from on-axis toroidal and surface-averaged poloidal fields.
+  description: Total magnetic field from on-axis toroidal and surface-averaged poloidal fields.
   domain: (0, inf)
-  solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
 
 H_factor:  # external-code alias variable
@@ -3626,17 +3390,19 @@ H_factor:  # external-code alias variable
   - hstar  # PROCESS physics_variables.py
   - confinement_time_scalar  # CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Generic multiplier applied to an energy-confinement scaling. Kept separate from H98_y2.
+  description: Generic multiplier applied to an energy-confinement scaling, whichever
+    one is active. Composes multiplicatively with the scaling-specific H (H98_y2,
+    H89_P, H_<scaling>), which is why it is kept separate from them; default 1.0
+    makes it a no-op when absent.
   domain: '[0, inf)'
   abs_tol: 0.001
+  default: 1.0
 
 I_total:  # external-code alias variable
   aliases:
   - Itot  # OpenPOPCON src/openpopcon.py
   default_unit: A
-  description:
-  - Total plasma current including all modeled current components, when distinguished from Ip.
+  description: Total plasma current including all modeled current components, when distinguished from Ip.
   domain: '[0, inf)'
   abs_tol: 10000.0
 
@@ -3646,8 +3412,7 @@ eta_NC:  # external-code alias variable
   - plasma_res_factor  # PROCESS physics_variables.py
   - f_res_plasma_neo  # PROCESS physics_variables.py
   default_unit: ohm*m
-  description:
-  - Neoclassical/effective plasma resistivity used for loop-voltage or ohmic-power estimates.
+  description: Neoclassical/effective plasma resistivity used for loop-voltage or ohmic-power estimates.
   domain: '[0, inf)'
   abs_tol: 1.0e-10
 
@@ -3657,8 +3422,7 @@ profile_size:  # external-code alias variable
   - n_plasma_profile_elements  # PROCESS physics_variables.py
   - n_points_for_confined_region_profiles  # CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Number of radial/profile grid points used by reduced profile models.
+  description: Number of radial/profile grid points used by reduced profile models.
   domain: '[1, inf)'
   abs_tol: 1
 
@@ -3666,8 +3430,7 @@ rho_grid:  # external-code alias variable
   aliases:
   - sqrtpsin  # OpenPOPCON src/openpopcon.py
   default_unit: dimensionless
-  description:
-  - Radial grid, typically sqrt(normalized poloidal flux) or normalized minor-radius coordinate.
+  description: Radial grid, typically sqrt(normalized poloidal flux) or normalized minor-radius coordinate.
   domain: '[0, 1]'
   abs_tol: 0.001
 
@@ -3675,8 +3438,7 @@ V_rho:  # external-code alias variable
   aliases:
   - volgrid  # OpenPOPCON src/openpopcon.py
   default_unit: m^3
-  description:
-  - Flux-surface volume grid used for radial integration.
+  description: Flux-surface volume grid used for radial integration.
   domain: '[0, inf)'
   abs_tol: 0.1
 
@@ -3684,8 +3446,7 @@ A_rho:  # external-code alias variable
   aliases:
   - agrid  # OpenPOPCON src/openpopcon.py
   default_unit: m^2
-  description:
-  - Flux-surface area grid used for radial/profile integration.
+  description: Flux-surface area grid used for radial/profile integration.
   domain: '[0, inf)'
   abs_tol: 0.1
 
@@ -3694,8 +3455,7 @@ j_profile:  # external-code alias variable
   - j_prof  # OpenPOPCON src/openpopcon.py
   - j_plasma_bootstrap_sauter_profile  # PROCESS physics_variables.py
   default_unit: A/m^2
-  description:
-  - Radial plasma-current-density profile.
+  description: Radial plasma-current-density profile.
   domain: '[-inf, inf]'
   abs_tol: 1000.0
 
@@ -3703,8 +3463,7 @@ q_profile:  # external-code alias variable
   aliases:
   - q_prof  # OpenPOPCON src/openpopcon.py
   default_unit: dimensionless
-  description:
-  - Radial safety-factor profile.
+  description: Radial safety-factor profile.
   domain: '(0, inf)'
   abs_tol: 0.001
 
@@ -3712,8 +3471,7 @@ f_trapped_profile:  # external-code alias variable
   aliases:
   - ftrapped_prof  # OpenPOPCON src/openpopcon.py
   default_unit: dimensionless
-  description:
-  - Radial profile of trapped-particle fraction or equivalent trapped-field quantity.
+  description: Radial profile of trapped-particle fraction or equivalent trapped-field quantity.
   domain: '[0, 1]'
   abs_tol: 0.001
 
@@ -3721,8 +3479,7 @@ B_avg_profile:  # external-code alias variable
   aliases:
   - extraprof  # OpenPOPCON src/openpopcon.py
   default_unit: T
-  description:
-  - Radial profile of flux-surface-averaged magnetic field when supplied externally.
+  description: Radial profile of flux-surface-averaged magnetic field when supplied externally.
   domain: '[0, inf)'
   abs_tol: 0.001
 
@@ -3732,8 +3489,7 @@ impurity_fraction_profile:  # external-code alias variable
   - impurity_concentration  # CFSPOPCON variables.yaml
   - intrinsic_impurity_concentration  # CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description:
-  - Impurity concentration or fraction profile used by impurity/radiation models.
+  description: Impurity concentration or fraction profile used by impurity/radiation models.
   domain: '[0, 1]'
   abs_tol: 0.001
 
@@ -3741,8 +3497,7 @@ ion_to_electron_peak_temp_ratio:  # external-code alias variable
   aliases:
   - tipeak_over_tepeak  # OpenPOPCON src/openpopcon.py
   default_unit: dimensionless
-  description:
-  - Ratio of peak ion temperature to peak electron temperature.
+  description: Ratio of peak ion temperature to peak electron temperature.
   domain: '[0, inf)'
   abs_tol: 0.001
 
@@ -3750,49 +3505,334 @@ fusion_reaction:  # external-code alias variable
   aliases:
   - fuel  # OpenPOPCON src/openpopcon.py
   default_unit: null
-  description:
-  - Fusion reaction or fuel-cycle selector used by external POPCON models.
+  description: Fusion reaction or fuel-cycle selector used by external POPCON models.
 
 energy_confinement_scaling:  # external-code alias variable
   aliases:
   - energy_confinement_scaling_for_L_mode  # CFSPOPCON variables.yaml
   - i_confinement_time  # PROCESS physics_variables.py
   default_unit: null
-  description:
-  - Selector for the energy-confinement scaling law.
+  description: Selector for the energy-confinement scaling law.
 
 confinement_power_scaling:  # external-code alias variable
   aliases:
   - i_l_h_threshold  # PROCESS physics_variables.py
   default_unit: null
-  description:
-  - Selector for power-threshold or confinement-transition scaling.
+  description: Selector for power-threshold or confinement-transition scaling.
 
 radiated_power_method:  # external-code alias variable
   aliases:
   - i_rad_loss  # PROCESS physics_variables.py
   default_unit: null
-  description:
-  - Selector controlling how radiation terms are treated in power balance.
+  description: Selector controlling how radiation terms are treated in power balance.
 
 core_impurity_species:  # external-code alias variable
   default_unit: null
-  description:
-  - Species used as a core radiator in reduced impurity/radiation models.
+  description: Species used as a core radiator in reduced impurity/radiation models.
 
 edge_impurity_species:  # external-code alias variable
   default_unit: null
-  description:
-  - Species used as an edge/SOL radiator in reduced impurity/radiation models.
+  description: Species used as an edge/SOL radiator in reduced impurity/radiation models.
 
 radiated_power_scalar:  # external-code alias variable
   default_unit: dimensionless
-  description:
-  - Multiplier applied to calculated radiated power.
+  description: Multiplier applied to calculated radiated power.
   domain: '[0, inf)'
   abs_tol: 0.001
 
 atomic_data:  # external-code alias variable
   default_unit: null
-  description:
-  - Atomic-data table or handle used by radiation and impurity-charge-state models.
+  description: Atomic-data table or handle used by radiation and impurity-charge-state models.
+
+# --- Per-scaling energy-confinement enhancement factors -------------------
+# One H per SCALING (not per relation): implementations of the same scaling
+# share an H, e.g. both IPB98(y,2) ports use H98_y2.  Each is injected as an
+# optional constant by @relation(h_factor=...) and multiplies that scaling's
+# raw fit, alongside the generic H_factor.  Default 1.0 = no enhancement, so
+# an unsupplied H is a no-op and an H supplied for an inactive scaling is
+# simply unused.
+H89_P:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the 9 P scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_christiansen:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the christiansen scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_ds03:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the ds03 scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_goldston:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the goldston scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_gyro_reduced_bohm:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the gyro reduced bohm scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_hubbard_lower:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the hubbard lower scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_hubbard_nominal:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the hubbard nominal scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_hubbard_upper:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the hubbard upper scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iss04_stellarator:
+  aliases:
+  - H_ISS04  # Helios
+  - H_iss04
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iss04 stellarator scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iss95_stellarator:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iss95 stellarator scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_89_0:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter 89 0 scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_93h:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter 93h scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_96p:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter 96p scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_h90_p:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter h90 p scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_h90_p_amended:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter h90 p amended scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_h97p:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter h97p scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_h97p_elmy:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter h97p elmy scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_ipb98y:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter ipb98y scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_ipb98y1:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter ipb98y1 scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_ipb98y3:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter ipb98y3 scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_ipb98y4:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter ipb98y4 scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_iter_pb98py:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the iter pb98py scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_itpa20:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the itpa20 scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_itpa20_il:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the itpa20 il scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_jaeri:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the jaeri scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_kaye:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the kaye scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_kaye_big:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the kaye big scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_kaye_goldston:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the kaye goldston scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_lackner_gottardi:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the lackner gottardi scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_lackner_gottardi_stellarator:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the lackner gottardi stellarator scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_lang_high_density:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the lang high density scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_menard_nstx:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the menard nstx scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_menard_nstx_petty08_hybrid:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the menard nstx petty08 hybrid scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_merezhkin_muhkovatov:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the merezhkin muhkovatov scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_mirnov:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the mirnov scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_murari:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the murari scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_neo_alcator:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the neo alcator scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_neo_kaye:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the neo kaye scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_nstx_gyro_bohm:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the nstx gyro bohm scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_petty08:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the petty08 scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_rebut_lallia:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the rebut lallia scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_riedel_h:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the riedel h scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_riedel_l:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the riedel l scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_shimomura:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the shimomura scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_sudo_et_al:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the sudo et al scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_t10:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the t10 scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0
+H_valovic_elmy:
+  default_unit: dimensionless
+  description: Confinement enhancement factor for the valovic elmy scaling.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+  default: 1.0

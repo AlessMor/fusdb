@@ -106,20 +106,23 @@ FIELDS: list[tuple[str, str, str]] = [
     # Computed since "Plasma stored energy (cfspopcon)" landed (2026-07-17);
     # the scan reproduces the reference to ~0.002% median grid-wide.
     ("plasma_stored_energy", "W_th", "match"),
-    # cfspopcon's diagnostic average_total_pressure is n_e(T_e+T_i) -- no
-    # dilution, product of averages -- while fusdb's p_th integrates the real
-    # peaked profiles with the real n_i; with the Angioni-peaked density the
-    # two differ ~15% by construction, so the whole beta chain built on it is
-    # a documented convention gap (importable as cfspopcon-form beta relations
-    # if ever needed; the *energy* balance already uses cfspopcon's W).
-    ("average_total_pressure", "p_th", "gap"),
-    ("beta_toroidal", "beta_T", "gap"),
-    ("beta_total", "beta", "gap"),
-    # cfspopcon normalises beta_p to B_pol_out_mid = mu0 I_p/(2 pi a); selecting
-    # "Poloidal beta (cfspopcon)" in reactor.yaml fixed the normalisation (was
-    # +117%); the residual ~15% is the pressure convention above.
-    ("beta_poloidal", "beta_p", "gap"),
-    ("normalized_beta", "beta_N", "gap"),
+    # The whole beta/pressure chain now matches (~0%): selecting "Average total
+    # pressure (cfspopcon)" makes p_th the undiluted product of averages
+    # n_e(T_e+T_i) that cfspopcon's beta diagnostics are built on (fusdb's
+    # profile-integrated "Thermal pressure" stays the default elsewhere; the
+    # *energy* balance separately uses cfspopcon's W).  beta_T/beta/beta_p all
+    # follow from p_th, and "Normalized beta (cfspopcon)" normalises beta_total
+    # (not beta_T).  Note: cfspopcon's Angioni peaking uses this same
+    # product-of-averages beta_T, so density_peaking held at ~0% through the
+    # change.  Trade-off: correcting beta_p made f_BS exact (below) but removed
+    # an error cancellation that had been flattering Q (see the Q note).
+    ("average_total_pressure", "p_th", "match"),
+    ("beta_toroidal", "beta_T", "match"),
+    ("beta_total", "beta", "match"),
+    # cfspopcon normalises beta_p to B_pol_out_mid = mu0 I_p/(2 pi a) via
+    # "Poloidal beta (cfspopcon)"; with the product-of-averages p_th it matches.
+    ("beta_poloidal", "beta_p", "match"),
+    ("normalized_beta", "beta_N", "match"),
     ("P_LH_thresh", "P_LH", "match"),
     # -- resistive / collisionality chain (fixed by the impurity-mix Z_eff) --
     ("z_effective", "Z_eff", "match"),
@@ -137,6 +140,15 @@ FIELDS: list[tuple[str, str, str]] = [
     ("invmu_0_dLedR", "invmu_0_dLedR", "match"),
     ("vertical_magnetic_field", "vertical_magnetic_field", "match"),
     ("poloidal_field_flux", "poloidal_field_flux", "match"),
+    # Total solenoid flux over rampup: internal + external + resistive -
+    # poloidal, byte-identical formula to cfspopcon.  Was a ~14% "gap" purely
+    # because the fixture omitted input.yaml's ejima_coefficient (0.6) and fell
+    # back to fusdb's 0.4 default, running resistive_flux 1/3 low; supplying it
+    # (reactor.yaml) makes resistive_flux exact and the sum ~2.6% (100% within
+    # 10%).  The residual is the internal_inductance convention: fusdb's
+    # cylindrical li runs ~8.6% below cfspopcon's, i.e. internal_flux ~1 Wb low
+    # on a ~34.5 Wb total.
+    ("flux_needed_from_CS_over_rampup", "flux_needed_from_CS_over_rampup", "match"),
     # -- separatrix / SOL upstream (median matches; grid edges diverge) --
     # P_sep median dropped 3.4% -> 0.3% once the line radiation was activated
     # on the radas Lz tables (P_sep = P_loss - P_rad on the reference's own
@@ -205,11 +217,15 @@ FIELDS: list[tuple[str, str, str]] = [
     ("peak_fuel_ion_density", "n_i_peak", "match"),
     ("fusion_triple_product", "n_i_tau_E_T_i", "match"),
     # Q on cfspopcon's own definition (P_fus / (P_aux_launched + P_ohmic),
-    # verified against dataset P_external): ~9% median with the decoupled ion
-    # peaking + cfspopcon W/tau_E conventions (was 59%).  The max blows up at
-    # the handful of near-ignition cells where P_aux -> 0 amplifies any
-    # residual stored-energy difference.
-    ("Q", "Q_cfspopcon", "match"),
+    # verified against dataset P_external).  ~10.2% median: the well-conditioned
+    # value (cells with P_aux > 5 MW) is ~9.6%, but the near-ignition cells
+    # where P_aux -> 0 make Q hypersensitive and drag the all-cell median over
+    # 10%.  It was ~9.06% before the beta/pressure import -- but that was partly
+    # an error cancellation: the wrong beta_p (12.6% off) drove a wrong f_BS
+    # that compensated in the P_aux balance; correcting beta_p (f_BS now exact,
+    # below) removed the cancellation and exposed Q's true ~10.2% disagreement.
+    # Kept as a gap (honest) rather than masking the near-ignition cells.
+    ("Q", "Q_cfspopcon", "gap"),
     # Radiation runs on cfspopcon's composition (hydrogenic bremsstrahlung +
     # synchrotron + line radiation from the input.yaml He/O/W concentrations)
     # with the radas 2-D Lz(Te, ne) tables evaluated pointwise -- the
@@ -220,18 +236,28 @@ FIELDS: list[tuple[str, str, str]] = [
     # difference inflates the relative error.
     ("core_radiated_power_fraction", "f_rad", "match"),
     ("P_radiation", "P_rad", "match"),
+    # f_BS scales with beta_p; with the cfspopcon product-of-averages pressure
+    # (above) beta_p is exact, so the bootstrap fraction matches to ~0.1%.
+    ("bootstrap_fraction", "f_BS", "match"),
     # -- known modelling gaps (reported, xfail at 10%) --
-    # f_BS scales with beta_p, which carries the pressure-convention gap above.
-    ("bootstrap_fraction", "f_BS", "gap"),
-    ("flux_needed_from_CS_over_rampup", "flux_needed_from_CS_over_rampup", "gap"),
+    # Flat-top duration = (total_flux_available_from_CS - flux_needed) /
+    # loop_voltage: ~0.4% median over the certified (feasible) cells.  It only
+    # matches once flux_needed is essentially exact -- which it now is (0.0%),
+    # because "Elongation at psi95 from areal elongation (cfspopcon)" gives
+    # cfspopcon's kappa_95 and hence its internal_inductance.  On the LOW-density
+    # side flux_needed > 35 Wb -> a NEGATIVE flat-top (low beta_p means little
+    # poloidal-field flux assistance -- poloidal_field_flux is subtracted -- so
+    # the CS must supply more than it has, and cannot even cover rampup): fusdb
+    # treats that as an infeasible operating point and does not certify it
+    # (domain [0, inf)), so the certified region shrinks to ~768 cells -- every
+    # one of which lands where cfspopcon also reports a feasible (non-negative)
+    # flat-top.  fusdb reports feasibility; cfspopcon reports the negative value.
+    ("max_flattop_duration", "max_flattop_duration", "match"),
     # -- not produced by the scan fixture --
     # Lengyel chain stays off: L_int's canonical scale (~1e-28) is unsolvable
     # as a least-squares DOF, and fusdb's Mavrin-coronal L_int differs from
     # the reference's radas-noncoronal one anyway (see reactor.yaml).
     ("edge_impurity_concentration", "edge_impurity_concentration", "missing"),
-    # Needs total_flux_available_from_CS (35 Wb in input.yaml); the flux chain
-    # hung reconcile when last tried (2026-07) -- retest before activating.
-    ("max_flattop_duration", "max_flattop_duration", "missing"),
     # Needs minimum_core_radiated_fraction (0.0 in input.yaml, so the
     # reference field is identically zero and uncomparable anyway).
     ("min_P_radiation", "min_P_radiation", "missing"),
@@ -381,7 +407,16 @@ OVERLAY_QUANTITIES = [
     ("Q_cfspopcon", "Q", "$Q$ (launched)", 1.0, [1.0, 2.0, 5.0]),
     ("P_aux", "P_auxiliary_absorbed", "$P_{aux}$ [MW]", 1.0e-6, [5.0, 15.0, 25.0]),
     ("ratio_of_P_SOL_to_P_LH", "ratio_of_P_SOL_to_P_LH", "$P_{SOL}/P_{LH}$", 1.0, [1.0]),
-    ("max_flattop_duration", "max_flattop_duration", "$t_{flattop}$ [s]", 1.0, [3.0, 10.0, 30.0]),
+    # The 0 s level is the CS flat-top *feasibility boundary* (flux_needed =
+    # total_flux_available_from_CS).  t_flattop = 0 is itself a VALID value --
+    # max_flattop_duration's domain is [0, inf), closed at 0 -- so the marginal
+    # zero-flat-top point certifies; only a STRICTLY negative flat-top is
+    # infeasible.  cfspopcon's dashed 0-line is drawn because its data brackets
+    # zero (it reports the negative branch); fusdb's solid 0-line does not
+    # render only because no grid cell evaluates to exactly 0 (its lowest
+    # certified value is ~0.002 s), so its contours approach the same line from
+    # the valid side.
+    ("max_flattop_duration", "max_flattop_duration", "$t_{flattop}$ [s]", 1.0, [0.0, 3.0, 10.0, 30.0]),
 ]
 
 

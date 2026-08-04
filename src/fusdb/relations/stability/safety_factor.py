@@ -18,7 +18,7 @@ from fusdb.registry import MU0
     tags=("plasma", "stability", "tokamak"),
     outputs="f_shaping",
 )
-def calc_f_shaping_for_qstar(eps, kappa, delta_95):
+def calc_f_shaping_for_qstar(eps, kappa_areal, delta_95):
     """Calculate the shaping function.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
@@ -29,16 +29,42 @@ def calc_f_shaping_for_qstar(eps, kappa, delta_95):
 
     Args:
         eps: [~] :term:`glossary link<inverse_aspect_ratio>`
-        kappa: [~] :term:`glossary link<areal_elongation>`
+        kappa_areal: [~] :term:`glossary link<areal_elongation>`
         delta_95: [~] :term:`glossary link<triangularity_psi95>`
 
     Returns:
         f_shaping [~]
     """
     # CHECK
-    return ((1.0 + kappa**2.0 * (1.0 + 2.0 * delta_95**2.0 - 1.2 * delta_95**3.0)) / 2.0) * (
+    return ((1.0 + kappa_areal**2.0 * (1.0 + 2.0 * delta_95**2.0 - 1.2 * delta_95**3.0)) / 2.0) * (
         (1.17 - 0.65 * eps) / (1.0 - eps**2.0) ** 2.0
     )
+
+
+@relation(
+    name="Plasma shaping function for q_star (PROCESS IPDG89)",
+    tags=("plasma", "stability", "tokamak", "process"),
+    outputs="f_shaping",
+)
+def calc_f_shaping_for_qstar_process(eps, kappa_95, delta_95):
+    """Shaping function on the 95% flux surface, PROCESS's IPDG89 convention.
+
+    Identical algebra to :func:`calc_f_shaping_for_qstar` -- ITER Physics Basis
+    Ch. 1 Eq. A-11 -- but fed the 95%-surface elongation rather than the AREAL
+    one.  That is the distinction: PROCESS's ``i_plasma_current = 4`` evaluates
+    this fit at ``kappa_95``/``triang95``, while fusdb's default (from cfspopcon)
+    evaluates it at ``kappa_areal``/``delta_95``.  The two elongations genuinely differ
+    -- 1.6518 vs 1.7188 at the large-tokamak design point -- and since the fit
+    goes as roughly kappa^2, the resulting f_shaping differs by ~8%, which lands
+    directly on ``I_p`` through the q_star relation.
+
+    Gated (see the ``f_shaping`` whitelist in variables.yaml): fusdb's areal form
+    stays the default.
+
+    Adapted from PROCESS; see README.md section "Third-party Notices".
+    """
+    # CHECK
+    return calc_f_shaping_for_qstar.func(eps=eps, kappa_areal=kappa_95, delta_95=delta_95)
 
 
 @relation(

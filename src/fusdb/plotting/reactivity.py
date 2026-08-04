@@ -18,7 +18,6 @@ extra to use the interactive app.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import Any, Callable, Mapping
 
 import numpy as np
@@ -26,14 +25,11 @@ import numpy as np
 from fusdb.registry import RELATIONS
 
 from ._bokeh import (
-    axis_limit_controls,
-    labeled_row,
+    explorer_layout,
     link_two_filter_visibility,
     log_grid,
     log_log_figure,
-    model_html,
     validate_axis_limits,
-    write_html,
 )
 from .data import Curve, CurveSet
 from .renderers import bokeh_curve_set
@@ -171,7 +167,7 @@ def _all_reactivity_curves(series: list[tuple[str, str, str, Any]], temperature_
 
 def reactivity_app(
     *,
-    x_limits: tuple[float, float] = (1.0, 1.0e3),
+    x_limits: tuple[float, float] = (1e-3, 1.0e3),
     y_limits: tuple[float, float] = (1e-30, 1e-21),
     num_points: int = 1000,
     width: int = 960,
@@ -187,10 +183,9 @@ def reactivity_app(
         height: Plot height in pixels.
 
     Returns:
-        A Bokeh layout model (embed with :func:`render_reactivity_app_html`).
+        A Bokeh layout model suitable for ``show()`` or ``bokeh.embed.file_html()``.
     """
-    from bokeh.layouts import column
-    from bokeh.models import CheckboxButtonGroup, Legend, LegendItem
+    from bokeh.models import CheckboxButtonGroup, LegendItem
 
     x_limits = validate_axis_limits(x_limits, label="x_limits")
     y_limits = validate_axis_limits(y_limits, label="y_limits")
@@ -212,8 +207,6 @@ def reactivity_app(
     _plot, renderers, _sources = bokeh_curve_set(data, plot=plot, legend=False)
     legend_items = [LegendItem(label=curve.label, renderers=[renderer], visible=True) for curve, renderer in zip(data.curves, renderers, strict=True)]
 
-    plot.add_layout(Legend(items=legend_items, location="top_left", click_policy="hide"))
-
     reaction_labels = sorted({reaction for reaction, *_ in series})
     source_labels = sorted({source for _, source, *_ in series}, key=_source_rank)
     reaction_selector = CheckboxButtonGroup(
@@ -223,7 +216,16 @@ def reactivity_app(
         labels=source_labels, active=list(range(len(source_labels))), sizing_mode="stretch_width"
     )
 
-    limit_widgets, status = axis_limit_controls(plot, x_limits, y_limits)
+    layout, status = explorer_layout(
+        plot,
+        legend_items=legend_items,
+        option_controls=(
+            ("Reactions", reaction_selector),
+            ("Sources", source_selector),
+        ),
+        x_limits=x_limits,
+        y_limits=y_limits,
+    )
     link_two_filter_visibility(
         reaction_selector,
         source_selector,
@@ -236,23 +238,4 @@ def reactivity_app(
         status,
     )
 
-    return column(
-        plot,
-        labeled_row("Reactions", reaction_selector),
-        labeled_row("Sources", source_selector),
-        labeled_row("Limits", *limit_widgets),
-        sizing_mode="stretch_width",
-    )
-
-
-def render_reactivity_app_html(*, title: str = "Fusion Reactivity Plotter", **kwargs: Any) -> str:
-    """Return a self-contained interactive HTML document (BokehJS from CDN).
-
-    ``**kwargs`` are forwarded to :func:`reactivity_app`.
-    """
-    return model_html(reactivity_app(**kwargs), title)
-
-
-def save_reactivity_app_html(path: str | Path, **kwargs: Any) -> Path:
-    """Write the interactive reactivity plotter HTML to ``path`` and return it."""
-    return write_html(path, render_reactivity_app_html(**kwargs))
+    return layout

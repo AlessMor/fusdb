@@ -107,15 +107,6 @@ def helium4_density_volume_average(n_He4_avg: float, n_He4: Any, rho: Any) -> An
 
 
 @relation(
-    name="Impurity density volume-average consistency",
-    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
-)
-def impurity_density_volume_average(n_imp_avg: float, n_imp: Any, rho: Any) -> Any:
-    """Link the generic impurity density profile to its volume-average ``n_imp_avg``."""
-    return _profile_average_residual(n_imp_avg, n_imp, rho)
-
-
-@relation(
     name="Magnetic-field rho-average",
     tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
     outputs="B_rho_avg",
@@ -206,10 +197,3 @@ def helium4_density_rho_average(n_He4: Any, rho: Any) -> Any:
     return line_average(n_He4, rho)
 
 
-@relation(
-    name="Impurity density rho-average",
-    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
-    outputs="n_imp_rho_avg",
-)
-def impurity_density_rho_average(n_imp: Any, rho: Any) -> Any:
-    return line_average(n_imp, rho)

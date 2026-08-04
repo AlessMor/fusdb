@@ -118,7 +118,7 @@ def calc_neoclassical_loop_resistivity(spitzer_resistivity: Any, Z_eff: Any, tra
     tags=("plasma", "current_drive", "tokamak"),
     outputs="current_relaxation_time",
 )
-def calc_current_relaxation_time(R: Any, eps: Any, kappa: Any, T_e_avg: Any, Z_eff: Any) -> Any:
+def calc_current_relaxation_time(R: Any, eps: Any, kappa_areal: Any, T_e_avg: Any, Z_eff: Any) -> Any:
     """Calculate the current relaxation time.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
@@ -128,7 +128,7 @@ def calc_current_relaxation_time(R: Any, eps: Any, kappa: Any, T_e_avg: Any, Z_e
     Args:
         R: [m] :term:`glossary link<major_radius>`
         eps: [~] :term:`glossary link<inverse_aspect_ratio>`
-        kappa: [~] :term:`glossary link<areal_elongation>`
+        kappa_areal: [~] :term:`glossary link<areal_elongation>`
         T_e_avg: [keV] :term:`glossary link<average_electron_temp>`
         Z_eff: [~] :term:`glossary link<z_effective>`
 
@@ -136,4 +136,4 @@ def calc_current_relaxation_time(R: Any, eps: Any, kappa: Any, T_e_avg: Any, Z_e
         current_relaxation_time [s]
     """
     # CHECK
-    return 1.4 * ((R * eps) ** 2.0) * kappa * (T_e_avg**1.5) / Z_eff
+    return 1.4 * ((R * eps) ** 2.0) * kappa_areal * (T_e_avg**1.5) / Z_eff

@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import yaml
 
+from .batch import map_chunks, parallel_chunk_size
 from .modes import MODE_NAMES
 from .registry import RELATIONS, TAGS, VARIABLES
 from .relationsystem import RelationSystem
 from .plotting.tables import SolvedColumn, _table_column
 from .variable import Variable
+
+logger = logging.getLogger("fusdb")
 
 
 @dataclass(frozen=True)
@@ -56,9 +61,9 @@ class SolvedVariable:
 #   * the regimes themselves are the ``confinement_mode`` tag group, listed in
 #     allowed_tags.yaml in threshold-escalation order;
 #   * a regime's sustainment guards are the relations tagged
-#     ``("regime_guard", <regime>)``;
+#     ``("confinement_mode_threshold", <regime>)``;
 #   * a regime's fallback confinement-time scaling is the tau_E producer
-#     tagged ``("regime_default", <regime>)``.
+#     tagged ``("confinement_mode_default", <regime>)``.
 _REGIME_SOLVE_MODES = {"reconcile", "optimize", "popcon"}
 
 
@@ -71,18 +76,18 @@ def _regime_guard_names(regime: str | None) -> tuple[str, ...]:
     """Sustainment guard relation names of one regime, in registration order."""
     if not regime:
         return ()
-    return tuple(rel.name for rel in RELATIONS if "regime_guard" in rel.tags and regime in rel.tags)
+    return tuple(rel.name for rel in RELATIONS if "confinement_mode_threshold" in rel.tags and regime in rel.tags)
 
 
 def _all_regime_guard_names() -> tuple[str, ...]:
     """All sustainment guard relation names, in registration order."""
-    return tuple(rel.name for rel in RELATIONS if "regime_guard" in rel.tags)
+    return tuple(rel.name for rel in RELATIONS if "confinement_mode_threshold" in rel.tags)
 
 
 def _regime_tau_default_name(regime: str) -> str | None:
     """Name of the regime's fallback tau_E scaling, or None when undeclared."""
     for rel in RELATIONS:
-        if "regime_default" in rel.tags and regime in rel.tags and "tau_E" in rel.output_names:
+        if "confinement_mode_default" in rel.tags and regime in rel.tags and "tau_E" in rel.output_names:
             return rel.name
     return None
 
@@ -367,6 +372,26 @@ class Reactor:
         # to a worker process. Set by from_yaml. Here so __getattr__ skips it.
         self.source_path: Path | None = None
         self.tags = tuple(str(tag).strip().lower() for tag in self.tags)
+        # An unregistered tag is kept (it is legitimate descriptive metadata --
+        # a machine name, a programme) but it selects nothing, and a reactor
+        # whose ONLY tag is unregistered silently gets no device-scoped
+        # relations at all.  That failure is invisible otherwise, so say it out
+        # loud once, at declaration time.
+        unknown = tuple(tag for tag in self.tags if tag not in TAGS.allowed)
+        if unknown:
+            known_groups = ", ".join(sorted(TAGS.raw)) or "none"
+            logger.warning(
+                "Reactor %r declares tag(s) %s that are not in allowed_tags.yaml; "
+                "they are kept as descriptive metadata but match no relation. "
+                "%sAdd them to a group in allowed_tags.yaml (groups: %s) if they "
+                "should select relations.",
+                self.name,
+                ", ".join(repr(tag) for tag in unknown),
+                "This reactor has NO recognised tag, so every relation scoped to a "
+                "tag group (e.g. device: tokamak/stellarator/mirror) is excluded. "
+                if len(unknown) == len(self.tags) else "",
+                known_groups,
+            )
         self.relation_include = tuple(str(name) for name in (self.relation_include or ()))
         self.relation_exclude = tuple(str(name) for name in (self.relation_exclude or ()))
         self.relation_order = tuple(self.relation_order or ())
@@ -375,6 +400,33 @@ class Reactor:
             self.grid_size = int(self.grid_size)
             if self.grid_size <= 0:
                 raise ValueError("grid.size must be positive.")
+
+    @classmethod
+    def from_name(cls, name: str) -> "Reactor":
+        """Load a packaged or checkout reactor scenario by folder name.
+
+        Resolution order: the optional ``fusdb-reactors`` data distribution
+        (``pip install ./reactors`` from a checkout), then a ``reactors/``
+        directory under the current working directory.  The base ``fusdb``
+        install deliberately ships no scenarios.
+        """
+        candidates: list[Path] = []
+        try:
+            import fusdb_reactors  # optional data-only distribution (S14)
+
+            candidates.append(Path(fusdb_reactors.reactors_dir()))
+        except ImportError:
+            pass
+        candidates.append(Path.cwd() / "reactors")
+        for base in candidates:
+            target = base / name
+            if target.exists():
+                return cls.from_yaml(target)
+        raise FileNotFoundError(
+            f"Reactor scenario {name!r} not found. Install the scenario data "
+            "(pip install ./reactors from a fusdb checkout) or run from a "
+            "directory containing reactors/."
+        )
 
     @classmethod
     def from_yaml(cls, path_like: str | Path) -> "Reactor":
@@ -428,6 +480,30 @@ class Reactor:
             )
         self.variables[var.name] = var
 
+    def clone(self) -> "Reactor":
+        """Return an isolated copy of this reactor's declarations."""
+        variables = {
+            name: var.clone(value=_copy_value(var.input_value))
+            for name, var in self.variables.items()
+        }
+        clone = Reactor(
+            name=self.name,
+            organization=self.organization,
+            country=self.country,
+            year=self.year,
+            doi=self.doi,
+            notes=self.notes,
+            tags=self.tags,
+            variables=variables,
+            relation_include=self.relation_include,
+            relation_exclude=self.relation_exclude,
+            relation_order=self.relation_order,
+            constraints=self.constraints,
+            grid_size=self.grid_size,
+        )
+        clone.source_path = self.source_path
+        return clone
+
     def get_variable(self, name: str) -> SolvedVariable | None:
         """Return one loaded variable, as a read-through solved/declared view.
 
@@ -461,7 +537,70 @@ class Reactor:
         Returns:
             Tuple of relations selected for this reactor.
         """
-        return RELATIONS.get_filtered_relations(names=self.relation_include, tags=TAGS.expand(self.tags), exclude=self.relation_exclude, order=None)
+        names = _unique_extend(
+            self._regime_filtered_include(_confinement_regime(self.tags)),
+            self._supplied_shape_includes(),
+        )
+        return RELATIONS.get_filtered_relations(names=names, tags=TAGS.expand(self.tags), exclude=self.relation_exclude, order=None)
+
+    def _supplied_shape_includes(self) -> tuple[str, ...]:
+        """Shape generators opted in by supplied profile information.
+
+        A profile is ``average x shape``.  The average comes from the data; the
+        shape is a modelling choice, so the SHAPE generators are opt-in (tag
+        ``profile_shape``) and the default is a uniform profile at the average
+        value.  But a reactor that supplies a peaking factor -- or a peak value
+        which, with its average, determines one -- HAS given the shape, exactly
+        as a reactor supplying the profile itself has.  Those generators are
+        therefore selected automatically, so supplied data is never discarded in
+        favour of a flat default.  ``relation_exclude`` still overrides.
+        """
+        supplied = {
+            VARIABLES.resolve(name)
+            for name in self.variables
+            if name in VARIABLES
+        }
+        if not supplied:
+            return ()
+
+        def shape_is_supplied(peaking: str, seen: frozenset[str] = frozenset()) -> bool:
+            """Whether ``peaking`` is pinned by supplied data.
+
+            Directly supplied, or produced by a relation whose own inputs are
+            each supplied or themselves shape-supplied.  The recursion matters:
+            the ion peaking is inherited from the electron one by a default
+            relation, so supplying ``n0`` shapes the ion density too -- and a
+            peaking that is neither supplied nor determined is a shape the
+            *solver* would invent, which is exactly what stays opt-in.
+            """
+            if peaking in supplied:
+                return True
+            if peaking in seen:
+                return False
+            seen = seen | {peaking}
+            spec = VARIABLES.get(peaking) if peaking in VARIABLES else None
+            for producer_name in (getattr(spec, "default_relation", None) or ()):
+                try:
+                    producer = RELATIONS.get(producer_name)
+                except KeyError:
+                    continue
+                inputs = tuple(producer.input_names)
+                if inputs and all(
+                    inp in supplied or ("peaking" in inp and shape_is_supplied(inp, seen))
+                    for inp in inputs
+                ):
+                    return True
+            return False
+
+        selected: list[str] = []
+        for rel in RELATIONS:
+            relation = RELATIONS.get(rel) if isinstance(rel, str) else rel
+            if "profile_shape" not in relation.tags:
+                continue
+            peakings = [name for name in relation.input_names if "peaking" in name]
+            if peakings and all(shape_is_supplied(name) for name in peakings):
+                selected.append(relation.name)
+        return tuple(selected)
 
     def relation_system(self) -> RelationSystem:
         """Build a RelationSystem for this reactor.
@@ -691,45 +830,55 @@ class Reactor:
 
     def _clone_for_regime(self, regime: str, *, include_guards: bool = True) -> "Reactor":
         """Return an isolated reactor candidate for one confinement regime."""
-        # ``clone(value=...)`` carries every other declaration field through
-        # unchanged and re-ingests once, so this is identical to hand-listing
-        # all eight constructor arguments (and no longer silently drops a
-        # field if ``Variable`` grows one).  Seeding from ``input_value``
-        # keeps a scalar-supplied profile scalar, preserving grid inference.
-        variables = {
-            name: var.clone(value=_copy_value(var.input_value))
-            for name, var in self.variables.items()
-        }
-        clone = Reactor(
-            name=self.name,
-            organization=self.organization,
-            country=self.country,
-            year=self.year,
-            doi=self.doi,
-            notes=self.notes,
-            tags=_with_confinement_regime(self.tags, regime),
-            variables=variables,
-            relation_include=self._candidate_relation_include(regime, include_guards=include_guards),
-            relation_exclude=self.relation_exclude,
-            relation_order=self.relation_order,
-            constraints=self.constraints,
-            grid_size=self.grid_size,
-        )
-        clone.source_path = self.source_path
+        clone = self.clone()
+        clone.tags = _with_confinement_regime(self.tags, regime)
+        clone.relation_include = self._candidate_relation_include(regime, include_guards=include_guards)
         return clone
 
     def _candidate_relation_include(self, regime: str, *, include_guards: bool = True) -> tuple[str, ...]:
         """Add optional regime guards and a mode-appropriate tau_E default relation."""
         extras = list(_regime_guard_names(regime)) if include_guards else []
-        if not self._has_explicit_tau_e_scaling():
+        if not self._has_explicit_tau_e_scaling(regime):
             scaling = _regime_tau_default_name(regime)
             if scaling and scaling not in self.relation_exclude:
                 extras.append(scaling)
-        return _unique_extend(self.relation_include, extras)
+        return _unique_extend(self._regime_filtered_include(regime), extras)
 
-    def _has_explicit_tau_e_scaling(self) -> bool:
-        """Whether relation_include already names a tau_E producer."""
+    def _regime_filtered_include(self, regime: str | None) -> tuple[str, ...]:
+        """Includes that apply in ``regime``.
+
+        An included relation carrying a ``confinement_mode`` tag applies only in
+        that regime; one carrying none applies always.  A scaling already knows
+        which regime it belongs to, so a reactor can name one per regime --
+        ``include: [cfspopcon_itpa20_il_confinement_time, goldston_confinement_time]``
+        reads as "ITPA20-IL in H-mode, Goldston in L-mode" -- and the regime
+        driver picks the right one when it switches, instead of carrying an
+        H-mode scaling into an L-mode solve.
+        """
+        if not regime:
+            return self.relation_include
+        order = set(_regime_order())
+        kept: list[str] = []
         for identifier in self.relation_include:
+            try:
+                rel = RELATIONS.get(identifier)
+            except KeyError:
+                kept.append(identifier)      # unknown name: leave it to the registry
+                continue
+            modes = set(rel.tags) & order
+            if modes and regime not in modes:
+                continue
+            kept.append(identifier)
+        return tuple(kept)
+
+    def _has_explicit_tau_e_scaling(self, regime: str | None = None) -> bool:
+        """Whether relation_include names a tau_E producer *for this regime*.
+
+        Per-regime so that an H-mode-only override still falls back to the
+        regime default when the machine drops to L-mode, rather than silently
+        reusing the H-mode scaling there.
+        """
+        for identifier in self._regime_filtered_include(regime):
             try:
                 rel = RELATIONS.get(identifier)
             except KeyError:
@@ -794,9 +943,9 @@ class Reactor:
     def popcon(self, *, x: Any, y: Any, **options: Any) -> dict[str, Any]:
         """Run a batched 2-D popcon scan over two axis variables.
 
-        The whole grid is evaluated as one batched computation with this
-        reactor's inputs held exactly as given and the axis values pinned to
-        the grid coordinates; every point is then individually certified.
+        Grid points are evaluated in vectorized chunks with this reactor's
+        inputs held exactly as given and the axis values pinned to the grid
+        coordinates; every point is then individually certified.
         See :mod:`fusdb.modes.popcon` for the options and result payload.
 
         Args:
@@ -808,6 +957,25 @@ class Reactor:
             Popcon result dictionary.
         """
         return self.run("popcon", x=x, y=y, **options)
+
+    def run_many(
+        self,
+        cases: Iterable[Mapping[str, Any]],
+        *,
+        mode: str = "reconcile",
+        workers: int | None = None,
+        chunk_size: int | None = None,
+        **options: Any,
+    ) -> list[SolvedColumn]:
+        """Run any mode over independent parameter cases."""
+        return run_many(
+            self,
+            cases,
+            mode=mode,
+            workers=workers,
+            chunk_size=chunk_size,
+            **options,
+        )
 
     def _run_popcon_auto_regime(self, **options: Any) -> dict[str, Any]:
         """Popcon scan with automatic per-point confinement regime.
@@ -846,43 +1014,13 @@ class Reactor:
         warnings: list[str] = []
         for regime in chain:
             clones[regime] = self._clone_for_regime(regime, include_guards=False)
-        # The per-regime scans are independent, so run them on a process pool.
-        # Live systems cannot cross a process boundary; workers rebuild from
-        # the same picklable recipe the pointwise scan uses.  ``workers=0``/``1``
-        # or a pointwise (``solver="reconcile"``) scan stays serial -- the
-        # pointwise solver parallelises internally, and nesting pools would
-        # oversubscribe.  Any pool/pickling failure falls back to in-process.
-        requested_workers = options.get("workers")
-        parallel = (
-            str(options.get("solver", "batched")) != "reconcile"
-            and (requested_workers is None or int(requested_workers) > 1)
-        )
-        if parallel:
-            try:
-                from concurrent.futures import ProcessPoolExecutor
-
-                from .modes.popcon import _system_spec
-
-                tasks = [
-                    (_system_spec(clones[regime].relation_system()), scan_options)
-                    for regime in chain
-                ]
-                with ProcessPoolExecutor(max_workers=len(chain)) as executor:
-                    for regime, scan in zip(chain, executor.map(_popcon_regime_scan_worker, tasks)):
-                        per_regime[regime] = scan
-            except Exception:
-                per_regime = {}
         for regime in chain:
-            if regime not in per_regime:
-                per_regime[regime] = clones[regime]._run_once("popcon", **scan_options)
+            # POPCON itself owns chunking and parallelism.  Keeping regime
+            # composition serial avoids a second nested process-pool policy.
+            per_regime[regime] = clones[regime]._run_once("popcon", **scan_options)
             for warning in per_regime[regime].get("warnings", ()):  # e.g. underivable output
                 if warning not in warnings:
                     warnings.append(warning)
-        if clones[chain[0]].last_system is None:
-            # The parallel scans never ran in this process; a popcon restores
-            # its system to the declared state anyway, so an equivalent
-            # freshly-built system serves the read-through role.
-            clones[chain[0]].last_system = clones[chain[0]].relation_system()
         self.last_system = clones[chain[0]].last_system
 
         base = per_regime[chain[0]]["popcon"]
@@ -932,6 +1070,13 @@ class Reactor:
             "n_failed": n - n_ok,
             "warnings": warnings,
             "errors": [],
+            # Each per-regime scan carries its own certificate; the composite
+            # scope is full-system by default, or cone when the caller opted
+            # into certification_targets (S6-full).
+            "certificate": {
+                "scope": "cone" if options.get("certification_targets") is not None else "full",
+                "per_regime": True,
+            },
             "popcon": {
                 "x": base["x"],
                 "y": base["y"],
@@ -943,20 +1088,6 @@ class Reactor:
                 "lh_ratio_reference": lh_ratio_reference,
             },
         }
-
-
-def _popcon_regime_scan_worker(task: tuple[Mapping[str, Any], Mapping[str, Any]]) -> dict[str, Any]:
-    """Worker: rebuild one regime clone's system and run its batched popcon scan.
-
-    Top-level so it pickles for the process pool.  Mode results are plain data
-    and pickle back as-is.
-    """
-    spec, options = task
-    from .modes.popcon import _rebuild_system
-
-    return _rebuild_system(spec).run("popcon", **options)
-
-
 def _solve_reactor_path(task: tuple[str, str, Mapping[str, Any]]) -> SolvedColumn:
     """Worker: load one reactor YAML, solve it, return a display-ready column.
 
@@ -968,8 +1099,11 @@ def _solve_reactor_path(task: tuple[str, str, Mapping[str, Any]]) -> SolvedColum
     path, mode, options = task
     try:
         reactor = Reactor.from_yaml(path)
-        reactor.run(mode, **options)
-        return _table_column(reactor.last_system)
+        result = reactor.run(mode, **options)
+        # Carry the value ``run`` returned rather than whatever the system
+        # happened to record: ``popcon`` returns its scan payload without
+        # writing ``last_result``, so snapshotting the system alone drops it.
+        return _table_column(reactor.last_system)._replace(result=result)
     except Exception as exc:  # report the failure as a column; keep the batch alive
         location = Path(path)
         return SolvedColumn(
@@ -984,11 +1118,100 @@ def _solve_reactor_path(task: tuple[str, str, Mapping[str, Any]]) -> SolvedColum
         )
 
 
+def _solve_reactor_chunk(
+    tasks: tuple[tuple[str, str, Mapping[str, Any]], ...],
+) -> list[SolvedColumn]:
+    """Solve one ordered reactor chunk through the common scheduler."""
+    return [_solve_reactor_path(task) for task in tasks]
+
+
+def _run_case(
+    reactor: Reactor,
+    overrides: Mapping[str, Any],
+    mode: str,
+    options: Mapping[str, Any],
+) -> SolvedColumn:
+    """Pin one case's overrides, solve, and snapshot.
+
+    Called inside a :func:`run_many` chunk.  Overrides are pinned as
+    fixed inputs before the run, so the case's values are held exactly and the
+    rest of the system reconciles/optimizes around them.  A failure is returned
+    as a failed column, keeping the multi-case run alive.
+    """
+    try:
+        for name, value in overrides.items():
+            reactor.add_variable(Variable(name, value=value, fixed=True))
+        result = reactor.run(mode, **options)
+        # See _solve_reactor_path: take the result ``run`` returned so every
+        # mode's payload survives the process boundary, popcon included.
+        column = _table_column(reactor.last_system)._replace(result=result)
+        label = ", ".join(f"{name}={value:g}" if isinstance(value, (int, float)) else f"{name}={value}" for name, value in overrides.items())
+        return column._replace(name=label or column.name)
+    except Exception as exc:
+        label = ", ".join(f"{name}={value}" for name, value in overrides.items())
+        return SolvedColumn(label or "case", dict(overrides), {}, {}, {}, frozenset(), {}, {"success": False, "termination": f"crashed: {exc!r}", "errors": [repr(exc)]})
+
+
+def _run_case_chunk(
+    path: str,
+    mode: str,
+    options: Mapping[str, Any],
+    cases: tuple[Mapping[str, Any], ...],
+) -> list[SolvedColumn]:
+    """Load once, then process independent scalar solves in one ordered chunk."""
+    base = Reactor.from_yaml(path)
+    return [_run_case(base.clone(), case, mode, options) for case in cases]
+
+
+def run_many(
+    reactor: "str | Path | Reactor",
+    cases: Iterable[Mapping[str, Any]],
+    *,
+    mode: str = "reconcile",
+    workers: int | None = None,
+    chunk_size: int | None = None,
+    **options: Any,
+) -> list[SolvedColumn]:
+    """Run any mode over parameter cases through the shared chunk scheduler.
+
+    Each case is a mapping of ``{variable_name: value}`` overrides pinned as
+    fixed inputs for that run; every other quantity is solved by ``mode``
+    around them.  Chunks are scheduled by the same harness POPCON uses; scalar
+    modes run independent solves within each chunk, while POPCON vectorizes the
+    points inside its chunks.
+
+    Args:
+        reactor: Reactor YAML path or a :class:`Reactor` loaded from YAML
+            (its ``source_path`` is reused; workers reload from it).
+        cases: One ``{name: value}`` override mapping per case.
+        mode: Mode run on each case (``reconcile``, ``optimize``, ...).
+        workers: Maximum worker processes; ``None`` lets the pool decide.
+        chunk_size: Cases handled by one worker task.
+        **options: Mode options forwarded to every case.
+
+    Returns:
+        One :class:`SolvedColumn` per case, in order; render with
+        :func:`fusdb.plotting.variable_table_data` or read ``.values`` /
+        ``.result`` directly.
+    """
+    if isinstance(reactor, Reactor):
+        if reactor.source_path is None:
+            raise ValueError(f"Reactor {reactor.name!r} was not loaded from YAML; pass its path.")
+        path = str(reactor.source_path)
+    else:
+        path = str(reactor)
+    case_list = [dict(case) for case in cases]
+    size = chunk_size or parallel_chunk_size(len(case_list), workers)
+    worker = partial(_run_case_chunk, path, mode, dict(options))
+    return map_chunks(case_list, worker, workers=workers, chunk_size=size)
+
+
 def solve_reactors(
     paths: Iterable[str | Path | Reactor],
     *,
     mode: str = "reconcile",
     workers: int | None = None,
+    chunk_size: int | None = None,
     **options: Any,
 ) -> list[SolvedColumn]:
     """Solve many reactor YAMLs in parallel, one worker process each.
@@ -1009,8 +1232,6 @@ def solve_reactors(
         One :class:`SolvedColumn` per input, in order. Duplicate reactor names
         are disambiguated with their file path.
     """
-    from concurrent.futures import ProcessPoolExecutor
-
     resolved: list[str] = []
     for item in paths:
         if isinstance(item, Reactor):
@@ -1021,8 +1242,13 @@ def solve_reactors(
             resolved.append(str(item))
 
     tasks = [(path, mode, options) for path in resolved]
-    with ProcessPoolExecutor(max_workers=workers) as executor:
-        columns = list(executor.map(_solve_reactor_path, tasks))
+    size = chunk_size or parallel_chunk_size(len(tasks), workers)
+    columns = map_chunks(
+        tasks,
+        _solve_reactor_chunk,
+        workers=workers,
+        chunk_size=size,
+    )
 
     name_counts: dict[str, int] = {}
     for column in columns:

@@ -11,7 +11,7 @@ from scipy.optimize import least_squares
 from scipy.sparse import lil_matrix
 
 
-from .relation import Relation, canonicalize_relation, canonicalize_relation_names, constraint_from_expression, is_default_relation
+from .relation import COORDINATE_NAMES, Relation, canonicalize_relation, canonicalize_relation_names, constraint_from_expression, is_default_relation
 from .registry import VARIABLES
 from .utils import ZERO_TOL, parse_constraint_specs, signed_scalar_grid, value_in_domain, volume_average
 from .variable import Variable
@@ -198,6 +198,8 @@ def _structural_block_plan(
     ]
 
 
+
+
 class RelationSystem:
     """Variables and relations compiled into one numeric system.
 
@@ -219,6 +221,16 @@ class RelationSystem:
       :meth:`build_jac_sparsity`, :meth:`movement_weights`,
       :meth:`refresh_scales` -- solve setup/initialization helpers.
 
+    Trust boundary: ``modes/`` also reads four *compiled-plan* members that are
+    underscore-prefixed but are part of the interface the modes depend on, not
+    private implementation -- ``_enforced_residual_relations``,
+    ``_profile_specs``, ``_constant_defaults_solver`` and
+    ``_apply_completion_providers``.  They are the frozen products of
+    :meth:`compile` (a Modelica-style compiled artifact lives here as method
+    state rather than a separate object -- see the deferred CompiledSystem
+    note in the refactor backlog), so a compile-internals change must keep
+    these four stable or update the modes with it.
+
     Args:
         variables: Scenario variables.
         relations: Post-filter relation candidates.
@@ -238,6 +250,13 @@ class RelationSystem:
         # Result of the most recent run(); read by table rendering for header
         # colouring. None until a mode has been dispatched.
         self.last_result: dict[str, Any] | None = None
+        # First swallowed exception per provider relation of the most recent
+        # completion cycle (strings only, so results stay picklable).  The
+        # solver keeps running on a failed provider -- a missing value
+        # penalizes its own residual rows -- but the original cause must
+        # survive into diagnostics instead of surfacing as a bare "value
+        # missing" downstream.
+        self.completion_errors: dict[str, str] = {}
         # Single read point for registry metadata; Variable/Relation are bound
         # to the same shared global registry.
         self.variable_registry = VARIABLES
@@ -253,10 +272,10 @@ class RelationSystem:
         # ``(name, reference, width, is_scalar)``; written by pack().  The
         # reference value and tolerance width are fixed for a whole solve, so
         # they are resolved once there instead of per residual call.
-        self._movement_plan: list[tuple[str, Any, float, bool]] = []
-        # Registry defaults that seed packed variables.  Unlike held constants,
-        # these may move to satisfy enforced relations; reconcile still treats
-        # the default value as the movement reference.
+        self._movement_plan: list[tuple[str, Any, float, bool, float | None]] = []
+        # Registry defaults that seed packed variables.  Every applied default
+        # lands here: they may move to satisfy enforced relations, and reconcile
+        # treats the default value as the movement reference.
         self.seeded_default_values: dict[str, float] = {}
 
         # ── Per-scenario state: plain dicts keyed by canonical name.  The
@@ -333,6 +352,13 @@ class RelationSystem:
         #   * packed layout -- packed_specs, packed_dim, _packed_base_values,
         #     uninitialized_free_variables (pack()).
         self.variable_roles: dict[str, str] = {}
+        # Solver mechanics behind the roles, not origin: which values are
+        # solver unknowns, and which of those get no seed entitlement.
+        self.packed_variables: set[str] = set()
+        self.unseeded_variables: set[str] = set()
+        # Values expanded from a scalar average with an assumed shape --
+        # orthogonal to the role, and true for inputs and computed alike.
+        self.avg_to_profile: set[str] = set()
         # Supplied-name/fixed-set fingerprint of the last full compile; while it
         # matches, compile() refreshes only the value-dependent products.
         self._compile_fingerprint: tuple[frozenset[str], frozenset[str]] | None = None
@@ -346,6 +372,12 @@ class RelationSystem:
         # ("held_constant", "relation:<name>", "block", "registry_default").
         self.seed_provenance: dict[str, str] = {}
         self.uninitialized_free_variables: list[str] = []
+        # Profile-shaped free cores with no supplied data and no average+shape
+        # reconstruction (S9).  Their uniform (flat) shape is the default and
+        # their level is a free scalar left at its seed -- correct and uniform,
+        # but the level is *defaulted*, not measured.  Detected at pack and
+        # surfaced (compiler report + verify warning); such a level is "assumed".
+        self.underdetermined_profiles: list[str] = []
         # The canonical bipartite structural graph over the (immutable)
         # candidate relations; built once on first use.  Its *structure*
         # never changes; compile passes rewrite only verdict annotations.
@@ -383,7 +415,11 @@ class RelationSystem:
         """Materialize the canonical fixed ``rho`` grid whenever profiles or
         rho-dependent relations are present."""
         if "rho" in self.variable_registry:
-            uses_rho = any("rho" in rel.variables for rel in self.candidate_primary_relations)
+            # rho is a relation *constant* now (S3), not a solved variable, so it
+            # no longer appears in ``rel.variables``; detect its users through
+            # ``constant_names``.  It stays framework-materialized here so every
+            # evaluation namespace still carries the identical grid.
+            uses_rho = any("rho" in rel.constant_names for rel in self.candidate_primary_relations)
             has_profile = any(self.variable_registry.get(name).shape == 1 for name in self.known)
             if uses_rho or has_profile:
                 self.track("rho")
@@ -693,7 +729,8 @@ class RelationSystem:
         # Derived/held names that may carry a movement row, sorted once here
         # instead of per residual call (see _build_movement_plan).
         self._movement_candidate_names = sorted(
-            name for name, role in self.variable_roles.items() if role in ("derived", "held")
+            name for name, role in self.variable_roles.items()
+            if role in ("computed", "assumed") and name not in self.packed_variables
         )
         # Registry-default seed plan: the single decision point for which
         # variables may be seeded from their registry default and from what
@@ -773,7 +810,13 @@ class RelationSystem:
             while changed_inv:
                 changed_inv = False
                 for rel in rels:
-                    if len(rel.variables) != 2:
+                    # A relation over a coordinate grid (rho) is a profile<->average
+                    # reduction, not a scalar bijection: many profiles share one
+                    # average, so an average must NOT be treated as invertible to a
+                    # profile here.  rho is a constant now (S3), so guard on it
+                    # explicitly to keep these relations out of the bijection
+                    # closure exactly as when rho counted toward their arity.
+                    if len(rel.variables) != 2 or any(c in COORDINATE_NAMES for c in rel.constant_names):
                         continue
                     unknown = [v for v in rel.variables if v not in decided]
                     if len(unknown) == 1:
@@ -783,16 +826,24 @@ class RelationSystem:
 
         base_forward = _forward_with_bijections(non_default)
         # Apply registry defaults to variables the user did not supply and that no
-        # real relation already forward-decides.  A default is one of two kinds:
-        #   * FREE core -- a default gated on a variable that is available
-        #     (``default_requires``, e.g. the composition fractions gated on
-        #     ``tau_p``).  The gate signals an active constraint (the steady-state
-        #     balance) that will move the variable; the default is only the x0
-        #     seed that breaks the n_X<->f_X cycle so the balance can activate.
-        #   * DERIVED CONSTANT -- any other default.  Nothing can move it, so it
-        #     is held at the default and never packed as a solver unknown (no
-        #     extra free dimension, so unconstrained defaults cost nothing).
-        # A supplied or forward-derivable value always wins over either.
+        # real relation already forward-decides.  Every default is a PENALIZED
+        # INPUT: a packed unknown seeded with the default value, which an enforced
+        # relation may move off that seed against a movement penalty anchored on
+        # it.  It is never a hard pin -- the penalty is free inside the variable's
+        # tolerance band and L1 beyond it, and reconcile weights relations far
+        # above movement, so a default yields when the data requires it and stays
+        # put when nothing pushes it.  A supplied or forward-derivable value
+        # always wins over a default.
+        #
+        # ``default_requires`` still gates one class, and only that class: the
+        # ash and impurity fractions, which must be EXACTLY their default (zero)
+        # unless the gate variable -- a particle confinement time, per species or
+        # the shared ``tau_p`` propagated by a default relation -- says a balance
+        # exists to derive them.  Without it there is no mechanism to create
+        # helium or an impurity, so "a little bit of ash" is not a weaker
+        # assumption than none, it is a wrong one.  A gated default whose gate is
+        # unavailable is therefore held exactly; everything else is a penalized
+        # input.
         candidate_vars = {name for rel in usable for name in rel.variables}
         self.constant_default_values = {}
         self.seeded_default_values = {}
@@ -803,16 +854,17 @@ class RelationSystem:
             spec = self.variable_registry.get(name)
             if spec.default is None or name in self.fixed:
                 continue
-            gated_available = (
+            gate_unavailable = (
                 spec.default_requires is not None
-                and self.variable_registry.resolve(spec.default_requires) in (supplied | base_forward)
+                and self.variable_registry.resolve(spec.default_requires) not in (supplied | base_forward)
             )
-            if gated_available:
-                seeded.add(name)
+            if gate_unavailable:
                 if not isinstance(spec.default, str):
-                    self.seeded_default_values[name] = float(spec.default)
-            elif not isinstance(spec.default, str):
-                self.constant_default_values[name] = float(spec.default)
+                    self.constant_default_values[name] = float(spec.default)
+                continue
+            seeded.add(name)
+            if not isinstance(spec.default, str):
+                self.seeded_default_values[name] = float(spec.default)
         forward = _forward_with_bijections(non_default, extra_known=seeded | set(self.constant_default_values))
         # Profile defaults seed the forward closure, but only for a profile that
         # is neither supplied nor produced by a non-default relation.  Without
@@ -858,6 +910,30 @@ class RelationSystem:
         # output a non-default relation can determine (forward or by a
         # two-variable inversion) is never registered as a provider, so it cannot
         # overwrite that derived value in completion (verify) or in reconcile.
+        # A profile is ``average x shape``.  The uniform fallback supplies the
+        # shape only when nothing else does, so an active SHAPE generator for the
+        # same profile retires it -- otherwise both stay enforced, the fallback
+        # (being forward-decidable from the average alone) wins the provider slot,
+        # and the shape generator becomes a residual that can never be satisfied.
+        # The activation gate above already intends this, but it is evaluated on
+        # the forward closure as it stands mid-fixpoint: a generator whose average
+        # only becomes decidable later (via composition/quasineutrality) has not
+        # claimed its output yet, so the fallback activates anyway.  The pool is
+        # final here, so the check is exact.
+        shaped_outputs = {
+            out
+            for rel in non_default
+            if "profile_shape" in rel.tags
+            for out in rel.output_names
+        }
+        if shaped_outputs:
+            retired = [rel for rel in active_defaults if shaped_outputs.intersection(rel.output_names)]
+            for rel in retired:
+                active_defaults.remove(rel)
+                self._mark_relation_inactive(
+                    rel, "inactive_default_superseded_by_shape_generator", replace=True
+                )
+
         claimed: set[str] = set()
         for rel in sorted(active_defaults, key=lambda item: item.name):
             for out in rel.output_names:
@@ -1015,15 +1091,13 @@ class RelationSystem:
                 continue
             lower_dimensional = True
             for inp in rel.input_names:
-                if inp == "rho":
-                    continue
                 if inp not in self.variable_registry or self.variable_registry.get(inp).shape == 1:
                     lower_dimensional = False
                     break
             if not lower_dimensional:
                 continue
             for out in rel.output_names:
-                if out not in self.variable_registry or self.variable_registry.get(out).shape != 1 or out == "rho":
+                if out not in self.variable_registry or self.variable_registry.get(out).shape != 1:
                     continue
                 if out in self.fixed:
                     continue
@@ -1067,12 +1141,25 @@ class RelationSystem:
         relation the oracle successfully used ends with every one of its
         variables valued, so no later round can deactivate it (verified
         empirically across the reactor fixtures).  Each round then re-packs
-        against the current roles -- the pack is the evaluability oracle: a
-        variable that is active, non-fixed, unsupplied, not a forward-derived
-        output and not a determined block core, and for which no seed exists,
-        cannot be evaluated.  It is recorded and every relation that references
-        it is deactivated on the next round; this repeats to a fixpoint because
+        against the current roles -- the pack is the evaluability oracle, and
+        it reports TWO ways a variable can fail:
+
+        * no seed exists (``uninitialized_free_variables``) -- active,
+          non-fixed, unsupplied, not a forward-derived output, not a determined
+          block core, and nothing can even start it; or
+        * it is a profile that IS seedable but has nothing determining it
+          (``underdetermined_profiles``) -- no supplied data and no surviving
+          producer, so its level sits wherever the seed put it.
+
+        Both are recorded and every relation that references them is
+        deactivated on the next round; this repeats to a fixpoint because
         removing a relation can orphan further variables.
+
+        The second test used to be recorded and then ignored, which is how a
+        stale decidability verdict reached the answer: a variable matched to a
+        producer that is *later* deactivated keeps its "determined" verdict,
+        because deactivation does not re-run the matching.  Only the pack can
+        see the result, so the pack has to be the one to veto it.
         """
         self._unevaluable_names = set()
         self.initial_guesses = {}
@@ -1086,7 +1173,17 @@ class RelationSystem:
             if round_no == 0:
                 self._refresh_seeds()
             self.pack()
-            newly = set(self.uninitialized_free_variables)
+            # Two evaluability failures, not one.  A variable with NO SEED
+            # cannot be evaluated; so can a profile that is seedable but has
+            # nothing determining it -- no supplied data, no producer left, so
+            # its level sits wherever the seed put it.  Feeding only the first
+            # in let the second survive to the answer: on Eos, `n_D` was matched
+            # to "D density from ion density and D fraction", that relation was
+            # then deactivated for needing an unevaluable `n_i`, and n_D's
+            # verdict was never revisited -- so it stayed packed as a free
+            # profile at its seed and its rho-average/peak consumers reported
+            # statistics of a meaningless curve, while `success` stayed True.
+            newly = set(self.uninitialized_free_variables) | set(self.underdetermined_profiles)
             if newly <= self._unevaluable_names:
                 break
             self._unevaluable_names |= newly
@@ -1129,23 +1226,37 @@ class RelationSystem:
         self._compiler_report_cache = None
 
     def _assign_roles(self, active_vars: set[str], derived: set[str], cores: set[str]) -> dict[str, str]:
-        """Return the one solve role of every variable -- the compile verdict.
+        """Return the one role of every variable -- the compile verdict.
 
-        Exactly one role per variable; everything downstream (packing,
-        completion, movement, storage, reporting) switches on it instead of
-        re-deriving membership from overlapping sets:
+        ONE classification, answering both "how did this number arise?" and
+        "what did the solver do with it?".  Two axes, plus the orthogonal
+        :attr:`avg_to_profile` flag:
 
-        * ``"inactive"`` -- touched by no active relation; ignored by the solve.
-        * ``"fixed"``    -- held at its supplied input; never packed or moved.
-        * ``"held"``     -- held at its registry constant default; filled by
-          completion when missing, never packed.
-        * ``"derived"``  -- recomputed by its provider relation during
-          completion (includes shape-locked supplied profiles); never packed.
-        * ``"core"``     -- packed solver unknown with no seed entitlement (a
-          determined-block free core); starts at the tolerance-floor magnitude.
-        * ``"packed"``   -- packed solver unknown (supplied inputs anchored by
-          the movement penalty, seeded free cores by their default).
+        =========  ============  =====================================
+        origin     role          meaning
+        =========  ============  =====================================
+        --         ``inactive``  touched by no active relation
+        input      ``fixed``     supplied and pinned; never moved
+        input      ``movable``   supplied, may move within its tolerance
+        computed   ``computed``  the equations determine it
+        computed   ``assumed``   nothing determines it -- a registry
+                                 constant, or a value left at its start
+                                 because the system under-determines it
+        =========  ============  =====================================
+
+        So ``fixed``/``movable`` is real data, ``computed`` is physics, and
+        ``assumed`` is the honest warning label.  ``avg_to_profile`` marks a
+        value expanded from a scalar average with an assumed shape, and applies
+        to inputs and computed values alike.
+
+        The solver needs two finer distinctions that are *mechanics*, not
+        origin, so they are booleans rather than roles:
+        :attr:`packed_variables` (which values are solver unknowns) and
+        :attr:`unseeded_variables` (packed unknowns with no seed entitlement,
+        which start at the tolerance-floor magnitude rather than at a default).
         """
+        self.packed_variables = set()
+        self.unseeded_variables = set()
         roles: dict[str, str] = {}
         for name in self.known:
             if name not in active_vars:
@@ -1153,13 +1264,20 @@ class RelationSystem:
             elif name in self.fixed:
                 roles[name] = "fixed"
             elif name in self.constant_default_values and name in derived:
-                roles[name] = "held"
+                roles[name] = "assumed"
             elif name in cores:
-                roles[name] = "core"
+                roles[name] = "computed"
+                self.packed_variables.add(name)
+                self.unseeded_variables.add(name)
             elif name in derived:
-                roles[name] = "derived"
+                roles[name] = "computed"
             else:
-                roles[name] = "packed"
+                # Packed: a supplied input the solver may move within tolerance,
+                # or a free unknown started from a registry default.  The seed is
+                # solver mechanics -- what the value IS depends on whether data
+                # supplied it.
+                self.packed_variables.add(name)
+                roles[name] = "movable" if self.inputs.get(name) is not None else "computed"
         return roles
 
     @property
@@ -1310,6 +1428,46 @@ class RelationSystem:
             if data.get("kind") == "relation" and data.get("inactive_reason")
         }
 
+    def _classify_avg_to_profile(self) -> None:
+        """Mark values expanded from a scalar average with an assumed shape.
+
+        Orthogonal to the role: it is true of a computed profile built by a
+        scalar->profile generator, and equally of an input profile supplied as a
+        bare average.  Call after providers and packing are known.
+        """
+        reg = self.variable_registry
+        self.avg_to_profile = set()
+        for name, role in self.variable_roles.items():
+            if role == "inactive" or name in COORDINATE_NAMES or name not in reg:
+                continue
+            if reg.get(name).shape != 1:
+                continue
+            producer = self.derived_provider_by_output.get(name) or self.default_provider_by_output.get(name)
+            if producer is not None and all(
+                reg.get(inp).shape == 0 for inp in producer.input_names if inp in reg
+            ):
+                self.avg_to_profile.add(name)
+
+    def reported_roles(self) -> dict[str, str]:
+        """Per-variable role -- the single origin classification.
+
+        ``fixed``/``movable`` are real data, ``computed`` is physics, and
+        ``assumed`` is the honest warning label (a registry constant, or a value
+        the system under-determines and therefore left at its start).  See
+        :meth:`_assign_roles`; :attr:`avg_to_profile` is the orthogonal flag.
+
+        Deliberately non-propagating: each value reports its OWN origin, not the
+        weakest of its ancestors -- propagating would collapse every quantity
+        downstream of one assumed profile and carry no information.  A caller
+        wanting effective upstream provenance can walk
+        ``derived_provider_by_output`` over these roles on demand.
+        """
+        return {
+            name: role
+            for name, role in self.variable_roles.items()
+            if role != "inactive" and name not in COORDINATE_NAMES
+        }
+
     @property
     def compiler_report(self) -> dict[str, Any]:
         """Diagnostic view of the compiled system, built on first access.
@@ -1329,12 +1487,17 @@ class RelationSystem:
             "variable_roles": dict(sorted(self.variable_roles.items())),
             "supplied_variables": tuple(sorted(self.inputs)),
             "active_variables": tuple(sorted(name for name, role in self.variable_roles.items() if role != "inactive")),
-            "derived_variables": tuple(sorted(name for name, role in self.variable_roles.items() if role in ("derived", "held"))),
+            "derived_variables": tuple(sorted(name for name, role in self.variable_roles.items() if role in ("computed", "assumed") and name not in self.packed_variables)),
             "active_relations": tuple(rel.name for rel in self.primary_relations),
             "inactive_relations": dict(sorted(self.blocked_relation_reasons.items())),
             "default_provider_outputs": {name: rel.name for name, rel in sorted(self.default_provider_by_output.items())},
             "derived_provider_by_output": {name: rel.name for name, rel in self.derived_provider_by_output.items()},
             "unevaluable_variables": tuple(sorted(self._unevaluable_names)),
+            # Profile free cores with no data anchor -- solved shape is an
+            # arbitrary seed, not physics (S9).
+            "underdetermined_profiles": tuple(sorted(self.underdetermined_profiles)),
+            # Per-variable data-origin tag (D3): measured/defaulted/
+            "avg_to_profile": tuple(sorted(self.avg_to_profile)),
             "structural_determinacy": {
                 **self._partition_diagnostics,
                 "blocks": tuple(self.structural_blocks),
@@ -1567,16 +1730,20 @@ class RelationSystem:
         upper: list[float] = []
         specs: list[tuple[str, int, int, np.ndarray, np.ndarray, int, str | None]] = []
         self.uninitialized_free_variables = []
+        self.underdetermined_profiles = []
         for name, role in sorted(self.variable_roles.items()):
-            if role in ("inactive", "derived", "held"):
-                continue
-            if role == "fixed":
-                if self.inputs.get(name) is None:
+            if role == "inactive" or name not in self.packed_variables:
+                if role == "fixed" and self.inputs.get(name) is None:
                     raise ValueError(f"Fixed variable {name!r} has no value.")
                 continue
             spec = self.variable_registry.get(name)
             lb, ub = spec.solver_bounds
             size = self.profile_size if spec.shape == 1 else 1
+            # A profile packed as raw free elements with no data anchor is
+            # under-determined pointwise: its shape is fixed by the seed, not by
+            # physics.  Record it so the certificate never claims it as solved.
+            if spec.shape == 1 and self.inputs.get(name) is None:
+                self.underdetermined_profiles.append(name)
             start = len(lower)
             offsets: list[float] = []
             scales: list[float] = []
@@ -1611,6 +1778,15 @@ class RelationSystem:
             specs.append((name, start, len(lower), np.asarray(offsets, dtype=float), np.asarray(scales, dtype=float), spec.shape, span_transform))
         self.packed_specs = specs
         self.packed_dim = len(lower)
+        # A profile packed as raw free elements has no physics pinning its
+        # level -- it sits where its start put it -- so its role is the
+        # warning label, not "computed".  Only knowable here, once packing
+        # has run.
+        for name in self.underdetermined_profiles:
+            if self.variable_roles.get(name) == "computed":
+                self.variable_roles[name] = "assumed"
+        self._classify_avg_to_profile()
+        self._compiler_report_cache = None
         # Immutable input values are the base every solver vector is layered
         # onto; completion itself reads the compile-cached plan.
         self._packed_base_values = self.input_values()
@@ -1685,7 +1861,9 @@ class RelationSystem:
                     # both of which build solver-form values), so the relation is
                     # evaluated directly without the per-relation namespace copy.
                     mapped = rel.output_map(rel.evaluate(out))
-                except Exception:
+                except Exception as exc:
+                    # Skip the provider but keep the first real cause (S10a).
+                    self.completion_errors.setdefault(rel.name, f"{type(exc).__name__}: {exc}")
                     continue
                 for out_name, spec in outs:
                     old_missing = out.get(out_name) is None
@@ -1694,7 +1872,8 @@ class RelationSystem:
                         continue
                     try:
                         value = spec.solver_value(mapped[out_name], size)
-                    except Exception:
+                    except Exception as exc:
+                        self.completion_errors.setdefault(rel.name, f"{out_name}: {type(exc).__name__}: {exc}")
                         continue
                     old_value = out.get(out_name) if check_changes and not old_missing else None
                     out[out_name] = value
@@ -1798,6 +1977,7 @@ class RelationSystem:
         Returns:
             The same ``values`` mapping, for convenience.
         """
+        self.completion_errors = {}
         self.apply_profile_specs(values)
         self._apply_constant_defaults(values)
         self._apply_completion_providers(values)
@@ -2067,7 +2247,14 @@ class RelationSystem:
         """Domain rows for one namespace at a frozen layout."""
         return self._domain_rows(values, layout["domain_sel"], layout["domain_sel_names"], layout["domain_tail"])
 
-    def layout_movement_rows(self, values: Mapping[str, Any], layout: Mapping[str, Any], weights: Mapping[str, float] | None = None) -> np.ndarray:
+    def layout_movement_rows(
+        self,
+        values: Mapping[str, Any],
+        layout: Mapping[str, Any],
+        weights: Mapping[str, float] | None = None,
+        *,
+        deadzone: bool = True,
+    ) -> np.ndarray:
         """Movement rows for one namespace at a frozen layout.
 
         Each movement input contributes ``sqrt(weight * excess)``, so its
@@ -2086,7 +2273,7 @@ class RelationSystem:
         if not names:
             return np.empty(0, dtype=float)
         weights = weights or {}
-        excess_by_name = dict(self._movement_rows(values))
+        excess_by_name = dict(self._movement_rows(values, deadzone=deadzone))
         rows = np.empty(len(names), dtype=float)
         for i, name in enumerate(names):
             excess = excess_by_name.get(name)
@@ -2340,8 +2527,8 @@ class RelationSystem:
             rows.append(np.full(n_rows, 1.0e12, dtype=float))
         return np.concatenate(rows) if rows else np.empty(0, dtype=float)
 
-    def _build_movement_plan(self) -> list[tuple[str, Any, float, bool]]:
-        """Return movement records ``(name, reference, width, is_scalar)``.
+    def _build_movement_plan(self) -> list[tuple[str, Any, float, bool, float | None]]:
+        """Return movement records ``(name, reference, width, is_scalar, log_width)``.
 
         Movement inputs are the packed variables (from the layout stored by
         :meth:`pack`) with a supplied reference, plus the supplied variables
@@ -2353,7 +2540,7 @@ class RelationSystem:
         all iterate this one plan (:meth:`_movement_rows`) so their rows stay
         aligned.
         """
-        plan: list[tuple[str, Any, float, bool]] = []
+        plan: list[tuple[str, Any, float, bool, float | None]] = []
         packed: set[str] = set()
         for name, *_rest in self.packed_specs:
             packed.add(name)
@@ -2377,33 +2564,53 @@ class RelationSystem:
             plan.append(self._movement_record(name, self.solver_value(name, ref_input)))
         return plan
 
-    def _movement_record(self, name: str, reference: Any) -> tuple[str, Any, float, bool]:
-        """Build one movement-plan record from a solver-form reference value."""
+    def _movement_record(self, name: str, reference: Any) -> tuple[str, Any, float, bool, float | None]:
+        """Build one movement-plan record from a solver-form reference value.
+
+        ``log_width`` is non-None for strictly-positive variables, whose
+        movement is measured multiplicatively (see
+        :attr:`VariableSpec.movement_is_multiplicative`).
+        """
         spec = self.spec_of(name)
         rel_tol, abs_tol = self.tols_of(name)
         width = max(float(spec.tolerance_width(spec.scale_of(rel_tol, abs_tol, reference), rel_tol, abs_tol)), 1.0e-300)
+        log_width = spec.movement_log_width(width, reference)
         if spec.shape == 0:
-            return name, float(np.asarray(reference, dtype=float).reshape(-1)[0]), width, True
-        return name, reference, width, False
+            return name, float(np.asarray(reference, dtype=float).reshape(-1)[0]), width, True, log_width
+        return name, reference, width, False, log_width
 
-    def _movement_rows(self, values: Mapping[str, Any]):
+    def _movement_rows(self, values: Mapping[str, Any], *, deadzone: bool = True):
         """Yield ``(name, excess)`` for every movement input present in ``values``.
 
         The scalar fast path computes the deadzone excess in plain float
         arithmetic (identical to :meth:`VariableSpec.movement_excess`); profile
         or unexpectedly-shaped values fall back to that spec method.
+
+        ``deadzone=False`` (reconcile's ``exact`` option) drops the free
+        tolerance band: movement is penalised from the first deviation, in
+        units of the pack-time tolerance width.
         """
-        for name, reference, width, is_scalar in self._movement_plan:
+        for name, reference, width, is_scalar, log_width in self._movement_plan:
             current = values.get(name)
             if current is None:
                 continue
-            if is_scalar and isinstance(current, float):
-                excess = abs(current - reference) / width - 1.0
+            if not deadzone:
+                cur = np.asarray(current, dtype=float)
+                ref = np.asarray(reference, dtype=float)
+                if log_width is not None and bool(np.all(cur > 0.0)):
+                    yield name, float(np.max(np.abs(np.log(cur / ref)))) / log_width
+                else:
+                    yield name, float(np.max(np.abs(cur - ref))) / width
+            elif is_scalar and isinstance(current, float):
+                if log_width is not None and current > 0.0:
+                    excess = abs(np.log(current / reference)) / log_width - 1.0
+                else:
+                    excess = abs(current - reference) / width - 1.0
                 yield name, excess if excess > 0.0 else 0.0
             else:
                 yield name, self.spec_of(name).movement_excess(current, reference, *self.tols_of(name))
 
-    def movement_weights(self, values: Mapping[str, Any], *, eps: float) -> dict[str, float]:
+    def movement_weights(self, values: Mapping[str, Any], *, eps: float, deadzone: bool = True) -> dict[str, float]:
         """Return movement L1 weights from the current solution (one IRLS step).
 
         ``weight = 1 / (excess + eps)`` per input: an input already well
@@ -2418,7 +2625,7 @@ class RelationSystem:
             eps: Reweighting floor; smaller drives sparser (more aggressive)
                 solutions at some cost to stability.
         """
-        return {name: 1.0 / (excess + float(eps)) for name, excess in self._movement_rows(values)}
+        return {name: 1.0 / (excess + float(eps)) for name, excess in self._movement_rows(values, deadzone=deadzone)}
 
     # ── Store and final-value checks ──────────────────────────────────────
 
@@ -2453,7 +2660,17 @@ class RelationSystem:
                 # domain.  Do not call public_value here, because that may
                 # project a violating value back onto a solver boundary and hide
                 # an invalid reconciliation candidate.
-                if not value_in_domain(value, spec.domain, zero_tol=0.0):
+                #
+                # The boundary slack is a single GLOBAL constant, not the
+                # variable's abs_tol.  It exists to absorb FLOATING-POINT NOISE
+                # and nothing else: abs_tol is a physical tolerance, and using
+                # it would have let P_brem_imp (abs_tol 1 MW) sit at -0.5 MW
+                # unnoticed.  Anything that legitimately reaches a boundary is
+                # fixed at the source instead -- P_brem_imp is now a sum over
+                # impurity species rather than a difference of two totals, and
+                # the peaking factors no longer claim a `>= 1` domain, because a
+                # hollow profile is physical.
+                if not value_in_domain(value, spec.domain, zero_tol=ZERO_TOL):
                     errors.append(f"Variable {name!r} violates domain {spec.domain!r}.")
             except Exception as exc:
                 errors.append(f"Could not validate domain for variable {name!r}: {exc}")
@@ -2527,8 +2744,10 @@ class RelationSystem:
         out = dict(values)
         # Relation inputs are coerced to canonical solver shape/unit only.
         # Domains and solver domains are checked by residuals, bounds, and final
-        # verification; they are not algebraic projections.
-        for name in set(rel.input_names) | set(rel.constant_names):
+        # verification; they are not algebraic projections.  ``_coerce_names``
+        # is the precomputed input+constant tuple (disjoint), so the hot
+        # per-evaluation path does no set construction.
+        for name in rel._coerce_names:
             if name in out and out[name] is not None and name in self.variable_registry:
                 out[name] = self.solver_value(name, out[name])
         return out
@@ -2600,7 +2819,7 @@ class RelationSystem:
         # same unique answer regardless.  The magnitude comes from the declared
         # registry ``nominal`` when present, else from the variable tolerance
         # scale, which the log transform then explores.
-        if self.variable_roles.get(name) == "core":
+        if name in self.unseeded_variables:
             if spec.nominal is not None:
                 arr = np.asarray(spec.solver_value(spec.nominal, size), dtype=float).reshape(-1)
                 if arr.size:

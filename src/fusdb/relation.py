@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import functools
 import inspect
 import operator
 from collections.abc import Iterable, Mapping
@@ -17,6 +18,39 @@ from .utils import compare_numeric, domain_bounds_for_solver, normalize_tags, pa
 
 REGISTERED_RELATIONS: dict[str, "Relation"] = {}
 _ALLOWED_OPS = {"==", "<", "<=", ">", ">="}
+
+# Discretisation coordinates are framework state, not physical unknowns.  A
+# coordinate is never a solved variable: it is not registered, is classified as
+# a relation *constant* regardless of its signature (so it drops out of the
+# arity count and the structural graph), and is supplied by the framework at
+# evaluation.  A standalone solve refuses to invert one, and forward standalone
+# calls fall back to the default grid below when the framework does not supply
+# one.
+COORDINATE_NAMES = ("rho",)
+
+# Lower-bound stand-in for a single-relation inverse solve whose lower bound is
+# exactly zero.  The bounds are read with ``zero_tol=0.0`` on purpose -- an
+# inclusive physical bound is not an open one and must not be nudged -- but
+# handing a root-finder a lower bound of exactly zero for a variable appearing
+# as 1/x or log(x) makes the bracket unusable, and the global packer already
+# starts those variables at 1e-12.  Only an exact zero is replaced: a smaller
+# declared floor (L_int at 1e-45, beam_stopping_cross_section at 1e-30) is
+# deliberate and must survive.  This floors the *search box* alone; it never
+# alters a declared domain.
+INVERSE_BOUND_FLOOR = 1.0e-12
+
+
+def _floored_lower_bound(lower: float | None) -> float:
+    """Return an inverse-solve lower bound, replacing an exact zero."""
+    if lower is None:
+        return -np.inf
+    return INVERSE_BOUND_FLOOR if float(lower) == 0.0 else float(lower)
+
+# Standalone default grid for coordinate constants (the framework overrides it
+# with its own ``profile_size`` grid via the evaluation namespace).  Matches
+# ``VariableRegistry.uniform_profile_grid`` at the default ``profile_size`` of
+# 46, so a forward standalone call with profile inputs of that length works.
+_DEFAULT_COORDINATE_GRID = np.linspace(0.0, 1.0, 46)
 
 # Shared variable registry, resolved lazily (importing it at module load would
 # cycle through fusdb.registry) and cached for the hot tolerance/domain paths.
@@ -42,6 +76,15 @@ class RelationUnderdeterminedError(RelationSolveError):
 
 class RelationVerificationError(RelationSolveError):
     """Raised when a solved value does not verify against the canonical relation."""
+
+
+class RelationNotInvertibleError(RelationSolveError):
+    """Raised when a standalone inverse direction is not a well-posed request.
+
+    Coordinates (the discretisation grid) and inequality relations refuse
+    inversion: a coordinate is not an unknown, and an inequality determines a
+    feasible interval rather than a value.
+    """
 
 
 @dataclass
@@ -93,6 +136,10 @@ class Relation:
     _variables: tuple[str, ...] = field(init=False, repr=False, compare=False)
     _implicit: bool = field(init=False, repr=False, compare=False)
     _arg_pairs: tuple[tuple[str, str], ...] = field(init=False, repr=False, compare=False)
+    # Names coerced to solver shape before a relation evaluation (inputs plus
+    # constants, disjoint by construction).  Cached so the per-evaluation
+    # namespace build does not rebuild the set on every residual call.
+    _coerce_names: tuple[str, ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Normalize metadata and build local constraint relations."""
@@ -119,9 +166,16 @@ class Relation:
             parameter = self._signature.parameters.get(name)
             if parameter is not None and parameter.default is not inspect.Parameter.empty:
                 self._constant_defaults[name] = parameter.default
+        # A coordinate constant with no signature default still needs a value
+        # for a standalone forward call (the framework supplies the real grid
+        # via the namespace at solve time).
+        for name in COORDINATE_NAMES:
+            if name in self.constant_names and name not in self._constant_defaults:
+                self._constant_defaults[name] = _DEFAULT_COORDINATE_GRID
         self._variables = unique_preserve_order((*self.input_names, *self.outputs))
         self._implicit = bool(set(self.outputs) & set(self.input_names))
         self._arg_pairs = tuple(zip(self.argument_names, self.input_names))
+        self._coerce_names = (*self.input_names, *self.constant_names)
 
         # Local constraints are themselves relations. enforce=False means checked-only applicability.
         built: list[Relation] = []
@@ -251,6 +305,19 @@ class Relation:
     def solve(self, values: Mapping[str, Any] | None = None) -> Any:
         """Evaluate, verify, or invert a standalone relation.
 
+        Inverse directions follow the target's registry shape:
+
+        * a scalar target is solved as a scalar, even when profiles are
+          supplied (the residual may then be overdetermined -- consistent
+          pointwise data still recovers the exact value);
+        * a profile target is recovered pointwise when the relation provides
+          a profile-sized residual; when the relation reduces to a scalar
+          equation (an average or integral), the solved level is returned as
+          a **flat profile** on the supplied grid -- the representative
+          member of the solution family, not a unique shape;
+        * a coordinate (``rho``) or an inequality relation refuses with
+          :class:`RelationNotInvertibleError`.
+
         Args:
             values: Supplied relation variable values. Constants may also be
                 supplied, but they are not counted as relation variables.
@@ -275,6 +342,16 @@ class Relation:
             )
 
         target = missing[0]
+        if target in COORDINATE_NAMES:
+            raise RelationNotInvertibleError(
+                f"Variable {target!r} in relation {self.name!r} is a coordinate grid, not an unknown; "
+                "supply it instead of solving for it."
+            )
+        if self.op != "==":
+            raise RelationNotInvertibleError(
+                f"Relation {self.name!r} is an inequality; it constrains {target!r} to a feasible "
+                "interval and cannot determine a single value."
+            )
         self._check_all_domains(ns, names=known, use_solver_domain=False)
 
         # Fast canonical direction: all inputs are available and the single
@@ -528,7 +605,7 @@ class Relation:
         if spec is None:
             return np.full(shape, -np.inf), np.full(shape, np.inf)
         lb, ub = domain_bounds_for_solver(spec.solver_domain, zero_tol=0.0)
-        lower = -np.inf if lb is None else float(lb)
+        lower = _floored_lower_bound(lb)
         upper = np.inf if ub is None else float(ub)
         return np.full(shape, lower, dtype=float), np.full(shape, upper, dtype=float)
 
@@ -550,10 +627,50 @@ class Relation:
                 raise RelationSolveError(f"Relation {self.name!r} failed local {label} {guard.name!r}.")
 
     def _solve_one_missing(self, target: str, ns: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
+        spec = self._variable_spec(target)
+        if spec is not None and spec.shape:
+            return self._solve_profile_target(target, ns)
         scalar = self._solve_one_missing_scalar_scan(target, ns)
         if scalar is not None:
             return scalar
-        return self._solve_one_missing_least_squares(target, ns)
+        return self._solve_one_missing_least_squares(target, ns, template=self._scalar_template_for(ns))
+
+    def _solve_profile_target(self, target: str, ns: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
+        """Invert a profile-valued target.
+
+        Pointwise inversion when the relation provides a profile-sized
+        residual; otherwise (a reducing relation -- one scalar equation over
+        many grid points) the solved level is returned as a flat profile on
+        the supplied grid, the documented standalone semantics.
+        """
+        size = self._grid_size(ns)
+        if size is not None:
+            try:
+                return self._solve_one_missing_least_squares(target, ns, template=np.ones(size))
+            except RelationSolveError:
+                pass  # reduction: profile-sized template is underdetermined
+        scalar = self._solve_one_missing_scalar_scan(target, ns)
+        if scalar is None:
+            scalar = self._solve_one_missing_least_squares(target, ns, template=self._scalar_template_for(ns))
+        value, info = scalar
+        level = float(np.asarray(value, dtype=float).reshape(-1)[0])
+        if size is None:
+            return level, info
+        return np.full(size, level), info
+
+    @staticmethod
+    def _grid_size(ns: Mapping[str, Any]) -> int | None:
+        """Profile length implied by the supplied values (``rho`` preferred)."""
+        rho = ns.get("rho")
+        if rho is not None:
+            arr = np.asarray(rho)
+            if arr.ndim == 1 and arr.size > 1:
+                return int(arr.size)
+        for value in ns.values():
+            arr = np.asarray(value)
+            if arr.ndim >= 1 and arr.shape[-1] > 1:
+                return int(arr.shape[-1])
+        return None
 
     def _solve_one_missing_scalar_scan(self, target: str, ns: Mapping[str, Any]) -> tuple[Any, dict[str, Any]] | None:
         lower, upper = self._scalar_bounds_for_target(target)
@@ -595,8 +712,9 @@ class Relation:
                     return root, {"method": "brentq", "residual": np.asarray([final]), "success": True}
         return None
 
-    def _solve_one_missing_least_squares(self, target: str, ns: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
-        template = self._initial_template_for(ns)
+    def _solve_one_missing_least_squares(
+        self, target: str, ns: Mapping[str, Any], *, template: np.ndarray
+    ) -> tuple[Any, dict[str, Any]]:
         flat0 = np.asarray(template, dtype=float).reshape(-1)
         if flat0.size == 0 or not np.all(np.isfinite(flat0)):
             raise RelationSolveError(f"No finite initial guess is available for {target!r} in {self.name!r}.")
@@ -637,13 +755,16 @@ class Relation:
         if spec is None:
             return -np.inf, np.inf
         lower, upper = domain_bounds_for_solver(spec.solver_domain, zero_tol=0.0)
-        return (-np.inf if lower is None else float(lower)), (np.inf if upper is None else float(upper))
+        return _floored_lower_bound(lower), (np.inf if upper is None else float(upper))
 
-    def _initial_template_for(self, ns: Mapping[str, Any]) -> np.ndarray:
-        for value in ns.values():
-            arr = np.asarray(value)
-            if arr.ndim > 0 and arr.size > 1:
-                return np.ones_like(arr, dtype=float)
+    def _scalar_template_for(self, ns: Mapping[str, Any]) -> np.ndarray:
+        """Scalar initial guess: the geometric mean of the supplied magnitudes.
+
+        The inverse template follows the *target's* registry shape, never the
+        shape of whichever supplied value happens to come first -- a scalar
+        target solved against profile-sized residuals is simply
+        overdetermined, and consistent data recovers it exactly.
+        """
         positive = []
         for value in ns.values():
             arr = np.asarray(value, dtype=float).reshape(-1)
@@ -663,6 +784,7 @@ class Relation:
         enforce: bool = True,
         constraints: Any = None,
         dependency: str = "dense",
+        h_factor: str | None = None,
     ) -> "Relation":
         """Build a relation from a decorated Python function.
 
@@ -678,6 +800,8 @@ class Relation:
         Returns:
             Relation object.
         """
+        if h_factor is not None:
+            func = _with_h_factor(func, h_factor)
         inputs: list[str] = []
         constants: list[str] = []
         for parameter in inspect.signature(func).parameters.values():
@@ -685,7 +809,9 @@ class Relation:
                 raise ValueError(f"Relation {func.__name__!r} cannot use positional-only parameters or *args.")
             if parameter.kind == inspect.Parameter.VAR_KEYWORD:
                 continue
-            if parameter.default is inspect.Parameter.empty:
+            # Coordinates are always framework-supplied constants, never solved
+            # inputs, even without a signature default (S3).
+            if parameter.default is inspect.Parameter.empty and parameter.name not in COORDINATE_NAMES:
                 inputs.append(parameter.name)
             else:
                 constants.append(parameter.name)
@@ -717,6 +843,52 @@ def is_default_relation(rel: "Relation") -> bool:
     return "default" in set(rel.tags) or str(rel.source_kind).startswith("default")
 
 
+def _with_h_factor(func: Callable[..., Any], h_name: str) -> Callable[..., Any]:
+    """Wrap a confinement scaling so its result is H-enhanced.
+
+    Energy-confinement scalings are published as a *raw* fit; the confinement
+    time a device actually achieves is that fit times an enhancement factor H.
+    Rather than write the multiplication into 50 relation bodies, the scaling
+    declares ``h_factor="H98_y2"`` and this wrapper injects two optional
+    constants and multiplies them in:
+
+    * ``h_name`` -- the H defined against *this particular* scaling
+      (``H98_y2`` for IPB98(y,2), ``H_iter_89p`` for ITER89-P, ...), which is
+      what published design points quote; and
+    * ``H_factor`` -- a generic multiplier that applies whichever scaling is
+      active, matching PROCESS's ``hfact`` and cfspopcon's
+      ``confinement_time_scalar``.
+
+    Both default to 1.0, so they compose multiplicatively and each is a no-op
+    when absent.  Supplying only the generic H enhances any scaling; supplying
+    only the scaling-specific H enhances it exactly where it belongs, and is
+    simply unused if a different scaling wins the provider slot.  Supplying
+    both applies the product.
+
+    Making the conditionality structural like this -- rather than coupling the
+    two with an ``H_factor = H98_y2`` relation -- is deliberate: fusdb activates
+    relations on variable availability, not on which sibling relation won a
+    provider slot, so such a coupling would force a published ``H98_y2`` onto
+    whatever scaling happened to be active.
+    """
+    signature = inspect.signature(func)
+    extra = [
+        inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=1.0, annotation=float)
+        for name in (h_name, "H_factor")
+        if name not in signature.parameters
+    ]
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        scale = 1.0
+        for parameter in extra:
+            scale = scale * kwargs.pop(parameter.name, 1.0)
+        return scale * func(*args, **kwargs)
+
+    wrapper.__signature__ = signature.replace(parameters=[*signature.parameters.values(), *extra])
+    return wrapper
+
+
 def relation(
     _func: Callable[..., Any] | None = None,
     *,
@@ -726,6 +898,7 @@ def relation(
     enforce: bool = True,
     constraints: Any = None,
     dependency: str = "dense",
+    h_factor: str | None = None,
 ) -> Callable[[Callable[..., Any]], Relation] | Relation:
     """Decorate a function as a FusDB relation.
 
@@ -743,7 +916,7 @@ def relation(
     """
 
     def decorator(func: Callable[..., Any]) -> Relation:
-        built = Relation.from_function(func, outputs=outputs, name=name, tags=tags, enforce=enforce, constraints=constraints, dependency=dependency)
+        built = Relation.from_function(func, outputs=outputs, name=name, tags=tags, enforce=enforce, constraints=constraints, dependency=dependency, h_factor=h_factor)
         if built.name in REGISTERED_RELATIONS:
             raise ValueError(f"Duplicate relation {built.name!r}.")
         REGISTERED_RELATIONS[built.name] = built

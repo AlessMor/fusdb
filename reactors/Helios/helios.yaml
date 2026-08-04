@@ -24,9 +24,9 @@ variables:
     unit: MW
   beta: # volume avg beta
     value: 2.7
-    unit: %
+    unit: "%"
   # iota_2_3: 0.46 # rotational transform at 2/3 surface
-  # H_ISS04: 1.4 # ISS04 confinement enhancement factor
+  H_ISS04: 1.4 # ISS04 confinement enhancement factor
   # TODO: check confinement scaling H. Yamada, J. H. Harris, A. Dinklage, E. Ascasibar, F. Sano, S. Okamura, J. Talmadge, U. Stroth, A. Kus, S. Murakami, M. Yokoyama, C. D. Beidler, V. Tribaldos, K. Y. Watanabe, Y. Suzuki, Characterization of energy confinement in net-current free plasmas using the  extended International Stellarator Database, Nuclear Fusion 45 (12) (2005) 1684–1693, number: 12 Publisher: IOP Publishing. doi:10.1088/0029-5515/45/12/024. URL https://doi.org/10.1088/00295515/45/12/024
   tau_E: 1.8
   n_e_0: 2.1e20
@@ -44,7 +44,7 @@ variables:
     unit: GW
   eta_th:
     value: 40
-    unit: %
+    unit: "%"
   P_e_net:
     value: 390
     unit: MW

@@ -20,9 +20,9 @@ variables:
   delta_95: 0.54
   P_aux: 25e6
   tau_pulse: 10 # actually it's t_flattop
-  Phi_tot:
-    value: 42
-    unit: Wb
+  # Phi_tot:
+  #   value: 42
+  #   unit: Wb
   P_fus: 140e6
   Q: 11
   tau_E: 0.77
@@ -34,7 +34,7 @@ variables:
   nu_eff: 0.16
   nu_star: 0.029
   H_98y2: 1.0
-  P_rf: 11.1e6
+  # P_rf: 11.1e6 # NOTE: Radio frequency heating?
   P_ohmic: 1.7e6
   T_e_avg: 7.3
   T_i_avg: 7.3

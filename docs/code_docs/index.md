@@ -9,6 +9,13 @@ The main objects used in `fusdb` are:
 - [Relation](relation_class.md)
 - [RelationSystem](relationsystem_class.md)
 
+Two further pages cover cross-cutting structure:
+
+- [Responsibility Model](responsibility_model.md) — which layer owns identity,
+  metadata, ingestion, the declaration, solved state and provenance
+- [Species Registry](species_registry.md) — the ion-species metadata behind
+  composition, quasineutrality and the fusion rates
+
 ## Reactors
 
 A [Reactor](reactor_class.md) is an object containing all the information pertaining to a specific fusion reactor configuration. It stores metadata such as its name, configuration, year and DOI of publication of its design, solver-specific settings, and available data taken from the cited reference.

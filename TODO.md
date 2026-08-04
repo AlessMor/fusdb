@@ -1,7 +1,28 @@
-- L-H switch for Popcon: popcon uses one regime for the whole map. _verify_all_regime_guards evaluates guards on system.complete(system.solver_values()) — a single nominal operating point. So a popcon that spans a wide (n, T) range picks one tau_E scaling at the nominal point and applies it to every grid cell, even in corners that are physically on the other side of the L-H boundary. Since a popcon exists precisely to explore operating space that crosses these thresholds, this is the one place the current design is genuinely under-serving the physics.
+- Regime choice inside the L-H bistable band contradicts its own stated rationale. `Reactor._run_with_regime_verification` walks the candidate regimes and keeps one when its own solve satisfies its own sustainment guards. When NO candidate is self-consistent -- the genuine dithering band, where the h-mode solve falls below the very threshold the l-mode solve exceeds -- it settles on `l_mode` and sets `regime_bistable=True` with a warning. That is detected and reported honestly, but the choice fights the docstring two paragraphs above it: starting at the declared regime is described as "the steady-state stand-in for L-H hysteresis: the declared tag states which branch of a bistable band the machine sits on". Hysteresis IS the bistable-band phenomenon, so a machine declared `h_mode` and sitting in the band should stay in H-mode -- yet the fallback overrides the declaration precisely where the declaration was supposed to be the tie-breaker.
 
-- match cfspocpon SPARC PRD
+  MEASURED 2026-08-03 on `tests/PROCESS_large_tokamak` tungsten sweep, point `w_5.0e-05` (the last sustained point; the fixture already annotates it "radiation is 71% of heating power here"):
+    regime_path = ['h_mode', 'l_mode', 'ohmic_mode', 'l_mode'] -- all three tried, none self-consistent
+    fusdb settles l_mode: P_sep 800.3 MW, P_LH 106.6 (ratio 7.5), P_aux 783.9 MW, tau_E 0.93 s
+    PROCESS stays h_mode: P_sep 104.2 MW, P_LH 99.1 (ratio 1.05), P_aux 79.3 MW
+  The reported P_sep is the l-mode solve's and is inconsistent by construction, which is exactly what `regime_bistable` is telling you. Composition is NOT implicated: P_fus 1684.3 vs PROCESS 1679.9 (0.3%), and the neighbouring point w_2.0e-05 gives P_sep 154.5 vs 155.4 (0.6%).
 
-- match PROCESS
+  Candidate one-liner: `fallback = declared if declared in attempts else ("l_mode" if "l_mode" in attempts else current)`.
+  NOT applied -- it is a physics convention, not a defect, and both readings are defensible (`l_mode` = the pessimistic/accessible branch; declared = hysteresis). BLAST RADIUS: the docstring notes the popcon composite applies the same rule per grid point, so this changes every bistable cell in every popcon scan (`tests/test_popcon_mode.py` and the cfspopcon comparison both exercise it). Decide the convention before touching it.
 
 - rewrite tests
+
+- Selectable reconcile movement penalty. The "culprit" verdict (`inputs_beyond_tolerance`) is an optimiser *outcome*, not a ranking: it falls out of eligibility (`fixed` vs supplied) x deadzone (tolerances) x distance metric x aggregation norm x relation-weight continuation. (`likely_culprits` is a different, purely post-hoc thing: a count of how many failed relations each variable appears in, with no feedback into the solve.) Two knobs worth exposing, both defaulting to today's behaviour:
+
+  - `movement_objective` (default `count`) — *what belief about the data you are encoding*.
+    - `count` = L0 via IRLS `1/(excess+eps)`: minimises HOW MANY inputs are contradicted. Short, nameable verdict; right prior for published design points. Also a good model-bug detector — the tau_p 999.9-tolerance outlier that led to the Mavrin `n_i_avg` fix would have been smeared across a dozen inputs under L2. Cost: it will abandon one input entirely to save the rest.
+    - `sum` = plain L1 (`irls_iterations=0`, **already works**): still sparse, never actively abandons an input, cheaper (skips up to 3 warm-started re-solves), less decisive.
+    - `least_squares` = L2: spreads the correction in proportion to tolerance. Right when inputs are measurements with error bars; never names a culprit. Only this one needs code — row `= excess` instead of `sqrt(excess)`; the other two just need naming/discoverability.
+
+  - `movement_metric` (default `absolute`) — matters mainly under `count`, which is what creates the incentive to abandon an input.
+    - `absolute` = `|x-x0|/width`. Required wherever 0 is a legitimate value (`f_He4`, every `c_*`).
+    - `log` = decades, for strictly-positive variables (domain open at 0 — 102 of them, incl. `tau_p`, `V_p`). Fixes a real defect: the absolute metric caps a collapse at `x0/width = 1/rel_tol = 1000`, so driving `tau_p` 13 decades to zero costs *less* than doubling it, with no gradient left to pull it back. Any metric finite at 0 has this defect (asinh included), which is why it must key off the domain.
+    - PROTOTYPED + measured (2026-07-27): deadzone preserved, collapse 9330 vs 693 for doubling; but 1 reactor better / 2 worse on the beyond-tolerance count and **6x nfev on ARC_V0**. Recommend off by default — the defect is currently latent, since the tau_p collapse that motivated it was really the Mavrin conflict.
+
+  Also cheap and unexposed: a "movement-anchored but not blameable" tier, weaker than `fixed: true` (which today also removes the variable as a solver unknown entirely).
+
+  UNMEASURED: how the objective interacts with popcon / parametric-sweep smoothness. L0's discrete "which input gets blamed" decision is a plausible source of the sweep scatter seen in examples/01.

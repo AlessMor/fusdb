@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fusdb-reactors"
+version = "0.1.0"
+description = "Reactor scenario data for fusdb (optional install layer; the base fusdb package deliberately ships no scenarios)."
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["fusdb_reactors"]
+package-dir = {"fusdb_reactors" = "."}
+include-package-data = false
+
+[tool.setuptools.package-data]
+fusdb_reactors = ["**/*.yaml"]

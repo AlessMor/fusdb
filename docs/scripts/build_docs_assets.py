@@ -520,45 +520,40 @@ def build_figure_widgets() -> None:
         sys.path.insert(0, str(SRC))  # support source checkouts as well as installs
 
     widgets = {
-        "reactivity_plotter.html": ("reactivity", "Fusion reactivities", _render_reactivity_widget),
+        "reactivity_plotter.html": (
+            "reactivity",
+            "Fusion reactivities",
+            "fusdb.plotting.reactivity",
+            "reactivity_app",
+            {"num_points": 400},
+        ),
         "atomic_physics_plotter.html": (
             "atomic physics rates",
             "Atomic & molecular rate coefficients",
-            _render_atomic_physics_widget,
+            "fusdb.plotting.atomic_physics",
+            "atomic_physics_app",
+            {},
         ),
         "relations_variables_graph.html": (
             "relation graph",
             "Relation-variable graph from current registries",
-            _render_relation_graph_widget,
+            "fusdb.plotting.relation_graph",
+            "bokeh_relation_graph",
+            {"title": "Relation-variable graph from current registries"},
         ),
     }
-    for filename, (label, title, renderer) in widgets.items():
+    for filename, (label, title, module_name, builder_name, kwargs) in widgets.items():
         target = f"code_docs/{filename}"
         try:
-            _write(target, renderer(title))
+            from importlib import import_module
+
+            from bokeh.embed import file_html
+            from bokeh.resources import CDN
+
+            builder = getattr(import_module(module_name), builder_name)
+            _write(target, file_html(builder(**kwargs), CDN, title))
         except Exception as exc:  # noqa: BLE001 - widgets must never break the build
             _write(target, _widget_placeholder(label, exc))
-
-
-def _render_reactivity_widget(title: str) -> str:
-    """Render the interactive Bokeh reactivity plotter as embeddable HTML."""
-    from fusdb.plotting.reactivity import render_reactivity_app_html
-
-    return render_reactivity_app_html(title=title, num_points=400)
-
-
-def _render_atomic_physics_widget(title: str) -> str:
-    """Render the interactive Bokeh atomic-physics rate plotter as embeddable HTML."""
-    from fusdb.plotting.atomic_physics import render_atomic_physics_app_html
-
-    return render_atomic_physics_app_html(title=title)
-
-
-def _render_relation_graph_widget(title: str) -> str:
-    """Render the relation/variable graph as embeddable interactive HTML."""
-    from fusdb.plotting import relation_graph_html
-
-    return relation_graph_html(title=title)
 
 
 build_getting_started_index()

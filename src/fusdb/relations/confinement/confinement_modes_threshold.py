@@ -51,7 +51,7 @@ def lh_transition_power(n_avg: float, B0: float, A_p: float) -> Any:
     return 1e6 * 0.0488 * (n20 ** 0.717) * (B0 ** 0.803) * (A_p ** 0.941)
 
 
-# Opt-in regime guards. Tagged ``regime_guard`` (allowed_tags.yaml ``internal``
+# Opt-in regime guards. Tagged ``confinement_mode_threshold`` (allowed_tags.yaml ``internal``
 # group), which no reactor declares, so they are never picked up by automatic
 # tag selection -- verify includes them by name when checking regime consistency.
 # Each is an outputless, checked-only (``enforce=False``) guard: it is never a
@@ -59,7 +59,7 @@ def lh_transition_power(n_avg: float, B0: float, A_p: float) -> Any:
 # regime survived the solve.  Each guard also carries its confinement-mode tag,
 # which is how the Reactor discovers the guards of one regime -- there is no
 # name-based table anywhere.
-_GUARD_TAGS = ("confinement", "regime_guard")
+_GUARD_TAGS = ("confinement", "confinement_mode_threshold")
 
 
 @relation(name="Ohmic-mode sustainment (P_sep <= P_OL_thresh)", tags=(*_GUARD_TAGS, "ohmic_mode"), enforce=False)
@@ -354,6 +354,34 @@ def lh_martin08_aspect_nominal(n_la: float, B0: float, A_p: float, afuel: float,
     return 1.0e6 * (
         0.0488 * dnla20**0.717 * B0**0.803 * A_p**0.941 * (2.0 / afuel)
         * _martin08_aspect_correction(A)
+    )
+
+
+@relation(
+    name="L-H threshold Martin-2008 aspect nominal (total ion mass)",
+    tags=_LH + ("process",),
+    outputs="P_LH",
+)
+def lh_martin08_aspect_nominal_total_ion_mass(
+    n_la: float, B0: float, A_p: float, afuel_total: float, A: float
+) -> float:
+    """Martin-2008 aspect-corrected L-H threshold on the TOTAL ion mass.
+
+    Same fit as :func:`lh_martin08_aspect_nominal`; the only difference is which
+    mass the ``2/A_i`` isotope factor uses.  PROCESS evaluates its L-H thresholds
+    at ``m_ions_total_amu`` -- every ion, impurities and helium ash included --
+    while its confinement scalings use ``m_fuel_amu``.  fusdb's ``afuel`` is the
+    fuel mass, so feeding it here overstates the threshold by the mass ratio:
+    2/2.514 vs 2/2.731 is 9.2% at the large-tokamak design point, and the factor
+    enters linearly.
+
+    Gated; fusdb's fuel-mass form stays the default.
+
+    Adapted from PROCESS; see README.md section "Third-party Notices".
+    """
+    # CHECK
+    return lh_martin08_aspect_nominal.func(
+        n_la=n_la, B0=B0, A_p=A_p, afuel=afuel_total, A=A
     )
 
 

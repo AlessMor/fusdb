@@ -21,27 +21,36 @@ a weak default; the ion profile decouples through its own generator), plus
 the Martin+Ryter L-H scaling and cfspopcon's stored-energy / ITER98y2
 conventions, and the SOL two-point model on input.yaml's fixed-target-Te
 block.  Field-by-field agreement (median relative error over
-the ~1029 certified cells), measured and categorised in :data:`_compare.FIELDS`:
+the ~768 certified cells), measured and categorised in :data:`_compare.FIELDS`:
 
   * **match** -- fusdb reproduces cfspopcon within ~10% grid-wide: geometry,
     the confinement solve (``P_in`` ~0.2%, ``tau_E`` ~0.1% on the cfspopcon
     W/ITER98y2 conventions), both Angioni peakings (~0.4%), the whole
     resistive/collisionality chain (~0.4%), the Barr inductance/flux chain,
-    ``P_ohmic`` (~3%), ``P_radiation``/``f_rad`` (~3%, on the radas Lz
-    tables), ``P_sep`` (~0.3%), ``P_SOL/P_LH`` (~8.5%, inheriting ``P_LH``'s
-    systematic), ``P_aux`` (~2%), ``P_LH`` (~9%), the triple product / peak
-    fuel density (~7%, total-vs-fuel-ion semantics), and ``Q`` itself (~9% on
-    cfspopcon's own definition).
+    the beta/pressure chain (~0%, on cfspopcon's product-of-averages pressure)
+    and the bootstrap fraction (~0.1%), ``P_ohmic`` (~0.4%),
+    ``P_radiation``/``f_rad`` (~3%, on the radas Lz tables), ``P_sep`` (~0.3%),
+    ``P_SOL/P_LH`` (~8.5%, inheriting ``P_LH``'s systematic), ``P_aux`` (~2%),
+    ``P_LH`` (~9%), the CS flux consumption
+    (``flux_needed_from_CS_over_rampup`` ~0%, on input.yaml's ejima coefficient
+    and cfspopcon's ``kappa_95``), the flat-top duration (~0.4%, once
+    ``flux_needed`` is exact -- on the low-density side the flat-top goes
+    NEGATIVE, an infeasible operating point that fusdb does not certify, so the
+    certified region is the ~768 feasible cells, all within cfspopcon's own
+    feasible region), and the triple product / peak fuel density (~7%,
+    total-vs-fuel-ion semantics).
   * **fusion** -- ``P_fus``/``P_neutron``/``P_alpha`` land at ~6% median
     (PRD cell +0.8%): fuel densities and profile shapes both match
     cfspopcon's; the residual is reactivity-table differences plus the
     non-DT channels cfspopcon does not compute.
   * **gap** -- known modelling differences carried as ``xfail`` so a future fix
-    surfaces as an ``xpass``: the beta/pressure chain (~13%, cfspopcon's
-    dilution-free product-of-averages pressure), bootstrap (~12%) and the CS
-    flux (~14%).
+    surfaces as an ``xpass``: ``Q`` (~10.2%; well-conditioned ~9.6%, but the
+    near-ignition cells where ``P_aux`` -> 0 drag the median over 10% -- the
+    beta/pressure import made ``f_BS`` exact, removing an error cancellation
+    that had flattered ``Q`` to ~9%).
   * **missing** -- fields the scan fixture does not compute (the Lengyel edge
-    seeding, flat-top duration); guarded so the set is explicit.
+    seeding; ``min_P_radiation``, identically zero in the reference); guarded
+    so the set is explicit.
 
 The ``comparison.ipynb`` notebook in this directory renders the same comparison
 as a full table (including the missing fields) plus the T-n contour overlay.
@@ -72,11 +81,15 @@ def grid_comparison():
 
 def test_scan_certifies_operating_region(grid_comparison):
     """The batched scan certifies the bulk of the 40x30 grid (infeasible corners
-    -- ignited, sub-L-H, or out-of-reactivity-range -- are legitimately masked)."""
+    -- ignited, sub-L-H, out-of-reactivity-range, or flat-top-infeasible -- are
+    legitimately masked)."""
     result, _ = grid_comparison
     payload = result["popcon"]
     assert payload["success"].shape == (30, 40)
-    assert payload["success"].sum() >= 700  # ~1029 today (Angioni-peaked h_mode; the cold/ignited fringe and the n_e=1e19 column fail)
+    # ~768 today: Angioni-peaked h_mode, minus the cold/ignited fringe and the
+    # low-density side where the CS flat-top is infeasible (flux_needed >
+    # total_flux_available_from_CS -> negative flat-top).
+    assert payload["success"].sum() >= 700
 
 
 _MATCH = [d for d, _f, cat in FIELDS if cat == "match"]
@@ -153,7 +166,11 @@ def test_prd_point_matches_reference(grid_comparison):
         from _compare import dataset_grid
 
         # With the decoupled ion peaking the PRD cell is essentially exact:
-        # P_in +0.2%, tau_E -0.1%, both peakings -0.4%, P_fus +0.8%.
+        # P_in +0.2%, tau_E -0.1%, both peakings -0.4%, P_fus +0.8%.  The CS
+        # flux consumption lands within 3% now that input.yaml's ejima
+        # coefficient is supplied (max_flattop is deliberately NOT anchored:
+        # it is the small difference of two ~35 Wb fluxes and amplifies the
+        # internal_inductance residual -- see _compare.FIELDS).
         for fusdb_name, dataset_name, tol in [
             ("P_in", "P_in", 0.05),
             ("tau_E", "energy_confinement_time", 0.06),
@@ -163,6 +180,7 @@ def test_prd_point_matches_reference(grid_comparison):
             ("P_fus", "P_fusion", 0.05),
             ("density_peaking", "electron_density_peaking", 0.03),
             ("ion_density_peaking", "ion_density_peaking", 0.03),
+            ("flux_needed_from_CS_over_rampup", "flux_needed_from_CS_over_rampup", 0.03),
         ]:
             got = payload["fields"][VARIABLES.resolve(fusdb_name)][iy, ix]
             ref = dataset_grid(handle, dataset_name)[iy, ix]

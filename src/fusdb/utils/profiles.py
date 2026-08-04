@@ -36,11 +36,6 @@ def line_average(profile: Any, rho: Any) -> Any:
     return np.mean(arr, axis=-1, keepdims=arr.ndim > 1)
 
 
-def rho_average(profile: Any, rho: Any) -> Any:
-    """Backward-compatible name for :func:`line_average`."""
-    return line_average(profile, rho)
-
-
 def volume_average(profile: Any, rho: Any) -> Any:
     """Return a flux-volume average using the self-similar ``rho`` weighting."""
     arr = np.asarray(profile, dtype=float)

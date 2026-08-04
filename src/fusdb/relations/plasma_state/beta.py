@@ -82,3 +82,23 @@ def normalized_beta(beta_T: float, a: float, B0: float, I_p: float) -> Any:
     """
     I_p_MA = I_p / 1e6
     return beta_T * a * B0 / I_p_MA
+
+
+@relation(
+    name='Normalized beta (cfspopcon)',
+    tags=('plasma', 'tokamak'),
+    outputs='beta_N',
+)
+def normalized_beta_cfspopcon(beta: float, a: float, B0: float, I_p: float) -> Any:
+    """Normalized beta on cfspopcon's convention (normalises the TOTAL beta).
+
+    Adapted from cfspopcon; see README.md section "Third-party Notices".
+
+    Same Troyon normalisation ``beta / (I_p / (a B0))`` as :func:`normalized_beta`,
+    but cfspopcon normalises ``beta_total`` (the toroidal/poloidal harmonic
+    combination) rather than ``beta_T``.  Since ``beta_total < beta_T``, fusdb's
+    default runs higher; selecting this reproduces cfspopcon's ``normalized_beta``.
+    """
+    # CHECK
+    I_p_MA = I_p / 1e6
+    return beta * a * B0 / I_p_MA

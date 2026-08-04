@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fusdb.utils import line_average, rho_average, volume_average
+from fusdb.utils import line_average, volume_average
 from fusdb.registry import KEV_TO_J, RELATIONS, VARIABLES
 from fusdb.relationsystem import RelationSystem
 from fusdb.variable import Variable
@@ -55,11 +55,11 @@ def test_reconcile_moves_supplied_average_to_the_profile_value():
     assert system.values["T_e_avg"] == pytest.approx(15.0, abs=1e-3)
 
 
-def test_profile_avg_uses_volume_average_not_rho_average():
+def test_profile_avg_uses_volume_average_not_line_average():
     rho = np.linspace(0.0, 1.0, 101)
     profile = rho.copy()
     expected_volume = volume_average(profile, rho)
-    expected_rho = rho_average(profile, rho)
+    expected_rho = line_average(profile, rho)
     assert expected_volume != pytest.approx(expected_rho)
 
     system = _system(float(expected_volume), profile)
@@ -67,12 +67,12 @@ def test_profile_avg_uses_volume_average_not_rho_average():
     assert result["relation_status"][_CONSISTENCY]["verified"]
 
 
-def test_explicit_rho_average_relation_uses_straight_rho_average():
+def test_explicit_rho_average_relation_uses_straight_line_average():
     rho = np.linspace(0.0, 1.0, 101)
     profile = rho.copy()
     rel = RELATIONS.get("Electron temperature rho-average")
     result = rel.evaluate({"T_e": profile, "rho": rho})
-    assert result == pytest.approx(rho_average(profile, rho))
+    assert result == pytest.approx(line_average(profile, rho))
 
 
 def test_line_average_uses_normalized_minor_radius_definition():
@@ -122,11 +122,11 @@ def test_thermal_pressure_has_volume_and_rho_averaged_outputs():
 
     values = {"n_e": n_e, "T_e": T_e, "n_i": n_i, "T_i": T_i, "rho": rho}
     assert volume_rel.evaluate(values) == pytest.approx(KEV_TO_J * volume_average(T_e, rho))
-    assert rho_rel.evaluate(values) == pytest.approx(KEV_TO_J * rho_average(T_e, rho))
+    assert rho_rel.evaluate(values) == pytest.approx(KEV_TO_J * line_average(T_e, rho))
 
 
 def test_stored_energy_uses_volume_averaged_pressure():
-    rel = RELATIONS.get("Plasma stored energy from averages")
+    rel = RELATIONS.get("Thermal stored energy")
     assert rel.evaluate({"p_th": 4.0, "V_p": 10.0}) == pytest.approx(60.0)
 
 

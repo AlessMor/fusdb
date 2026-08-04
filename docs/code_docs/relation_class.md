@@ -66,6 +66,10 @@ Decorator parameters:
 - `tags`: classification tags
 - `enforce`: make a relation warning-only by setting `enforce=False`
 - `constraints`: relation-local validity constraints
+- `dependency`: dependency hint used for graph reports (`"dense"` by default)
+- `h_factor`: name of a scaling-specific confinement enhancement constant (e.g.
+  `"H98_y2"`); the decorator injects it and the generic `H_factor`, both
+  defaulting to 1.0 and composing multiplicatively
 
 !!! note
     For symbolic inversion to work, keep relation functions SymPy-friendly:
@@ -87,6 +91,9 @@ a = Variable("a", value=1.0, unit="m")
 A = Variable("A", value=None, unit="1")
 
 rel_system = RelationSystem(variables=[R, a, A], relations=[aspect_ratio])
-result = rel_system.run(mode="verify")
-print(result["variables"]["A"].value)
+result = rel_system.run(mode="reconcile")
+print(result["values"]["A"])       # 3.0
 ```
+
+`verify` only certifies the values it is given, so it returns no `values` block;
+`reconcile` (or `optimize`/`ordered`) is what fills in `A`.

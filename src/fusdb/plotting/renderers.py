@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 from matplotlib.axes import Axes
 
+from ._bokeh import move_legends_below
 from .data import CurveSet, FieldMap
 from .style import axes
 
@@ -81,6 +82,7 @@ def bokeh_curve_set(
     plot.yaxis.axis_label = data.ylabel or ""
     plot.grid.grid_line_alpha = 0.3
     if legend and plot.legend:
+        move_legends_below(plot)
         plot.legend.click_policy = "hide"
     return plot, renderers, sources
 

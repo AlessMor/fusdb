@@ -66,7 +66,10 @@ def cfspopcon_gain_factor(
     Adapted from cfspopcon; see README.md section "Third-party Notices".
     cfspopcon divides the fusion power by the *launched* external power,
     which counts ohmic heating alongside the launched auxiliary power
-    (its dataset P_external equals P_aux_launched + P_ohmic exactly).
+    (its dataset Q equals P_fusion / (P_aux_launched + P_ohmic) to 0.000%).
+    Note this is NOT the dataset's own ``P_external`` field, which is the
+    different quantity ``P_in - P_charged`` and differs from the sum above by
+    ~11%; fusdb spells that one ``P_external`` (see auxiliary.py).
     Unlike Q_sci (absorbed-power convention), the denominator keeps the
     ohmic term, so the gain stays finite where P_aux reaches zero.
 

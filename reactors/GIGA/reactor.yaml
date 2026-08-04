@@ -16,9 +16,9 @@ variables:
   tau_E: 1.25
   tau_p: 6.25
   S_fw: 1700
-  k_S_FW: 5 # Effective outgassing FW surface multiplier factor
-  Gamma_puff_Ne: 1e22
-  Gamma_puff_DT: 1e23
+  # k_S_FW: 5 # Effective outgassing FW surface multiplier factor
+  # Gamma_puff_Ne: 1e22
+  # Gamma_puff_DT: 1e23
   T_e:
     value: Hattab2026_GIGA_TekeV.csv
     unit: keV

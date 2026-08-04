@@ -124,7 +124,7 @@ def _peaking_residual(peak: Any, average: Any, peaking: Any) -> Any:
 
 @relation(
     name="Parabolic ion temperature profile",
-    tags=("plasma", "profile", "tokamak", "stellarator"),
+    tags=("plasma", "profile", "profile_shape"),
     outputs="T_i",
     dependency="generated_profile",
 )
@@ -135,7 +135,7 @@ def parabolic_ion_temperature_profile(T_i_avg: float, ion_temperature_peaking: f
 
 @relation(
     name="Parabolic electron temperature profile",
-    tags=("plasma", "profile", "tokamak", "stellarator"),
+    tags=("plasma", "profile", "profile_shape"),
     outputs="T_e",
     dependency="generated_profile",
 )
@@ -146,7 +146,7 @@ def parabolic_electron_temperature_profile(T_e_avg: float, temperature_peaking: 
 
 @relation(
     name="Parabolic ion density profile",
-    tags=("plasma", "profile", "tokamak", "stellarator"),
+    tags=("plasma", "profile", "profile_shape"),
     outputs="n_i",
     dependency="generated_profile",
 )
@@ -157,7 +157,7 @@ def parabolic_ion_density_profile(n_i_avg: float, ion_density_peaking: float, rh
 
 @relation(
     name="Parabolic electron density profile",
-    tags=("plasma", "profile", "tokamak", "stellarator"),
+    tags=("plasma", "profile", "profile_shape"),
     outputs="n_e",
     dependency="generated_profile",
 )
@@ -254,16 +254,6 @@ def peak_helium3_density_from_profile(n_He3: Any, rho: Any) -> float:
 def peak_helium4_density_from_profile(n_He4: Any, rho: Any) -> float:
     """Return the maximum helium-4 density from the helium-4-density profile."""
     return _profile_max(n_He4, "helium-4 density")
-
-
-@relation(
-    name="Peak impurity density from profile",
-    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
-    outputs="n_imp_peak",
-)
-def peak_impurity_density_from_profile(n_imp: Any, rho: Any) -> float:
-    """Return the maximum impurity density from the impurity-density profile."""
-    return _profile_max(n_imp, "impurity density")
 
 
 @relation(
@@ -370,40 +360,77 @@ def peak_the3_np_reactivity_from_profile(sigmav_THe3_np: Any, rho: Any) -> float
     name="Electron temperature peaking from peak and average",
     tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
     outputs="temperature_peaking",
+    # Warned, not enforced: a HOLLOW profile (peaking below 1) is physical --
+    # it occurs at the very centre of the core -- so it must not fail the
+    # reconcile.  But it is unusual enough to surface, and a reactor that
+    # wants it rejected can re-declare the same constraint enforced.
+    constraints=(("temperature_peaking >= 1.0", False),),
 )
 def electron_temperature_peaking_from_peak_and_average(T0: float, T_e_avg: float) -> float:
-    """Return electron-temperature peaking from peak and volume-average values."""
-    return np.maximum(T0 / T_e_avg, 1.0)
+    """Return electron-temperature peaking from peak and volume-average values.
+
+    The ``>= 1`` bound lives on ``temperature_peaking`` (domain ``[1, inf)``), not
+    here: clamping inside the relation makes it non-invertible, so solving it for
+    ``T0`` at peaking 1 admits every ``T0 <= T_e_avg``.  See NOTES.md.
+    """
+    return T0 / T_e_avg
 
 
 @relation(
     name="Ion temperature peaking from peak and average",
     tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
     outputs="ion_temperature_peaking",
+    # Warned, not enforced: a HOLLOW profile (peaking below 1) is physical --
+    # it occurs at the very centre of the core -- so it must not fail the
+    # reconcile.  But it is unusual enough to surface, and a reactor that
+    # wants it rejected can re-declare the same constraint enforced.
+    constraints=(("ion_temperature_peaking >= 1.0", False),),
 )
 def ion_temperature_peaking_from_peak_and_average(T_i_peak: float, T_i_avg: float) -> float:
-    """Return ion-temperature peaking from peak and volume-average values."""
-    return np.maximum(T_i_peak / T_i_avg, 1.0)
+    """Return ion-temperature peaking from peak and volume-average values.
+
+    Bound carried by ``ion_temperature_peaking``'s domain; see the electron
+    variant above.
+    """
+    return T_i_peak / T_i_avg
 
 
 @relation(
     name="Electron density peaking from peak and average",
     tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
     outputs="density_peaking",
+    # Warned, not enforced: a HOLLOW profile (peaking below 1) is physical --
+    # it occurs at the very centre of the core -- so it must not fail the
+    # reconcile.  But it is unusual enough to surface, and a reactor that
+    # wants it rejected can re-declare the same constraint enforced.
+    constraints=(("density_peaking >= 1.0", False),),
 )
 def electron_density_peaking_from_peak_and_average(n0: float, n_e_avg: float) -> float:
-    """Return electron-density peaking from peak and volume-average values."""
-    return np.maximum(n0 / n_e_avg, 1.0)
+    """Return electron-density peaking from peak and volume-average values.
+
+    Bound carried by ``density_peaking``'s domain; see the temperature variant
+    above.
+    """
+    return n0 / n_e_avg
 
 
 @relation(
     name="Ion density peaking from peak and average",
     tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
     outputs="ion_density_peaking",
+    # Warned, not enforced: a HOLLOW profile (peaking below 1) is physical --
+    # it occurs at the very centre of the core -- so it must not fail the
+    # reconcile.  But it is unusual enough to surface, and a reactor that
+    # wants it rejected can re-declare the same constraint enforced.
+    constraints=(("ion_density_peaking >= 1.0", False),),
 )
 def ion_density_peaking_from_peak_and_average(n_i_peak: float, n_i_avg: float) -> float:
-    """Return ion-density peaking from peak and volume-average values."""
-    return np.maximum(n_i_peak / n_i_avg, 1.0)
+    """Return ion-density peaking from peak and volume-average values.
+
+    Bound carried by ``ion_density_peaking``'s domain; see the temperature
+    variant above.
+    """
+    return n_i_peak / n_i_avg
 
 
 @relation(

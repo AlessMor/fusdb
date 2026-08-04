@@ -33,7 +33,7 @@ result = reactor.run()
 **Core fields**
 - `name`, `organization`, `country`, `year`, `doi`, `notes`
 - `tags`: tuple of strings used to filter relations
-- `mode`: one of `"verify"`, `"reconcile"`, `"optimize"`, or `"ordered"`
+- `mode`: one of `"verify"`, `"reconcile"`, `"optimize"`, `"ordered"` or `"popcon"`
 - `variables`: mapping of loaded `Variable` instances keyed by canonical name
 - `relation_include`, `relation_exclude`, `relation_order`: relation selection controls
 - `constraints`: optional system-level constraint expressions
@@ -57,10 +57,12 @@ reactor = Reactor(
 **Methods**
 - `from_yaml(path)` loads `reactor.yaml`, parses variables (including numeric
   profile files), and applies registry defaults.
-- `selected_relations(...)` returns the relation list after applying includes,
-  excludes, tags, and ordering.
+- `relations()` returns the relation list after applying includes, excludes and
+  tags.
 - `relation_system(...)` builds and returns a `RelationSystem` bound to the
   reactor's current variables and selected relations.
+- `clone()` returns an isolated copy of the declarations; chunk workers use it
+  to load a YAML once and run several independent cases safely.
 - `run(**kwargs)` convenience wrapper that builds a `RelationSystem` and runs
   the configured `mode`. `Variable` is immutable, so a solve never rewrites
   the reactor's declarations; the solved system is kept on `last_system`, and
@@ -77,10 +79,15 @@ reactor = Reactor(
   active-variable highlighting, and relation tooltips.
 
 **Parallel solving**
+- `run_many(reactor, cases, mode="reconcile", workers=N, chunk_size=M)` is the
+  common parametric interface for every mode. Each case is a mapping of fixed
+  variable overrides. Scalar modes solve independent cases inside scheduled
+  chunks; POPCON vectorizes the grid points inside each chunk. The method form
+  is `reactor.run_many(...)`.
 - `solve_reactors(paths, mode="reconcile", workers=N)` solves many reactor YAMLs
-  at once, one worker process each (reconcile is CPU-bound, so processes — not
+  through the same chunk scheduler (reconcile is CPU-bound, so processes — not
   threads — give the speedup). Live reactors/systems can't cross a process
-  boundary, so each worker loads from YAML and returns a picklable `SolvedColumn`
+  boundary, so workers load from YAML and return picklable `SolvedColumn`
   (the same display column `variable_table_data` consumes). A reactor that fails to
   load or solve comes back as a failed-result column instead of aborting the
   batch. `paths` may be YAML paths/directories or `from_yaml`-loaded reactors
@@ -121,7 +128,7 @@ tags:
   - regime_tag
 
 solver_tags:
-  mode: verify         # verify | reconcile | optimize | ordered
+  mode: verify         # verify | reconcile | optimize | ordered | popcon
   verbosity: false
 
 grid:

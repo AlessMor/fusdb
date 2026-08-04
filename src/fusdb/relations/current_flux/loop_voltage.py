@@ -11,7 +11,7 @@ from fusdb.relation import relation
     outputs="loop_voltage",
 )
 def calc_loop_voltage(
-    R: Any, a: Any, inductive_plasma_current: Any, kappa: Any, neoclassical_loop_resistivity: Any
+    R: Any, a: Any, inductive_plasma_current: Any, kappa_areal: Any, neoclassical_loop_resistivity: Any
 ) -> Any:
     """Calculate plasma toroidal loop voltage at flattop.
 
@@ -23,7 +23,7 @@ def calc_loop_voltage(
         R: [m] :term:`glossary link<major_radius>`
         a: [m] :term:`glossary link<minor_radius>`
         inductive_plasma_current: [A] :term:`glossary link<inductive_plasma_current>`
-        kappa: [~] :term:`glossary link<areal_elongation>`
+        kappa_areal: [~] :term:`glossary link<areal_elongation>`
         neoclassical_loop_resistivity: [Ohm-m] :term:`glossary link<neoclassical_loop_resistivity>`
 
     Returns:
@@ -31,5 +31,5 @@ def calc_loop_voltage(
     """
     # CHECK
     # Toroidal length over plasma cross-section surface area [1/m]
-    _term1 = 2 * R / (a**2 * kappa)
+    _term1 = 2 * R / (a**2 * kappa_areal)
     return inductive_plasma_current * _term1 * neoclassical_loop_resistivity

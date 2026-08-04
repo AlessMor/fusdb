@@ -6,8 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "fusdb"
 version = "0.1.0"
 description = "Fusion reactor scenario database with per-folder YAML and a single Reactor class."
-requires-python = ">=3.10"
-dependencies = ["PyYAML>=6.0", "scipy>=1.11", "networkx>=3.0", "pint>=0.23"]
+requires-python = ">=3.12"
+dependencies = ["numpy>=2.5.1", "PyYAML>=6.0", "scipy>=1.11", "networkx>=3.0", "pint>=0.23"]
 
 [project.optional-dependencies]
 plotting = ["matplotlib>=3.7", "bokeh>=3.5"]

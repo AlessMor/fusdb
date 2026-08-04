@@ -5,7 +5,7 @@ case, which is scan-native: dilution comes from quasineutrality with a generic
 Z=6 impurity fraction, the density peaking is derived (not supplied), and P_aux
 is the free degree of freedom the scan solves for.
 
-The popcon evaluates the whole grid as one batched computation with every
+The popcon evaluates the grid in vectorized chunks with every
 supplied input held exactly and the axis values pinned to the grid
 coordinates, then certifies each point individually.  The central guarantee
 -- and the central test here -- is reconcile-equivalence: reconciling any
@@ -83,6 +83,8 @@ def test_popcon_option_validation() -> None:
     # The legacy per-point inner modes are gone; passing one is an error.
     result = popcon_mode.run(system, x=X_AXIS, y=Y_AXIS, inner="reconcile")
     assert not result["success"] and "Unknown popcon option(s)" in result["errors"][0]
+    result = popcon_mode.run(system, x=X_AXIS, y=Y_AXIS, solver="reconcile")
+    assert not result["success"] and "Unknown popcon option(s)" in result["errors"][0]
 
 
 def test_certification_cone_scales_with_targets() -> None:
@@ -124,6 +126,22 @@ def test_popcon_scan_certifies_grid(serial_scan: tuple[Reactor, dict]) -> None:
     fields = payload["fields"]
     assert np.allclose(fields["Q_sci"][ok], (fields["P_fus"] / fields["P_aux"])[ok], rtol=1e-6)
     assert np.allclose((fields["P_loss"] * fields["tau_E"])[ok], fields["W_th"][ok], rtol=1e-6)
+
+
+def test_popcon_parallel_chunks_match_one_batch() -> None:
+    """Chunk scheduling must not change per-point answers or certificates."""
+    x = {"variable": "average_electron_density", "values": [2.5e20, 3.0e20]}
+    y = {"variable": "average_electron_temp", "values": [9.0, 12.0]}
+    outputs = ("P_fus", "P_aux")
+    serial = Reactor.from_yaml(POPCON_YAML)._clone_for_regime("h_mode", include_guards=False)
+    parallel = Reactor.from_yaml(POPCON_YAML)._clone_for_regime("h_mode", include_guards=False)
+    expected = serial._run_once("popcon", x=x, y=y, outputs=outputs)["popcon"]
+    actual = parallel._run_once(
+        "popcon", x=x, y=y, outputs=outputs, workers=2, chunk_size=2
+    )["popcon"]
+    assert np.array_equal(actual["success"], expected["success"])
+    for name in outputs:
+        assert np.allclose(actual["fields"][name], expected["fields"][name], equal_nan=True)
 
 
 def test_popcon_points_reconcile_to_same_values(serial_scan: tuple[Reactor, dict]) -> None:

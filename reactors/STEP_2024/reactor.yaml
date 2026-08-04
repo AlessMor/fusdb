@@ -42,3 +42,26 @@ variables:
     value: 297
     unit: MW
   Q_sci: 12.0
+
+relations:
+  # STEP is a spherical tokamak (A = 1.8), so its elongation must come from an
+  # ST shape fit, not from the conventional-tokamak IPDG89 ratio.  The tag
+  # algebra cannot express "tokamak but NOT spherical_tokamak" -- an ST reactor
+  # expands to both -- so the choice is made here by name, which is also how
+  # PROCESS does it (an explicit `i_plasma_geometry` switch, not inference).
+  #
+  # Against STEP's own declared kappa = 3.0 / kappa_95 = 2.8:
+  #   MAST elongation fit          0.913 k95 + 0.38654 = 2.943   -1.9%   <- selected
+  #   FIESTA elongation fit        0.90698 k95 + 0.39467 = 2.934  -2.2%
+  #   Elongation 95% (IPDG89)      1.12 * 2.8 = 3.136            +4.5%
+  #   ST elongation vs aspect      0.95(1.9 + 1.9/A^1.4) = 2.598 -13.4%
+  # Both of the two worst were active simultaneously, which is where kappa's
+  # ~126-tolerance and kappa_95's ~169-tolerance violations came from.
+  include:
+  - MAST elongation fit
+  exclude:
+  # Conventional-tokamak ratio; superseded by the MAST fit above.
+  - Elongation 95%
+  # An aspect-ratio correlation that ignores STEP's own declared kappa_95 and
+  # lands 13% low; the MAST fit uses that measurement instead.
+  - ST elongation vs aspect ratio

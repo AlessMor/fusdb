@@ -42,6 +42,13 @@ def verify_values(system: Any, values: Mapping[str, Any], *, complete: bool = Tr
             "warnings": [],
         }
     max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
+    # A profile packed as a free core with no data anchor (S9): its uniform
+    # (flat) shape is the default and its level is a free scalar the solve
+    # leaves at its seed.  Not an error -- a reliability signal that the level
+    # is assumed, not supplied data (it becomes the "assumed" role).
+    underdetermined = tuple(getattr(self, "underdetermined_profiles", ()) or ())
+    if underdetermined:
+        warnings = [*warnings, f"profile level defaulted (uniform shape, level free at seed): {list(underdetermined)}"]
     verified = not failed_relations and not all_errors
     return {
         "verified": bool(verified),

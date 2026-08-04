@@ -18,7 +18,7 @@ objects; per-variable numerics live on the process-lifetime `VariableSpec`)
   canonical units; `fixed`: the fixed-name set; `rel_tols` / `abs_tols`:
   resolved per-name tolerances; `known`: every tracked name
 - `variable_roles`: the compile verdict — exactly one solve role per variable
-  (`inactive` / `fixed` / `held` / `derived` / `core` / `packed`); packing,
+  (`inactive` / `fixed` / `movable` / `computed` / `assumed`); packing,
   completion, movement and reporting all switch on it
 - `relations`: full list of active `Relation` objects (including relation-local guards)
 - `primary_relations`: the active relations selected by compilation
@@ -30,8 +30,9 @@ objects; per-variable numerics live on the process-lifetime `VariableSpec`)
 
 **Main methods**
 - `run(mode='verify', **options)`: compile, then dispatch to one of the
-  available modes (`verify`, `reconcile`, `optimize`, `ordered`) and return a
-  result dict. `verify()`/`reconcile()`/`optimize()`/`ordered()` are shortcuts.
+  available modes (`verify`, `reconcile`, `optimize`, `ordered`, `popcon`) and
+  return a result dict. `verify()`/`reconcile()`/`optimize()`/`ordered()`/
+  `popcon()` are shortcuts.
 - `compile(force=False)`: build/prune the active system (`run` calls this
   first). The structural verdicts depend only on *which* variables are
   supplied/fixed, so while that fingerprint is unchanged a re-compile only
@@ -57,7 +58,9 @@ objects; per-variable numerics live on the process-lifetime `VariableSpec`)
   widths are frozen into a movement plan at `pack()` time.
 - `build_jac_sparsity(layout)` / `jacobian_plan(layout)`: conservative
   Jacobian sparsity and the grouped-difference plan for the frozen layout.
-- `store(values)`: write solved values back into the variables.
+- `store(values)`: overwrite the system's current public `values` from a
+  solver-domain value map. `inputs` and fixed variables are left untouched, and
+  nothing is written back onto the frozen `Variable` declarations.
 - `initial_values_from_graph(system)` (module function): the seeding oracle
   (direct propagation plus the small structural block solver) used to build
   solver start values.

@@ -9,6 +9,7 @@ from fusdb.relation import relation
     name="merezhkin_muhkovatov_confinement_time",
     tags=("confinement", "ohmic_mode", "l_mode"),
     outputs="tau_E",
+    h_factor="H_merezhkin_muhkovatov",
 )
 def merezhkin_muhkovatov_confinement_time(
     rmajor: float,
@@ -71,6 +72,7 @@ def merezhkin_muhkovatov_confinement_time(
     name="rebut_lallia_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_rebut_lallia",
 )
 def rebut_lallia_confinement_time(
     rminor: float,
@@ -140,6 +142,7 @@ def rebut_lallia_confinement_time(
     name="goldston_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_goldston",
 )
 def goldston_confinement_time(
     I_p: float,
@@ -196,6 +199,7 @@ def goldston_confinement_time(
     name="kaye_goldston_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_kaye_goldston",
 )
 def kaye_goldston_confinement_time(
     kappa95: float,
@@ -269,6 +273,7 @@ def kaye_goldston_confinement_time(
     name="t10_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_t10",
 )
 def t10_confinement_time(
     n_la: float,
@@ -339,6 +344,7 @@ def t10_confinement_time(
     name="jaeri_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_jaeri",
 )
 def jaeri_confinement_time(
     kappa95: float,
@@ -418,6 +424,7 @@ def jaeri_confinement_time(
     name="kaye_big_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_kaye_big",
 )
 def kaye_big_confinement_time(
     rmajor: float,
@@ -484,6 +491,7 @@ def kaye_big_confinement_time(
     name="riedel_l_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_riedel_l",
 )
 def riedel_l_confinement_time(
     I_p: float,
@@ -544,6 +552,7 @@ def riedel_l_confinement_time(
     name="christiansen_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_christiansen",
 )
 def christiansen_confinement_time(
     I_p: float,
@@ -607,6 +616,7 @@ def christiansen_confinement_time(
     name="lackner_gottardi_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_lackner_gottardi",
 )
 def lackner_gottardi_confinement_time(
     I_p: float,
@@ -674,6 +684,7 @@ def lackner_gottardi_confinement_time(
     name="neo_kaye_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_neo_kaye",
 )
 def neo_kaye_confinement_time(
     I_p: float,
@@ -737,6 +748,7 @@ def neo_kaye_confinement_time(
     name="kaye_confinement_time",
     tags=("confinement", "l_mode"),
     outputs="tau_E",
+    h_factor="H_kaye",
 )
 def kaye_confinement_time(
     I_p: float,

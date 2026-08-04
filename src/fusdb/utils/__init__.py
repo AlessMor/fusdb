@@ -394,4 +394,4 @@ def safe_max_abs(value: Any, default: float = 0.0) -> float:
     return float(np.max(np.abs(finite)))
 
 
-from .profiles import line_average, rho_average, trapezoid, volume_average
+from .profiles import line_average, trapezoid, volume_average

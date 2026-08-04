@@ -100,3 +100,21 @@ def kappa_ipb_from_volume(V_p: float, R: float, a: float) -> float:
     """Return IPB-specific elongation from volume and radii."""
     pi = np.pi
     return V_p / (2 * pi**2 * R * a**2)
+
+
+@relation(
+    name='Areal elongation from cross-section',
+    tags=('geometry',),
+    outputs='kappa_areal',
+)
+def kappa_areal_from_cross_section(S_phi: float, a: float) -> float:
+    """Areal elongation: the elongation of the equivalent ellipse with the same
+    horizontal minor radius ``a`` and the same poloidal cross-sectional area.
+
+    This is the *definition* ``kappa_A = S_phi / (pi a^2)`` (:cite:`zohm_2015`), so
+    it is the producer for ``kappa_areal`` rather than a fit.  It is deliberately
+    NOT the same quantity as ``kappa_ipb = V_p / (2 pi^2 R a^2)``: with fusdb's
+    Sauter cross-section ``S_phi = pi a^2 kappa (1 + 0.52 (w07 - 1))`` the two
+    coincide only for a plain ellipse.
+    """
+    return S_phi / (np.pi * a**2)

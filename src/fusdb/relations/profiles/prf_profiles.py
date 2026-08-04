@@ -124,7 +124,7 @@ def _prf_profile(average: Any, peaking: Any, nu_n: Any, rho: Any) -> np.ndarray:
 
 @relation(
     name="PRF ion temperature profile",
-    tags=("plasma", "profile", "tokamak", "stellarator"),
+    tags=("plasma", "profile", "profile_shape"),
     outputs="T_i",
     dependency="generated_profile",
 )
@@ -139,7 +139,7 @@ def prf_ion_temperature_profile(T_i_avg: float, ion_temperature_peaking: float, 
 
 @relation(
     name="PRF electron temperature profile",
-    tags=("plasma", "profile", "tokamak", "stellarator"),
+    tags=("plasma", "profile", "profile_shape"),
     outputs="T_e",
     dependency="generated_profile",
 )
@@ -154,7 +154,7 @@ def prf_electron_temperature_profile(T_e_avg: float, temperature_peaking: float,
 
 @relation(
     name="PRF ion density profile",
-    tags=("plasma", "profile", "tokamak", "stellarator"),
+    tags=("plasma", "profile", "profile_shape"),
     outputs="n_i",
     dependency="generated_profile",
 )
@@ -171,7 +171,7 @@ def prf_ion_density_profile(n_i_avg: float, temperature_peaking: float, ion_dens
 
 @relation(
     name="PRF electron density profile",
-    tags=("plasma", "profile", "tokamak", "stellarator"),
+    tags=("plasma", "profile", "profile_shape"),
     outputs="n_e",
     dependency="generated_profile",
 )

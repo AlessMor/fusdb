@@ -14,6 +14,7 @@ from matplotlib.axes import Axes
 from fusdb.registry import RELATIONS, VARIABLES
 from fusdb.relationsystem import relation_bipartite_graph
 
+from ._bokeh import move_legends_below
 from .style import RELATION_COLOR, VARIABLE_COLOR, axes
 
 
@@ -387,7 +388,7 @@ def bokeh_relation_graph(
             ],
         )
     )
-    plot.legend.location = "top_left"
+    move_legends_below(plot)
     plot.legend.click_policy = "hide"
 
     if labels and node_rows:
@@ -485,16 +486,3 @@ edge_source.change.emit();
     )
 
     return column(search, plot)
-
-
-def relation_graph_html(
-    graph: nx.Graph | None = None,
-    *,
-    title: str = "Relation-variable graph from current registries",
-    **kwargs: Any,
-) -> str:
-    """Render the interactive relation graph as standalone Bokeh HTML."""
-    from bokeh.embed import file_html
-    from bokeh.resources import CDN
-
-    return file_html(bokeh_relation_graph(graph, title=title, **kwargs), CDN, title)

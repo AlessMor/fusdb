@@ -11,6 +11,20 @@ tags:
 - compact_tokamak
 - h_mode
 variables:
+  T_e_avg:
+    value: 11.4
+    unit: keV
+  T_i_avg:
+    value: 10.3
+    unit: keV
+  n_e_avg:
+    value: 2.44e20
+    unit: m^-3
+  f_GW: 0.9
+  tau_E: 0.93
+  W_th:
+    value: 231
+    unit: MJ
   R:
     value: 4.62
   a:
@@ -32,7 +46,7 @@ variables:
     value: 231
     unit: MJ
   P_fus:
-    value: 1130
+    value: 1133
     unit: MW
   P_e_net:
     value: 400

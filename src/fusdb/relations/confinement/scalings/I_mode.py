@@ -6,6 +6,7 @@ from fusdb.relation import relation
     name="hubbard_nominal_confinement_time",
     tags=("confinement", "i_mode"),
     outputs="tau_E",
+    h_factor="H_hubbard_nominal",
 )
 def hubbard_nominal_confinement_time(
     I_p: float,
@@ -56,6 +57,7 @@ def hubbard_nominal_confinement_time(
     name="hubbard_lower_confinement_time",
     tags=("confinement", "i_mode"),
     outputs="tau_E",
+    h_factor="H_hubbard_lower",
 )
 def hubbard_lower_confinement_time(
     I_p: float,
@@ -105,6 +107,7 @@ def hubbard_lower_confinement_time(
     name="hubbard_upper_confinement_time",
     tags=("confinement", "i_mode"),
     outputs="tau_E",
+    h_factor="H_hubbard_upper",
 )
 def hubbard_upper_confinement_time(
     I_p: float,
@@ -153,7 +156,7 @@ def hubbard_upper_confinement_time(
 
 @relation(
     name="cfspopcon_imodey2_confinement_time",
-    tags=("confinement", "i_mode", "regime_default"),
+    tags=("confinement", "i_mode", "confinement_mode_default"),
     outputs="tau_E",
 )
 def cfspopcon_imodey2_confinement_time(

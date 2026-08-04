@@ -10,7 +10,6 @@ helper, so importing this module (or ``fusdb.plotting``) does not pull it in.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
@@ -63,6 +62,119 @@ def log_log_figure(
     plot.yaxis.axis_label = y_label
     plot.grid.grid_line_alpha = 0.3
     return plot
+
+
+def move_legends_below(
+    plot: Any,
+    legends: Sequence[Any] | None = None,
+    *,
+    ncols: int | None = None,
+) -> None:
+    """Place the plot's legends in a compact grid below the figure.
+
+    Legends created through Bokeh's ``legend_label``/``legend_group`` glyph
+    arguments start in the figure's overlay area. Remove them from their
+    current layout slot before adding them below so the same legend model is
+    not present in two layout slots at once.
+    """
+    if ncols is not None and ncols < 1:
+        raise ValueError("ncols must be at least 1.")
+    if legends is None:
+        legends = list(plot.legend)
+
+    if legends and getattr(plot, "frame_height", None) is None:
+        plot.frame_height = plot.height
+        plot.height = None
+
+    for legend in legends:
+        legend.orientation = "horizontal"
+        legend.margin = 5
+        legend.padding = 5
+        item_widths = _legend_item_widths(legend)
+        legend.ncols = min(
+            ncols
+            if ncols is not None
+            else _columns_for_width(
+                item_widths,
+                max(
+                    1,
+                    int(getattr(plot, "width", 960))
+                    - 2 * (legend.margin + legend.padding),
+                ),
+                legend.spacing,
+            ),
+            max(len(legend.items), 1),
+        )
+        for location in ("above", "below", "left", "right", "center"):
+            layout = getattr(plot, location)
+            if legend in layout:
+                layout.remove(legend)
+        plot.add_layout(legend, "below")
+        if ncols is None:
+            _link_responsive_legend(plot, legend, item_widths)
+
+
+def _legend_item_widths(legend: Any) -> list[int]:
+    """Estimate each legend item's rendered width in pixels."""
+    font_size = str(legend.label_text_font_size)
+    character_width = 6 if font_size.endswith("pt") and float(font_size[:-2]) <= 8 else 7
+    item_widths = []
+    for item in legend.items:
+        label = item.label
+        text = getattr(label, "value", None) or getattr(label, "field", None) or str(label)
+        label_width = max(50, min(len(str(text)) * character_width, 280))
+        item_widths.append(legend.glyph_width + legend.label_standoff + label_width)
+    return item_widths
+
+
+def _columns_for_width(item_widths: Sequence[int], available_width: int, spacing: int) -> int:
+    """Return the largest row-major column count fitting ``available_width``."""
+    if not item_widths:
+        return 1
+    best = 1
+    for columns in range(1, len(item_widths) + 1):
+        column_widths = [
+            max(item_widths[column::columns])
+            for column in range(columns)
+            if item_widths[column::columns]
+        ]
+        required_width = sum(column_widths) + spacing * max(columns - 1, 0)
+        if required_width <= available_width:
+            best = columns
+    return best
+
+
+def _link_responsive_legend(plot: Any, legend: Any, item_widths: Sequence[int]) -> None:
+    """Reflow a legend whenever Bokeh changes the rendered plot width."""
+    from bokeh.models import CustomJS
+
+    callback = CustomJS(
+        args=dict(plot=plot, legend=legend, itemWidths=list(item_widths)),
+        code="""
+const availableWidth = Math.max(
+  1,
+  (plot.inner_width ?? plot.width ?? 1) - 2 * (legend.margin + legend.padding),
+);
+let best = 1;
+for (let columns = 1; columns <= itemWidths.length; columns++) {
+  const columnWidths = new Array(columns).fill(0);
+  for (let index = 0; index < itemWidths.length; index++) {
+    const column = index % columns;
+    columnWidths[column] = Math.max(columnWidths[column], itemWidths[index]);
+  }
+  const requiredWidth =
+    columnWidths.reduce((total, width) => total + width, 0) +
+    legend.spacing * Math.max(columns - 1, 0);
+  if (requiredWidth <= availableWidth) {
+    best = columns;
+  }
+}
+if (legend.ncols !== best) {
+  legend.ncols = best;
+}
+""",
+    )
+    plot.js_on_change("inner_width", callback)
 
 
 def link_two_filter_visibility(
@@ -152,29 +264,48 @@ status.text = "";
     return [x_min_input, x_max_input, y_min_input, y_max_input, axis_button, status], status
 
 
-def labeled_row(label: str, *widgets: Any) -> Any:
-    """Return a stretch-width row with a fixed-width bold label in front."""
-    from bokeh.layouts import row
-    from bokeh.models import Div
+def explorer_layout(
+    plot: Any,
+    *,
+    legend_items: Sequence[Any],
+    option_controls: Sequence[tuple[str, Any]],
+    x_limits: tuple[float, float],
+    y_limits: tuple[float, float],
+    legend_kwargs: dict[str, Any] | None = None,
+) -> tuple[Any, Any]:
+    """Build the standard explorer: plot + legend, options, then limits.
 
-    return row(
-        Div(text=f"<div style='{_LABEL_STYLE}'>{label}</div>", width=100),
-        *widgets,
+    Returns ``(layout, status)`` so the caller can connect its option widgets
+    to the shared status message used by the axis-limit controls.
+    """
+    from bokeh.layouts import column, row
+    from bokeh.models import Div, Legend
+
+    legend = Legend(
+        items=list(legend_items),
+        **{"click_policy": "hide", **(legend_kwargs or {})},
+    )
+    move_legends_below(plot, [legend])
+    limit_widgets, status = axis_limit_controls(plot, x_limits, y_limits)
+    rows = [
+        row(
+            Div(text=f"<div style='{_LABEL_STYLE}'>{label}</div>", width=100),
+            control,
+            sizing_mode="stretch_width",
+        )
+        for label, control in option_controls
+    ]
+    limit_row = row(
+        Div(text=f"<div style='{_LABEL_STYLE}'>Limits</div>", width=100),
+        *limit_widgets,
         sizing_mode="stretch_width",
     )
-
-
-def model_html(model: Any, title: str) -> str:
-    """Return a self-contained interactive HTML document (BokehJS from CDN)."""
-    from bokeh.embed import file_html
-    from bokeh.resources import CDN
-
-    return file_html(model, CDN, title)
-
-
-def write_html(path: str | Path, html: str) -> Path:
-    """Write ``html`` to ``path`` (creating parent directories) and return it."""
-    output_path = Path(path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(html, encoding="utf-8")
-    return output_path
+    return (
+        column(
+            plot,
+            *rows,
+            limit_row,
+            sizing_mode="stretch_width",
+        ),
+        status,
+    )

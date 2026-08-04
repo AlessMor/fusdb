@@ -24,9 +24,16 @@ def calc_density_peaking(effective_collisionality: Any, beta_T: Any, nu_noffset:
     Adapted from cfspopcon; see README.md section "Third-party Notices".
 
     Equation 3 from p1334 of Angioni et al :cite:`angioni_scaling_2007`.
+
+    cfspopcon clips this to ``>= 1``; fusdb carries that bound on the variable
+    instead (``density_peaking``/``ion_density_peaking`` domain ``[1, inf)``).
+    A clip inside the formula makes the relation **non-invertible**: every
+    ``nu_noffset`` below the clip point yields the same output, so solving the
+    relation for the offset has infinitely many roots and the scalar scan
+    returns the first grid point it tries -- which is ``-1e240``.  That is what
+    broke DEMO_2022 (see NOTES.md).
     """
-    nu_n = (1.347 - 0.117 * np.log(effective_collisionality) - 4.03 * beta_T) + nu_noffset
-    return np.maximum(nu_n, 1.0)
+    return (1.347 - 0.117 * np.log(effective_collisionality) - 4.03 * beta_T) + nu_noffset
 
 
 @relation(
@@ -59,6 +66,11 @@ def calc_effective_collisionality(n_e_avg: Any, T_e_avg: Any, R: Any, Z_eff: Any
     name="Electron density peaking (Angioni)",
     tags=("default", "plasma", "profile", "tokamak"),
     outputs="density_peaking",
+    # Warned, not enforced: a HOLLOW profile (peaking below 1) is physical --
+    # it occurs at the very centre of the core -- so it must not fail the
+    # reconcile.  But it is unusual enough to surface, and a reactor that
+    # wants it rejected can re-declare the same constraint enforced.
+    constraints=(("density_peaking >= 1.0", False),),
 )
 def calc_electron_density_peaking(
     effective_collisionality: Any, beta_T: Any, electron_density_peaking_offset: Any
@@ -82,6 +94,11 @@ def calc_electron_density_peaking(
     name="Ion density peaking (Angioni)",
     tags=("default", "plasma", "profile", "tokamak"),
     outputs="ion_density_peaking",
+    # Warned, not enforced: a HOLLOW profile (peaking below 1) is physical --
+    # it occurs at the very centre of the core -- so it must not fail the
+    # reconcile.  But it is unusual enough to surface, and a reactor that
+    # wants it rejected can re-declare the same constraint enforced.
+    constraints=(("ion_density_peaking >= 1.0", False),),
 )
 def calc_ion_density_peaking(
     effective_collisionality: Any, beta_T: Any, ion_density_peaking_offset: Any

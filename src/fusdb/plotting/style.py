@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Iterable
-
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 
@@ -19,8 +17,3 @@ def axes(ax: Axes | None = None, *, figsize: tuple[float, float] | None = None) 
         return ax
     _, ax = plt.subplots(figsize=figsize)
     return ax
-
-
-def color_cycle(labels: Iterable[str]) -> dict[str, str]:
-    """Map labels to palette colours, cycling when labels outnumber colours."""
-    return {label: PALETTE[index % len(PALETTE)] for index, label in enumerate(labels)}
