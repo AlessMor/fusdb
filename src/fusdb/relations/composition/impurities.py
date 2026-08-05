@@ -17,6 +17,33 @@ from ..utils import _positive_denominator, _species_fraction
 # fits (the ``zc`` blocks of the mavrin_coronal datasets), so no external
 # atomic data is needed.  Evaluated at the volume-averaged temperature, like
 # cfspopcon (which feeds average_electron_temp to the interpolator).
+#
+# The ``Zbar_X`` parameters below are KEYWORD-ONLY WITHOUT DEFAULTS on purpose,
+# i.e. real relation inputs rather than constants.  They used to carry the bare
+# atomic number as a signature default (``Zbar_Xe: Any = 54.0``), which is not a
+# default VALUE but a silent substitution of a different physical model -- fully
+# stripped instead of the coronal Zbar(T_e).  A constant is not an edge in the
+# dependency graph, so nothing forced the Mavrin producer to run: the relation
+# merely used its result if some other path happened to compute it, and fell
+# back to the bare charge without an error otherwise.  That is exactly how a
+# misfiring gate once turned Zbar_Xe 48.7 into 54 and c_Xe -23% with every
+# reactor still reporting success.  As inputs they are honest edges: each has a
+# ``default``-tagged Mavrin producer keyed only on T_e_avg, so they resolve on
+# every reactor that matches a device group, and a device that knows its own
+# charge states still wins by supplying Zbar_X.  Where they do NOT resolve the
+# relation now PRUNES instead of silently substituting a bare charge -- measured
+# on Eos, whose only tag is the `steallarator` typo so it matches no device
+# group and every Zbar_X is inactive: active relations 61 -> 60.  That pruning is
+# the intended behaviour, not a regression.  The bare nuclear charge lives in
+# species.yaml as ``atomic_number``; it is not this quantity.
+# Do not restore the defaults.
+#
+# EXCEPTION: ``Mean ion charge from composition`` (chi_e, quasineutrality.py)
+# deliberately STILL carries these bare-charge defaults.  Making its Zbar_X real
+# inputs routes chi_e through T_e_avg, which reorders the composition solve: 3
+# failures in tests/PROCESS_large_tokamak and STELLARIS nfev 2 -> 360.  chi_e
+# feeds n_i on every reactor, so it is the one place the extra edge changes the
+# solve; it needs its own stage and is not folded into this change.
 
 def _mavrin_charge_terms(T_e_avg: Any, concentrations: dict[str, Any]) -> Any:
     """Yield (concentration, Zbar(T_e_avg)) for each supplied species."""
@@ -38,9 +65,10 @@ def effective_charge_from_impurity_concentrations(
     c_Xe: Any,
     c_He: Any = 0.0, c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0,
     c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_W: Any = 0.0,
-    Zbar_He: Any = 2.0, Zbar_Li: Any = 3.0, Zbar_Be: Any = 4.0, Zbar_C: Any = 6.0,
-    Zbar_N: Any = 7.0, Zbar_O: Any = 8.0, Zbar_Ne: Any = 10.0, Zbar_Ar: Any = 18.0,
-    Zbar_Kr: Any = 36.0, Zbar_Xe: Any = 54.0, Zbar_W: Any = 74.0,
+    *,
+    Zbar_He: Any, Zbar_Li: Any, Zbar_Be: Any, Zbar_C: Any,
+    Zbar_N: Any, Zbar_O: Any, Zbar_Ne: Any, Zbar_Ar: Any,
+    Zbar_Kr: Any, Zbar_Xe: Any, Zbar_W: Any,
 ) -> Any:
     """Z_eff = 1 + sum_z c_z * Zbar_z(T_e) * (Zbar_z(T_e) - 1), at T_e_avg.
 
@@ -92,9 +120,10 @@ def effective_charge_from_all_species(
     c_Xe: Any,
     c_He: Any = 0.0, c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0,
     c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_W: Any = 0.0,
-    Zbar_He: Any = 2.0, Zbar_Li: Any = 3.0, Zbar_Be: Any = 4.0, Zbar_C: Any = 6.0,
-    Zbar_N: Any = 7.0, Zbar_O: Any = 8.0, Zbar_Ne: Any = 10.0, Zbar_Ar: Any = 18.0,
-    Zbar_Kr: Any = 36.0, Zbar_Xe: Any = 54.0, Zbar_W: Any = 74.0,
+    *,
+    Zbar_He: Any, Zbar_Li: Any, Zbar_Be: Any, Zbar_C: Any,
+    Zbar_N: Any, Zbar_O: Any, Zbar_Ne: Any, Zbar_Ar: Any,
+    Zbar_Kr: Any, Zbar_Xe: Any, Zbar_W: Any,
 ) -> Any:
     """Z_eff = sum_X c_X Zbar_X(T_e)^2, over EVERY species.
 
@@ -140,9 +169,10 @@ def effective_charge_from_all_species(
 def dilution_from_impurity_concentrations(
     c_He: Any = 0.0, c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0,
     c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_Xe: Any = 0.0, c_W: Any = 0.0,
-    Zbar_He: Any = 2.0, Zbar_Li: Any = 3.0, Zbar_Be: Any = 4.0, Zbar_C: Any = 6.0,
-    Zbar_N: Any = 7.0, Zbar_O: Any = 8.0, Zbar_Ne: Any = 10.0, Zbar_Ar: Any = 18.0,
-    Zbar_Kr: Any = 36.0, Zbar_Xe: Any = 54.0, Zbar_W: Any = 74.0,
+    *,
+    Zbar_He: Any, Zbar_Li: Any, Zbar_Be: Any, Zbar_C: Any,
+    Zbar_N: Any, Zbar_O: Any, Zbar_Ne: Any, Zbar_Ar: Any,
+    Zbar_Kr: Any, Zbar_Xe: Any, Zbar_W: Any,
 ) -> Any:
     """Fuel dilution, cfspopcon's SIMPLIFIED form: 1 - sum_X c_X Zbar_X(T_e).
 
@@ -204,9 +234,10 @@ def ion_density_average_from_impurity_concentrations(
     n_e_avg: Any,
     c_He: Any = 0.0, c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0,
     c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_Xe: Any = 0.0, c_W: Any = 0.0,
-    Zbar_He: Any = 2.0, Zbar_Li: Any = 3.0, Zbar_Be: Any = 4.0, Zbar_C: Any = 6.0,
-    Zbar_N: Any = 7.0, Zbar_O: Any = 8.0, Zbar_Ne: Any = 10.0, Zbar_Ar: Any = 18.0,
-    Zbar_Kr: Any = 36.0, Zbar_Xe: Any = 54.0, Zbar_W: Any = 74.0,
+    *,
+    Zbar_He: Any, Zbar_Li: Any, Zbar_Be: Any, Zbar_C: Any,
+    Zbar_N: Any, Zbar_O: Any, Zbar_Ne: Any, Zbar_Ar: Any,
+    Zbar_Kr: Any, Zbar_Xe: Any, Zbar_W: Any,
 ) -> Any:
     """n_i_avg = n_e_avg * (1 - sum_z c_z * (Zbar_z(T_e) - 1)), at T_e_avg.
 

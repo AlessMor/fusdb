@@ -679,7 +679,16 @@ n_i_avg:
   # through the quasineutrality entry.  See .claude/scratchpad.md.
   default_relation:
   - Ion density average from quasineutrality
-  - Default ion density average from plasma average density
+  # REMOVED 2026-08-04: "Default ion density average from plasma average density"
+  # (n_i_avg = n_avg).  It is a hard-coded chi_e = 1, i.e. the impurity-free
+  # special case of the quasineutrality entry beside it -- and a multi-entry
+  # whitelist enforces ALL entries, so the two were asserted simultaneously and
+  # the crude one won the provider slot whenever quasineutrality's dependency
+  # chain grew.  Measured: it was the active n_i_avg provider on DEMO_2022,
+  # pinning n_i/n_e = 1.000000 against DEMO's declared Z_eff 2.12.  `chi_e` now
+  # expresses the degenerate case properly (it equals 1 exactly on a hydrogenic
+  # plasma), so the crude copy is redundant, not a fallback.  The relation
+  # itself is kept -- it is `default`-tagged and reachable by tags.
   # NOT whitelisted: "Ion density average from impurity concentrations (Mavrin)".
   # It is algebraically identical to the quasineutrality form once
   # c_z = sum over that element's isotopes (both give n_i/n_e = 1/(1+f_He) for a
@@ -738,7 +747,7 @@ n_i:
   abs_tol: 1.0e+18
   default_relation:
   - Parabolic ion density profile
-  - Ion density from electron density and fuel fractions
+  - Ion density from electron density (quasineutrality)
   - Ion density from tracked species densities
 n_i_peak:
   aliases:
@@ -999,25 +1008,78 @@ f_p:
   abs_tol: 0.001
   default: 0.0
   default_requires: tau_p
-chi_e:
+Zbar_i:
+  default_unit: dimensionless
+  shape: 1
+  average_variable: Zbar_i_avg
+  # Mean charge per ion PROFILE, Zbar_i(rho) = n_plus/n_i = sum_s Z_s f_s(rho),
+  # where n_plus = sum_s Z_s n_s is the positive-charge density and n_i = sum_s
+  # n_s is the ion PARTICLE density.  It relates charge to particle count: only a
+  # singly-charged plasma has Zbar_i = 1 and hence n_plus = n_i.  Quasineutrality
+  # (n_e = n_plus) then gives the ion dilution n_i = n_e / Zbar_i.
+  # This is the composition Zbar_i, uniform-at-average (= Zbar_i_avg) until the
+  # species densities carry their own radial shapes, at which point it becomes
+  # genuinely radial.  Dilution and the ion LEVEL read the scalar `Zbar_i_avg`,
+  # so their composition denominator never comes from a density ratio (no c_Xe
+  # loop).
+  description: >-
+    Mean charge per ion profile, Zbar_i(rho) = sum_s Z_s f_s = n_plus/n_i.
+    Relates positive-charge density to ion particle density; equals 1 only for a
+    singly-charged plasma.
+  domain: (0, inf)
+  abs_tol: 0.001
+Zbar_i_avg:
   aliases:
   - mean_ion_charge
   default_unit: dimensionless
   # THE bridge between the two composition denominators.  f_s = n_s/n_i is what
   # the particle balance moves; c_s = n_s/n_e is what the atomic data needs; and
-  #     c_s = f_s / chi_e            chi_e = n_e/n_i = sum_s Z_s f_s
+  #     c_s = f_s / Zbar_i_avg       Zbar_i_avg = n_e/n_i = sum_s Z_s f_s
   # is the single scalar relating them.  It is the mean charge PER ION, and is
-  # NOT Z_eff: Z_eff is quadratic in the charge (sum_s Z_s^2 c_s), chi_e linear.
-  #
-  # It had no registry variable before, so four separate relations re-derived it
-  # inline and each truncated it differently -- every one of them dropping the
-  # impurity electrons and so pinning n_i/n_e to 1 on an impurity-seeded
-  # machine.  That truncation is the recorded root cause of the A1 failures
-  # (see .claude/scratchpad.md).  Naming it is the fix.
+  # NOT Z_eff: Z_eff is quadratic in the charge (sum_s Z_s^2 c_s), Zbar_i linear.
+  # This is the SCALAR, composition side (sum_s Z_s f_s).  Dilution and n_i_avg
+  # read THIS one so their composition denominator never comes from a density
+  # ratio.
   description: >-
     Mean charge per ion, n_e/n_i = sum_s Z_s f_s.  Relates the two composition
-    denominators: c_s = f_s / chi_e.  Equals 1 for a pure hydrogenic plasma.
+    denominators: c_s = f_s / Zbar_i_avg.  Equals 1 for a pure hydrogenic plasma.
   domain: '[1, inf)'
+  abs_tol: 0.001
+n_plus:
+  default_unit: 1/m^3
+  shape: 1
+  average_variable: n_plus_avg
+  # Positive-charge density, n_plus(rho) = sum_s Z_s n_s(rho): the fuel ions at
+  # their nuclear charge (D, T, p at Z=1; He3, He4 at Z=2) plus the impurities
+  # (c_k * Zbar_k * n_e).  Quasineutrality is the CHARGE balance n_e = n_plus,
+  # NOT the particle balance n_e = n_i; the two coincide only in a singly-charged
+  # (hydrogenic) plasma.  Computed from the actual species densities, so where an
+  # independent ion shape (Angioni) pulls n_i off n_e it reflects that, and the
+  # charge imbalance `chi_e = n_e / n_plus` departs from 1.
+  description: >-
+    Positive-charge density profile, sum_s Z_s n_s.  Quasineutrality is
+    n_e = n_plus.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+n_plus_avg:
+  default_unit: 1/m^3
+  description: Volume-averaged positive-charge density.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+chi_e:
+  default_unit: dimensionless
+  shape: 1
+  # Charge-imbalance RATIO, chi_e(rho) = n_e(rho) / n_plus(rho): the electron
+  # density relative to the positive-charge density.  Quasineutrality is n_e =
+  # n_plus, so chi_e = 1 wherever it holds -- which is everywhere the ions are
+  # built to match the electrons (the quasineutrality default).  It departs from
+  # 1 only where an INDEPENDENT ion shape (Angioni peaking) makes the positive
+  # charge track the electrons imperfectly along the profile: that residual is
+  # the local charge imbalance.  A pure DIAGNOSTIC; nothing consumes it.
+  description: >-
+    Charge-imbalance ratio, n_e/n_plus.  1 where quasineutrality holds, departs
+    from 1 where an independent ion shape leaves a residual profile imbalance.
+  domain: (0, inf)
   abs_tol: 0.001
 c_H:
   # Hydrogenic counterpart of the c_* impurity concentrations, so that a single

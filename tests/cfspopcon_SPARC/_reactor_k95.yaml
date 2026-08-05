@@ -328,7 +328,7 @@ relations:
   # active and forces ion peaking == electron peaking (both compromise to the
   # 1.445 midpoint of 1.50/1.40).  Quasineutrality is anchored at the
   # averages level by "Ion density average from quasineutrality".
-  - Ion density from electron density and fuel fractions
+  - Ion density from electron density (quasineutrality)
   # Profile-consistent stored-energy producers, superseded by cfspopcon's
   # product-of-averages convention above.
   - Thermal stored energy

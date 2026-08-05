@@ -46,6 +46,23 @@ def default_ion_density_profile_from_average_density(n_avg: float, rho: NDArray[
 
 
 @relation(
+    name="Default mean ion charge profile from average",
+    tags=("default", "plasma", "profile"),
+    outputs="Zbar_i",
+)
+def default_mean_ion_charge_profile_from_average(Zbar_i_avg: float, rho: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Fallback uniform mean-ion-charge profile Zbar_i(rho) = Zbar_i_avg.
+
+    With radially-constant species fractions the mean ion charge Zbar_i is flat,
+    so the profile is the composition scalar broadcast over rho.  This is what
+    lets quasineutrality ``n_i = n_e/Zbar_i`` be a pointwise relation while the
+    composition stays scalar; when species densities carry their own radial
+    shapes a stronger Zbar_i producer gives it a real profile.
+    """
+    return np.full_like(np.asarray(rho, dtype=float), float(Zbar_i_avg), dtype=float)
+
+
+@relation(
     name="Default electron density profile from average density",
     tags=("default", "plasma", "profile"),
     outputs="n_e",
