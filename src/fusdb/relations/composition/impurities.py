@@ -42,7 +42,7 @@ from ..utils import _positive_denominator, _species_fraction
 # deliberately STILL carries these bare-charge defaults.  Making its Zbar_X real
 # inputs routes chi_e through T_e_avg, which reorders the composition solve: 3
 # failures in tests/PROCESS_large_tokamak and STELLARIS nfev 2 -> 360.  chi_e
-# feeds n_i on every reactor, so it is the one place the extra edge changes the
+# feeds n_fuel on every reactor, so it is the one place the extra edge changes the
 # solve; it needs its own stage and is not folded into this change.
 
 def _mavrin_charge_terms(T_e_avg: Any, concentrations: dict[str, Any]) -> Any:
@@ -125,34 +125,28 @@ def effective_charge_from_all_species(
     Zbar_N: Any, Zbar_O: Any, Zbar_Ne: Any, Zbar_Ar: Any,
     Zbar_Kr: Any, Zbar_Xe: Any, Zbar_W: Any,
 ) -> Any:
-    """Z_eff = sum_X c_X Zbar_X(T_e)^2, over EVERY species.
+    """Z_eff = sum_X c_X <q^2>_X, over EVERY species (electron-normalised).
 
-    The single definition.  Each term is a concentration relative to the
-    electrons (c_X = n_X/n_e), so the fusion ions and the impurities enter on
-    exactly the same footing -- the hydrogenic bundle through ``c_H`` at
-    Zbar = 1 (fully stripped at core temperatures), helium and the seeded
-    impurities through their Mavrin coronal mean charge at ``T_e_avg``.
+    The effective charge is the concentration-weighted MEAN-SQUARE charge,
+    sum_X c_X <q^2>_X, with c_X = n_X/n_e.  Fusion ions and impurities enter on
+    the same footing -- the hydrogenic bundle through ``c_H`` at <q^2> = 1 (fully
+    stripped), helium and the impurities through their mean charge ``Zbar_X``.
 
-    It replaces two partial statements that were whitelisted TOGETHER and so
-    enforced simultaneously: ``Effective charge from ion fractions`` (fuel only,
-    impurities absent) and ``Effective charge from impurity concentrations
-    (Mavrin)`` (impurities present but the fuel assumed purely Z = 1, so helium
-    ash was missing from the fuel side).
-
-    ``Zbar`` is a per-species mean charge state, NOT a second effective charge:
-    it stays a Mavrin quantity and is the only place the fits are consulted.
+    APPROXIMATION: <q^2> is squared from the registry mean charge, <q^2> = Zbar^2.
+    That is EXACT for a fully-stripped species (single charge q = Z) and an
+    under-estimate for partially-ionised heavies, where <q^2> > <q>^2 = Zbar^2.
+    fusdb has no charge-state-resolved data to do better; if a radas/ADAS <q^2>
+    table is ever imported, replace ``Zbar_X * Zbar_X`` with the tabulated value.
 
     ``c_Xe`` has no default, so it remains the invertible knob -- a reactor that
-    declares Z_eff without a composition still gets its xenon from this
-    equation.
+    declares Z_eff without a composition still gets its xenon from this equation.
     """
-    # CHECK
     concentrations = {"He": c_He, "Li": c_Li, "Be": c_Be, "C": c_C, "N": c_N, "O": c_O,
                       "Ne": c_Ne, "Ar": c_Ar, "Kr": c_Kr, "Xe": c_Xe, "W": c_W}
     charges = {"He": Zbar_He, "Li": Zbar_Li, "Be": Zbar_Be, "C": Zbar_C, "N": Zbar_N,
                "O": Zbar_O, "Ne": Zbar_Ne, "Ar": Zbar_Ar, "Kr": Zbar_Kr, "Xe": Zbar_Xe,
                "W": Zbar_W}
-    z_effective = c_H  # hydrogenic bundle: Zbar = 1, so it enters as c_H itself
+    z_effective = c_H  # hydrogenic bundle: <q^2> = 1, so it enters as c_H itself
     for symbol, concentration in concentrations.items():
         if np.all(np.asarray(concentration, dtype=float) == 0.0):
             continue
@@ -176,7 +170,7 @@ def dilution_from_impurity_concentrations(
 ) -> Any:
     """Fuel dilution, cfspopcon's SIMPLIFIED form: 1 - sum_X c_X Zbar_X(T_e).
 
-    TERMINOLOGY (project-wide): ``f_X`` are FRACTIONS (n_X/n_i), ``c_X`` are
+    TERMINOLOGY (project-wide): ``f_X`` are FRACTIONS (n_X/n_fuel), ``c_X`` are
     CONCENTRATIONS (n_X/n_e), and FUEL DILUTION is the fuel share of the
     electron density.
 
@@ -228,7 +222,7 @@ def dilution_from_impurity_concentrations(
 @relation(
     name="Ion density average from impurity concentrations (Mavrin)",
     tags=("plasma", "composition"),
-    outputs="n_i_avg",
+    outputs="n_fuel_avg",
 )
 def ion_density_average_from_impurity_concentrations(
     n_e_avg: Any,
@@ -239,14 +233,14 @@ def ion_density_average_from_impurity_concentrations(
     Zbar_N: Any, Zbar_O: Any, Zbar_Ne: Any, Zbar_Ar: Any,
     Zbar_Kr: Any, Zbar_Xe: Any, Zbar_W: Any,
 ) -> Any:
-    """n_i_avg = n_e_avg * (1 - sum_z c_z * (Zbar_z(T_e) - 1)), at T_e_avg.
+    """n_fuel_avg = n_e_avg * (1 - sum_z c_z * (Zbar_z(T_e) - 1)), at T_e_avg.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
     cfspopcon's dilution is n_fuel/n_e = 1 - sum(c_z * Zbar_z); this adds the
-    impurity ions back, n_i = n_fuel + n_e * sum(c_z).
+    impurity ions back, n_fuel = n_fuel + n_e * sum(c_z).
     Mean charge from the Mavrin 2018 coronal fits instead of radas.
 
-    INCONSISTENT with the pinned definition of ``n_i_avg`` (fusion ions only --
+    INCONSISTENT with the pinned definition of ``n_fuel_avg`` (fusion ions only --
     p, D, T, He3, He4 -- see variables.yaml): the ``+ n_e * sum(c_z)`` counts
     the impurity ions, which that definition excludes.  It also states only
     HALF the charge balance -- the impurity term with no fuel ``zbar`` -- while
@@ -268,25 +262,25 @@ def ion_density_average_from_impurity_concentrations(
 
 # ── isotope-fraction -> element-concentration bridges ────────────────────────
 # fusdb carries composition two ways, and both are load-bearing:
-#   f_X  isotope-keyed, denominated in n_i -- what the NUCLEAR side needs
+#   f_X  isotope-keyed, denominated in n_fuel -- what the NUCLEAR side needs
 #        (reactivity distinguishes D from T from He3; the ash balance and
 #        quasineutrality are written per isotope).
 #   c_X  element-keyed, denominated in n_e -- what the ATOMIC side needs
 #        (Lz cooling curves, Mavrin Zbar, Z_eff, NBI stopping are set by
 #        electronic structure, so isotopes are indistinguishable).
 # The bridge is therefore one relation per ELEMENT that has tracked isotope
-# fractions: c_X = (sum of that element's isotope fractions) * n_i/n_e.
+# fractions: c_X = (sum of that element's isotope fractions) * n_fuel/n_e.
 # Elements with no isotope resolution (C, Ne, Xe, W, ...) are declared as c_X
 # directly and need no bridge.  A reactor may state both sides; reconcile then
 # treats the bridge as any other constraint and resolves the disagreement.
 
 
-def _element_concentration(fractions: tuple, n_i_avg: Any, n_e_avg: Any) -> Any:
-    """c_X = (sum of the element's isotope fractions) * n_i/n_e."""
+def _element_concentration(fractions: tuple, n_fuel_avg: Any, n_e_avg: Any) -> Any:
+    """c_X = (sum of the element's isotope fractions) * n_fuel/n_e."""
     total = fractions[0]
     for item in fractions[1:]:
         total = total + item
-    return total * n_i_avg / _positive_denominator(n_e_avg, name="n_e_avg")
+    return total * n_fuel_avg / _positive_denominator(n_e_avg, name="n_e_avg")
 
 
 @relation(
@@ -296,17 +290,17 @@ def _element_concentration(fractions: tuple, n_i_avg: Any, n_e_avg: Any) -> Any:
 )
 def helium_concentration_from_ash_densities(
     f_He4: Any,
-    n_i_avg: Any,
+    n_fuel_avg: Any,
     n_e_avg: Any,
     f_He3: Any = 0.0,
 ) -> Any:
-    """c_He = (f_He3 + f_He4) * n_i/n_e -- the He bridge.
+    """c_He = (f_He3 + f_He4) * n_fuel/n_e -- the He bridge.
 
     Helium is carried isotope-resolved (f_He3/f_He4, which the ash balance
     needs) and, for the atomic data, as the per-element concentration
     ``c_He = n_He/n_e``.
     """
-    return _element_concentration((f_He3, f_He4), n_i_avg, n_e_avg)
+    return _element_concentration((f_He3, f_He4), n_fuel_avg, n_e_avg)
 
 
 @relation(
@@ -318,10 +312,10 @@ def hydrogen_concentration_from_fuel_fractions(
     f_D: Any,
     f_T: Any,
     f_p: Any,
-    n_i_avg: Any,
+    n_fuel_avg: Any,
     n_e_avg: Any,
 ) -> Any:
-    """c_H = (f_D + f_T + f_p) * n_i/n_e -- the hydrogen bridge.
+    """c_H = (f_D + f_T + f_p) * n_fuel/n_e -- the hydrogen bridge.
 
     ``f_p`` is the PROTON (ionised protium) fraction, and protons are a fusion
     product as much as a fuel: ``DDp``, ``DHe3``, ``He3He3`` and ``THe3_np`` all
@@ -329,4 +323,63 @@ def hydrogen_concentration_from_fuel_fractions(
     channel comparable to He4, and being Z=1 they radiate on hydrogen's cooling
     curve and dilute like any other ion.
     """
-    return _element_concentration((f_D, f_T, f_p), n_i_avg, n_e_avg)
+    return _element_concentration((f_D, f_T, f_p), n_fuel_avg, n_e_avg)
+
+
+# ── Per-element concentrations c_X = n_X/n_e (generic elemental convention) ───
+# The impurities are carried as c_X = n_X/n_e already; these give the FUEL/ash
+# species the same n_e-normalised concentration, so every element sits on one
+# footing (c_X for all X), the way cfspopcon/PROCESS express composition.  They
+# are DERIVED DIAGNOSTICS -- nothing consumes them, so they cannot draw the fuel
+# into the c_Xe <- Z_eff inversion (only ``c_H``, the hydrogenic bundle, feeds
+# Z_eff).  ``c_X = f_X * n_fuel/n_e``, the same bridge as c_H, per species.
+
+
+@relation(
+    name="Deuterium concentration from fuel fraction",
+    tags=("plasma", "composition"),
+    outputs="c_D",
+)
+def deuterium_concentration_from_fuel_fraction(f_D: Any, n_fuel_avg: Any, n_e_avg: Any) -> Any:
+    """c_D = f_D * n_fuel/n_e -- deuterium concentration relative to electrons."""
+    return _element_concentration((f_D,), n_fuel_avg, n_e_avg)
+
+
+@relation(
+    name="Tritium concentration from fuel fraction",
+    tags=("plasma", "composition"),
+    outputs="c_T",
+)
+def tritium_concentration_from_fuel_fraction(f_T: Any, n_fuel_avg: Any, n_e_avg: Any) -> Any:
+    """c_T = f_T * n_fuel/n_e -- tritium concentration relative to electrons."""
+    return _element_concentration((f_T,), n_fuel_avg, n_e_avg)
+
+
+@relation(
+    name="Proton concentration from fuel fraction",
+    tags=("plasma", "composition"),
+    outputs="c_p",
+)
+def proton_concentration_from_fuel_fraction(f_p: Any, n_fuel_avg: Any, n_e_avg: Any) -> Any:
+    """c_p = f_p * n_fuel/n_e -- proton (ionised protium) concentration."""
+    return _element_concentration((f_p,), n_fuel_avg, n_e_avg)
+
+
+@relation(
+    name="Helium-3 concentration from fuel fraction",
+    tags=("plasma", "composition"),
+    outputs="c_He3",
+)
+def helium3_concentration_from_fuel_fraction(f_He3: Any, n_fuel_avg: Any, n_e_avg: Any) -> Any:
+    """c_He3 = f_He3 * n_fuel/n_e -- helium-3 concentration relative to electrons."""
+    return _element_concentration((f_He3,), n_fuel_avg, n_e_avg)
+
+
+@relation(
+    name="Helium-4 concentration from fuel fraction",
+    tags=("plasma", "composition"),
+    outputs="c_He4",
+)
+def helium4_concentration_from_fuel_fraction(f_He4: Any, n_fuel_avg: Any, n_e_avg: Any) -> Any:
+    """c_He4 = f_He4 * n_fuel/n_e -- helium-4 (ash) concentration relative to electrons."""
+    return _element_concentration((f_He4,), n_fuel_avg, n_e_avg)

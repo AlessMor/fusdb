@@ -13,19 +13,19 @@ from fusdb.relation import relation
     outputs='n_i_tau_E_T_i',
 )
 def fusion_triple_product(
-    n_i_peak: float, T_i_peak: float, tau_E: float
+    n_fuel_peak: float, T_i_peak: float, tau_E: float
 ) -> Any:
     """Return fusion triple product from peak ion density, peak ion temperature, and energy confinement time.
     # TODO: check why peak values are used instead of volume-averaged values
     Args:
-        n_i_peak: Peak fuel ion density [m^-3]
+        n_fuel_peak: Peak fuel ion density [m^-3]
         T_i_peak: Peak ion temperature [keV]
         tau_E: Energy confinement time [s]
 
     Returns:
         n_i_tau_E_T_i: Fusion triple product [m^-3 keV s]
     """
-    return n_i_peak * T_i_peak * tau_E
+    return n_fuel_peak * T_i_peak * tau_E
 
 
 @relation(

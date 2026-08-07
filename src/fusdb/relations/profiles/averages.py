@@ -65,9 +65,9 @@ def electron_density_volume_average(n_e_avg: float, n_e: Any, rho: Any) -> Any:
     name="Ion density volume-average consistency",
     tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
 )
-def ion_density_volume_average(n_i_avg: float, n_i: Any, rho: Any) -> Any:
-    """Link the ion density profile to its volume-average ``n_i_avg``."""
-    return _profile_average_residual(n_i_avg, n_i, rho)
+def ion_density_volume_average(n_fuel_avg: float, n_fuel: Any, rho: Any) -> Any:
+    """Link the ion density profile to its volume-average ``n_fuel_avg``."""
+    return _profile_average_residual(n_fuel_avg, n_fuel, rho)
 
 
 @relation(
@@ -155,10 +155,10 @@ def electron_density_line_average(n_e: Any, rho: Any) -> Any:
 @relation(
     name="Ion density rho-average",
     tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
-    outputs="n_i_rho_avg",
+    outputs="n_fuel_rho_avg",
 )
-def ion_density_rho_average(n_i: Any, rho: Any) -> Any:
-    return line_average(n_i, rho)
+def ion_density_rho_average(n_fuel: Any, rho: Any) -> Any:
+    return line_average(n_fuel, rho)
 
 
 @relation(

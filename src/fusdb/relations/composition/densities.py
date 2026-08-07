@@ -12,7 +12,7 @@ from ..utils import _positive_denominator
 @relation(
     name="Ion density from tracked species densities",
     tags=("plasma", "composition"),
-    outputs="n_i",
+    outputs="n_fuel",
 )
 def ion_density_from_tracked_species_densities(
     n_D: Any,
@@ -28,7 +28,7 @@ def ion_density_from_tracked_species_densities(
     making it positional would put ``n_p`` in the forward closure of every
     reactor and change which OTHER composition relations activate.
     """
-    return n_D + n_T + n_He3 + n_He4 + n_p
+    return  n_p + n_D + n_T + n_He3 + n_He4
 
 
 @relation(
@@ -36,9 +36,9 @@ def ion_density_from_tracked_species_densities(
     tags=("plasma", "composition", "inverse"),
     outputs="n_D",
 )
-def deuterium_density_from_ion_density_and_fraction(n_i: Any, f_D: Any) -> Any:
+def deuterium_density_from_ion_density_and_fraction(n_fuel: Any, f_D: Any) -> Any:
     """Return deuterium density from total ion density and D fraction."""
-    return n_i * f_D
+    return n_fuel * f_D
 
 
 @relation(
@@ -46,9 +46,9 @@ def deuterium_density_from_ion_density_and_fraction(n_i: Any, f_D: Any) -> Any:
     tags=("plasma", "composition", "inverse"),
     outputs="n_T",
 )
-def tritium_density_from_ion_density_and_fraction(n_i: Any, f_T: Any) -> Any:
+def tritium_density_from_ion_density_and_fraction(n_fuel: Any, f_T: Any) -> Any:
     """Return tritium density from total ion density and T fraction."""
-    return n_i * f_T
+    return n_fuel * f_T
 
 
 @relation(
@@ -56,9 +56,9 @@ def tritium_density_from_ion_density_and_fraction(n_i: Any, f_T: Any) -> Any:
     tags=("plasma", "composition", "inverse"),
     outputs="n_He3",
 )
-def helium3_density_from_ion_density_and_fraction(n_i: Any, f_He3: Any) -> Any:
+def helium3_density_from_ion_density_and_fraction(n_fuel: Any, f_He3: Any) -> Any:
     """Return helium-3 density from total ion density and He3 fraction."""
-    return n_i * f_He3
+    return n_fuel * f_He3
 
 
 @relation(
@@ -66,9 +66,9 @@ def helium3_density_from_ion_density_and_fraction(n_i: Any, f_He3: Any) -> Any:
     tags=("plasma", "composition", "inverse"),
     outputs="n_He4",
 )
-def helium4_density_from_ion_density_and_fraction(n_i: Any, f_He4: Any) -> Any:
+def helium4_density_from_ion_density_and_fraction(n_fuel: Any, f_He4: Any) -> Any:
     """Return helium-4 density from total ion density and He4 fraction."""
-    return n_i * f_He4
+    return n_fuel * f_He4
 
 
 @relation(
@@ -76,9 +76,9 @@ def helium4_density_from_ion_density_and_fraction(n_i: Any, f_He4: Any) -> Any:
     tags=("plasma", "composition", "inverse"),
     outputs="n_p",
 )
-def proton_density_from_ion_density_and_fraction(n_i: Any, f_p: Any) -> Any:
+def proton_density_from_ion_density_and_fraction(n_fuel: Any, f_p: Any) -> Any:
     """Return proton density from total ion density and proton fraction."""
-    return n_i * f_p
+    return n_fuel * f_p
 
 
 def _reaction_balances(
@@ -272,7 +272,7 @@ def _integrated_balances(rho: Any, *balance_args: Any) -> tuple[float, float, fl
     """Return the rho-integrated normalized particle balances (one scalar each).
 
     The steady-state balance is a relation between profiles, but the species
-    are parameterized by scalar fractions (a profile of fixed shape ``n_i`` times
+    are parameterized by scalar fractions (a profile of fixed shape ``n_fuel`` times
     a scalar ``f_X``).  The meaningful residual is therefore the profile reduced
     to its single free degree of freedom: the line-average over the ``rho`` grid,
     using the same trapezoid convention profiles use for their average.  This

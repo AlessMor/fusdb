@@ -56,7 +56,7 @@ def test_registry_default_step_replays_bit_identically() -> None:
     # forward derivation, so f_D is seeded by _seed_defaults -> a "default" step.
     rel = RELATIONS.get("deuterium_density_from_ion_density_and_fraction")
     system = RelationSystem(
-        [Variable("n_i", 1.0e20), Variable("tau_p", 1.0), Variable("f_D"), Variable("n_D")],
+        [Variable("n_fuel", 1.0e20), Variable("tau_p", 1.0), Variable("f_D"), Variable("n_D")],
         [rel],
     )
     system.compile()

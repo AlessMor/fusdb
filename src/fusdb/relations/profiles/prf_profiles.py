@@ -17,7 +17,7 @@ cfspopcon.  fusdb uses scipy/pandas (already runtime dependencies), so the LUT
 handling is ported verbatim; only cfspopcon's pint unit wrapper is dropped.
 
 These are opt-in alternatives to the parabolic ``(1-rho^2)^alpha`` generators
-(gated by ``default_relation`` on ``T_e``/``T_i``/``n_e``/``n_i``): the reactivity
+(gated by ``default_relation`` on ``T_e``/``T_i``/``n_e``/``n_fuel``): the reactivity
 is steeply nonlinear in ``T_i``, so the ``prf`` core shape reproduces cfspopcon's
 fusion power where the parabolic shape at the same peaking over-states it.
 """
@@ -155,10 +155,10 @@ def prf_electron_temperature_profile(T_e_avg: float, temperature_peaking: float,
 @relation(
     name="PRF ion density profile",
     tags=("plasma", "profile", "profile_shape"),
-    outputs="n_i",
+    outputs="n_fuel",
     dependency="generated_profile",
 )
-def prf_ion_density_profile(n_i_avg: float, temperature_peaking: float, ion_density_peaking: float, rho: Any) -> Any:
+def prf_ion_density_profile(n_fuel_avg: float, temperature_peaking: float, ion_density_peaking: float, rho: Any) -> Any:
     """Generate a cfspopcon-``prf`` ion-density profile.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices". The
@@ -166,7 +166,7 @@ def prf_ion_density_profile(n_i_avg: float, temperature_peaking: float, ion_dens
     its core gradient ``a/L_n`` is matched to ``ion_density_peaking``.
     """
     # CHECK
-    return _prf_profile(n_i_avg, temperature_peaking, ion_density_peaking, rho)
+    return _prf_profile(n_fuel_avg, temperature_peaking, ion_density_peaking, rho)
 
 
 @relation(

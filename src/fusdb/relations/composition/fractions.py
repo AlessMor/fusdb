@@ -14,9 +14,9 @@ from ..utils import _positive_denominator, _species_fraction
     tags=("plasma", "composition"),
     outputs="f_D",
 )
-def integrated_deuterium_fraction_from_density_profiles(n_D: Any, n_i: Any) -> Any:
+def integrated_deuterium_fraction_from_density_profiles(n_D: Any, n_fuel: Any) -> Any:
     """Return pointwise deuterium fraction from density profiles."""
-    return _species_fraction(n_D, n_i, name="f_D")
+    return _species_fraction(n_D, n_fuel, name="f_D")
 
 
 @relation(
@@ -24,9 +24,9 @@ def integrated_deuterium_fraction_from_density_profiles(n_D: Any, n_i: Any) -> A
     tags=("plasma", "composition"),
     outputs="f_T",
 )
-def integrated_tritium_fraction_from_density_profiles(n_T: Any, n_i: Any) -> Any:
+def integrated_tritium_fraction_from_density_profiles(n_T: Any, n_fuel: Any) -> Any:
     """Return pointwise tritium fraction from density profiles."""
-    return _species_fraction(n_T, n_i, name="f_T")
+    return _species_fraction(n_T, n_fuel, name="f_T")
 
 
 @relation(
@@ -34,9 +34,9 @@ def integrated_tritium_fraction_from_density_profiles(n_T: Any, n_i: Any) -> Any
     tags=("plasma", "composition"),
     outputs="f_He3",
 )
-def integrated_helium3_fraction_from_density_profiles(n_He3: Any, n_i: Any) -> Any:
+def integrated_helium3_fraction_from_density_profiles(n_He3: Any, n_fuel: Any) -> Any:
     """Return pointwise helium-3 fraction from density profiles."""
-    return _species_fraction(n_He3, n_i, name="f_He3")
+    return _species_fraction(n_He3, n_fuel, name="f_He3")
 
 
 @relation(
@@ -44,9 +44,9 @@ def integrated_helium3_fraction_from_density_profiles(n_He3: Any, n_i: Any) -> A
     tags=("plasma", "composition"),
     outputs="f_He4",
 )
-def integrated_helium4_fraction_from_density_profiles(n_He4: Any, n_i: Any) -> Any:
+def integrated_helium4_fraction_from_density_profiles(n_He4: Any, n_fuel: Any) -> Any:
     """Return pointwise helium-4 fraction from density profiles."""
-    return _species_fraction(n_He4, n_i, name="f_He4")
+    return _species_fraction(n_He4, n_fuel, name="f_He4")
 
 
 @relation(
@@ -54,9 +54,9 @@ def integrated_helium4_fraction_from_density_profiles(n_He4: Any, n_i: Any) -> A
     tags=("plasma", "composition"),
     outputs="f_p",
 )
-def integrated_proton_fraction_from_density_profiles(n_p: Any, n_i: Any) -> Any:
+def integrated_proton_fraction_from_density_profiles(n_p: Any, n_fuel: Any) -> Any:
     """Return pointwise proton fraction from density profiles."""
-    return _species_fraction(n_p, n_i, name="f_p")
+    return _species_fraction(n_p, n_fuel, name="f_p")
 
 
 @relation(

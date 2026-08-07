@@ -147,12 +147,12 @@ def parabolic_electron_temperature_profile(T_e_avg: float, temperature_peaking: 
 @relation(
     name="Parabolic ion density profile",
     tags=("plasma", "profile", "profile_shape"),
-    outputs="n_i",
+    outputs="n_fuel",
     dependency="generated_profile",
 )
-def parabolic_ion_density_profile(n_i_avg: float, ion_density_peaking: float, rho: Any) -> Any:
+def parabolic_ion_density_profile(n_fuel_avg: float, ion_density_peaking: float, rho: Any) -> Any:
     """Generate an ion-density profile from average and peaking factor."""
-    return _parabolic_profile(n_i_avg, ion_density_peaking, rho)
+    return _parabolic_profile(n_fuel_avg, ion_density_peaking, rho)
 
 
 @relation(
@@ -209,11 +209,26 @@ def peak_electron_density_from_profile(n_e: Any, rho: Any) -> float:
 @relation(
     name="Peak ion density from profile",
     tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
+    outputs="n_fuel_peak",
+)
+def peak_ion_density_from_profile(n_fuel: Any, rho: Any) -> float:
+    """Return the maximum fuel-ion density from the fuel-ion-density profile."""
+    return _profile_max(n_fuel, "fuel ion density")
+
+
+@relation(
+    name="Peak total ion density from profile",
+    tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
     outputs="n_i_peak",
 )
-def peak_ion_density_from_profile(n_i: Any, rho: Any) -> float:
-    """Return the maximum ion density from the ion-density profile."""
-    return _profile_max(n_i, "ion density")
+def peak_total_ion_density_from_profile(n_i: Any, rho: Any) -> float:
+    """Return the maximum TOTAL ion density (fuel + impurity) from the profile.
+
+    Feeds the peak plasma pressure ``n0 T0 + n_i_peak T_i_peak``, which counts
+    all ions -- consistent with the volume-averaged thermal pressure using the
+    total ion density n_i = n_fuel + n_imp.
+    """
+    return _profile_max(n_i, "total ion density")
 
 
 @relation(
@@ -424,13 +439,13 @@ def electron_density_peaking_from_peak_and_average(n0: float, n_e_avg: float) ->
     # wants it rejected can re-declare the same constraint enforced.
     constraints=(("ion_density_peaking >= 1.0", False),),
 )
-def ion_density_peaking_from_peak_and_average(n_i_peak: float, n_i_avg: float) -> float:
+def ion_density_peaking_from_peak_and_average(n_fuel_peak: float, n_fuel_avg: float) -> float:
     """Return ion-density peaking from peak and volume-average values.
 
     Bound carried by ``ion_density_peaking``'s domain; see the temperature
     variant above.
     """
-    return n_i_peak / n_i_avg
+    return n_fuel_peak / n_fuel_avg
 
 
 @relation(
@@ -492,6 +507,6 @@ def electron_density_peaking_consistency(n0: float, n_e_avg: float, density_peak
     name="Ion density peaking consistency",
     tags=("plasma", "profile", "tokamak", "stellarator", "mirror"),
 )
-def ion_density_peaking_consistency(n_i_peak: float, n_i_avg: float, ion_density_peaking: float) -> float:
-    """Constrain ion-density peaking as ``n_i_peak / n_i_avg`` independent of direction."""
-    return _peaking_residual(n_i_peak, n_i_avg, ion_density_peaking)
+def ion_density_peaking_consistency(n_fuel_peak: float, n_fuel_avg: float, ion_density_peaking: float) -> float:
+    """Constrain ion-density peaking as ``n_fuel_peak / n_fuel_avg`` independent of direction."""
+    return _peaking_residual(n_fuel_peak, n_fuel_avg, ion_density_peaking)

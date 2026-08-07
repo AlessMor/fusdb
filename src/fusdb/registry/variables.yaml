@@ -655,11 +655,10 @@ nesep_over_nebar:  # CHECK imported from cfspopcon (scrape_off_layer/separatrix_
   description: Ratio of separatrix electron density to volume-averaged electron density.
   domain: (0, inf)
   abs_tol: 0.001
-n_i_avg:
+n_fuel_avg:
   aliases:
-  - n_i_vol_avg
-  - average_ion_density  # CFSPOPCON variables.yaml
-  - nd_plasma_ions_total_vol_avg  # PROCESS physics_variables.py
+  - n_fuel_vol_avg
+  - average_ion_density  # CFSPOPCON variables.yaml (cfspopcon n_i = fuel ions)
   - nd_plasma_fuel_ions_vol_avg  # PROCESS physics_variables.py
   default_unit: 1/m^3
   # DEFINITION (pinned 2026-08-01): n_i counts the FUSION ions only -- p, D, T,
@@ -698,7 +697,7 @@ n_i_avg:
   # cfspopcon convention name it in `include` (see tests/cfspopcon_SPARC).
   domain: (0, inf)
   abs_tol: 1.0e+18
-n_i_rho_avg:
+n_fuel_rho_avg:
   aliases:
   - n_i_la
   - n_i_line_avg
@@ -733,28 +732,73 @@ n_e:
   default_relation:
   - Parabolic electron density profile
   - Default electron density profile from average density
-n_i:
+n_fuel:
   aliases:
-  - n_i_prof
   - fuel_ion_density_profile  # CFSPOPCON variables.yaml
-  - ni_prof  # OpenPOPCON src/openpopcon.py
+  - n_fuel_prof
   default_unit: 1/m^3
-  # See n_i_avg: FUSION ions only (p, D, T, He3, He4); impurities excluded.
+  # FUSION ions only (p, D, T, He3, He4); impurities excluded.  This is the
+  # denominator of every f_X fuel fraction (n_X = f_X * n_fuel) and the source
+  # of the fusion rates.  The TOTAL ion density n_i = n_fuel + n_imp.
   description: Fusion-ion density profile (p + D + T + He3 + He4).
   shape: 1
-  average_variable: n_i_avg
+  average_variable: n_fuel_avg
   domain: '[0, inf)'
   abs_tol: 1.0e+18
   default_relation:
   - Parabolic ion density profile
   - Ion density from electron density (quasineutrality)
   - Ion density from tracked species densities
-n_i_peak:
+n_i:
+  aliases:
+  - n_i_prof
+  - ni_prof  # OpenPOPCON src/openpopcon.py
+  - total_ion_density_profile
+  default_unit: 1/m^3
+  # ALL ions, n_i = sum_X sum_{q>=1} n_X,q = n_fuel + n_imp: the fusion ions
+  # PLUS the impurity ions.  This is the total ion PARTICLE density -- what the
+  # thermal ion pressure n_i * T_i counts.  Quasineutrality is the CHARGE
+  # balance n_e = n_plus = sum_X n_X Zbar_X, a DIFFERENT sum (Zbar-weighted).
+  description: Total ion density profile (fusion ions + impurity ions).
+  shape: 1
+  average_variable: n_i_avg
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+n_i_avg:
+  aliases:
+  - n_i_vol_avg
+  - nd_plasma_ions_total_vol_avg  # PROCESS physics_variables.py
+  default_unit: 1/m^3
+  description: Volume-averaged total ion density (fusion + impurity ions).
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+n_imp:
+  default_unit: 1/m^3
+  # Impurity-ion density, n_imp = sum_k n_k = n_e * sum_k c_k (the non-fuel
+  # elements Li..W, plus He when it is carried as an impurity concentration).
+  # It closes the total ion inventory n_i = n_fuel + n_imp.
+  description: Impurity-ion density profile, sum_k n_k.
+  shape: 1
+  average_variable: n_imp_avg
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+n_imp_avg:
+  default_unit: 1/m^3
+  description: Volume-averaged impurity-ion density.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+n_fuel_peak:
   aliases:
   - peak_fuel_ion_density  # CFSPOPCON variables.yaml
+  default_unit: 1/m^3
+  description: On-axis/peak fuel-ion density.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+n_i_peak:
+  aliases:
   - nd_plasma_ions_on_axis  # PROCESS physics_variables.py
   default_unit: 1/m^3
-  description: On-axis/peak ion density.
+  description: On-axis/peak total ion density (fuel + impurity).
   domain: '[0, inf)'
   abs_tol: 1.0e+18
 n_i_tau_E_T_i:
@@ -1092,6 +1136,36 @@ c_H:
   # boundary, so f_D + f_T rounding to 1 + 2e-9 (ARC_V0, measured) trips it and
   # fails the reconcile. A domain edge must never sit on the nominal operating
   # point of a derived quantity.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+# Per-element FUEL/ash concentrations c_X = n_X/n_e, the same n_e-normalised
+# footing as the impurity c_* (generic elemental convention).  Derived
+# diagnostics; nothing consumes them (only c_H, the hydrogenic bundle, feeds
+# radiation/Z_eff).  Domain [0, inf) for the same reason as c_H: a pure single-
+# species case sits on 1 and a hard upper bound would be a knife-edge.
+c_D:
+  default_unit: dimensionless
+  description: Deuterium concentration n_D/n_e.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+c_T:
+  default_unit: dimensionless
+  description: Tritium concentration n_T/n_e.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+c_p:
+  default_unit: dimensionless
+  description: Proton (ionised protium) concentration n_p/n_e.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+c_He3:
+  default_unit: dimensionless
+  description: Helium-3 concentration n_He3/n_e.
+  domain: '[0, inf)'
+  abs_tol: 0.001
+c_He4:
+  default_unit: dimensionless
+  description: Helium-4 (ash) concentration n_He4/n_e.
   domain: '[0, inf)'
   abs_tol: 0.001
 c_He:

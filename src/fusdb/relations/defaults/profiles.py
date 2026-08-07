@@ -38,7 +38,7 @@ def default_electron_temperature_profile_from_average_temperature(T_avg: float, 
 @relation(
     name="Default ion density profile from average density",
     tags=("default", "plasma", "profile"),
-    outputs="n_i",
+    outputs="n_fuel",
 )
 def default_ion_density_profile_from_average_density(n_avg: float, rho: NDArray[np.float64]) -> NDArray[np.float64]:
     """Fallback uniform ion-density profile on the canonical rho grid."""
@@ -55,7 +55,7 @@ def default_mean_ion_charge_profile_from_average(Zbar_i_avg: float, rho: NDArray
 
     With radially-constant species fractions the mean ion charge Zbar_i is flat,
     so the profile is the composition scalar broadcast over rho.  This is what
-    lets quasineutrality ``n_i = n_e/Zbar_i`` be a pointwise relation while the
+    lets quasineutrality ``n_fuel = n_e/Zbar_i`` be a pointwise relation while the
     composition stays scalar; when species densities carry their own radial
     shapes a stronger Zbar_i producer gives it a real profile.
     """
@@ -84,7 +84,7 @@ def default_ion_temperature_average_from_plasma_average_temperature(T_avg: float
 @relation(
     name="Default ion density average from plasma average density",
     tags=("default", "plasma", "profile"),
-    outputs="n_i_avg",
+    outputs="n_fuel_avg",
 )
 def default_ion_density_average_from_plasma_average_density(n_avg: float) -> float:
     return n_avg
