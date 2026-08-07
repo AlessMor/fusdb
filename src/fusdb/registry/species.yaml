@@ -94,6 +94,7 @@ He:
     - polynomialfit_post_jensen
     - coolingcurve_PROCESS_coronal
     - coolingcurve_radas_coronal
+    - meancharge_radas_coronal
   isotopes:
     He3:
       symbol: [He3, 3He, He_3, 3_He]
@@ -120,6 +121,7 @@ Li:
     - polynomialfit_mavrin_coronal
     - polynomialfit_mavrin_noncoronal
     - coolingcurve_radas_coronal
+    - meancharge_radas_coronal
 Be:
   full_name: beryllium
   atomic_number: 4
@@ -131,6 +133,7 @@ Be:
     - polynomialfit_post_jensen
     - coolingcurve_PROCESS_coronal
     - coolingcurve_radas_coronal
+    - meancharge_radas_coronal
 B:
   full_name: boron
   atomic_number: 5
@@ -147,6 +150,7 @@ C:
     - polynomialfit_post_jensen
     - coolingcurve_PROCESS_coronal
     - coolingcurve_radas_coronal
+    - meancharge_radas_coronal
 N:
   full_name: nitrogen
   atomic_number: 7
@@ -157,6 +161,7 @@ N:
     - polynomialfit_mavrin_noncoronal
     - coolingcurve_PROCESS_coronal
     - coolingcurve_radas_coronal
+    - meancharge_radas_coronal
 O:
   full_name: oxygen
   atomic_number: 8
@@ -168,6 +173,7 @@ O:
     - polynomialfit_post_jensen
     - coolingcurve_PROCESS_coronal
     - coolingcurve_radas_coronal
+    - meancharge_radas_coronal
 Ne:
   full_name: neon
   atomic_number: 10
@@ -178,6 +184,7 @@ Ne:
     - polynomialfit_mavrin_noncoronal
     - coolingcurve_PROCESS_coronal
     - coolingcurve_radas_coronal
+    - meancharge_radas_coronal
 Ar:
   full_name: argon
   atomic_number: 18
@@ -189,6 +196,7 @@ Ar:
     - polynomialfit_post_jensen
     - coolingcurve_PROCESS_coronal
     - coolingcurve_radas_coronal
+    - meancharge_radas_coronal
 Fe:
   full_name: iron
   atomic_number: 26
@@ -199,10 +207,13 @@ Kr:
   atomic_number: 36
   atomic_mass: 84
   isotopic_mass_u: 83.798
-  # No radas entry: krypton's coronal_Lz is all-zero in the source radas_dir.
+  # No radas coronal_Lz (krypton's is all-zero in the source radas_dir), but its
+  # coronal_mean_charge_state IS valid, so radas supplies Zbar here even though
+  # Lz falls back to Mavrin/PROCESS.
   atomic_data:
     - polynomialfit_mavrin_coronal
     - coolingcurve_PROCESS_coronal
+    - meancharge_radas_coronal
 Xe:
   full_name: xenon
   atomic_number: 54
@@ -212,6 +223,7 @@ Xe:
     - polynomialfit_mavrin_coronal
     - coolingcurve_PROCESS_coronal
     - coolingcurve_radas_coronal
+    - meancharge_radas_coronal
 W:
   full_name: tungsten
   atomic_number: 74
@@ -222,6 +234,7 @@ W:
     - polynomialfit_post_jensen
     - coolingcurve_PROCESS_coronal
     - coolingcurve_radas_coronal
+    - meancharge_radas_coronal
 
 # ── Charge states, neutrals and molecules ────────────────────────────────────
 # Deliberately absent.  fusdb never tracks a density of a charge state: in the

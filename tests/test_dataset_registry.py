@@ -32,6 +32,7 @@ def test_all_packaged_datasets_use_common_envelope_and_canonical_name():
         "reactivity": 5,
         "polynomialfit": 87,
         "coolingcurve": 21,  # 11 PROCESS + 10 radas coronal (no radas Kr: all-zero source table)
+        "meancharge": 11,  # radas coronal mean charge: He Li Be C N O Ne Ar Kr Xe W
     }
 
 

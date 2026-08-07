@@ -24,7 +24,7 @@ import yaml
 
 SCHEMA_VERSION = 1
 SUPPORTED_DATATYPES = frozenset(
-    {"xsection", "reactivity", "polynomialfit", "coolingcurve"}
+    {"xsection", "reactivity", "polynomialfit", "coolingcurve", "meancharge"}
 )
 
 
@@ -155,6 +155,10 @@ def _validate_document(path: Path, raw: Any, *, expected_datatype: str | None) -
         for key in ("temperature_keV", "Lz_Wm3"):
             if key not in raw:
                 raise ValueError(f"Cooling-curve dataset {path.name!r} is missing {key!r}.")
+    elif datatype == "meancharge":
+        for key in ("temperature_keV", "electron_density_m3", "mean_charge"):
+            if key not in raw:
+                raise ValueError(f"Mean-charge dataset {path.name!r} is missing {key!r}.")
 
     return DatasetDocument(
         dataset_id=path.stem,

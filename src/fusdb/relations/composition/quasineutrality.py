@@ -86,30 +86,32 @@ def mean_ion_charge_from_composition(
     f_p: Any = 0.0,
     c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0, c_O: Any = 0.0,
     c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_Xe: Any = 0.0, c_W: Any = 0.0,
-    Zbar_Li: Any = 3.0, Zbar_Be: Any = 4.0, Zbar_C: Any = 6.0, Zbar_N: Any = 7.0,
-    Zbar_O: Any = 8.0, Zbar_Ne: Any = 10.0, Zbar_Ar: Any = 18.0, Zbar_Kr: Any = 36.0,
-    Zbar_Xe: Any = 54.0, Zbar_W: Any = 74.0,
+    *,
+    Zbar_Li: Any, Zbar_Be: Any, Zbar_C: Any, Zbar_N: Any,
+    Zbar_O: Any, Zbar_Ne: Any, Zbar_Ar: Any, Zbar_Kr: Any,
+    Zbar_Xe: Any, Zbar_W: Any,
 ) -> Any:
-    """chi_e = n_e/n_fuel = sum_s Z_s f_s, the mean charge per ion.
+    """Zbar_i = n_e/n_fuel = sum_s Z_s f_s, the mean charge per (fuel) ion.
 
+    (Not to be confused with ``chi_e``, the charge-imbalance ratio n_e/n_plus.)
     Derived rather than postulated.  Splitting the species sum into the ones
     carried as fractions of n_fuel (the fuel and ash) and the ones carried as
-    concentrations relative to n_e (the impurities, f_z = c_z * chi_e):
+    concentrations relative to n_e (the impurities, f_z = c_z * Zbar_i):
 
-        chi_e = [f_D + f_T + f_p + 2(f_He3 + f_He4)]  +  chi_e * sum_z c_z Zbar_z
+        Zbar_i = [f_D + f_T + f_p + 2(f_He3 + f_He4)]  +  Zbar_i * sum_z c_z Zbar_z
 
-    and solving for chi_e gives
+    and solving for Zbar_i gives
 
-        chi_e = zbar_fuel / (1 - sum_z c_z Zbar_z)
+        Zbar_i = zbar_fuel / (1 - sum_z c_z Zbar_z)
 
     i.e. exactly the fuel-only mean charge the composition relations already
     compute, DIVIDED BY the impurity term every one of them drops.  With no
-    impurities the denominator is 1 and chi_e degenerates to zbar_fuel, so a
-    hydrogenic plasma still gives chi_e = 1 and n_fuel = n_e.
+    impurities the denominator is 1 and Zbar_i degenerates to zbar_fuel, so a
+    hydrogenic plasma still gives Zbar_i = 1 and n_fuel = n_e.
 
     Hydrogen enters at Z = 1 and helium at Z = 2 (both fully stripped at any
     temperature fusdb models); the impurities bring their own ``Zbar_X``, so
-    chi_e carries a temperature dependence through them and is not a pure
+    Zbar_i carries a temperature dependence through them and is not a pure
     composition quantity.
 
     Helium is NOT in the impurity sum -- it is already in the f-fractions above
@@ -141,8 +143,8 @@ def fuel_dilution_from_fuel_fractions(
 
     Charge-weighted, so He3 enters at Z = 2: the quantity answers "what
     fraction of the electrons is balanced by FUEL ions", which is what dilutes
-    the fusion rate.  Written with fractions over ``chi_e`` because
-    ``c_s = f_s / chi_e``:
+    the fusion rate.  Written with fractions over ``Zbar_i_avg`` because
+    ``c_s = f_s / Zbar_i_avg``:
 
         (f_D + f_T + 2 f_He3) * n_fuel/n_e  =  (f_D + f_T + 2 f_He3) / Zbar_i_avg
 
@@ -233,9 +235,6 @@ def charge_imbalance_from_densities(
 # carried as c_k = n_k/n_e and are NOT in n_fuel.  The TOTAL ion density
 # n_i = n_fuel + n_imp is what the thermal ion pressure n_i*T_i counts.
 # (He is in n_fuel as fusion ash, so it is excluded from the impurity sum here.)
-
-_IMPURITY_SYMBOLS = ("Li", "Be", "C", "N", "O", "Ne", "Ar", "Kr", "Xe", "W")
-
 
 def _impurity_concentration_sum(concentrations: dict) -> Any:
     total = 0.0

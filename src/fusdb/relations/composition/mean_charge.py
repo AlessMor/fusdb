@@ -19,7 +19,11 @@ from typing import Any
 
 from fusdb.relation import relation
 
-from ..radiation.impurity_radiation import mavrin_mean_charge
+from ..radiation.impurity_radiation import (
+    mavrin_mean_charge,
+    radas_mean_charge,
+    _RADAS_MEANCHARGE_SPECIES,
+)
 
 
 @relation(
@@ -130,3 +134,37 @@ def mean_ionisation_state_xenon(T_e_avg: Any) -> Any:
 def mean_ionisation_state_tungsten(T_e_avg: Any) -> Any:
     """Zbar_W(T_e_avg) from the Mavrin 2018 coronal fit."""
     return mavrin_mean_charge("W", T_e_avg)
+
+
+# ── radas coronal mean charge (the DEFAULT Zbar; Mavrin above is the fallback) ──
+# One relation per element that has a `meancharge_radas_coronal` dataset.  These
+# are NON-default (strong providers) while the Mavrin producers above are now
+# `default` (weak fallbacks), so radas wins the Zbar_X provider slot wherever its
+# table exists; Mavrin is used only if a radas dataset is absent, or when a
+# reactor selects a Mavrin relation by name.  A reactor that supplies Zbar_X
+# still overrides both (supplied > derived).
+# radas reads (T_e_avg, n_e_avg) -- the table is 2-D in (T_e, n_e) -- vs Mavrin's
+# T_e-only fit; it is materially better for partially-ionised heavies (W ~+25%
+# at 0.4-1.2 keV) and at edge temperatures where the Mavrin fit floors.
+
+
+def _make_radas_meancharge_relation(symbol: str) -> Any:
+    def _relation_func(T_e_avg: Any, n_e_avg: Any) -> Any:
+        return radas_mean_charge(symbol, T_e_avg, n_e_avg)
+
+    _relation_func.__name__ = f"radas_mean_charge_{symbol}"
+    _relation_func.__doc__ = (
+        f"Zbar_{symbol}(T_e_avg, n_e_avg) from the radas (OpenADAS) coronal "
+        "mean-charge table -- the full 2-D dependence cfspopcon uses (log-spaced "
+        "interpolation in both coordinates, edge-clamped).  The n_e dependence is "
+        "weak over physical core densities (<=2.5% for Xe, ~0 for W)."
+    )
+    return _relation_func
+
+
+for _sym in _RADAS_MEANCHARGE_SPECIES:
+    relation(
+        name=f"Mean ionisation state of {_sym} (radas coronal)",
+        tags=("plasma", "composition"),
+        outputs=f"Zbar_{_sym}",
+    )(_make_radas_meancharge_relation(_sym))

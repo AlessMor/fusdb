@@ -5,7 +5,7 @@ and ``ion_density_peaking``). The electron Angioni variant produces
 ``density_peaking`` (the default producer). The ion Angioni variant produces
 ``ion_density_peaking``; it is off by default (``ion_density_peaking`` defaults to
 the electron value) and active only when explicitly included. The ion variant
-additionally needs ``dilution`` (n_i/n_e), which fusdb's composition layer or the
+additionally needs ``dilution`` (the fuel share n_fuel/n_e), which fusdb's composition layer or the
 user supplies.
 """
 

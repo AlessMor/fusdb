@@ -33,7 +33,12 @@ variables:
   T_avg:
     value: 12.49
     unit: keV
-  f_GW: 1.2
+    fixed: true
+  f_GW:
+    value: 1.2
+    fixed: true  # design point: anchors n_e (= f_GW * n_GW) hard, so the density
+                 # cannot collapse to a spurious low-n_e branch under the 2-D
+                 # radas Zbar(T_e, n_e) coupling.
   Z_eff: 2.12
   afuel:
     value: 2.5

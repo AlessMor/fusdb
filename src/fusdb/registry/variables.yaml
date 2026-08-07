@@ -1293,56 +1293,78 @@ Zbar_He:
   description: Mean ionisation state of He (sum_q q n_q / sum_q n_q).
   domain: '[0, 2]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of He (radas coronal)
 Zbar_Li:
   default_unit: dimensionless
   description: Mean ionisation state of Li (sum_q q n_q / sum_q n_q).
   domain: '[0, 3]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of Li (radas coronal)
 Zbar_Be:
   default_unit: dimensionless
   description: Mean ionisation state of Be (sum_q q n_q / sum_q n_q).
   domain: '[0, 4]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of Be (radas coronal)
 Zbar_C:
   default_unit: dimensionless
   description: Mean ionisation state of C (sum_q q n_q / sum_q n_q).
   domain: '[0, 6]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of C (radas coronal)
 Zbar_N:
   default_unit: dimensionless
   description: Mean ionisation state of N (sum_q q n_q / sum_q n_q).
   domain: '[0, 7]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of N (radas coronal)
 Zbar_O:
   default_unit: dimensionless
   description: Mean ionisation state of O (sum_q q n_q / sum_q n_q).
   domain: '[0, 8]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of O (radas coronal)
 Zbar_Ne:
   default_unit: dimensionless
   description: Mean ionisation state of Ne (sum_q q n_q / sum_q n_q).
   domain: '[0, 10]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of Ne (radas coronal)
 Zbar_Ar:
   default_unit: dimensionless
   description: Mean ionisation state of Ar (sum_q q n_q / sum_q n_q).
   domain: '[0, 18]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of Ar (radas coronal)
 Zbar_Kr:
   default_unit: dimensionless
   description: Mean ionisation state of Kr (sum_q q n_q / sum_q n_q).
   domain: '[0, 36]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of Kr (radas coronal)
 Zbar_Xe:
   default_unit: dimensionless
   description: Mean ionisation state of Xe (sum_q q n_q / sum_q n_q).
   domain: '[0, 54]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of Xe (radas coronal)
 Zbar_W:
   default_unit: dimensionless
   description: Mean ionisation state of W (sum_q q n_q / sum_q n_q).
   domain: '[0, 74]'
   abs_tol: 0.01
+  default_relation:
+  - Mean ionisation state of W (radas coronal)
 TBR:
   default_unit: dimensionless
   description: Tritium breeding ratio.

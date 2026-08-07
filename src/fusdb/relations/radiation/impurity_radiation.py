@@ -312,6 +312,48 @@ def _radas_coronal_spline(symbol: str) -> Any:
     return spline, (logT[0], logT[-1]), (logn[0], logn[-1])
 
 
+_RADAS_MEANCHARGE_SPECIES = SPECIES.with_atomic_data("meancharge_radas_coronal")
+
+
+@lru_cache(maxsize=None)
+def _radas_meancharge_spline(symbol: str) -> Any:
+    """Bicubic spline over the 2-D mean-charge table, plus coordinate bounds.
+
+    Returns ``(spline, logT_bounds, logn_bounds, atomic_number)`` mapping
+    (log10 Te[keV], log10 ne[m^-3]) -> Zbar.  LINEAR in the charge (Zbar spans a
+    small [0, Z] range, not the decades that make Lz a log-log quantity); the
+    coordinates stay log-spaced like the Lz spline.
+    """
+    from scipy.interpolate import RectBivariateSpline
+
+    entry = _load_radiation_dataset("meancharge", "radas_coronal", symbol)
+    logT = np.log10(np.asarray(entry["temperature_keV"], dtype=float))
+    logn = np.log10(np.asarray(entry["electron_density_m3"], dtype=float))
+    zbar = np.asarray(entry["mean_charge"], dtype=float)
+    spline = RectBivariateSpline(logT, logn, zbar)
+    return spline, (logT[0], logT[-1]), (logn[0], logn[-1]), float(entry["atomic_number"])
+
+
+def radas_mean_charge(symbol: str, Te_keV: Any, n_e: Any) -> np.ndarray:
+    """radas coronal mean charge Zbar(T_e, n_e) for one species.
+
+    2-D interpolation of the tabulated ``coronal_mean_charge_state`` (OpenADAS
+    coronal equilibrium), clamped to the table edges in both coordinates like
+    cfspopcon's ``CoeffInterpolator``.  Preferred over the Mavrin polynomial
+    fit for partially-ionised heavies -- W runs ~25% higher than the Mavrin fit
+    at 0.4-1.2 keV -- and at edge temperatures, where the fit floors.
+    """
+    spline, (logT_lo, logT_hi), (logn_lo, logn_hi), Z = _radas_meancharge_spline(symbol)
+    with np.errstate(divide="ignore"):
+        lT = np.log10(np.asarray(Te_keV, dtype=float))
+        ln = np.log10(np.asarray(n_e, dtype=float))
+    lT, ln = np.broadcast_arrays(lT, ln)
+    lT = np.clip(lT, logT_lo, logT_hi)
+    ln = np.clip(ln, logn_lo, logn_hi)
+    val = spline(np.ravel(lT), np.ravel(ln), grid=False).reshape(np.shape(lT))
+    return np.clip(val, 0.0, Z)
+
+
 def _radas_coronal_Lz(symbol: str, Te_keV: Any, n_e: Any) -> np.ndarray:
     """radas coronal Lz [W*m^3] for one species at (T_e [keV], n_e [m^-3]).
 

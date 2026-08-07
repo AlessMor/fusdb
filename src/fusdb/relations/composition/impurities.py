@@ -38,12 +38,12 @@ from ..utils import _positive_denominator, _species_fraction
 # species.yaml as ``atomic_number``; it is not this quantity.
 # Do not restore the defaults.
 #
-# EXCEPTION: ``Mean ion charge from composition`` (chi_e, quasineutrality.py)
-# deliberately STILL carries these bare-charge defaults.  Making its Zbar_X real
-# inputs routes chi_e through T_e_avg, which reorders the composition solve: 3
-# failures in tests/PROCESS_large_tokamak and STELLARIS nfev 2 -> 360.  chi_e
-# feeds n_fuel on every reactor, so it is the one place the extra edge changes the
-# solve; it needs its own stage and is not folded into this change.
+# ``Mean ion charge from composition`` (Zbar_i_avg, quasineutrality.py) also takes
+# these as real inputs now, so the mean ion charge / dilution use the SAME (radas)
+# Zbar_X as Z_eff -- no bare-charge (fully-stripped) approximation anywhere.  An
+# earlier attempt regressed (routed the mean charge through T_e_avg, reordering the
+# solve: STELLARIS nfev 2 -> 360), but the chi_e/Zbar_i split + radas Zbar changed
+# the topology enough that it is now neutral (measured 2026-08-05).
 
 def _mavrin_charge_terms(T_e_avg: Any, concentrations: dict[str, Any]) -> Any:
     """Yield (concentration, Zbar(T_e_avg)) for each supplied species."""
@@ -110,6 +110,33 @@ def effective_charge_from_impurity_concentrations(
     return z_effective
 
 
+def _mean_square_charge(zbar: Any) -> Any:
+    """<q^2> from the mean charge <q> = Zbar -- the adjacent-states closure.
+
+    Z_eff needs the SECOND charge moment <q^2> = sum_q q^2 y_q, not Zbar^2 =
+    <q>^2.  The two differ by the variance of the charge-state distribution,
+    Var(q) = <q^2> - <q>^2, which Zbar alone does not carry -- so with no
+    charge-state-resolved atomic data we CLOSE it with a minimal, data-free
+    assumption: the distribution is the two integer charge states bracketing
+    Zbar.  Writing Zbar = n + f (n = floor(Zbar), f = frac in [0, 1)), put a
+    fraction (1 - f) at q = n and f at q = n + 1.  That reproduces the mean
+    exactly, <q> = (1-f) n + f (n+1) = n + f = Zbar, and gives
+
+        <q^2> = (1-f) n^2 + f (n+1)^2 = Zbar^2 + f (1 - f).
+
+    So the correction f(1-f) (in [0, 0.25]) is added to Zbar^2.  It is:
+      * EXACT for a fully-stripped species (Zbar integer, f = 0 -> <q^2> = Zbar^2),
+        including the hydrogenic bundle (Zbar = 1) and core helium (Zbar = 2);
+      * a strict improvement on Zbar^2 for partially-ionised ions, but a LOWER
+        BOUND on the true variance -- a genuine coronal distribution for a heavy
+        like W spans several charge states, not two, so the real spread (and
+        hence Z_eff) is larger.  Replace this with a tabulated radas/ADAS <q^2>
+        if that accuracy is ever needed.
+    """
+    frac = zbar - np.floor(zbar)
+    return zbar * zbar + frac * (1.0 - frac)
+
+
 @relation(
     name="Effective charge from all species",
     tags=("plasma", "composition"),
@@ -132,11 +159,11 @@ def effective_charge_from_all_species(
     the same footing -- the hydrogenic bundle through ``c_H`` at <q^2> = 1 (fully
     stripped), helium and the impurities through their mean charge ``Zbar_X``.
 
-    APPROXIMATION: <q^2> is squared from the registry mean charge, <q^2> = Zbar^2.
-    That is EXACT for a fully-stripped species (single charge q = Z) and an
-    under-estimate for partially-ionised heavies, where <q^2> > <q>^2 = Zbar^2.
-    fusdb has no charge-state-resolved data to do better; if a radas/ADAS <q^2>
-    table is ever imported, replace ``Zbar_X * Zbar_X`` with the tabulated value.
+    <q^2> is NOT Zbar^2: it carries the charge-state VARIANCE, supplied here by
+    ``_mean_square_charge`` (the adjacent-states closure <q^2> = Zbar^2 + f(1-f),
+    data-free, a lower bound on the true spread -- see that helper).  This is the
+    only place the closure enters; the cfspopcon Z_eff form below keeps its own
+    ``Zbar(Zbar-1)`` convention so it still reproduces cfspopcon.
 
     ``c_Xe`` has no default, so it remains the invertible knob -- a reactor that
     declares Z_eff without a composition still gets its xenon from this equation.
@@ -146,12 +173,11 @@ def effective_charge_from_all_species(
     charges = {"He": Zbar_He, "Li": Zbar_Li, "Be": Zbar_Be, "C": Zbar_C, "N": Zbar_N,
                "O": Zbar_O, "Ne": Zbar_Ne, "Ar": Zbar_Ar, "Kr": Zbar_Kr, "Xe": Zbar_Xe,
                "W": Zbar_W}
-    z_effective = c_H  # hydrogenic bundle: <q^2> = 1, so it enters as c_H itself
+    z_effective = c_H  # hydrogenic bundle: fully stripped, <q^2> = 1, enters as c_H
     for symbol, concentration in concentrations.items():
         if np.all(np.asarray(concentration, dtype=float) == 0.0):
             continue
-        zbar = charges[symbol]
-        z_effective = z_effective + concentration * zbar * zbar
+        z_effective = z_effective + concentration * _mean_square_charge(charges[symbol])
     return z_effective
 
 
