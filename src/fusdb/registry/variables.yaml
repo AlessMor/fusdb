@@ -1365,6 +1365,64 @@ Zbar_W:
   abs_tol: 0.01
   default_relation:
   - Mean ionisation state of W (radas coronal)
+# Mean-SQUARE charge state <q^2>_X = sum_q q^2 y_X,q, the TRUE second charge
+# moment from the radas coronal charge-state distribution (NOT Zbar^2).  Z_eff =
+# sum_X c_X <q^2>_X reads these.  radas is the sole producer, so no whitelist.
+Zsq_He:
+  default_unit: dimensionless
+  description: Mean-square charge state of He (sum_q q^2 n_q / sum_q n_q).
+  domain: '[0, 4]'
+  abs_tol: 0.01
+Zsq_Li:
+  default_unit: dimensionless
+  description: Mean-square charge state of Li.
+  domain: '[0, 9]'
+  abs_tol: 0.01
+Zsq_Be:
+  default_unit: dimensionless
+  description: Mean-square charge state of Be.
+  domain: '[0, 16]'
+  abs_tol: 0.01
+Zsq_C:
+  default_unit: dimensionless
+  description: Mean-square charge state of C.
+  domain: '[0, 36]'
+  abs_tol: 0.01
+Zsq_N:
+  default_unit: dimensionless
+  description: Mean-square charge state of N.
+  domain: '[0, 49]'
+  abs_tol: 0.01
+Zsq_O:
+  default_unit: dimensionless
+  description: Mean-square charge state of O.
+  domain: '[0, 64]'
+  abs_tol: 0.01
+Zsq_Ne:
+  default_unit: dimensionless
+  description: Mean-square charge state of Ne.
+  domain: '[0, 100]'
+  abs_tol: 0.01
+Zsq_Ar:
+  default_unit: dimensionless
+  description: Mean-square charge state of Ar.
+  domain: '[0, 324]'
+  abs_tol: 0.01
+Zsq_Kr:
+  default_unit: dimensionless
+  description: Mean-square charge state of Kr.
+  domain: '[0, 1296]'
+  abs_tol: 0.01
+Zsq_Xe:
+  default_unit: dimensionless
+  description: Mean-square charge state of Xe.
+  domain: '[0, 2916]'
+  abs_tol: 0.01
+Zsq_W:
+  default_unit: dimensionless
+  description: Mean-square charge state of W.
+  domain: '[0, 5476]'
+  abs_tol: 0.01
 TBR:
   default_unit: dimensionless
   description: Tritium breeding ratio.

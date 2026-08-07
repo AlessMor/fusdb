@@ -1,18 +1,16 @@
 """Mean ionisation states Zbar_X(T_e).
 
-The single home of the coronal-equilibrium assumption.  Each element's mean
-charge used to be computed inline, inside whichever relation needed it, by
-calling the Mavrin fit through ``_mavrin_charge_terms`` -- so "coronal
-equilibrium" was asserted in four places at once and could not be inspected,
-swapped or overridden.  Here it is one ``default``-tagged producer per element,
-so a reactor that knows its own charge states supplies ``Zbar_X`` and wins.
+The single home of the coronal-equilibrium mean charge.  Each element has one
+strong ``radas coronal`` producer (the default Zbar_X source) and a weak Mavrin
+fallback; a reactor that knows its own charge states supplies ``Zbar_X`` and
+overrides both.  The second charge moment ``Zsq_X`` = <q^2> follows the same
+pattern, from the radas charge-state distribution.
 
-Hydrogen is absent on purpose: the Mavrin fits start at helium, and hydrogen is
-fully stripped at any temperature fusdb models, so it enters the charge moments
-at Zbar = 1 exactly.
+Hydrogen is absent on purpose: it is fully stripped at any temperature fusdb
+models, so it enters the charge moments at Zbar = 1, <q^2> = 1 exactly.
 
-Zbar is LINEAR in the charge (sum_q q n_q / sum_q n_q).  Z_eff is quadratic and
-is built from these, not the other way round.
+Zbar is LINEAR in the charge (sum_q q n_q / sum_q n_q); <q^2> is its second
+moment.  Z_eff = sum_X c_X <q^2>_X is built from these.
 """
 
 from typing import Any
@@ -22,7 +20,9 @@ from fusdb.relation import relation
 from ..radiation.impurity_radiation import (
     mavrin_mean_charge,
     radas_mean_charge,
+    radas_mean_square_charge,
     _RADAS_MEANCHARGE_SPECIES,
+    _RADAS_MEANSQ_SPECIES,
 )
 
 
@@ -168,3 +168,29 @@ for _sym in _RADAS_MEANCHARGE_SPECIES:
         tags=("plasma", "composition"),
         outputs=f"Zbar_{_sym}",
     )(_make_radas_meancharge_relation(_sym))
+
+
+# ── radas coronal mean-square charge <q^2>_X (the second charge moment) ────────
+# Z_eff = sum_X c_X <q^2>_X reads these.  <q^2> = sum_q q^2 y_q from the radas
+# coronal charge-state distribution -- the TRUE variance, not Zbar^2.  radas is
+# the sole producer (no Mavrin <q^2>), so no whitelist is needed.
+
+
+def _make_radas_meansq_relation(symbol: str) -> Any:
+    def _relation_func(T_e_avg: Any, n_e_avg: Any) -> Any:
+        return radas_mean_square_charge(symbol, T_e_avg, n_e_avg)
+
+    _relation_func.__name__ = f"radas_mean_square_charge_{symbol}"
+    _relation_func.__doc__ = (
+        f"Zsq_{symbol}(T_e_avg, n_e_avg) = <q^2> from the radas coronal charge-"
+        "state distribution (2-D log-spaced interpolation, edge-clamped)."
+    )
+    return _relation_func
+
+
+for _sym in _RADAS_MEANSQ_SPECIES:
+    relation(
+        name=f"Mean-square charge of {_sym} (radas coronal)",
+        tags=("plasma", "composition"),
+        outputs=f"Zsq_{_sym}",
+    )(_make_radas_meansq_relation(_sym))

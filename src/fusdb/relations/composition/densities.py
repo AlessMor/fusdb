@@ -191,7 +191,6 @@ def plasma_balance_ode(
     dn_He4_dt = src_He4 - inv_tau_He4 * n_He4
     dn_p_dt = src_p - inv_tau_p * n_p
 
-    total_density = n_D + n_T + n_He3 + n_He4 + n_p
     if injection_fractions is None:
         # Physical fuelling replenishes burned FUEL (D, T) in their current
         # ratio and never injects ash (He3/He4/p): injecting ash proportionally

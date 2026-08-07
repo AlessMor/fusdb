@@ -354,6 +354,41 @@ def radas_mean_charge(symbol: str, Te_keV: Any, n_e: Any) -> np.ndarray:
     return np.clip(val, 0.0, Z)
 
 
+_RADAS_MEANSQ_SPECIES = SPECIES.with_atomic_data("meansquarecharge_radas_coronal")
+
+
+@lru_cache(maxsize=None)
+def _radas_meansq_spline(symbol: str) -> Any:
+    """Bicubic spline over the 2-D <q^2> table, plus coordinate bounds."""
+    from scipy.interpolate import RectBivariateSpline
+
+    entry = _load_radiation_dataset("meansquarecharge", "radas_coronal", symbol)
+    logT = np.log10(np.asarray(entry["temperature_keV"], dtype=float))
+    logn = np.log10(np.asarray(entry["electron_density_m3"], dtype=float))
+    q2 = np.asarray(entry["mean_square_charge"], dtype=float)
+    spline = RectBivariateSpline(logT, logn, q2)
+    zsq_max = float(entry["atomic_number"]) ** 2
+    return spline, (logT[0], logT[-1]), (logn[0], logn[-1]), zsq_max
+
+
+def radas_mean_square_charge(symbol: str, Te_keV: Any, n_e: Any) -> np.ndarray:
+    """radas coronal mean-SQUARE charge <q^2>(T_e, n_e) for one species.
+
+    <q^2> = sum_q q^2 y_q, the TRUE second charge moment of the coronal charge-
+    state distribution (precomputed at extraction), NOT Zbar^2.  Same 2-D log-
+    spaced interpolation and edge clamping as the mean charge; feeds Z_eff.
+    """
+    spline, (logT_lo, logT_hi), (logn_lo, logn_hi), zsq_max = _radas_meansq_spline(symbol)
+    with np.errstate(divide="ignore"):
+        lT = np.log10(np.asarray(Te_keV, dtype=float))
+        ln = np.log10(np.asarray(n_e, dtype=float))
+    lT, ln = np.broadcast_arrays(lT, ln)
+    lT = np.clip(lT, logT_lo, logT_hi)
+    ln = np.clip(ln, logn_lo, logn_hi)
+    val = spline(np.ravel(lT), np.ravel(ln), grid=False).reshape(np.shape(lT))
+    return np.clip(val, 0.0, zsq_max)
+
+
 def _radas_coronal_Lz(symbol: str, Te_keV: Any, n_e: Any) -> np.ndarray:
     """radas coronal Lz [W*m^3] for one species at (T_e [keV], n_e [m^-3]).
 

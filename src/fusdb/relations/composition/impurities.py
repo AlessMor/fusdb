@@ -7,7 +7,7 @@ import numpy as np
 from fusdb.relation import relation
 
 
-from ..utils import _positive_denominator, _species_fraction
+from ..utils import _positive_denominator
 
 # ── Impurity-concentration composition (cfspopcon structure, Mavrin charge states) ──
 # cfspopcon's calc_zeff_and_dilution_due_to_impurities builds Z_eff and the ion
@@ -110,33 +110,6 @@ def effective_charge_from_impurity_concentrations(
     return z_effective
 
 
-def _mean_square_charge(zbar: Any) -> Any:
-    """<q^2> from the mean charge <q> = Zbar -- the adjacent-states closure.
-
-    Z_eff needs the SECOND charge moment <q^2> = sum_q q^2 y_q, not Zbar^2 =
-    <q>^2.  The two differ by the variance of the charge-state distribution,
-    Var(q) = <q^2> - <q>^2, which Zbar alone does not carry -- so with no
-    charge-state-resolved atomic data we CLOSE it with a minimal, data-free
-    assumption: the distribution is the two integer charge states bracketing
-    Zbar.  Writing Zbar = n + f (n = floor(Zbar), f = frac in [0, 1)), put a
-    fraction (1 - f) at q = n and f at q = n + 1.  That reproduces the mean
-    exactly, <q> = (1-f) n + f (n+1) = n + f = Zbar, and gives
-
-        <q^2> = (1-f) n^2 + f (n+1)^2 = Zbar^2 + f (1 - f).
-
-    So the correction f(1-f) (in [0, 0.25]) is added to Zbar^2.  It is:
-      * EXACT for a fully-stripped species (Zbar integer, f = 0 -> <q^2> = Zbar^2),
-        including the hydrogenic bundle (Zbar = 1) and core helium (Zbar = 2);
-      * a strict improvement on Zbar^2 for partially-ionised ions, but a LOWER
-        BOUND on the true variance -- a genuine coronal distribution for a heavy
-        like W spans several charge states, not two, so the real spread (and
-        hence Z_eff) is larger.  Replace this with a tabulated radas/ADAS <q^2>
-        if that accuracy is ever needed.
-    """
-    frac = zbar - np.floor(zbar)
-    return zbar * zbar + frac * (1.0 - frac)
-
-
 @relation(
     name="Effective charge from all species",
     tags=("plasma", "composition"),
@@ -148,36 +121,36 @@ def effective_charge_from_all_species(
     c_He: Any = 0.0, c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0,
     c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_W: Any = 0.0,
     *,
-    Zbar_He: Any, Zbar_Li: Any, Zbar_Be: Any, Zbar_C: Any,
-    Zbar_N: Any, Zbar_O: Any, Zbar_Ne: Any, Zbar_Ar: Any,
-    Zbar_Kr: Any, Zbar_Xe: Any, Zbar_W: Any,
+    Zsq_He: Any, Zsq_Li: Any, Zsq_Be: Any, Zsq_C: Any,
+    Zsq_N: Any, Zsq_O: Any, Zsq_Ne: Any, Zsq_Ar: Any,
+    Zsq_Kr: Any, Zsq_Xe: Any, Zsq_W: Any,
 ) -> Any:
     """Z_eff = sum_X c_X <q^2>_X, over EVERY species (electron-normalised).
 
     The effective charge is the concentration-weighted MEAN-SQUARE charge,
     sum_X c_X <q^2>_X, with c_X = n_X/n_e.  Fusion ions and impurities enter on
     the same footing -- the hydrogenic bundle through ``c_H`` at <q^2> = 1 (fully
-    stripped), helium and the impurities through their mean charge ``Zbar_X``.
+    stripped), helium and the impurities through their per-species ``Zsq_X``.
 
-    <q^2> is NOT Zbar^2: it carries the charge-state VARIANCE, supplied here by
-    ``_mean_square_charge`` (the adjacent-states closure <q^2> = Zbar^2 + f(1-f),
-    data-free, a lower bound on the true spread -- see that helper).  This is the
-    only place the closure enters; the cfspopcon Z_eff form below keeps its own
-    ``Zbar(Zbar-1)`` convention so it still reproduces cfspopcon.
+    ``<q^2>`` is the TRUE second charge moment (sum_q q^2 y_q), read from the
+    radas coronal charge-state distribution via ``Zsq_X`` -- NOT ``Zbar^2``,
+    which drops the charge-state variance and under-counts partially-ionised
+    heavies.  The cfspopcon Z_eff form below keeps its own ``Zbar(Zbar-1)``
+    convention so it still reproduces cfspopcon.
 
     ``c_Xe`` has no default, so it remains the invertible knob -- a reactor that
     declares Z_eff without a composition still gets its xenon from this equation.
     """
     concentrations = {"He": c_He, "Li": c_Li, "Be": c_Be, "C": c_C, "N": c_N, "O": c_O,
                       "Ne": c_Ne, "Ar": c_Ar, "Kr": c_Kr, "Xe": c_Xe, "W": c_W}
-    charges = {"He": Zbar_He, "Li": Zbar_Li, "Be": Zbar_Be, "C": Zbar_C, "N": Zbar_N,
-               "O": Zbar_O, "Ne": Zbar_Ne, "Ar": Zbar_Ar, "Kr": Zbar_Kr, "Xe": Zbar_Xe,
-               "W": Zbar_W}
+    mean_square = {"He": Zsq_He, "Li": Zsq_Li, "Be": Zsq_Be, "C": Zsq_C, "N": Zsq_N,
+                   "O": Zsq_O, "Ne": Zsq_Ne, "Ar": Zsq_Ar, "Kr": Zsq_Kr, "Xe": Zsq_Xe,
+                   "W": Zsq_W}
     z_effective = c_H  # hydrogenic bundle: fully stripped, <q^2> = 1, enters as c_H
     for symbol, concentration in concentrations.items():
         if np.all(np.asarray(concentration, dtype=float) == 0.0):
             continue
-        z_effective = z_effective + concentration * _mean_square_charge(charges[symbol])
+        z_effective = z_effective + concentration * mean_square[symbol]
     return z_effective
 
 
