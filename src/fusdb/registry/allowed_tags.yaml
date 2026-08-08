@@ -20,8 +20,20 @@ device:
 # Confinement regimes, listed in threshold-escalation order (lowest heating
 # power first): the Reactor regime driver reads this order when it has to
 # switch a reactor whose declared regime fails its sustainment guards.
+#
+# This axis is the plasma's TRANSPORT state -- specifically whether an edge
+# transport barrier exists (H-mode has a pedestal, L-mode does not).  It is
+# deliberately NOT a list of heating methods.  "Ohmic" names how the plasma is
+# heated, not how it confines: an ohmically heated discharge is usually L-mode,
+# but ohmic H-modes exist (the ITER Physics Basis lists ohmic heating among the
+# methods by which H-mode has been produced, and its H-mode database contains
+# ohmic H-mode discharges from COMPASS-D and TCV).  The older OH/L/H shorthand
+# comes from L-mode being identified as the *degraded* state that followed
+# auxiliary heating of an ohmic target; it is useful experimental labelling but
+# conflates two axes.  If fusdb ever needs the other two, they are separate:
+# a heating-scheme axis (ohmic, NBI, ECRH, ICRH, LH) and an ohmic transport
+# regime axis (LOC, SOC).
 confinement_mode:
-  - ohmic_mode
   - l_mode
   - h_mode
   - i_mode

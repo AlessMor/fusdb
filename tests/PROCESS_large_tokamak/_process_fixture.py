@@ -266,10 +266,9 @@ def build_config(mfile_path, profile_size=PROFILE_SIZE):
                 "Plasma loss power (PROCESS)",
                 "Power crossing the separatrix (PROCESS)",
                 # i_l_h_threshold = 19 -> Martin 2008 ASPECT-RATIO CORRECTED,
-                # nominal.  fusdb's default L-H relation runs +23% high here,
-                # which pushes P_sep below threshold and demotes the regime.
-                # i_l_h_threshold = 19, evaluated on the TOTAL ion mass as
-                # PROCESS does (fusdb's default form uses the fuel mass).
+                # nominal, on the TOTAL ion mass.  This is now also fusdb's
+                # registry default, so naming it here is belt-and-braces rather
+                # than a convention override.
                 "L-H threshold Martin-2008 aspect nominal (total ion mass)",
                 # PROCESS's i_plasma_current = 4 evaluates the IPDG89 shaping fit
                 # at kappa_95; fusdb's default evaluates it at the areal kappa.
@@ -287,7 +286,15 @@ def build_config(mfile_path, profile_size=PROFILE_SIZE):
                 "Bootstrap current fraction",
                 "Synchrotron radiation",
                 "Plasma loss power",
-                "L-H transition threshold power",
+                # afuel_total is supplied from the MFILE, so fusdb's derivation
+                # would be a second provider for a pinned input.  They agree to
+                # -0.57%, which is ENTIRELY the mass convention: fusdb's SPECIES
+                # table stores mass NUMBERS (D 2, T 3, He4 4) while PROCESS uses
+                # atomic masses (2.0136, 3.0161, 4.0026), so PROCESS's m_fuel_amu
+                # is 2.51453 against fusdb's exact 2.5.  Rescaling the derived
+                # value by that 1.00592 gives 2.6986 vs PROCESS 2.6981 (0.02%).
+                # The same offset applies to afuel and is pre-existing.
+                "Average mass of all plasma ions",
                 "Plasma shaping function for q_star",
                 # kappa_95 is supplied, so fusdb's kappa->kappa_95 derivation
                 # would over-determine it.

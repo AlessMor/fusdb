@@ -460,7 +460,7 @@ def contour_overlay(result: dict, handle, ax=None):
         # Per-point regime fill: colour the background by the regime each cell
         # was solved in (index into regime_names; -1 = no regime certified).
         names = payload.get("regime_names", ())
-        palette = {"h_mode": "#dbe9ff", "l_mode": "#ffe7cc", "ohmic_mode": "#dcf5dc", "i_mode": "#f0dcf5"}
+        palette = {"h_mode": "#dbe9ff", "l_mode": "#ffe7cc", "i_mode": "#f0dcf5"}
         used = [i for i in range(len(names)) if np.any(regime_index == i)]
         cmap = ListedColormap([palette.get(names[i], "0.8") for i in used])
         norm = BoundaryNorm([*range(len(used) + 1)], cmap.N)

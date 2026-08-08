@@ -4,6 +4,11 @@ This module contains confinement-mode threshold power producers and checked-only
 sustainment guards. Threshold producers are intentionally regime-neutral: the
 reactor-level verification pass compares candidate confinement-mode tags against
 the same thresholds, while confinement-time scalings remain mode-tagged.
+
+The confinement modes are transport states (L / H / I), not heating methods.
+There is deliberately no Ohmic "mode" here: ohmic names how a plasma is heated,
+and an ohmic discharge may be either L-mode or H-mode.  See the
+``confinement_mode`` group in ``allowed_tags.yaml``.
 """
 
 from typing import Any
@@ -11,17 +16,6 @@ from typing import Any
 import numpy as np
 
 from fusdb.relation import relation
-
-
-@relation(
-    name="Ohmic-L transition threshold power",
-    tags=("confinement", "constraint"),
-    outputs="P_OL_thresh",
-)
-def ohmic_l_transition_power() -> float:
-    """Return the Ohmic-to-L-mode transition threshold power [W]."""
-    # TODO: Replace this placeholder with a physical Ohmic/L-mode threshold.
-    return 0.0
 
 
 @relation(
@@ -46,8 +40,11 @@ def lh_transition_power(n_avg: float, B0: float, A_p: float) -> Any:
     """
     n20 = n_avg / 1e20
     # P_LH [MW] = 0.0488 * n20^0.717 * B0^0.803 * A_p^0.941
-    # TODO: Near copy of PROCESS `lh_martin08_nominal`; check Martin 2008 to
-    # decide which producer to keep and whether the original density is n_la or n_avg.
+    # Superseded as the default by `lh_martin08_aspect_nominal` (PROCESS's own
+    # default): this form drops Martin's ion-mass correction `2/afuel` and the
+    # Takizuka aspect correction, and evaluates the fit at the volume-averaged
+    # density rather than the line average it was fitted to.  Kept, gated, as
+    # the bare-coefficient Martin form.
     return 1e6 * 0.0488 * (n20 ** 0.717) * (B0 ** 0.803) * (A_p ** 0.941)
 
 
@@ -60,21 +57,6 @@ def lh_transition_power(n_avg: float, B0: float, A_p: float) -> Any:
 # which is how the Reactor discovers the guards of one regime -- there is no
 # name-based table anywhere.
 _GUARD_TAGS = ("confinement", "confinement_mode_threshold")
-
-
-@relation(name="Ohmic-mode sustainment (P_sep <= P_OL_thresh)", tags=(*_GUARD_TAGS, "ohmic_mode"), enforce=False)
-def ohmic_mode_sustainment(P_sep: float, P_OL_thresh: float) -> Any:
-    """Guard that holds while an Ohmic-mode solve stays below the Ohmic-L threshold;
-    violated (verify status False) once ``P_sep`` exceeds ``P_OL_thresh``."""
-    scale = np.maximum(np.maximum(np.abs(P_sep), np.abs(P_OL_thresh)), 1.0)
-    return np.maximum(P_sep - P_OL_thresh, 0.0) / scale
-
-
-@relation(name="L-mode sustainment (P_sep >= P_OL_thresh)", tags=(*_GUARD_TAGS, "l_mode"), enforce=False)
-def l_mode_above_ohmic_sustainment(P_sep: float, P_OL_thresh: float) -> Any:
-    """Guard that holds once an L-mode candidate is above the Ohmic-L threshold."""
-    scale = np.maximum(np.maximum(np.abs(P_sep), np.abs(P_OL_thresh)), 1.0)
-    return np.maximum(P_OL_thresh - P_sep, 0.0) / scale
 
 
 @relation(name="H-mode sustainment (P_sep >= P_LH)", tags=(*_GUARD_TAGS, "h_mode"), enforce=False)
@@ -335,21 +317,28 @@ def lh_snipes2000_cd_lower(n_la: float, B0: float, R: float, afuel: float) -> fl
 
 
 # --- Martin 2008 with Takizuka aspect-ratio correction ----------------------
-def _martin08_aspect_correction(aspect: float) -> float:
-    """Takizuka aspect-ratio correction; unity for aspect > 2.7."""
-    if aspect <= 2.7:
-        return 0.098 * aspect / (1.0 - (2.0 / (1.0 + aspect)) ** 0.5)
-    return 1.0
+def _martin08_aspect_correction(aspect: Any) -> Any:
+    """Takizuka aspect-ratio correction; unity for aspect > 2.7.
+
+    Branches per element so the batched popcon namespace evaluates in one call
+    (the same reason ``calc_LH_transition_threshold_power`` does).  This form is
+    the default ``P_LH`` producer, so it is reached on every scan.
+    """
+    aspect = np.asarray(aspect, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        corrected = 0.098 * aspect / (1.0 - (2.0 / (1.0 + aspect)) ** 0.5)
+    return np.where(aspect <= 2.7, corrected, 1.0)
 
 
 @relation(name="L-H threshold Martin-2008 aspect nominal", tags=_LH, outputs="P_LH")
 def lh_martin08_aspect_nominal(n_la: float, B0: float, A_p: float, afuel: float, A: float) -> float:
     """Martin-2008 nominal L-H threshold with Takizuka aspect-ratio correction.
+
+    fusdb's default ``P_LH`` producer, matching PROCESS's own default
+    (``i_l_h_threshold = 19``).  Reduces to :func:`lh_martin08_nominal` wherever
+    the aspect correction is unity (``A > 2.7``).
+
     Adapted from PROCESS; see README.md section "Third-party Notices"."""
-    # CHECK
-    # TODO: Near copy of `lh_martin08_nominal` when the aspect correction is
-    # unity; check Takizuka/Martin sources to decide which variant to keep and
-    # whether the original density is n_la or n_avg.
     dnla20 = n_la / 1.0e20
     return 1.0e6 * (
         0.0488 * dnla20**0.717 * B0**0.803 * A_p**0.941 * (2.0 / afuel)

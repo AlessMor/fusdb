@@ -2436,13 +2436,6 @@ P_ECRH:
   description: ECRH coupled power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-P_OL_thresh:
-  default_unit: W
-  description: Ohmic-L transition threshold power.
-  domain: '[0, inf)'
-  abs_tol: 1000000.0
-  default_relation:
-  - Ohmic-L transition threshold power
 P_LH:
   default_unit: W
   aliases:
@@ -2451,10 +2444,19 @@ P_LH:
   description: L-H transition threshold power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  # CHECK gate: keep fusdb's simplified relation as the default producer; the full
-  # cfspopcon Martin+Ryter version is off unless explicitly included.
+  # Gate: PROCESS's own default (`i_l_h_threshold = 19`) -- Martin 2008 with the
+  # Takizuka aspect-ratio correction, on the LINE-averaged density Martin fitted,
+  # and with the isotope factor evaluated on the TOTAL ion mass (`afuel_total`)
+  # exactly as PROCESS does: every one of its 21 L-H scalings takes
+  # m_ions_total_amu, not m_fuel_amu.  The fuel-mass sibling
+  # ("L-H threshold Martin-2008 aspect nominal") runs ~9% high wherever there is
+  # a real ash/impurity inventory and is kept only as the gated variant.
+  # Also off unless explicitly included: the cfspopcon-faithful Martin+Ryter form
+  # ("L-H transition threshold power (Martin-Ryter)", which adds the low-density
+  # rollover but drops the aspect correction and uses the VOLUME average, as
+  # cfspopcon does), and the 17 other PROCESS scalings.
   default_relation:
-  - L-H transition threshold power
+  - L-H threshold Martin-2008 aspect nominal (total ion mass)
 P_LI_thresh:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power); CFSPOPCON variables.yaml
   default_unit: W
   description: L-I transition threshold power.
@@ -2605,6 +2607,21 @@ SOL_momentum_loss_fraction:  # CHECK imported from cfspopcon (two_point_model)
   abs_tol: 0.001
   # CHECK gate: KotovReiter is the default (cfspopcon's SPARC choice); the Sang /
   # Jarvinen / Moulton / PerezH / PerezL fits are off unless explicitly included.
+  #
+  # PerezH/PerezL are the one genuinely regime-specific pair here (AUG SOLPS
+  # scans for H-mode and L-mode respectively) and carry `h_mode`/`l_mode` tags
+  # to say so, but those tags cannot select today: `default_relation` is applied
+  # AFTER tag matching as a filter on the tag-selected set, so a tag can only
+  # choose *within* a whitelist. KotovReiter is untagged and therefore matches
+  # every reactor. Making the regime pick the Perez fit needs one of:
+  #   * whitelisting all three -- but then KotovReiter and PerezH are BOTH
+  #     active on an h_mode machine (over-determined);
+  #   * demoting KotovReiter to a weak `default` -- but scalar weak-defaults do
+  #     not retire (the known gap behind the Zbar_X whitelist), so they conflict;
+  #   * whitelisting only PerezH/PerezL -- which breaks the cfspopcon SPARC
+  #     comparison, whose whole point is that KotovReiter is cfspopcon's own
+  #     SPARC choice.
+  # So this stays as-is pending a decision on the SPARC parity cost.
   default_relation:
   - SOL momentum loss fraction KotovReiter
 upstream_total_pressure:  # CHECK imported from cfspopcon (two_point_model); cfspopcon uses atm, fusdb uses Pa

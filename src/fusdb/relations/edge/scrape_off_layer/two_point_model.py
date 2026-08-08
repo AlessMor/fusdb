@@ -397,11 +397,18 @@ def calc_SOL_momentum_loss_fraction_Moulton(target_electron_temp: Any) -> Any:
 
 @relation(
     name="SOL momentum loss fraction PerezH",
-    tags=("power_exhaust", "tokamak"),
+    tags=("power_exhaust", "tokamak", "h_mode"),
     outputs="SOL_momentum_loss_fraction",
 )
 def calc_SOL_momentum_loss_fraction_PerezH(target_electron_temp: Any) -> Any:
     """SOL momentum-loss fraction, Perez H-mode fit (Stangeby 2018 fig. 11a).
+
+    Carries the ``h_mode`` tag because the fit IS regime-specific (a SOLPS
+    density scan for AUG H-mode with trace impurities only); ``PerezL`` is its
+    L-mode partner.  The tag is currently inert: ``SOL_momentum_loss_fraction``
+    whitelists the untagged ``KotovReiter`` form, and ``default_relation`` is
+    applied *after* tag matching, so tags can only choose *within* a whitelist.
+    See the note on that variable in ``variables.yaml``.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
     """
@@ -411,11 +418,14 @@ def calc_SOL_momentum_loss_fraction_PerezH(target_electron_temp: Any) -> Any:
 
 @relation(
     name="SOL momentum loss fraction PerezL",
-    tags=("power_exhaust", "tokamak"),
+    tags=("power_exhaust", "tokamak", "l_mode"),
     outputs="SOL_momentum_loss_fraction",
 )
 def calc_SOL_momentum_loss_fraction_PerezL(target_electron_temp: Any) -> Any:
     """SOL momentum-loss fraction, Perez L-mode fit (Stangeby 2018 fig. 11b).
+
+    L-mode partner of ``PerezH`` (a SOLPS density scan for AUG L-mode with
+    carbon).  See ``PerezH`` for why the regime tag is currently inert.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
     """

@@ -5,20 +5,18 @@ from __future__ import annotations
 import numpy as np
 
 from fusdb.reactor import Reactor
-from fusdb.registry import RELATIONS
+from fusdb.registry import RELATIONS, TAGS
 from fusdb.variable import Variable
 
 
 H_GUARD = "H-mode sustainment (P_sep >= P_LH)"
 L_GUARD = "L-mode sustainment (P_sep <= P_LH)"
-L_OL_GUARD = "L-mode sustainment (P_sep >= P_OL_thresh)"
 L_LI_GUARD = "L-mode sustainment (P_sep <= P_LI_thresh)"
 I_GUARD = "I-mode sustainment (P_sep >= P_LI_thresh)"
-O_GUARD = "Ohmic-mode sustainment (P_sep <= P_OL_thresh)"
 
 
 def _exclude_except_guards() -> tuple[str, ...]:
-    keep = {H_GUARD, L_GUARD, L_OL_GUARD, L_LI_GUARD, I_GUARD, O_GUARD}
+    keep = {H_GUARD, L_GUARD, L_LI_GUARD, I_GUARD}
     return tuple(rel.name for rel in RELATIONS if rel.name not in keep)
 
 
@@ -28,13 +26,11 @@ def _reactor(
     p_sep: float = 1.0e6,
     p_lh: float = 2.0e6,
     p_li: float = 3.0e6,
-    p_ol: float = 0.0,
 ) -> Reactor:
     variables = [
         Variable("P_sep", p_sep),
         Variable("P_LH", p_lh),
         Variable("P_LI_thresh", p_li),
-        Variable("P_OL_thresh", p_ol),
         # Popcon axes for the scan preflight test; inert in the scalar tests.
         Variable("n_e_avg", 1.0e20),
         Variable("T_e_avg", 10.0),
@@ -94,16 +90,17 @@ def test_reconcile_switches_declared_l_mode_to_i_mode_when_li_threshold_is_cross
     assert any("switched to i_mode for reconcile" in warning for warning in result["warnings"])
 
 
-def test_reconcile_switches_declared_ohmic_mode_to_l_mode_with_zero_threshold() -> None:
-    reactor = _reactor("ohmic_mode")
+def test_confinement_mode_axis_holds_only_transport_states() -> None:
+    # Confinement mode is the plasma's transport state (does an edge barrier
+    # exist), not how it is heated.  "Ohmic" is a heating method -- an ohmic
+    # discharge may be L-mode or H-mode -- so it must not appear on this axis,
+    # and no sustainment guard may depend on an Ohmic-L threshold power.
+    assert tuple(TAGS.raw["confinement_mode"]) == ("l_mode", "h_mode", "i_mode")
 
-    result = reactor.reconcile()
-
-    assert result["success"]
-    assert "l_mode" in reactor.tags
-    assert result["regime"] == "l_mode"
-    assert result["regime_path"] == ["ohmic_mode", "l_mode"]
-    assert any("switched to l_mode for reconcile" in warning for warning in result["warnings"])
+    guards = [rel for rel in RELATIONS if "confinement_mode_threshold" in rel.tags]
+    assert guards
+    for guard in guards:
+        assert "P_OL_thresh" not in guard.input_names
 
 
 def test_popcon_auto_regime_assigns_l_mode_below_lh_threshold() -> None:

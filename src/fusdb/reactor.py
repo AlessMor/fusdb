@@ -149,25 +149,27 @@ def _bistable_warning(fallback: str, mode: str) -> str:
 def _candidate_regimes(declared: str | None) -> tuple[str, ...]:
     """Candidate regimes in preference order: declared first, then escalation.
 
-    Candidates cover *both* directions from the declared tag -- an ohmic or
-    L-mode machine whose ``P_sep`` crosses a threshold escalates, an H/I-mode
+    Candidates cover *both* directions from the declared tag -- an L-mode
+    machine whose ``P_sep`` crosses a threshold escalates, an H/I-mode
     machine below its threshold de-escalates.  The declared tag picks the
     machine's upper branch: H-mode and I-mode are alternative upper regimes
     selected by machine operation (topology, drift direction), not by heating
     power alone, so an ``h_mode`` machine never auto-selects ``i_mode`` and
-    vice versa.  A machine declared ``l_mode``/``ohmic_mode`` can escalate
-    into either branch; self-consistency of each candidate's own solve (its
-    guards evaluated on its own values) disambiguates, ties broken by this
-    order.  Regimes with no registered guards are dropped: self-consistency
-    would be undefined for them.
+    vice versa.  A machine declared ``l_mode`` can escalate into either
+    branch; self-consistency of each candidate's own solve (its guards
+    evaluated on its own values) disambiguates, ties broken by this order.
+    Regimes with no registered guards are dropped: self-consistency would be
+    undefined for them.
+
+    L-mode is the floor: it is the transport state a machine falls back to
+    when it cannot sustain a barrier, whatever heats it.
     """
     if declared not in _regime_order():
         return ()
     chains = {
-        "h_mode": ("h_mode", "l_mode", "ohmic_mode"),
-        "i_mode": ("i_mode", "l_mode", "ohmic_mode"),
-        "l_mode": ("l_mode", "h_mode", "i_mode", "ohmic_mode"),
-        "ohmic_mode": ("ohmic_mode", "l_mode", "h_mode", "i_mode"),
+        "h_mode": ("h_mode", "l_mode"),
+        "i_mode": ("i_mode", "l_mode"),
+        "l_mode": ("l_mode", "h_mode", "i_mode"),
     }
     chain = chains.get(declared, (declared,))
     return tuple(regime for regime in chain if _regime_guard_names(regime))
@@ -205,7 +207,7 @@ def _regime_guards_indeterminate(statuses: Mapping[str, Mapping[str, Any]], regi
 def _regime_guard_input_names(chain: Iterable[str]) -> set[str]:
     """Canonical variables every sustainment guard in ``chain`` reads.
 
-    These (``P_sep``, ``P_LH``, ``P_OL_thresh``, ``P_LI_thresh``) must be produced
+    These (``P_sep``, ``P_LH``, ``P_LI_thresh``) must be produced
     by each per-regime scan so the guards can classify every grid point.
     """
     names: set[str] = set()
@@ -983,14 +985,14 @@ class Reactor:
         Instead of running the whole grid in one fixed regime, this runs the
         batched scan once per candidate regime (:func:`_candidate_regimes` of
         the declared tag -- the declared branch's escalation chain, e.g.
-        ``h_mode``/``l_mode``/``ohmic_mode``, with both upper branches as
-        candidates for an ``l_mode``/``ohmic_mode`` machine) and assigns each
-        grid point the regime it actually
+        ``h_mode``/``l_mode``, with both upper branches as candidates for an
+        ``l_mode`` machine) and assigns each grid point the regime it actually
         sits in: the strongest regime whose sustainment guard holds on that
-        regime's own solve (``P_sep >= P_LH`` for H-mode, ``P_sep <= P_OL_thresh``
-        for ohmic), with L-mode as the accessible fallback for the intermediate /
-        L-H-bistable band. The composited result carries a ``regime_index`` grid
-        (index into ``regime_names``, ``-1`` where no regime certified).
+        regime's own solve (``P_sep >= P_LH`` for H-mode, ``P_sep >=
+        P_LI_thresh`` for I-mode), with L-mode as the accessible fallback for
+        the intermediate / L-H-bistable band. The composited result carries a
+        ``regime_index`` grid (index into ``regime_names``, ``-1`` where no
+        regime certified).
 
         A reactor with no declared confinement regime falls back to a single
         plain scan.

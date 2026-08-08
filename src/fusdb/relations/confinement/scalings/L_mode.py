@@ -7,7 +7,7 @@ from fusdb.relation import relation
 
 @relation(
     name="merezhkin_muhkovatov_confinement_time",
-    tags=("confinement", "ohmic_mode", "l_mode"),
+    tags=("confinement", "l_mode"),
     outputs="tau_E",
     h_factor="H_merezhkin_muhkovatov",
 )

@@ -193,10 +193,10 @@ relations:
   # the comparison must use cfspopcon's own definition.
   - Fuel dilution from impurity concentrations (cfspopcon)
   # cfspopcon computes P_LH from the full Martin (2008) scaling plus the Ryter
-  # (2014) low-density branch; fusdb's default "L-H transition threshold power"
-  # is a simpler Martin-style scaling that runs ~35% high at this point and
-  # would push the PRD operating point below its own L-H threshold. Selecting
-  # the imported Martin+Ryter relation reproduces cfspopcon's P_LH.
+  # (2014) low-density branch. fusdb's default is PROCESS's default instead
+  # ("L-H threshold Martin-2008 aspect nominal"): same Martin fit, but with the
+  # Takizuka aspect correction and on the line-averaged density, so it does not
+  # reproduce cfspopcon here. Selecting the imported Martin+Ryter relation does.
   - L-H transition threshold power (Martin-Ryter)
   # cfspopcon normalises beta_poloidal to the outboard-midplane poloidal field
   # B_pol_out_mid = mu0 I_p / (2 pi a) (circular cross-section, ignores
@@ -297,8 +297,9 @@ relations:
   # Superseded by "Ion density average from impurity concentrations (Mavrin)"
   # above: n_i_avg comes from the c_z mix directly, not the f-fraction zbar.
   - Ion density average from quasineutrality
-  # Simpler Martin-only L-H scaling, superseded here by the Martin+Ryter form.
-  - L-H transition threshold power
+  # fusdb's default (PROCESS's aspect-corrected Martin on the total ion mass),
+  # superseded here by the cfspopcon Martin+Ryter form selected above.
+  - L-H threshold Martin-2008 aspect nominal (total ion mass)
   # Superseded by "Poloidal beta (cfspopcon)" above (different B_pol normalisation).
   - Poloidal beta
   # Superseded by the cfspopcon pressure/beta_N forms above.

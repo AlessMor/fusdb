@@ -5,7 +5,7 @@ from fusdb.relation import relation
 
 @relation(
     name="neo_alcator_confinement_time",
-    tags=("confinement", "ohmic_mode", "confinement_mode_default"),
+    tags=("confinement", "loc"),
     outputs="tau_E",
     h_factor="H_neo_alcator",
 )
@@ -45,7 +45,7 @@ def neo_alcator_confinement_time(
 
 @relation(
     name="cfspopcon_loc_confinement_time",
-    tags=("confinement", "ohmic_mode", "loc"),
+    tags=("confinement", "loc"),
     outputs="tau_E",
 )
 def cfspopcon_loc_confinement_time(
