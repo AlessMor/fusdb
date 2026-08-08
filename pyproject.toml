@@ -7,7 +7,7 @@ name = "fusdb"
 version = "0.1.0"
 description = "Fusion reactor scenario database with per-folder YAML and a single Reactor class."
 requires-python = ">=3.12"
-dependencies = ["numpy>=2.5.1", "PyYAML>=6.0", "scipy>=1.11", "networkx>=3.0", "pint>=0.23"]
+dependencies = ["numpy>=2.0", "PyYAML>=6.0", "scipy>=1.13", "networkx>=3.0", "pint>=0.23"]
 
 [project.optional-dependencies]
 plotting = ["matplotlib>=3.7", "bokeh>=3.5"]
@@ -26,7 +26,7 @@ docs = [
     "mkdocs-awesome-pages-plugin>=2.10",
     "mkdocs-bibtex>=4.4",
     "mkdocs-gen-files>=0.5",
-    "mkdocs-jupyter==0.25.1",
+    "mkdocs-jupyter>=0.26.3,<0.27",
     "mkdocs==1.6.1",
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.26",
