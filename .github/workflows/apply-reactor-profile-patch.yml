@@ -18,34 +18,75 @@ jobs:
         with:
           ref: agent/profile-coordinate-refactor
           fetch-depth: 0
-      - name: Apply patch and clean temporary patch machinery
+      - name: Apply source-aware reactor integration
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           set +e
-          git apply --check patches/reactor-profile-integration.patch
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/fusdb/reactor.py')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  'from .modes import MODE_NAMES\nfrom .registry import RELATIONS, TAGS, VARIABLES\n',
+                  'from .modes import MODE_NAMES\nfrom .profile_system import build_relation_system\nfrom .registry import RELATIONS, TAGS, VARIABLES\n',
+              ),
+              (
+                  'def _load_variable_file(path_like: Path, *, base_dir: Path, delimiter: str | None = None, usecols: Any = None, skiprows: int = 0) -> np.ndarray:\n',
+                  'def _load_variable_file(\n    path_like: Path,\n    *,\n    base_dir: Path,\n    delimiter: str | None = None,\n    usecols: Any = None,\n    skiprows: int = 0,\n    keep_columns: bool = False,\n) -> np.ndarray:\n',
+              ),
+              (
+                  '    if array.ndim == 2 and usecols is None:\n        return array[:, -1].astype(float)\n    if array.ndim == 2 and array.shape[1] == 1:\n',
+                  '    if array.ndim == 2 and keep_columns:\n        return array.astype(float)\n    if array.ndim == 2 and usecols is None:\n        return array[:, -1].astype(float)\n    if array.ndim == 2 and array.shape[1] == 1:\n',
+              ),
+              (
+                  '        value = entry.get("value")\n        size = entry.get("size", grid_size if spec.shape == 1 else None)\n        file_value = entry.get("file")\n',
+                  '        value = entry.get("value")\n        size = entry.get("size", grid_size if spec.shape == 1 else None)\n        coordinate = entry.get("coordinate")\n        coordinate_values = entry.get("coordinate_values")\n        file_value = entry.get("file")\n',
+              ),
+              (
+                  '        if file_value is not None:\n            value = _load_variable_file(Path(str(file_value)), base_dir=base_dir, delimiter=entry.get("delimiter"), usecols=entry.get("usecols"), skiprows=entry.get("skiprows", 0))\n            if np.asarray(value).ndim == 1:\n                size = int(np.asarray(value).shape[0])\n        var = Variable(str(raw_name), value=value, unit=entry.get("unit"), rel_tol=entry.get("rel_tol"), fixed=bool(entry.get("fixed", False)), size=size, constraints=entry.get("constraints"))\n',
+                  '        if file_value is not None:\n            loaded = _load_variable_file(\n                Path(str(file_value)),\n                base_dir=base_dir,\n                delimiter=entry.get("delimiter"),\n                usecols=entry.get("usecols"),\n                skiprows=entry.get("skiprows", 0),\n                keep_columns=coordinate is not None and coordinate_values is None,\n            )\n            if coordinate is not None and coordinate_values is None and loaded.ndim == 2:\n                if loaded.shape[1] < 2:\n                    raise ValueError(\n                        f"Variable {raw_name!r} source profile file needs at least two columns "\n                        "when coordinate is declared without coordinate_values."\n                    )\n                coordinate_values = loaded[:, 0]\n                value = loaded[:, -1]\n            else:\n                value = loaded\n            if np.asarray(value).ndim == 1:\n                size = int(np.asarray(value).shape[0])\n        var = Variable(\n            str(raw_name),\n            value=value,\n            unit=entry.get("unit"),\n            rel_tol=entry.get("rel_tol"),\n            abs_tol=entry.get("abs_tol"),\n            fixed=bool(entry.get("fixed", False)),\n            size=size,\n            constraints=entry.get("constraints"),\n            default_relation=entry.get("default_relation"),\n            coordinate=coordinate,\n            coordinate_values=coordinate_values,\n        )\n',
+              ),
+              (
+                  '        return RELATIONS.get_filtered_relations(names=names, tags=TAGS.expand(self.tags), exclude=self.relation_exclude, order=None)\n',
+                  '        defaults = {\n            name: variable.default_relation\n            for name, variable in self.variables.items()\n            if variable.default_relation is not None\n        }\n        return RELATIONS.get_filtered_relations(\n            names=names,\n            tags=TAGS.expand(self.tags),\n            exclude=self.relation_exclude,\n            order=None,\n            default_relations=defaults,\n        )\n',
+              ),
+              (
+                  '        return RelationSystem(\n            self.variables.values(),\n            self.relations(),\n            constraints=self.constraints,\n            name=self.name,\n        )\n',
+                  '        return build_relation_system(\n            self.variables.values(),\n            self.relations(),\n            constraints=self.constraints,\n            name=self.name,\n            profile_size=self.grid_size,\n        )\n',
+              ),
+              (
+                  '            if var is not None and value is not None:\n                self.variables[name] = var.clone(value=value)\n',
+                  '            if var is not None and value is not None:\n                changes: dict[str, Any] = {"value": value}\n                if var.has_source_grid:\n                    arr = np.asarray(value)\n                    changes.update(\n                        coordinate=None,\n                        coordinate_values=None,\n                        size=int(arr.shape[-1]) if arr.ndim else None,\n                    )\n                self.variables[name] = var.clone(**changes)\n',
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'reactor integration replacement matched {count} times: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
           rc=$?
           if [ "$rc" -ne 0 ]; then
-            curl -sS -L -X POST \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$REPO/statuses/$HEAD_SHA" \
-              -d '{"state":"failure","context":"fusdb/reactor-patch-apply","description":"git apply --check failed"}' >/dev/null
-            exit "$rc"
+            state=failure; description="reactor source rewrite failed"
+          else
+            rm -f patches/reactor-profile-integration.patch
+            rm -f .github/workflows/apply-reactor-profile-patch.yml
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add -A
+            git commit -m "refactor: wire source profiles into reactor"
+            git push origin HEAD:agent/profile-coordinate-refactor
+            rc=$?
+            if [ "$rc" -eq 0 ]; then state=success; description="reactor profile integration applied"; else state=failure; description="reactor integration push failed"; fi
           fi
-          git apply patches/reactor-profile-integration.patch
-          rm patches/reactor-profile-integration.patch
-          rm .github/workflows/apply-reactor-profile-patch.yml
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m "refactor: wire source profiles into reactor"
-          git push origin HEAD:agent/profile-coordinate-refactor
-          rc=$?
-          if [ "$rc" -eq 0 ]; then state=success; description="reactor profile patch applied"; else state=failure; description="reactor profile patch push failed"; fi
           curl -sS -L -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
