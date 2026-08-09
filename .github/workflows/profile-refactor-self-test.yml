@@ -41,9 +41,11 @@ jobs:
             tests/test_explicit_profile_mappings.py \
             tests/test_coordinate_nonpackability.py \
             tests/test_coordinate_registry_identity.py \
+            tests/test_coordinate_domain_rows.py \
             tests/test_reduced_device_coordinates.py \
             tests/test_non_tokamak_profile_links.py \
             tests/test_giga_profile_sources.py \
+            tests/test_stellaris_regression.py \
             tests/test_bootstrap_coordinate_mapping.py \
             tests/test_pedestal_coordinate_mapping.py \
             tests/test_source_profile_measure_dependency.py \
