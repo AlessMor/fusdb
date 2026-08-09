@@ -21,7 +21,7 @@ def test_process_pedestal_profiles_preserve_average_and_edge_values() -> None:
             "radius_plasma_pedestal_temp_norm": 0.9,
             "alphat": 0.5,
             "tbeta": 2.0,
-            "rho": rho,
+            "rho_minor": rho,
         }
     )
     density = RELATIONS.get("PROCESS pedestal electron density profile").evaluate(
@@ -31,7 +31,7 @@ def test_process_pedestal_profiles_preserve_average_and_edge_values() -> None:
             "n_sep": 2.0e19,
             "radius_plasma_pedestal_density_norm": 0.9,
             "alphan": 0.25,
-            "rho": rho,
+            "rho_minor": rho,
         }
     )
 
