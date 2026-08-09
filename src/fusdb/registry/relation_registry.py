@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import importlib
 import logging
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Iterable
+from typing import Any
 
 from ..relation import REGISTERED_RELATIONS, Relation, canonicalize_relation
 from ..utils import normalize_tags
@@ -20,9 +21,8 @@ class RelationRegistry:
     """Registry of decorated relations.
 
     Relations are validated against ``variable_registry`` at build time, so
-    alias-degenerate relations (declared outputs that resolve to one of their own
-    inputs) are rejected here rather than silently dropped when a RelationSystem
-    is later compiled.
+    alias-degenerate relations are rejected here rather than silently dropped
+    when a RelationSystem is later compiled.
     """
 
     def __init__(
@@ -34,13 +34,6 @@ class RelationRegistry:
     ) -> None:
         by_name: dict[str, Relation] = {}
         by_function: dict[str, Relation] = {}
-        # A relation is addressable by either its user-facing ``name`` or its
-        # decorated ``function_name``.  For that dual addressing to be
-        # unambiguous, every identifier must resolve to exactly one relation:
-        # names unique, function names unique, and no name colliding with a
-        # different relation's function name.  (A relation decorated without an
-        # explicit name has ``name == function_name``; that is the same owner
-        # registering both identifiers, not a collision.)
         owners: dict[str, Relation] = {}
         for rel in relations:
             for identifier, kind in ((rel.name, "name"), (rel.function_name, "function name")):
@@ -51,12 +44,6 @@ class RelationRegistry:
                         f"relation {owner.name!r}; relation names and function names must be unique."
                     )
                 owners[identifier] = rel
-            # Every relation tag must be declared in allowed_tags.yaml.  An
-            # undeclared tag is silently ignored by ``relation_matches``, so a
-            # typo (``profile_shapes`` for ``profile_shape``) does not fail --
-            # it makes the relation globally active, and the damage shows up
-            # later as physics drift on an unrelated reactor.  Declared-but-
-            # non-filtering tags belong in the ``descriptive`` group.
             unknown = tuple(tag for tag in normalize_tags(rel.tags) if tag not in tag_registry.allowed)
             if unknown:
                 raise ValueError(
@@ -66,11 +53,6 @@ class RelationRegistry:
                     "internal) if it should filter which reactors see the relation, or "
                     "'descriptive' if it is documentation or a code-read role marker."
                 )
-            # Validate against the variable registry (rejects alias-degenerate
-            # relations) and store the canonicalized relation, so every relation
-            # leaving the registry already uses canonical variable names.
-            # Name-based filtering is unaffected: canonicalization changes
-            # variable names, never ``rel.name``.
             canonical = canonicalize_relation(rel, variable_registry)
             by_name[rel.name] = canonical
             by_function[rel.function_name] = canonical
@@ -104,16 +86,61 @@ class RelationRegistry:
         raise KeyError(f"Unknown relation {name!r}.")
 
     def _canonical_name(self, name: Any) -> str:
-        """Return the user-facing name for an identifier (name or function name).
-
-        Unknown identifiers are returned unchanged so callers keep their own
-        not-found handling (``exclude`` silently ignores misses; ``order``
-        raises an inactive-relation error).
-        """
+        """Return the user-facing name for a relation identifier."""
         try:
             return self._resolve(name).name
         except KeyError:
             return str(name)
+
+    def _effective_default_relations(
+        self,
+        variable_registry: VariableRegistry,
+        overrides: Mapping[str, Iterable[str]] | None,
+    ) -> tuple[dict[str, set[str]], dict[str, tuple[str, ...]]]:
+        """Return effective default providers and canonical scenario overrides.
+
+        Registry ``VariableSpec.default_relation`` declarations establish the
+        process-wide defaults. A scenario override replaces that list for only
+        the named variable; an empty override removes its provider preference.
+        Relation identifiers may use either user-facing or decorated function
+        names and are canonicalized here.
+        """
+        allowed: dict[str, set[str]] = {
+            spec.name: {self._canonical_name(name) for name in spec.default_relation}
+            for spec in variable_registry
+            if spec.default_relation
+        }
+        explicit: dict[str, tuple[str, ...]] = {}
+        for raw_name, raw_relations in (overrides or {}).items():
+            name = variable_registry.resolve(raw_name)
+            relations = tuple(self._canonical_name(item) for item in raw_relations)
+            explicit[name] = relations
+            if relations:
+                allowed[name] = set(relations)
+            else:
+                allowed.pop(name, None)
+
+        # A selected multi-output relation is one physical model. If another of
+        # its outputs has its own non-empty scenario override, that override must
+        # explicitly admit the same relation; otherwise the two declarations are
+        # structurally contradictory and must not be silently ordered.
+        for name, relation_names in explicit.items():
+            for relation_name in relation_names:
+                rel = self._resolve(relation_name)
+                if name not in rel.output_names:
+                    raise ValueError(
+                        f"Variable {name!r} selects default_relation {relation_name!r}, "
+                        f"but that relation does not produce {name!r}."
+                    )
+                for out in rel.output_names:
+                    other = explicit.get(out)
+                    if out != name and other and rel.name not in other:
+                        raise ValueError(
+                            f"Relation {rel.name!r} is selected for {name!r} and also produces {out!r}, "
+                            f"but {out!r} explicitly selects {list(other)!r}. Multi-output relations "
+                            "are atomic; choose compatible providers."
+                        )
+        return allowed, explicit
 
     def get_filtered_relations(
         self,
@@ -123,13 +150,17 @@ class RelationRegistry:
         variables: Iterable[str] | None = None,
         exclude: Iterable[str] | None = None,
         order: Iterable[str] | None = None,
+        default_relations: Mapping[str, Iterable[str]] | None = None,
         variable_registry: VariableRegistry = VARIABLES,
         tag_registry: TagRegistry = TAGS,
     ) -> tuple[Relation, ...]:
         """Return selected relations.
 
-        Selection order is deterministic: tag/default filtering, explicit includes,
-        explicit excludes, then explicit ordering. Exclusion always wins.
+        Selection order is deterministic: tag/default filtering, explicit
+        includes, explicit excludes, then explicit ordering. Scenario-local
+        ``default_relations`` replace registry preferences per variable. A list
+        retains every named relation simultaneously; it is not a first-match
+        fallback list. Exclusion always wins.
         """
         exclude_set = {self._canonical_name(item) for item in (exclude or ())}
         include_names = [str(item) for item in (names or ())]
@@ -140,11 +171,9 @@ class RelationRegistry:
             if tag_registry.relation_matches(rel.tags, reactor_tags):
                 selected.append(rel)
 
-        # Variable default_relation limits duplicate output producers when present.
-        allowed_by_output: dict[str, set[str]] = {}
-        for spec in variable_registry:
-            if spec.default_relation:
-                allowed_by_output[spec.name] = set(spec.default_relation)
+        allowed_by_output, _explicit_overrides = self._effective_default_relations(
+            variable_registry, default_relations
+        )
         if allowed_by_output:
             filtered: list[Relation] = []
             for rel in selected:
@@ -157,11 +186,6 @@ class RelationRegistry:
         selected_by_name = {rel.name: rel for rel in selected}
         for name in include_names:
             rel = self._resolve(name)
-            # An include that is absent from a ``default_relation`` list for one
-            # of its own outputs is overriding the registry's preferred provider
-            # set for that variable.  That is a legitimate thing to do -- it is
-            # how a fixture selects a convention -- but it is a modelling
-            # decision, so it must not be silent.
             if rel.name not in selected_by_name:
                 overridden = [
                     out for out in rel.output_names
@@ -170,20 +194,14 @@ class RelationRegistry:
                 if overridden:
                     logger.warning(
                         "Included relation %r is not a preferred provider of %s; it overrides "
-                        "the default_relation set declared in variables.yaml (%s). This is "
-                        "allowed, but the preferred provider(s) remain active alongside it "
-                        "unless excluded.",
+                        "the effective default_relation set (%s). This is allowed, but the "
+                        "preferred provider(s) remain active alongside it unless excluded.",
                         rel.name,
                         ", ".join(repr(out) for out in overridden),
-                        "; ".join(
-                            f"{out}: {sorted(allowed_by_output[out])}" for out in overridden
-                        ),
+                        "; ".join(f"{out}: {sorted(allowed_by_output[out])}" for out in overridden),
                     )
             selected_by_name.setdefault(rel.name, rel)
-        # Exclusion is silent by design when it matches nothing, which hides both
-        # a misspelled name and a relation that some earlier gate had already
-        # dropped -- in either case the author believes they removed something
-        # and did not.
+
         for item in (exclude or ()):
             try:
                 canonical = self._resolve(item).name
