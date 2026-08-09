@@ -1,15 +1,15 @@
 """Coordinate-mapping variables layered onto the main variable registry.
 
-The historical registry defined ``rho`` as normalized minor radius.  The
+The historical registry defined ``rho`` as normalized minor radius. The
 profile-coordinate refactor makes ``rho`` framework state instead: a neutral
-normalized computational sampling grid.  Physical normalized coordinates and
+normalized computational sampling grid. Physical normalized coordinates and
 integration measures are ordinary profile variables, so relations can declare
 the geometry dependency explicitly without introducing another user-facing
 class.
 
 This small overlay keeps the large legacy ``variables.yaml`` stable while the
-coordinate migration is staged.  It replaces only the runtime metadata for
-``rho`` and appends the new mapping variables.  Once the migration is complete
+coordinate migration is staged. It replaces only the runtime metadata for
+``rho`` and appends the new mapping variables. Once the migration is complete
 these entries can be folded into ``variables.yaml`` mechanically.
 """
 
@@ -21,6 +21,11 @@ from .variable_registry import VariableRegistry, VariableSpec
 
 
 _RHO_LEGACY_ALIASES = {"normalized_minor_radius", "r_over_a"}
+
+# These are physical mappings/integration measures, not independent profile
+# unknowns. A supplied mapping is authoritative data; an unsupplied mapping must
+# be produced deterministically by an active geometry relation.
+PHYSICAL_COORDINATE_NAMES = frozenset({"rho_minor", "rho_tor", "v_norm", "w_V"})
 
 
 def _coordinate_spec(
