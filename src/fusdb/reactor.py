@@ -14,6 +14,7 @@ import yaml
 
 from .batch import map_chunks, parallel_chunk_size
 from .modes import MODE_NAMES
+from .profile_system import build_relation_system
 from .registry import RELATIONS, TAGS, VARIABLES
 from .relationsystem import RelationSystem
 from .plotting.tables import SolvedColumn, _table_column
@@ -300,7 +301,15 @@ def _resolve_reactor_yaml(path_like: str | Path) -> Path:
     return path
 
 
-def _load_variable_file(path_like: Path, *, base_dir: Path, delimiter: str | None = None, usecols: Any = None, skiprows: int = 0) -> np.ndarray:
+def _load_variable_file(
+    path_like: Path,
+    *,
+    base_dir: Path,
+    delimiter: str | None = None,
+    usecols: Any = None,
+    skiprows: int = 0,
+    keep_columns: bool = False,
+) -> np.ndarray:
     """Load one numeric variable/profile file.
 
     Args:
@@ -333,6 +342,8 @@ def _load_variable_file(path_like: Path, *, base_dir: Path, delimiter: str | Non
         return np.asarray([float(array)], dtype=float)
     if array.ndim == 1:
         return array.astype(float)
+    if array.ndim == 2 and keep_columns:
+        return array.astype(float)
     if array.ndim == 2 and usecols is None:
         return array[:, -1].astype(float)
     if array.ndim == 2 and array.shape[1] == 1:
@@ -360,6 +371,8 @@ def _parse_variables(raw: Mapping[str, Any], *, grid_size: int | None, base_dir:
         spec = VARIABLES.get(str(raw_name))
         value = entry.get("value")
         size = entry.get("size", grid_size if spec.shape == 1 else None)
+        coordinate = entry.get("coordinate")
+        coordinate_values = entry.get("coordinate_values")
         file_value = entry.get("file")
         if file_value is None and isinstance(value, str) and spec.shape == 1:
             try:
@@ -371,10 +384,39 @@ def _parse_variables(raw: Mapping[str, Any], *, grid_size: int | None, base_dir:
                 if candidate.is_file():
                     file_value = value
         if file_value is not None:
-            value = _load_variable_file(Path(str(file_value)), base_dir=base_dir, delimiter=entry.get("delimiter"), usecols=entry.get("usecols"), skiprows=entry.get("skiprows", 0))
+            loaded = _load_variable_file(
+                Path(str(file_value)),
+                base_dir=base_dir,
+                delimiter=entry.get("delimiter"),
+                usecols=entry.get("usecols"),
+                skiprows=entry.get("skiprows", 0),
+                keep_columns=coordinate is not None and coordinate_values is None,
+            )
+            if coordinate is not None and coordinate_values is None and loaded.ndim == 2:
+                if loaded.shape[1] < 2:
+                    raise ValueError(
+                        f"Variable {raw_name!r} source profile file needs at least two columns "
+                        "when coordinate is declared without coordinate_values."
+                    )
+                coordinate_values = loaded[:, 0]
+                value = loaded[:, -1]
+            else:
+                value = loaded
             if np.asarray(value).ndim == 1:
                 size = int(np.asarray(value).shape[0])
-        var = Variable(str(raw_name), value=value, unit=entry.get("unit"), rel_tol=entry.get("rel_tol"), fixed=bool(entry.get("fixed", False)), size=size, constraints=entry.get("constraints"))
+        var = Variable(
+            str(raw_name),
+            value=value,
+            unit=entry.get("unit"),
+            rel_tol=entry.get("rel_tol"),
+            abs_tol=entry.get("abs_tol"),
+            fixed=bool(entry.get("fixed", False)),
+            size=size,
+            constraints=entry.get("constraints"),
+            default_relation=entry.get("default_relation"),
+            coordinate=coordinate,
+            coordinate_values=coordinate_values,
+        )
         variables[var.name] = var
     return variables
 
@@ -576,7 +618,18 @@ class Reactor:
             self._regime_filtered_include(_confinement_regime(self.tags)),
             self._supplied_shape_includes(),
         )
-        return RELATIONS.get_filtered_relations(names=names, tags=TAGS.expand(self.tags), exclude=self.relation_exclude, order=None)
+        defaults = {
+            name: variable.default_relation
+            for name, variable in self.variables.items()
+            if variable.default_relation is not None
+        }
+        return RELATIONS.get_filtered_relations(
+            names=names,
+            tags=TAGS.expand(self.tags),
+            exclude=self.relation_exclude,
+            order=None,
+            default_relations=defaults,
+        )
 
     def _supplied_shape_includes(self) -> tuple[str, ...]:
         """Shape generators opted in by supplied profile information.
@@ -682,11 +735,12 @@ class Reactor:
         """
         # No clone: the system ingests the records into its own value dicts,
         # which is the isolation copy (values are replaced, never mutated).
-        return RelationSystem(
+        return build_relation_system(
             self.variables.values(),
             self.relations(),
             constraints=self.constraints,
             name=self.name,
+            profile_size=self.grid_size,
         )
 
     def run(self, mode: str = "verify", **options: Any) -> dict[str, Any]:
@@ -755,7 +809,15 @@ class Reactor:
         for name, value in self.last_system.values.items():
             var = self.variables.get(name)
             if var is not None and value is not None:
-                self.variables[name] = var.clone(value=value)
+                changes: dict[str, Any] = {"value": value}
+                if var.has_source_grid:
+                    arr = np.asarray(value)
+                    changes.update(
+                        coordinate=None,
+                        coordinate_values=None,
+                        size=int(arr.shape[-1]) if arr.ndim else None,
+                    )
+                self.variables[name] = var.clone(**changes)
 
     def _run_guarded_once(self, mode: str, **options: Any) -> dict[str, Any]:
         """Run one mode with the current regime sustainment guard included."""
