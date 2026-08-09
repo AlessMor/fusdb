@@ -57,7 +57,12 @@ an independent set of solver degrees of freedom.
 
 Interpolation is allowed only inside the supplied coordinate interval, apart
 from a small numerical endpoint tolerance. Fusdb must not silently extrapolate
-a core profile into an uncovered region.
+a core profile into an uncovered region. If a digitized/source dataset omits a
+small axis or separatrix interval, any extension must be an explicit input-model
+choice rather than an interpolator option. The GIGA reactor demonstrates this:
+the untouched Fig. 3 digitizations are retained, while separate `*_rho01.csv`
+files explicitly add `rho=0` and `rho=1` with a documented zero-order endpoint
+hold before strict interpolation is applied.
 
 A supplied physical mapping (`rho_minor`, `rho_tor`, `rho_radial`, `v_norm`, or
 `w_V`) is authoritative by default. Device fallback providers are removed from
@@ -78,7 +83,12 @@ where `w_V` is proportional to `dV/drho`. If geometry instead supplies
 `<f>_V = integral(f d v_norm) / integral(d v_norm)`.
 
 For the self-similar reduced defaults, `v_norm = rho**2` and `w_V = rho`. This
-choice preserves fusdb's historical discrete tokamak averaging exactly.
+choice preserves fusdb's historical discrete averaging exactly. The normalized
+weight does not need an absolute factor involving `R`, `a`, or `kappa`: such a
+constant cancels in a normalized average. A nontrivial mapping is required only
+when the *shape* of enclosed volume versus the computational coordinate differs
+from the self-similar assumption, which is where equilibrium-derived providers
+enter.
 
 ## Geometry defaults and overrides
 
@@ -89,8 +99,9 @@ mandatory single geometry model.
 Current reduced coordinate defaults are:
 
 - tokamak: `rho_minor = rho`, `v_norm = rho**2`, `w_V = rho`;
-- stellarator: `rho_tor = rho`, `v_norm = rho**2`, `w_V = rho` when no
-  equilibrium-derived mapping is supplied;
+- stellarator: `rho_tor = rho`, and where source data are explicitly published
+  against normalized minor radius also `rho_minor = rho`; `v_norm = rho**2` and
+  `w_V = rho` until an equilibrium-derived mapping is supplied;
 - mirror: `rho_radial = rho`, `v_norm = rho**2`, `w_V = rho` for the reduced
   radial model, with axial physics deliberately represented separately.
 
@@ -99,6 +110,13 @@ high-fidelity equilibrium geometry. Future VMEC/stellarator or mirror-equilibriu
 adapters should reduce external equilibria to these same mapping variables and
 replace the fallback providers without changing profile consumers.
 
+The current off-tokamak `n_la` provider is likewise deliberately
+behavior-neutral: stellarator and mirror scenarios retain the historical
+straight-`rho` average so existing consumers such as the Sudo density limit do
+not disappear during an architectural migration. A physical diagnostic chord
+or equilibrium-specific line integral should be added as a stronger provider,
+not smuggled into this compatibility step.
+
 A scenario may override a variable's `default_relation`. A list of relations
 means those providers are active simultaneously and must reconcile. A
 multi-output provider is atomic: selecting it makes all of its outputs part of
@@ -106,7 +124,23 @@ that physical model, and incompatible explicit provider selections must fail
 at compile time rather than be silently resolved.
 
 Mixed geometry conventions are allowed when they can reconcile. Provenance of
-each geometry quantity should remain visible in compiler/verification output.
+each geometry quantity remains visible through the compiler's default/derived
+provider maps.
+
+## Solver rows and coordinate domains
+
+Physical coordinate mappings are deterministic/non-packed variables, so their
+provider relations do not add nonlinear unknowns or structural relation
+residuals. Their variable domains are still hard feasibility constraints. With
+the current tokamak reduced set this accounts for five residual rows:
+
+- lower and upper bounds of `rho_minor`;
+- lower and upper bounds of `v_norm`;
+- the non-negative lower bound of `w_V`.
+
+Those rows explain the observed `residual_size +5` while `packed_dim` and `nfev`
+remain unchanged. They are intentional domain enforcement, not five extra
+physics equations.
 
 ## Separatrix and edge
 
