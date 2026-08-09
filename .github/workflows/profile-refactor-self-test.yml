@@ -40,7 +40,9 @@ jobs:
             tests/test_profile_system_builder.py \
             tests/test_reactor_profile_sources.py \
             tests/test_variable_default_relation.py \
-            tests/test_relation_default_overrides.py
+            tests/test_relation_default_overrides.py \
+            tests/test_explicit_profile_mappings.py \
+            tests/test_coordinate_nonpackability.py
           do
             python -m pytest "$testfile"
             rc=$?
@@ -62,7 +64,20 @@ jobs:
             -d "{\"state\":\"$state\",\"context\":\"fusdb/profile-refactor-self-test\",\"description\":\"$description\"}" >/dev/null
           exit "$overall"
 
-      - name: Run full repository test suite and publish status
+  full-pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+      - name: Run full pytest suite
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
