@@ -38,6 +38,7 @@ jobs:
             tests/test_variable_source_coordinates.py \
             tests/test_profile_source_system.py \
             tests/test_profile_system_builder.py \
+            tests/test_reactor_profile_sources.py \
             tests/test_variable_default_relation.py \
             tests/test_relation_default_overrides.py
           do
