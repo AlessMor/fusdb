@@ -118,12 +118,13 @@ def process_pedestal_electron_temperature_profile(
     radius_plasma_pedestal_temp_norm: Any,
     alphat: Any,
     tbeta: Any,
-    rho: Any,
+    rho_minor: Any,
 ) -> np.ndarray:
     """Generate the PROCESS/HELIOS pedestal electron-temperature profile.
 
-    H-mode and I-mode both carry a temperature pedestal. Adapted from PROCESS;
-    see README.md section "Third-party Notices".
+    PROCESS defines this radial coordinate as normalized minor radius. H-mode
+    and I-mode both carry a temperature pedestal. Adapted from PROCESS; see
+    README.md section "Third-party Notices".
     """
     return _process_temperature_profile(
         T_e_avg,
@@ -132,7 +133,7 @@ def process_pedestal_electron_temperature_profile(
         radius_plasma_pedestal_temp_norm,
         alphat,
         tbeta,
-        rho,
+        rho_minor,
     )
 
 
@@ -150,7 +151,7 @@ def process_pedestal_ion_temperature_profile(
     radius_plasma_pedestal_temp_norm: Any,
     alphat: Any,
     tbeta: Any,
-    rho: Any,
+    rho_minor: Any,
 ) -> np.ndarray:
     """PROCESS pedestal shape for ions, scaled by the volume-average Ti/Te ratio."""
     ratio = np.asarray(T_i_avg, dtype=float) / np.maximum(np.asarray(T_e_avg, dtype=float), 1e-300)
@@ -161,7 +162,7 @@ def process_pedestal_ion_temperature_profile(
         radius_plasma_pedestal_temp_norm,
         alphat,
         tbeta,
-        rho,
+        rho_minor,
     )
 
 
@@ -177,7 +178,7 @@ def process_pedestal_electron_density_profile(
     n_sep: Any,
     radius_plasma_pedestal_density_norm: Any,
     alphan: Any,
-    rho: Any,
+    rho_minor: Any,
 ) -> np.ndarray:
     """Generate the PROCESS/HELIOS H-mode electron-density pedestal profile."""
     return _process_density_profile(
@@ -186,7 +187,7 @@ def process_pedestal_electron_density_profile(
         n_sep,
         radius_plasma_pedestal_density_norm,
         alphan,
-        rho,
+        rho_minor,
     )
 
 
@@ -203,7 +204,7 @@ def process_pedestal_fuel_ion_density_profile(
     n_sep: Any,
     radius_plasma_pedestal_density_norm: Any,
     alphan: Any,
-    rho: Any,
+    rho_minor: Any,
 ) -> np.ndarray:
     """PROCESS H-mode density shape scaled to the fuel-ion average."""
     ratio = np.asarray(n_fuel_avg, dtype=float) / np.maximum(np.asarray(n_e_avg, dtype=float), 1e-300)
@@ -213,7 +214,7 @@ def process_pedestal_fuel_ion_density_profile(
         np.asarray(n_sep) * ratio,
         radius_plasma_pedestal_density_norm,
         alphan,
-        rho,
+        rho_minor,
     )
 
 
