@@ -10,10 +10,9 @@ from fusdb.relation import relation
     tags=("fusion_power", "neutronics"),
     outputs="q_wall",
 )
-def neutron_wall_loading(P_neutron: float, A_p: float) -> Any:
-    """Return neutron wall loading from neutron power and plasma surface area."""
-    # TODO: This considers plasma surface; it should consider wall surface.
-    return (P_neutron / A_p)
+def neutron_wall_loading(P_neutron: float, S_wall: float) -> Any:
+    """Return neutron wall loading using the plasma-facing wall surface area."""
+    return P_neutron / S_wall
 
 
 @relation(

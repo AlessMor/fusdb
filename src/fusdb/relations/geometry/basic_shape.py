@@ -103,6 +103,16 @@ def kappa_ipb_from_volume(V_p: float, R: float, a: float) -> float:
 
 
 @relation(
+    name="Wall surface from plasma surface",
+    tags=("geometry", "default"),
+    outputs="S_wall",
+)
+def wall_surface_from_plasma_surface(A_p: float) -> float:
+    """Fallback plasma-facing wall area when no wall geometry is supplied."""
+    return A_p
+
+
+@relation(
     name='Areal elongation from cross-section',
     tags=('geometry',),
     outputs='kappa_areal',

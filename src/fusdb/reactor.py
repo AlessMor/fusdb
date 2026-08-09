@@ -243,13 +243,33 @@ def _regime_guard_holds(regime: str, fields: Mapping[str, Any], shape: tuple[int
     guard whose inputs are missing marks the point as not in this regime.
     """
     mask = np.ones(shape, dtype=bool)
+
+    def registry_default(name: str, seen: frozenset[str] = frozenset()) -> Any:
+        """Resolve a guard-only field from its registry default."""
+        if name in seen or name not in VARIABLES:
+            return None
+        spec = VARIABLES.get(name)
+        if spec.default is None:
+            return None
+        if isinstance(spec.default, str):
+            source = VARIABLES.resolve(spec.default)
+            source_value = fields.get(source)
+            if source_value is not None and np.isfinite(np.asarray(source_value, dtype=float)).any():
+                return source_value
+            return registry_default(source, seen | {name})
+        return float(spec.default)
+
     for guard in _regime_guard_names(regime):
         rel = RELATIONS.get(guard)
         args: dict[str, Any] = {}
         for inp in rel.input_names:
             value = fields.get(inp)
+            if value is None or not np.isfinite(np.asarray(value, dtype=float)).any():
+                value = registry_default(inp)
             if value is None:
                 return np.zeros(shape, dtype=bool)
+            if np.asarray(value).ndim == 0:
+                value = np.full(shape, value)
             args[inp] = value
         residual = np.asarray(rel.func(**args), dtype=float)
         mask &= np.isfinite(residual) & (residual <= 1.0e-9)
@@ -607,14 +627,51 @@ class Reactor:
                     return True
             return False
 
-        selected: list[str] = []
+        mode = _confinement_regime(self.tags)
+        mode_axis = set(_regime_order())
+        candidates: list[Any] = []
+
+        def input_is_declared_or_defaulted(name: str) -> bool:
+            if name in supplied:
+                return True
+            spec = VARIABLES.get(name) if name in VARIABLES else None
+            if spec is None or spec.default is None:
+                return False
+            return spec.default_requires is None or spec.default_requires in supplied
+
         for rel in RELATIONS:
             relation = RELATIONS.get(rel) if isinstance(rel, str) else rel
             if "profile_shape" not in relation.tags:
                 continue
+            relation_modes = mode_axis & set(relation.tags)
+            if relation_modes and (mode is None or mode not in relation_modes):
+                continue
             peakings = [name for name in relation.input_names if "peaking" in name]
             if peakings and all(shape_is_supplied(name) for name in peakings):
-                selected.append(relation.name)
+                candidates.append(relation)
+                continue
+            if "confinement_mode_profile_default" in relation.tags:
+                physical_inputs = [name for name in relation.input_names if name != "rho"]
+                if physical_inputs and all(input_is_declared_or_defaulted(name) for name in physical_inputs):
+                    candidates.append(relation)
+
+        # A source-backed mode profile supersedes the generic parabolic shape
+        # for the same output only when all of its pedestal controls are
+        # available. Otherwise the established parabolic/uniform fallbacks stay
+        # untouched. Explicit ``relations.include`` remains the way to select a
+        # non-default source such as FUSE/IMAS.
+        mode_outputs = {
+            output
+            for relation in candidates
+            if "confinement_mode_profile_default" in relation.tags
+            for output in relation.output_names
+        }
+        selected = [
+            relation.name
+            for relation in candidates
+            if "confinement_mode_profile_default" in relation.tags
+            or not (set(relation.output_names) & mode_outputs)
+        ]
         return tuple(selected)
 
     def relation_system(self) -> RelationSystem:
@@ -886,12 +943,39 @@ class Reactor:
             except KeyError:
                 excluded.add(str(item))
         values = system.complete(system.solver_values())
+
+        def guard_value(name: str, seen: frozenset[str] = frozenset()) -> Any:
+            """Return a solved value, or the registry default for guard-only input.
+
+            Checked-only guards are intentionally absent from the solved relation
+            system.  Consequently, a variable used *only* by a guard is not part
+            of the compiler's default-seeding plan.  Resolve that variable here
+            using the same registry declaration so adding a guard does not force
+            every existing reactor file to repeat ordinary defaults.
+            """
+            value = values.get(name)
+            if value is not None:
+                return value
+            if name in seen or name not in VARIABLES:
+                return None
+            spec = VARIABLES.get(name)
+            if spec.default is None:
+                return None
+            if isinstance(spec.default, str):
+                source = VARIABLES.resolve(spec.default)
+                return guard_value(source, seen | {name})
+            return float(spec.default)
+
         status: dict[str, Any] = {}
         for name in _all_regime_guard_names():
             if name in excluded:
                 continue
             rel = RELATIONS.get(name)
-            missing = [v for v in rel.variables if values.get(v) is None]
+            guard_values = dict(values)
+            for variable_name in rel.variables:
+                if guard_values.get(variable_name) is None:
+                    guard_values[variable_name] = guard_value(variable_name)
+            missing = [v for v in rel.variables if guard_values.get(v) is None]
             if missing:
                 status[name] = {
                     "relation": name,
@@ -902,7 +986,10 @@ class Reactor:
                 }
                 continue
             try:
-                status[name] = system.relation_status_and_residual(rel, system.relation_evaluation_values(rel, values))[0]
+                status[name] = system.relation_status_and_residual(
+                    rel,
+                    system.relation_evaluation_values(rel, guard_values),
+                )[0]
             except Exception as exc:
                 status[name] = {"relation": name, "verified": False, "enforced": rel.enforce, "errors": [str(exc)], "warnings": []}
         return {"relation_status": status}

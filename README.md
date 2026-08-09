@@ -61,6 +61,21 @@ The relevant license notices, source code references are listed below.
 - License: MIT License
 - Identifier used in the code: # Adapted from PROCESS; see README.md section "Third-party Notices".
 
+### Code adapted from FUSE and IMAS.jl
+
+- Repositories: https://github.com/ProjectTorreyPines/FUSE.jl and https://github.com/ProjectTorreyPines/IMAS.jl
+- Copyright notice: Copyright (c) 2024 General Atomics
+- License: Apache License 2.0
+- Identifier used in the code: # Adapted from FUSE/IMAS.jl; see README.md section "Third-party Notices".
+
+### Model mappings adapted from bluemira
+
+- Repository: https://github.com/Fusion-Power-Plant-Framework/bluemira
+- Copyright notice: Copyright 2021-present, bluemira contributors
+- License: LGPL-2.1-or-later
+- Scope: PROCESS model-selection names/codes only; bluemira delegates the underlying plasma physics to PROCESS.
+- Identifier used in the code: # Model-code mapping cross-checked against bluemira; see README.md section "Third-party Notices".
+
 ## Use of generative AI disclosure
 
 FusDB is a personal project, that goes beyond the activities carried out during my PhD.  

@@ -336,7 +336,6 @@
 "fshine": 0.5,
 "fusion_reaction": 1.0,
 "greenwald_margin": 1.0,
-"i_ecrh_wave_mode": 0.5,
 "impurity_fraction_profile": 0.5,
 "impurity_residence_time": 1.0,
 "inductive_plasma_current": 1.0,

@@ -108,6 +108,25 @@ def h_mode_sustainment(P_sep: float, P_HL: float) -> Any:
     return np.maximum(P_HL - P_sep, 0.0) / scale
 
 
+@relation(
+    name="H-mode accessibility (diverted, non-negative triangularity)",
+    tags=(*_GUARD_TAGS, "h_mode"),
+    enforce=False,
+)
+def h_mode_accessibility(has_x_point: float, delta: float) -> Any:
+    """Certify the geometry prerequisites used by FUSE/IMAS for H-mode.
+
+    FUSE's ``IMAS.scaling_L_to_H_power`` returns infinity when no X-point is
+    present or triangularity is negative.  Infinity is unsuitable for fusdb's
+    least-squares residuals, so the same condition is represented as a
+    checked-only H-mode guard. Adapted from FUSE/IMAS.jl; see README.md section
+    "Third-party Notices".
+    """
+    missing_x_point = np.maximum(1.0 - np.asarray(has_x_point, dtype=float), 0.0)
+    negative_triangularity = np.maximum(-np.asarray(delta, dtype=float), 0.0)
+    return np.maximum(missing_x_point, negative_triangularity)
+
+
 @relation(name="L-mode sustainment (P_sep <= P_LH)", tags=(*_GUARD_TAGS, "l_mode"), enforce=False)
 def l_mode_sustainment(P_sep: float, P_LH: float) -> Any:
     """Certifier that holds while an L-mode solve stays below the FORWARD L-H
@@ -374,6 +393,62 @@ def _martin08_aspect_correction(aspect: Any) -> Any:
     with np.errstate(divide="ignore", invalid="ignore"):
         corrected = 0.098 * aspect / (1.0 - (2.0 / (1.0 + aspect)) ** 0.5)
     return np.where(aspect <= 2.7, corrected, 1.0)
+
+
+@relation(
+    name="L-H threshold power (FUSE IMAS corrected)",
+    tags=("confinement", "tokamak"),
+    outputs="P_LH",
+)
+def lh_threshold_fuse_imas_corrected(
+    n_la: float,
+    I_p: float,
+    B0: float,
+    R: float,
+    a: float,
+    A_p: float,
+    afuel: float,
+    B0_sign: float,
+    x_point_z: float,
+    is_metallic_wall: float,
+) -> Any:
+    """FUSE/IMAS L-H scaling with rollover, wall, drift, and isotope factors.
+
+    This is the finite threshold portion of ``IMAS.scaling_L_to_H_power`` used
+    by FUSE. Geometry accessibility is the separate checked-only
+    :func:`h_mode_accessibility` relation, avoiding the upstream ``Inf`` value.
+
+    Adapted from FUSE/IMAS.jl; see README.md section "Third-party Notices".
+    """
+    current_ma = np.abs(np.asarray(I_p, dtype=float)) / 1.0e6
+    field = np.abs(np.asarray(B0, dtype=float))
+    aspect = np.asarray(R, dtype=float) / np.asarray(a, dtype=float)
+    n_min_20 = (
+        0.1
+        * 0.7
+        * current_ma**0.34
+        * field**0.62
+        * np.asarray(a, dtype=float) ** -0.95
+        * aspect**0.4
+    )
+    density_20 = np.maximum(np.asarray(n_la, dtype=float) / 1.0e20, n_min_20)
+
+    drift_direction = np.where(np.asarray(B0_sign, dtype=float) < 0.0, -1.0, 1.0)
+    x_sign = np.where(np.asarray(x_point_z, dtype=float) < 0.0, -1.0, 1.0)
+    drift_factor = np.where(x_sign == drift_direction, 1.0, 2.0)
+    wall_factor = np.where(np.asarray(is_metallic_wall, dtype=float) >= 0.5, 0.8, 1.0)
+    isotope_factor = 2.0 / np.asarray(afuel, dtype=float)
+
+    return (
+        1.0e6
+        * wall_factor
+        * isotope_factor
+        * 0.049
+        * density_20**0.72
+        * field**0.8
+        * np.asarray(A_p, dtype=float) ** 0.94
+        * drift_factor
+    )
 
 
 @relation(name="L-H threshold Martin-2008 aspect nominal", tags=_LH, outputs="P_LH")

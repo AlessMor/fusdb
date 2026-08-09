@@ -13,10 +13,11 @@ H_GUARD = "H-mode sustainment (P_sep >= P_HL)"
 L_GUARD = "L-mode sustainment (P_sep <= P_LH)"
 L_LI_GUARD = "L-mode sustainment (P_sep <= P_LI_thresh)"
 I_GUARD = "I-mode sustainment (P_sep >= P_LI_thresh)"
+H_ACCESS_GUARD = "H-mode accessibility (diverted, non-negative triangularity)"
 
 
 def _exclude_except_guards() -> tuple[str, ...]:
-    keep = {H_GUARD, L_GUARD, L_LI_GUARD, I_GUARD}
+    keep = {H_GUARD, H_ACCESS_GUARD, L_GUARD, L_LI_GUARD, I_GUARD}
     return tuple(rel.name for rel in RELATIONS if rel.name not in keep)
 
 
@@ -33,6 +34,7 @@ def _reactor(
         Variable("P_LH", p_lh),
         Variable("P_HL", p_hl if p_hl is not None else 0.7 * p_lh),
         Variable("P_LI_thresh", p_li),
+        Variable("delta", 0.2),
         # Popcon axes for the scan preflight test; inert in the scalar tests.
         Variable("n_e_avg", 1.0e20),
         Variable("T_e_avg", 10.0),

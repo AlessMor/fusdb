@@ -72,6 +72,7 @@ internal:
 descriptive:
   - default
   - confinement_mode_default
+  - confinement_mode_profile_default
   - atomic_physics
   - auxiliary_power
   - collisionality

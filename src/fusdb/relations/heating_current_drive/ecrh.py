@@ -2,8 +2,10 @@
 
 Ported from PROCESS ``ElectronCyclotron.electron_cyclotron_fenstermacher`` and
 ``electron_cyclotron_freethy``. Both return the absolute current-drive
-efficiency (A/W) and are gated onto ``eta_cd``. PROCESS's ``culecd`` orchestrator
-and the Legendre-based ``eccdef``/``legend`` model are not ported.
+efficiency (A/W) and are gated onto ``eta_cd``. The Freethy O- and X-mode
+variants are separate named relations: wave branch is an explicitly declared
+EC launch configuration, not an integer model selector. PROCESS's ``culecd``
+orchestrator and the Legendre-based ``eccdef``/``legend`` model are not ported.
 """
 
 import numpy as np
@@ -14,9 +16,14 @@ from fusdb.registry import ELECTRON_CHARGE_C, ELECTRON_MASS_KG, EPSILON0
 _TAGS = ("plasma", "current_drive", "tokamak", "process")
 
 
-@relation(name="Current drive efficiency EC Fenstermacher", tags=_TAGS, outputs="eta_cd")
+@relation(
+    name="Current drive efficiency EC Fenstermacher", tags=_TAGS, outputs="eta_cd"
+)
 def electron_cyclotron_fenstermacher(
-    temp_plasma_electron_density_weighted: float, R: float, n_e_avg: float, dlamee: float
+    temp_plasma_electron_density_weighted: float,
+    R: float,
+    n_e_avg: float,
+    dlamee: float,
 ) -> float:
     """Electron-cyclotron heating efficiency (A/W), Fenstermacher model.
 
@@ -27,30 +34,68 @@ def electron_cyclotron_fenstermacher(
     return (0.21e0 * temp_plasma_electron_density_weighted) / (R * dene20 * dlamee)
 
 
-@relation(name="Current drive efficiency EC Freethy", tags=_TAGS, outputs="eta_cd")
-def electron_cyclotron_freethy(
-    T_e_avg: float, Z_eff: float, R: float, n_e_avg: float, B0: float,
-    n_ecrh_harmonic: float, i_ecrh_wave_mode: float,
+@relation(
+    name="Current drive efficiency EC Freethy O-mode", tags=_TAGS, outputs="eta_cd"
+)
+def electron_cyclotron_freethy_o_mode(
+    T_e_avg: float,
+    Z_eff: float,
+    R: float,
+    n_e_avg: float,
+    B0: float,
+    n_ecrh_harmonic: float,
 ) -> float:
-    """Electron-cyclotron current-drive efficiency (A/W), Freethy model, with a
-    plasma cut-off coupling factor (O-mode: i_ecrh_wave_mode=0, X-mode=1).
+    """Freethy O-mode EC current-drive efficiency magnitude [A/W].
+
+    The O branch is selected by including this named relation. ``n_ecrh_harmonic``
+    remains a physical resonance-harmonic input, not a model switch.
 
     Adapted from PROCESS; see README.md section "Third-party Notices".
-
-    PROCESS raises on an invalid wave mode; that guard is dropped here.
     """
     # CHECK
-    fc = 1 / (2 * np.pi) * ELECTRON_CHARGE_C * B0 / ELECTRON_MASS_KG
-    fp = 1 / (2 * np.pi) * np.sqrt(n_e_avg * ELECTRON_CHARGE_C**2 / (ELECTRON_MASS_KG * EPSILON0))
-    xi_CD = 0.18e0
-    xi_CD *= 4.8e0 / (2 + Z_eff)
-    eta_cd = xi_CD * T_e_avg / (3.27e0 * R * (n_e_avg / 1.0e19))
-    if i_ecrh_wave_mode == 0:  # O-mode
-        f_cutoff = fp
-    else:  # X-mode
-        f_cutoff = 0.5 * (fc + np.sqrt(n_ecrh_harmonic * fc**2 + 4 * fp**2))
-    a = 0.1
-    cutoff_factor = 0.5 * (1 + np.tanh((2 / a) * ((n_ecrh_harmonic * fc - f_cutoff) / fp - a)))
+    fc = ELECTRON_CHARGE_C * B0 / (2.0 * np.pi * ELECTRON_MASS_KG)
+    fp = (
+        1
+        / (2 * np.pi)
+        * np.sqrt(n_e_avg * ELECTRON_CHARGE_C**2 / (ELECTRON_MASS_KG * EPSILON0))
+    )
+    eta_cd = (0.18 * 4.8 / (2.0 + Z_eff)) * T_e_avg / (3.27 * R * (n_e_avg / 1.0e19))
+    cutoff_factor = 0.5 * (
+        1.0 + np.tanh(20.0 * ((n_ecrh_harmonic * fc - fp) / fp - 0.1))
+    )
+    return eta_cd * cutoff_factor
+
+
+@relation(
+    name="Current drive efficiency EC Freethy X-mode", tags=_TAGS, outputs="eta_cd"
+)
+def electron_cyclotron_freethy_x_mode(
+    T_e_avg: float,
+    Z_eff: float,
+    R: float,
+    n_e_avg: float,
+    B0: float,
+    n_ecrh_harmonic: float,
+) -> float:
+    """Freethy X-mode EC current-drive efficiency magnitude [A/W].
+
+    The X branch is selected by including this named relation. ``n_ecrh_harmonic``
+    remains a physical resonance-harmonic input, not a model switch.
+
+    Adapted from PROCESS; see README.md section "Third-party Notices".
+    """
+    # CHECK
+    fc = ELECTRON_CHARGE_C * B0 / (2.0 * np.pi * ELECTRON_MASS_KG)
+    fp = (
+        1
+        / (2 * np.pi)
+        * np.sqrt(n_e_avg * ELECTRON_CHARGE_C**2 / (ELECTRON_MASS_KG * EPSILON0))
+    )
+    f_cutoff = 0.5 * (fc + np.sqrt(n_ecrh_harmonic * fc**2 + 4 * fp**2))
+    eta_cd = (0.18 * 4.8 / (2.0 + Z_eff)) * T_e_avg / (3.27 * R * (n_e_avg / 1.0e19))
+    cutoff_factor = 0.5 * (
+        1.0 + np.tanh(20.0 * ((n_ecrh_harmonic * fc - f_cutoff) / fp - 0.1))
+    )
     return eta_cd * cutoff_factor
 
 
@@ -81,16 +126,25 @@ def _legend(zlocal, arg):
                 return palpha, palphap
             pold = palpha
             poldp = palphap
-        pterm = pterm * (4.0e0 * xisq + (2.0e0 * n - 1.0e0) ** 2) / (2.0e0 * n) ** 2 * sinsq
+        pterm = (
+            pterm * (4.0e0 * xisq + (2.0e0 * n - 1.0e0) ** 2) / (2.0e0 * n) ** 2 * sinsq
+        )
         palpha += pterm
         palphap -= n * pterm / (1.0e0 - arg2)
     return palpha, palphap
 
 
-@relation(name="Current drive efficiency EC Cohen-Legendre", tags=_TAGS, outputs="eta_cd")
+@relation(
+    name="Current drive efficiency EC Cohen-Legendre", tags=_TAGS, outputs="eta_cd"
+)
 def eccdef(
-    T_e_avg: float, eps: float, Z_eff: float, cosang: float, dlamie: float,
-    n_e_avg: float, R: float,
+    T_e_avg: float,
+    eps: float,
+    Z_eff: float,
+    cosang: float,
+    dlamie: float,
+    n_e_avg: float,
+    R: float,
 ) -> float:
     """Electron-cyclotron current-drive efficiency (A/W), Cohen/IPDG89 model via
     the Legendre conical function.
@@ -116,7 +170,10 @@ def eccdef(
     facm = 1.5e0
     y = mcsq / (2.0e0 * T_e_avg) * (1.0e0 + eps * cosang)
     ecgam = (
-        -7.8e0 * facm * np.sqrt((1.0e0 + eps) / (1.0e0 - eps)) / dlamie
+        -7.8e0
+        * facm
+        * np.sqrt((1.0e0 + eps) / (1.0e0 - eps))
+        / dlamie
         * (h * fp - 0.5e0 * y * f * hp)
     )
     # culecd normalisation: absolute eta_cd = ecgam / (dene20 * R)

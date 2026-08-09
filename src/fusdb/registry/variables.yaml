@@ -193,6 +193,19 @@ A_p:
   # CHECK gate: Sauter surface stays the default; the PROCESS arcs surface is opt-in.
   default_relation:
   - Tokamak plasma surface
+S_wall:
+  default_unit: m^2
+  aliases:
+  - wall_surface_area
+  - A_wall
+  description: >-
+    Plasma-facing wall surface area used for neutron and fusion-power wall
+    loading. Defaults to the LCFS plasma surface area when no independent wall
+    geometry is supplied.
+  domain: (0, inf)
+  abs_tol: 0.001
+  default_relation:
+  - Wall surface from plasma surface
 S_fw:
   default_unit: m^2
   aliases:
@@ -415,6 +428,30 @@ beta:
   description: Total beta.
   domain: '[0, 1]'
   abs_tol: 0.0001
+beta_fast_alpha:
+  default_unit: dimensionless
+  description: >-
+    Fast-alpha contribution to volume-averaged beta. The PROCESS Ward fit is
+    the default; select the IPDG89/Hender relation explicitly when required.
+  domain: '[0, 1]'
+  abs_tol: 0.0001
+  default_relation:
+  - Fast-alpha beta Ward (PROCESS)
+beta_beam:
+  default_unit: dimensionless
+  description: Neutral-beam fast-ion contribution to volume-averaged beta.
+  domain: '[0, 1]'
+  abs_tol: 0.0001
+beta_with_fast_ions:
+  default_unit: dimensionless
+  description: Total volume-averaged beta including thermal, fast-alpha, and beam-ion pressure.
+  domain: '[0, 1]'
+  abs_tol: 0.0001
+beta_N_with_fast_ions:
+  default_unit: dimensionless
+  description: Troyon-normalized beta including thermal and non-thermal ion pressure.
+  domain: '[0, 0.2]'
+  abs_tol: 0.0002
 beta_T:
   default_unit: dimensionless
   aliases:
@@ -461,6 +498,21 @@ p_th:
   # tag-matching as a second, conflicting p_th producer in other reactors).
   default_relation:
   - Thermal pressure
+p_fast_alpha:
+  default_unit: Pa
+  description: Volume-averaged pressure carried by non-thermal fusion alpha particles.
+  domain: '[0, inf)'
+  abs_tol: 1000.0
+p_fast_beam:
+  default_unit: Pa
+  description: Volume-averaged pressure carried by non-thermal neutral-beam ions.
+  domain: '[0, inf)'
+  abs_tol: 1000.0
+p_with_fast_ions:
+  default_unit: Pa
+  description: Total plasma pressure including thermal, fast-alpha, and beam-ion components.
+  domain: '[0, inf)'
+  abs_tol: 1000.0
 p_th_rho_avg:
   default_unit: Pa
   description: Straight-rho averaged thermal pressure.
@@ -518,6 +570,16 @@ T_sep:
   domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
+pedestal_width:
+  default_unit: dimensionless
+  aliases:
+  - w_ped
+  description: >-
+    Full pedestal width in normalized minor radius, measured from the
+    separatrix to the pedestal top (FUSE/IMAS convention).
+  domain: (0, 1)
+  solver_domain: '[1e-3, 0.999]'
+  abs_tol: 0.001
 T_edge:
   aliases:
   - edge_electron_temp  # CFSPOPCON variables.yaml
@@ -547,6 +609,7 @@ T_e:
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
   default_relation:
+  - PROCESS pedestal electron temperature profile
   - Parabolic electron temperature profile
   - Default electron temperature profile from average temperature
 T0:
@@ -572,6 +635,7 @@ T_i:
   solver_domain: '[1e-12, 300]'
   abs_tol: 0.05
   default_relation:
+  - PROCESS pedestal ion temperature profile
   - Parabolic ion temperature profile
   - Default ion temperature profile from average temperature
 T_i_avg:
@@ -591,7 +655,6 @@ T_i_rho_avg:
   - T_i_line_avg
   - line_average_T_i
   - rho_average_ion_temp
-  - temp_plasma_ion_density_weighted_kev  # PROCESS physics_variables.py
   description: Radial line-averaged ion temperature (the straight average over rho).
   domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
@@ -730,6 +793,7 @@ n_e:
   domain: '[0, inf)'
   abs_tol: 1.0e+18
   default_relation:
+  - PROCESS pedestal electron density profile
   - Parabolic electron density profile
   - Default electron density profile from average density
 n_fuel:
@@ -746,6 +810,7 @@ n_fuel:
   domain: '[0, inf)'
   abs_tol: 1.0e+18
   default_relation:
+  - PROCESS pedestal fuel-ion density profile
   - Parabolic ion density profile
   - Ion density from electron density (quasineutrality)
   - Ion density from tracked species densities
@@ -2043,6 +2108,13 @@ P_fus_DT_alpha:
   description: Alpha power from D-T fusion.
   domain: '[0, inf)'
   abs_tol: 1000000.0
+P_alpha_beam:
+  default_unit: W
+  description: Alpha-particle power produced by beam-target D-T fusion.
+  domain: '[0, inf)'
+  default: 0.0
+  default_requires: P_NBI
+  abs_tol: 1000000.0
 P_fus_DT_n:
   default_unit: W
   description: Neutron power from D-T fusion.
@@ -2469,6 +2541,31 @@ P_LH:
   # cfspopcon does), and the 17 other PROCESS scalings.
   default_relation:
   - L-H threshold Martin-2008 aspect nominal (total ion mass)
+has_x_point:
+  default_unit: dimensionless
+  description: Whether the equilibrium has at least one divertor X-point (1 yes, 0 no).
+  domain: '[0, 1]'
+  default: 1
+  abs_tol: 0.001
+x_point_z:
+  default_unit: m
+  description: Vertical position of the primary X-point; negative is lower single-null.
+  abs_tol: 0.001
+B0_sign:
+  default_unit: dimensionless
+  description: Sign of the toroidal field in the COCOS-11 convention used by FUSE/IMAS.
+  domain: '[-1, 1]'
+  solver_domain: '[-1, 1]'
+  abs_tol: 0.001
+is_metallic_wall:
+  default_unit: dimensionless
+  description: >-
+    Plasma-facing-wall material flag for the FUSE/IMAS L-H scaling: 1 for a
+    metallic wall and 0 for graphite/carbon. FUSE/IMAS defaults to metallic
+    when wall material is unavailable.
+  domain: '[0, 1]'
+  default: 1
+  abs_tol: 0.001
 P_HL:
   default_unit: W
   # The H->L BACK-transition power.  The forward (L->H) and back (H->L)
@@ -3396,7 +3493,10 @@ c_beta:  # CHECK imported from PROCESS (physics.py, Tholerus beta limit); PROCES
 # --- PROCESS current_drive ----------------------------------------------------
 eta_cd:  # CHECK imported from PROCESS (current_drive); PROCESS physics_variables.py
   default_unit: A/W
-  description: Absolute current-drive efficiency (A/W) from the selected HCD method.
+  description: >-
+    Absolute current-drive efficiency magnitude (A/W) from the selected HCD
+    relation. EC O- and X-mode branches are explicit named relation choices,
+    not a reactor-wide operating regime or integer selector.
   domain: '[0, inf)'
   abs_tol: 0.001
   # CHECK gate: NBI ITER-1990 is the arbitrary default; the LH/IC/EC/EBW and
@@ -3429,6 +3529,13 @@ temp_plasma_electron_density_weighted:  # CHECK imported from PROCESS (current_d
   description: Density-weighted average electron temperature.
   domain: '[0, 300]'
   abs_tol: 0.05
+temp_plasma_ion_density_weighted:
+  default_unit: keV
+  aliases:
+  - temp_plasma_ion_density_weighted_kev  # PROCESS physics_variables.py
+  description: Density-weighted average ion temperature.
+  domain: '[0, 300]'
+  abs_tol: 0.05
 dlamee:  # CHECK imported from PROCESS (current_drive, EC Fenstermacher); PROCESS physics_variables.py
   default_unit: dimensionless
   description: Electron-electron Coulomb logarithm (PROCESS dlamee).
@@ -3436,16 +3543,12 @@ dlamee:  # CHECK imported from PROCESS (current_drive, EC Fenstermacher); PROCES
   abs_tol: 0.001
 n_ecrh_harmonic:  # CHECK imported from PROCESS (current_drive); PROCESS physics_variables.py
   default_unit: dimensionless
-  description: Electron-cyclotron / EBW harmonic number.
+  description: >-
+    Electron-cyclotron / EBW resonance harmonic number. This is a physical EC
+    launch-channel input (for example O1 or X2), not a relation selector.
   domain: (0, inf)
   solver_domain: '[1, inf)'
   default: 1.0
-  abs_tol: 0.001
-i_ecrh_wave_mode:  # CHECK imported from PROCESS (current_drive); 0=O-mode, 1=X-mode
-  default_unit: dimensionless
-  description: Electron-cyclotron cut-off wave-mode switch (0 = O-mode, 1 = X-mode).
-  domain: '[0, 1]'
-  default: 0.0
   abs_tol: 0.001
 xi_ebw:  # CHECK imported from PROCESS (current_drive, EBW Freethy)
   default_unit: dimensionless
@@ -3525,6 +3628,12 @@ radius_plasma_pedestal_density_norm:  # CHECK imported from PROCESS (bootstrap_c
   domain: (0, 1]
   solver_domain: '[1e-3, 1]'
   abs_tol: 0.001
+radius_plasma_pedestal_temp_norm:
+  default_unit: dimensionless
+  description: Normalized minor radius of the temperature pedestal top.
+  domain: (0, 1]
+  solver_domain: '[1e-3, 1]'
+  abs_tol: 0.001
 nd_plasma_pedestal_electron:  # CHECK imported from PROCESS (bootstrap_current, Sugiyama H)
   default_unit: 1/m^3
   description: Electron number density at the pedestal.
@@ -3535,6 +3644,24 @@ temp_plasma_pedestal_kev:  # CHECK imported from PROCESS (bootstrap_current, Sug
   description: Electron temperature at the pedestal.
   domain: '[0, 300]'
   abs_tol: 0.05
+n_beam_hot:
+  default_unit: 1/m^3
+  description: Volume-averaged density of non-thermal neutral-beam ions.
+  domain: '[0, inf)'
+  abs_tol: 1.0e+18
+e_beam_deposited:
+  default_unit: keV
+  description: Mean deposited energy of the non-thermal neutral-beam population.
+  domain: '[0, inf)'
+  abs_tol: 0.05
+beta_beam_multiplier:
+  default_unit: dimensionless
+  aliases:
+  - betbm0  # PROCESS fusion_reactions.py
+  description: Multiplicative calibration factor for the PROCESS neutral-beam beta relation.
+  domain: '[0, inf)'
+  default: 1.0
+  abs_tol: 0.001
 j_plasma_on_axis:  # CHECK imported from PROCESS (plasma_profiles); PROCESS physics_variables.py
   default_unit: A/m^2
   description: Central (on-axis) plasma current density (parabolic current profile).

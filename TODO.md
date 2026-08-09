@@ -55,10 +55,9 @@ Ordered by how much each would change an answer.
   understood. Decide whether to add it as a reported diagnostic first.
 
 - **`confinement_mode` is a tag, not a variable.** The declared mode is therefore not
-  verifiable as data. It should be an integer-coded dimensionless variable following the
-  `i_ecrh_wave_mode` precedent, `fixed` when declared and `computed` when not, and NEVER
-  packed so the solver never differentiates through the discontinuity. The tag stays the
-  ASSUMPTION (it selects relations at compile time); the variable is the VERDICT.
+  verifiable as data. If a numeric verdict is needed, expose it as reported diagnostic
+  data, never as an integer model-selection variable: the tag remains the ASSUMPTION
+  (it selects relations at compile time), and the diagnostic is the VERDICT.
 
 - **`verify` does not switch and does not report admissibility.** It includes the certifiers
   and reports their status, but has no notion of the admissible set.
