@@ -195,14 +195,16 @@ FIELDS: list[tuple[str, str, str]] = [
     ("neutron_rate", "neutron_rate", "fusion"),
     # Neutron power flux to the wall = P_neutron / A_p -- fusdb's existing
     # q_wall (neutron wall loading), the same quantity cfspopcon reports here.
-    # The ~3.5% median is a partial cancellation of two ~7-10% effects, NOT
-    # clean agreement: fusdb's P_neutron runs ~6% high (extra D-D/T-T channels)
-    # while fusdb's own plasma surface area A_p (60.97 m^2) runs ~10% above
-    # cfspopcon's (55.54 m^2), and the excess power nearly offsets the excess
-    # area.  P_neutron / 55.54 matches the reference to ~0.25%, so the residual
-    # is a plasma-surface-area convention difference, not neutron physics.
-    # (That A_p gap -- 9.8% while V_p agrees to 0.9% -- is also the likely
-    # source of the P_LH ~9% systematic; see the SPARC comparison memo.)
+    # RESOLVED 2026-08-07, and the headline number got WORSE on purpose.  This
+    # used to sit at +2.98%, which was NOT agreement but a partial cancellation:
+    # fusdb's P_neutron runs ~6% high (extra D-D/T-T channels) while fusdb's
+    # Sauter A_p (60.97 m^2) ran ~10% above cfspopcon's (55.54 m^2), and the
+    # excess power offset the excess area.  The fixture now selects cfspopcon's
+    # own geometry ("Plasma surface area (cfspopcon)"), which reproduces the
+    # reference A_p exactly, so the flux error is now EXACTLY P_neutron's error
+    # (+6.35% vs +6.35%) with no geometry error hiding inside it.  The number
+    # is larger and the quantity is honest; what is left is the fusion chain,
+    # tracked by the `fusion` rows above.
     ("neutron_power_flux_to_walls", "q_wall", "match"),
     # Ohmic chain: fixed by the cfspopcon beta_p convention (was -20% via the
     # bootstrap -> inductive-current path); now within 10% grid-wide.

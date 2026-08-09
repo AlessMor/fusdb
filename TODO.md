@@ -1,21 +1,132 @@
-- Regime choice inside the L-H bistable band contradicts its own stated rationale. `Reactor._run_with_regime_verification` walks the candidate regimes and keeps one when its own solve satisfies its own sustainment guards. When NO candidate is self-consistent -- the genuine dithering band, where the h-mode solve falls below the very threshold the l-mode solve exceeds -- it settles on `l_mode` and sets `regime_bistable=True` with a warning. That is detected and reported honestly, but the choice fights the docstring two paragraphs above it: starting at the declared regime is described as "the steady-state stand-in for L-H hysteresis: the declared tag states which branch of a bistable band the machine sits on". Hysteresis IS the bistable-band phenomenon, so a machine declared `h_mode` and sitting in the band should stay in H-mode -- yet the fallback overrides the declaration precisely where the declaration was supposed to be the tie-breaker.
+# TODO
 
-  MEASURED 2026-08-03 on `tests/PROCESS_large_tokamak` tungsten sweep, point `w_5.0e-05` (the last sustained point; the fixture already annotates it "radiation is 71% of heating power here"):
-    regime_path = ['h_mode', 'l_mode', 'ohmic_mode', 'l_mode'] -- all three tried, none self-consistent
-    fusdb settles l_mode: P_sep 800.3 MW, P_LH 106.6 (ratio 7.5), P_aux 783.9 MW, tau_E 0.93 s
-    PROCESS stays h_mode: P_sep 104.2 MW, P_LH 99.1 (ratio 1.05), P_aux 79.3 MW
-  The reported P_sep is the l-mode solve's and is inconsistent by construction, which is exactly what `regime_bistable` is telling you. Composition is NOT implicated: P_fus 1684.3 vs PROCESS 1679.9 (0.3%), and the neighbouring point w_2.0e-05 gives P_sep 154.5 vs 155.4 (0.6%).
+Open items only. Landed work and its measurements are in `.claude/scratchpad.md`; the
+physics background, the three-level discriminant framing and how PROCESS / cfspopcon /
+HELIOS / PLASMOD / FUSE each handle confinement modes are in
+`docs/knowledge_base/plasma_physics/5-transport_and_confinement/Confinement_modes.md`.
 
-  Candidate one-liner: `fallback = declared if declared in attempts else ("l_mode" if "l_mode" in attempts else current)`.
-  NOT applied -- it is a physics convention, not a defect, and both readings are defensible (`l_mode` = the pessimistic/accessible branch; declared = hysteresis). BLAST RADIUS: the docstring notes the popcon composite applies the same rule per grid point, so this changes every bistable cell in every popcon scan (`tests/test_popcon_mode.py` and the cfspopcon comparison both exercise it). Decide the convention before touching it.
+## Confinement modes
 
-  UPDATE 2026-08-07, two corrections from reading the upstream sources directly (`/home/alessmor/Scrivania/PROCESS` `83d9f63f`, `/home/alessmor/Scrivania/cfspopcon` `57baea2`):
-  1. **"PROCESS stays h_mode" is NOT evidence for either convention.** PROCESS has no regime switching at all: `p_l_h_threshold_mw` appears only in constraint equations 15 (`P_sep >= f_h_mode_margin * P_LH`, "enforce H-mode") and 22 (its L-mode complement), plus output/plotting, and `i_confinement_time` selects one scaling that never changes. PROCESS stays in H-mode because it *cannot leave* the regime it was told to use. The regime walk is a fusdb invention with no upstream precedent to appeal to, so the tie-break is a fusdb-only decision.
-  2. The quoted `regime_path = ['h_mode', 'l_mode', 'ohmic_mode', 'l_mode']` can no longer occur: `ohmic_mode` was removed from the `confinement_mode` axis (it is a heating method, not a transport state), so the chains are now `h_mode -> (h, l)`, `i_mode -> (i, l)`, `l_mode -> (l, h, i)`. Re-measure the tungsten point before acting on the numbers above.
+Ordered by how much each would change an answer.
 
-  Two further things the item does not say, both still open:
-  - **There is no hysteresis width anywhere.** `h_mode_sustainment` (`P_sep >= P_LH`) and `l_mode_sustainment` (`P_sep <= P_LH`) are exact complements at a single threshold, so "the declared tag states which branch of a bistable band the machine sits on" has no implementation behind it. The band arises only from solution multiplicity (tau_E differs between branches, so `P_sep` does), never from a back-transition threshold below the forward one -- which is what the physics actually has.
-  - **The walk cannot distinguish bistability from non-convergence.** Each candidate is solved at most once (`attempts` dict, `range(len(candidates))` cap) and never revisited, so an h<->l 2-cycle where neither solve has settled on its own branch reports `regime_bistable=True` identically to genuine multiplicity. The fallback rule is being asked to arbitrate two different phenomena.
+- **The mode changes `tau_E` and essentially nothing else.** 58 of 64 mode-tagged relations
+  output only `tau_E`; the rest are certifiers. The mode also sets the CORE BOUNDARY
+  CONDITION -- H-mode a finite pedestal, L-mode the core profile continuing to the
+  separatrix, I-mode a temperature pedestal without the particle barrier -- and none of that
+  is represented. Biggest structural gap.
+  INVESTIGATE FIRST: profiles are `avg x shape` with shape generators opt-in via the
+  `profile_shape` tag. If a mode-tagged PEDESTAL generator can use that existing gate, this
+  is a tag change rather than a new subsystem. Establish that before designing anything.
+
+- **The L-H threshold has no accessibility limits and no geometry/wall corrections.**
+  IMAS.jl's `scaling_L_to_H_power` adds physics no other surveyed code has:
+    * INACCESSIBLE (no X-point, or triangularity < 0)  -- derivable now via `delta`
+    * x2 unfavourable grad-B drift                     -- needs X-point z + a B0 sign convention
+    * x0.8 metallic wall                               -- needs a wall-material input
+    * n_e clamped up to the Martin rollover minimum    -- derivable now
+  The grad-B factor of 2 dwarfs every correction argued about so far. `delta_95`'s domain was
+  widened to [-1, 1] for the negative-triangularity sweep in `examples/01`, so fusdb will
+  currently compute a finite P_LH for a plasma that cannot reach H-mode at all.
+  ENCODING: an `h_mode`-tagged `enforce=False` certifier, never `Inf` -- an Inf residual would
+  blow up the least-squares solve. The two missing inputs are scope needing approval.
+
+- **I<->H is blocked on an I-mode ceiling, not on plumbing.** The complete graph was built and
+  REVERTED 2026-08-07: with i_mode reachable from h_mode, the tungsten point `w_1.0e-04`
+  (which has no consistent mode) certified as i_mode on an absurd solve -- P_sep 7179.6 MW
+  against PROCESS's 0.0 MW, P_aux +9424%. Cause: i_mode's ONLY certifier is
+  `P_sep >= P_LI_thresh`, which an inflated P_sep satisfies trivially.
+  UNBLOCK WITH: an I-H threshold (an I-mode upper certifier). No surveyed code has one --
+  cfspopcon has three L->I entry scalings and no exit, PROCESS does not switch at all, and
+  FUSE/IMAS do not model I-mode. Then swap the chains in `_candidate_regimes` for
+  `[declared, *others]` and delete the test that locks the restriction.
+
+- **Nothing physically separates H from I.** When the declared mode is inadmissible and both
+  upper branches are admissible, the pick is by candidate order; that now sets
+  `regime_ambiguous` and says so, but it is still not a discriminator. H and I differ by
+  topology, drift direction and edge state, none of which is in the decision. A real one
+  drops in as ONE extra certifier relation -- no driver change.
+
+- **SepOS is reachable but degenerate.** Level 2 now evaluates (770/770 SPARC cells) after
+  `Z_bar` was given a producer, but it says H-mode on **100%** of them against 77% for
+  `P_sep/P_LH`, never L. `alpha_t` spans [0.0077, 0.0886], entirely below the O(0.1-1) band
+  where Eich places the boundary, driven by T_sep ~ 200-430 eV (cfspopcon's own, matched to
+  0.10%). Safe to add as a certifier -- conditions AND together, so a discriminant satisfied
+  everywhere contributes nothing -- but it buys nothing until the alpha_t calibration is
+  understood. Decide whether to add it as a reported diagnostic first.
+
+- **`confinement_mode` is a tag, not a variable.** The declared mode is therefore not
+  verifiable as data. It should be an integer-coded dimensionless variable following the
+  `i_ecrh_wave_mode` precedent, `fixed` when declared and `computed` when not, and NEVER
+  packed so the solver never differentiates through the discontinuity. The tag stays the
+  ASSUMPTION (it selects relations at compile time); the variable is the VERDICT.
+
+- **`verify` does not switch and does not report admissibility.** It includes the certifiers
+  and reports their status, but has no notion of the admissible set.
+
+- **popcon's fallback fills unclaimed cells with `l_mode` silently.** The scalar path now
+  flags `regime_over_constrained` when nothing is admissible; the per-cell path still assigns
+  the fallback with no equivalent marker. Same defect, one layer down, across 1200 cells.
+
+- **Guard classification differs between the two paths.** popcon uses `residual <= 1e-9`;
+  reconcile hits the outputless-relation tolerance (`rel_tol_default` 1e-3, `abs_tol` 0).
+  Six orders apart, both negligible in practice, but it should be one number.
+
+- **Near-boundary popcon cells are unasserted.** 62 of 770 SPARC cells (8.1%) sit within
+  +/-20% of the L-H threshold, 30 within +/-10%, 15 within +/-5% -- real coverage that no
+  test checks. A rejected hysteresis-band experiment passed the ENTIRE suite while changing
+  nothing any test asserted. Assert per-cell regime assignment there before any further L-H
+  change.
+
+- **PerezH/PerezL cannot be selected by regime.** They carry `h_mode`/`l_mode` tags and are
+  the one genuinely regime-specific pair, but `default_relation` filters AFTER tag matching,
+  so tags only choose WITHIN a whitelist -- and `SOL_momentum_loss_fraction` whitelists the
+  untagged KotovReiter, which matches every reactor. The three ways to open the gate and why
+  each is blocked are enumerated next to the whitelist in `variables.yaml`. Needs a ruling on
+  the cfspopcon-SPARC parity cost.
+
+- **LOC/SOC is unmodelled.** Removing ohmic from the confinement axis was right, but the
+  ohmic TRANSPORT regimes are still absent. cfspopcon's rule is a continuous min over tau_E
+  (`where(tau_E/tau_LOC > 1, tau_LOC, tau_E)`), NOT a tag axis.
+  `cfspopcon_loc_confinement_time` is ported and unwired.
+
+## Physics gaps
+
+- **fusdb has no non-thermal ion populations.** Zero hits for `beta_fast`, `fast_alpha`,
+  `slowing_down`, `thermalis*`. fusdb's beta is thermal-only; PROCESS's is
+  `beta_thermal + beta_fast_alpha + beta_beam`. At the PROCESS eval point `beta_fast_alpha` is
+  **13.7% of total beta** (4.435e-3 of 3.230e-2), and `beta_norm_total` 2.847 vs
+  `beta_norm_thermal` 2.456.
+
+  Note this is NOT a missing element. A beam ion is D or T at Z=1 ("Only deuterium and tritium
+  in the beams"); a fast alpha is the same He as the ash. What separates them is the
+  DISTRIBUTION FUNCTION -- injected/born at high energy, slowing down, never Maxwellian at
+  T_i. So it is a new *axis* in the composition model (a second population per isotope
+  carrying its own energy, excluded from thermal pressure but included in quasineutrality),
+  not a new row in `species.yaml`. fusdb's composition is one thermal population per isotope
+  and has nowhere to put it.
+
+  LEAD, NOT PROVEN: the reactors declare published design betas, which usually quote TOTAL
+  beta. DEMO declared beta_N 0.025 -> solved 0.0226 (-9.6%); STEP declared 0.0393 -> 0.0374
+  (-4.8%). Both LOW, sign consistent with the missing fast-alpha pressure and magnitudes in
+  the 13.7% ballpark; `beta_N` is beyond tolerance on 4 reactors (DEMO 11.8, ARC_V0 25.9,
+  STEP 9.4, ARC_V3A). FALSIFICATION TEST: establish which beta convention each reactor's
+  declared value uses (thermal vs total) BEFORE building a fast-alpha pressure model. The
+  PROCESS fixture is already honest about this -- it maps fusdb `beta` to PROCESS's THERMAL
+  beta and matches +0.48%.
+
+  Fast alphas bite on every burning plasma; beam ions only on NBI-heated non-ignited points
+  (PROCESS default `f_nd_beam_electron = 0.005`). If this is ever built, fast alphas first.
+  cfspopcon models neither -- it has zero occurrences of `beam`/`fast ion`/`slowing`.
+
+## Infrastructure
+
+- **Repointing any `default_relation` silently breaks fixtures that excluded the old default
+  BY NAME.** The registry logs `relations.exclude names X, which was not active anyway`, then
+  the new default runs alongside the fixture's include, the output is over-determined, and the
+  failure surfaces far away as NaN fields / `assert False`. This cost 4 popcon tests and then
+  3 PROCESS tests on the 2026-08-07 `P_LH` change, neither pointing at `P_LH`. Worth either a
+  registry check (warn when an exclude names a relation that a `default_relation` no longer
+  lists) or a test that asserts each fixture's excludes are live.
 
 - rewrite tests
 

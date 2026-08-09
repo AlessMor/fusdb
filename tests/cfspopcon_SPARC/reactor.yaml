@@ -319,7 +319,27 @@ relations:
   # fold-in's inventory to <0.1% while deriving it from the real mix (the
   # f-based quasineutrality producer is excluded below).
   - Ion density average from impurity concentrations (Mavrin)
+  # PLASMA SHAPE.  cfspopcon's geometry is a distinct shape model, not a
+  # reparametrisation of fusdb's Sauter default: closed forms in (R, eps,
+  # kappa_areal) alone, with the triangularity baked into the coefficients
+  # (its own note: "delta=1.0 is assumed since this was found to give a closer
+  # match to 2D equilibria from FreeGS").  The gap is not removable by picking a
+  # different delta -- at this point cfspopcon gives A_p 55.536 while fusdb's
+  # Sauter gives 60.39 at delta_sep 0.54 and still 57.90 at delta = 1.0.
+  # These reproduce the reference dataset EXACTLY (0.000e0 on A_p and V_p).
+  - Plasma surface area (cfspopcon)
+  - Plasma volume (cfspopcon)
+  - Plasma poloidal circumference (cfspopcon)
   exclude:
+  # The three Sauter shape defaults displaced by the cfspopcon forms above.
+  # `include` ADDS rather than replaces, so leaving them would over-determine
+  # A_p / V_p / L_p.  S_phi has no cfspopcon counterpart (it computes no
+  # cross-section), so fusdb's Sauter cross-section keeps that slot; with
+  # "Areal elongation from cross-section" excluded below, kappa_areal stays a
+  # pure input and does not have to equal S_phi/(pi a^2).
+  - Tokamak plasma surface
+  - Tokamak plasma volume
+  - Tokamak plasma poloidal length
   - Areal elongation from cross-section
   # Superseded by "Elongation at psi95 from areal elongation (cfspopcon)" above
   # `include` ADDS, so fusdb's derived P_line would stay active alongside the

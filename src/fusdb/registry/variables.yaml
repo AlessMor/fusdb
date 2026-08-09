@@ -868,7 +868,15 @@ Z_bar:
   aliases:
   - mean_ion_charge_state  # CFSPOPCON variables.yaml
   default_unit: dimensionless
-  description: Mean ion charge state.
+  # n_e over the TOTAL ion inventory.  Distinct from `Zbar_i_avg`, which divides
+  # by the FUEL bucket only -- the two coincide only when there are no
+  # impurities.  cfspopcon defines this one as n_e / sum_j n_j and leaves it a
+  # pure input (`set_by: []`); fusdb derives it, since both densities are already
+  # available, which is what makes `alpha_t` and the SepOS criterion reachable.
+  description: >-
+    Mean ion charge state, n_e/n_i over ALL ions (fuel, ash and impurities).
+    Sets the ion sound speed in the turbulence parameter alpha_t.  Equals 1 for a
+    pure hydrogenic plasma; NOT Z_eff, which is quadratic in the charge.
   domain: '[0, inf)'
   solver_domain: '[1e-12, inf)'
   abs_tol: 0.001
@@ -1078,15 +1086,19 @@ Zbar_i_avg:
   default_unit: dimensionless
   # THE bridge between the two composition denominators.  f_s = n_s/n_i is what
   # the particle balance moves; c_s = n_s/n_e is what the atomic data needs; and
-  #     c_s = f_s / Zbar_i_avg       Zbar_i_avg = n_e/n_i = sum_s Z_s f_s
-  # is the single scalar relating them.  It is the mean charge PER ION, and is
-  # NOT Z_eff: Z_eff is quadratic in the charge (sum_s Z_s^2 c_s), Zbar_i linear.
-  # This is the SCALAR, composition side (sum_s Z_s f_s).  Dilution and n_i_avg
+  #     c_s = f_s / Zbar_i_avg       Zbar_i_avg = n_e/n_fuel = sum_s Z_s f_s
+  # is the single scalar relating them.  It is the mean charge PER FUEL ION, and
+  # is NOT Z_eff: Z_eff is quadratic in the charge (sum_s Z_s^2 c_s), linear here.
+  # This is the SCALAR, composition side (sum_s Z_s f_s).  Dilution and n_fuel_avg
   # read THIS one so their composition denominator never comes from a density
   # ratio.
+  # The denominator is the FUEL bucket (D, T, H, He3, He4), NOT the all-ion
+  # inventory -- corrected 2026-08-07, the old text said n_e/n_i and predated the
+  # n_i -> n_fuel rename.  For n_e/n_i over ALL ions see `Z_bar`.
   description: >-
-    Mean charge per ion, n_e/n_i = sum_s Z_s f_s.  Relates the two composition
-    denominators: c_s = f_s / Zbar_i_avg.  Equals 1 for a pure hydrogenic plasma.
+    Mean charge per FUEL ion, n_e/n_fuel = sum_s Z_s f_s.  Relates the two
+    composition denominators: c_s = f_s / Zbar_i_avg.  Equals 1 for a pure
+    hydrogenic plasma.  NOT n_e/n_i -- see `Z_bar` for the all-ion ratio.
   domain: '[1, inf)'
   abs_tol: 0.001
 n_plus:
@@ -2457,15 +2469,52 @@ P_LH:
   # cfspopcon does), and the 17 other PROCESS scalings.
   default_relation:
   - L-H threshold Martin-2008 aspect nominal (total ion mass)
+P_HL:
+  default_unit: W
+  # The H->L BACK-transition power.  The forward (L->H) and back (H->L)
+  # transitions do not happen at the same power: once an edge barrier exists it
+  # is sustained below the power needed to create it, so P_HL < P_LH and the
+  # band between them is genuinely bistable -- which branch the plasma occupies
+  # is set by how it got there.  fusdb has no time axis, so the DECLARED
+  # confinement_mode tag is the steady-state stand-in for that history: inside
+  # the band both h_mode and l_mode certifiers hold, both modes are admissible,
+  # and the declared one wins.  The hysteresis therefore needs no special case
+  # in the regime driver -- it falls out of overlapping certifiers plus the
+  # admissible-count rule.
+  description: >-
+    H-L back-transition threshold power.  Below this an existing H-mode is lost;
+    between P_HL and P_LH both L- and H-mode are self-consistent (hysteresis).
+  domain: '[0, inf)'
+  abs_tol: 1000000.0
+  default_relation:
+  - H-L back-transition threshold power
+f_HL_hysteresis:
+  default_unit: dimensionless
+  # DIII-D back-transition measurements give P_HL/P_LH = 35-70%, and ITER
+  # studies suggest the ratio may need to be as low as ~50%.  0.7 is the
+  # CONSERVATIVE end of that range: it makes the bistable band as narrow as the
+  # measurements support, so hysteresis is never claimed more widely than the
+  # data warrants.  Supply a smaller value for a wider band.
+  description: >-
+    Ratio of the H-L back-transition power to the L-H threshold power,
+    P_HL / P_LH.  Measured range 0.35-0.70.
+  default: 0.7
+  abs_tol: 0.001
 P_LI_thresh:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power); CFSPOPCON variables.yaml
   default_unit: W
   description: L-I transition threshold power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
-  # CHECK gate: HubbardNF17 is the default I-mode threshold scaling; AUG and
-  # HubbardNF12 are off unless explicitly included.
+  # Gate: Hubbard-2017 on the LINE-AVERAGED density, which is what the source
+  # fits.  RESOLVED 2026-08-07 from Hubbard et al., Nucl. Fusion 57 126039
+  # (2017): the regression is P(L-I)/(n_e S) ~ B_T^0.26 with n_e the
+  # LINE-AVERAGED electron density ("power is normalized to n_e and to surface
+  # area S for comparison with other tokamaks"), consistent with the AUG result
+  # P_L-I/n_e ~ B_T^0.39 quoted alongside it.  PROCESS uses n_la and is right;
+  # the cfspopcon-derived relations substitute the VOLUME average, so they are
+  # kept but gated.  The Hubbard-2012 and AUG variants are off unless included.
   default_relation:
-  - L-I transition threshold power HubbardNF17
+  - L-I threshold Hubbard-2017
 ratio_of_P_SOL_to_P_LH:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power)
   default_unit: dimensionless
   description: Ratio of power crossing the separatrix to the L-H threshold power.

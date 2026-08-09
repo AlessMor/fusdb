@@ -1,9 +1,19 @@
 """Confinement-mode transition threshold relations.
 
-This module contains confinement-mode threshold power producers and checked-only
-sustainment guards. Threshold producers are intentionally regime-neutral: the
-reactor-level verification pass compares candidate confinement-mode tags against
-the same thresholds, while confinement-time scalings remain mode-tagged.
+This module holds the confinement-mode threshold POWERS and the per-mode
+CERTIFIERS that read them. Threshold producers are regime-neutral, so every
+threshold is available whichever mode is being tested; the confinement-time
+scalings stay mode-tagged.
+
+Certifiers are independent, declaratively-discovered conditions: the regime
+driver finds a mode's certifiers by tag and requires ALL of them, so a new
+discriminant is added by writing one tagged relation and needs no driver change.
+A mode is ADMISSIBLE when its own solve's relations hold AND its certifiers hold.
+
+The forward (``P_LH``) and back (``P_HL``) transition powers differ, so the
+h_mode and l_mode certifiers OVERLAP in the band between them -- both modes are
+admissible there and the declared mode, fusdb's stand-in for plasma history,
+decides. That is the whole hysteresis model; it needs no special case anywhere.
 
 The confinement modes are transport states (L / H / I), not heating methods.
 There is deliberately no Ohmic "mode" here: ohmic names how a plasma is heated,
@@ -48,6 +58,29 @@ def lh_transition_power(n_avg: float, B0: float, A_p: float) -> Any:
     return 1e6 * 0.0488 * (n20 ** 0.717) * (B0 ** 0.803) * (A_p ** 0.941)
 
 
+@relation(
+    name="H-L back-transition threshold power",
+    tags=("confinement", "constraint"),
+    outputs="P_HL",
+)
+def hl_back_transition_power(P_LH: float, f_HL_hysteresis: float = 0.7) -> Any:
+    """H-L back-transition power as a fraction of the forward L-H threshold.
+
+    An edge transport barrier, once formed, is sustained below the power needed
+    to create it, so the back-transition sits below the forward threshold and the
+    band between them is bistable.  DIII-D back-transition measurements give
+    ``P_HL/P_LH`` in the range 0.35-0.70, and ITER studies suggest the ratio may
+    need to be as low as ~0.5.
+
+    A plain fraction of ``P_LH`` is the reduced-model form: it carries no
+    independent physics beyond the forward threshold.  Replacing it with a real
+    back-transition model -- or an edge-state criterion -- is a matter of
+    supplying ``P_HL`` or whitelisting a different producer; nothing else changes,
+    because the h_mode certifier reads the variable, not the formula.
+    """
+    return f_HL_hysteresis * P_LH
+
+
 # Opt-in regime guards. Tagged ``confinement_mode_threshold`` (allowed_tags.yaml ``internal``
 # group), which no reactor declares, so they are never picked up by automatic
 # tag selection -- verify includes them by name when checking regime consistency.
@@ -59,18 +92,30 @@ def lh_transition_power(n_avg: float, B0: float, A_p: float) -> Any:
 _GUARD_TAGS = ("confinement", "confinement_mode_threshold")
 
 
-@relation(name="H-mode sustainment (P_sep >= P_LH)", tags=(*_GUARD_TAGS, "h_mode"), enforce=False)
-def h_mode_sustainment(P_sep: float, P_LH: float) -> Any:
-    """Guard that holds while an H-mode solve stays above the L-H threshold;
-    violated (verify status False) once ``P_sep`` falls below ``P_LH``."""
-    scale = np.maximum(np.maximum(np.abs(P_sep), np.abs(P_LH)), 1.0)
-    return np.maximum(P_LH - P_sep, 0.0) / scale
+@relation(name="H-mode sustainment (P_sep >= P_HL)", tags=(*_GUARD_TAGS, "h_mode"), enforce=False)
+def h_mode_sustainment(P_sep: float, P_HL: float) -> Any:
+    """Certifier that holds while an H-mode solve stays above the H-L
+    BACK-transition power; violated once ``P_sep`` falls below ``P_HL``.
+
+    Deliberately NOT the complement of :func:`l_mode_sustainment`, which uses the
+    forward threshold ``P_LH``.  Since ``P_HL < P_LH``, both certifiers hold in
+    the band between them: both modes are admissible there, which is what makes
+    the point genuinely bistable, and the declared confinement mode -- fusdb's
+    stand-in for plasma history -- decides which branch is occupied.  See
+    ``P_HL`` in variables.yaml.
+    """
+    scale = np.maximum(np.maximum(np.abs(P_sep), np.abs(P_HL)), 1.0)
+    return np.maximum(P_HL - P_sep, 0.0) / scale
 
 
 @relation(name="L-mode sustainment (P_sep <= P_LH)", tags=(*_GUARD_TAGS, "l_mode"), enforce=False)
 def l_mode_sustainment(P_sep: float, P_LH: float) -> Any:
-    """Complement of :func:`h_mode_sustainment`; violated once an L-mode solve
-    rises above the L-H threshold (``P_sep`` exceeds ``P_LH``)."""
+    """Certifier that holds while an L-mode solve stays below the FORWARD L-H
+    threshold; violated once ``P_sep`` exceeds ``P_LH``.
+
+    Not the complement of :func:`h_mode_sustainment`, which uses the lower
+    back-transition power ``P_HL``: the two overlap in the hysteresis band.
+    """
     scale = np.maximum(np.maximum(np.abs(P_sep), np.abs(P_LH)), 1.0)
     return np.maximum(P_sep - P_LH, 0.0) / scale
 
@@ -93,8 +138,11 @@ def i_mode_sustainment(P_sep: float, P_LI_thresh: float) -> Any:
 # L-I (L-mode to I-mode) transition threshold power. cfspopcon bundles three
 # scalings behind an enum; following the lambda_q pattern they are imported as
 # separate relations (all output P_LI_thresh), selected via the
-# P_LI_thresh.default_relation gate (HubbardNF17 default) or explicit include.
+# P_LI_thresh.default_relation gate or an explicit include.
 # cfspopcon expresses I_p in MA and n_e in 1e19 m^-3; outputs are in MW -> W.
+# NOTE these three evaluate the fits at the VOLUME-averaged density, which is
+# cfspopcon's substitution -- Hubbard fits the LINE average.  The default is the
+# PROCESS-derived `L-I threshold Hubbard-2017`, further down, which uses n_la.
 
 
 @relation(
@@ -107,9 +155,9 @@ def calc_LI_transition_threshold_power_HubbardNF17(n_e_avg, B0, A_p, confinement
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
     """
-    # CHECK
-    # TODO: Near copy of PROCESS `li_hubbard2017`; check Hubbard 2017 to decide
-    # which producer to keep and whether the original density is n_la or n_avg.
+    # RESOLVED 2026-08-07: Hubbard 2017 fits the LINE-AVERAGED density, so the
+    # PROCESS form `li_hubbard2017` is the faithful one and is now the default.
+    # This cfspopcon variant substitutes the volume average; kept, gated.
     n19 = n_e_avg / 1.0e19
     return 1.0e6 * (0.162 * (n19 / 10.0) * (B0**0.262) * A_p) * confinement_threshold_scalar
 
@@ -139,9 +187,9 @@ def calc_LI_transition_threshold_power_HubbardNF12(I_p, n_e_avg, confinement_thr
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
     """
-    # CHECK
-    # TODO: Near copy of PROCESS `li_hubbard2012_nominal`; check Hubbard 2012
-    # to decide which producer to keep and whether the original density is n_la or n_avg.
+    # RESOLVED 2026-08-07: as for HubbardNF17 above -- Hubbard's I-mode
+    # thresholds are fitted to the LINE-AVERAGED density, so the PROCESS
+    # `li_hubbard2012_*` forms are faithful; this one uses the volume average.
     plasma_current = I_p / 1.0e6
     n19 = n_e_avg / 1.0e19
     return 1.0e6 * (2.11 * plasma_current**0.94 * ((n19 / 10.0) ** 0.65)) * confinement_threshold_scalar
@@ -235,9 +283,7 @@ def lh_snipes1997_kappa(n_la: float, B0: float, R: float, kappa: float) -> float
 def lh_martin08_nominal(n_la: float, B0: float, A_p: float, afuel: float) -> float:
     """Martin-2008 nominal L-H power threshold with ion-mass correction.
     Adapted from PROCESS; see README.md section "Third-party Notices"."""
-    # CHECK
-    # TODO: Near copy of `lh_transition_power`; check Martin 2008 to decide
-    # which producer to keep and whether the original density is n_la or n_avg.
+    # Martin 2008 on the LINE-AVERAGED density, as PROCESS evaluates it.
     dnla20 = n_la / 1.0e20
     return 1.0e6 * (0.0488 * dnla20**0.717 * B0**0.803 * A_p**0.941 * (2.0 / afuel))
 
@@ -409,10 +455,8 @@ def lh_martin08_aspect_lower(n_la: float, B0: float, A_p: float, afuel: float, A
 def li_hubbard2012_nominal(I_p: float, n_la: float) -> float:
     """Hubbard-2012 nominal L-I power threshold.
     Adapted from PROCESS; see README.md section "Third-party Notices"."""
-    # CHECK
-    # TODO: Near copy of `calc_LI_transition_threshold_power_HubbardNF12`;
-    # check Hubbard 2012 to decide which producer to keep and whether the
-    # original density is n_la or n_avg.
+    # RESOLVED 2026-08-07: Hubbard's I-mode thresholds use the LINE-AVERAGED
+    # density (see `li_hubbard2017`), so this n_la form is the faithful one.
     dnla20 = n_la / 1.0e20
     return 1.0e6 * (2.11 * (I_p / 1.0e6) ** 0.94 * dnla20**0.65)
 
@@ -445,9 +489,9 @@ def li_hubbard2012_lower(I_p: float, n_la: float) -> float:
 def li_hubbard2017(n_la: float, A_p: float, B0: float) -> float:
     """Hubbard-2017 L-I power threshold.
     Adapted from PROCESS; see README.md section "Third-party Notices"."""
-    # CHECK
-    # TODO: Near copy of `calc_LI_transition_threshold_power_HubbardNF17`;
-    # check Hubbard 2017 to decide which producer to keep and whether the
-    # original density is n_la or n_avg.
+    # RESOLVED 2026-08-07: Hubbard et al. NF 57 126039 (2017) fits
+    # P(L-I)/(n_e S) ~ B_T^0.26 with n_e the LINE-AVERAGED density, so this
+    # PROCESS form is the faithful one and is the default; the cfspopcon
+    # variant substitutes the volume average and is kept gated.
     dnla20 = n_la / 1.0e20
     return 1.0e6 * (0.162 * dnla20 * A_p * B0**0.26)

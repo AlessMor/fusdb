@@ -137,35 +137,48 @@ def _regime_warning(old: str, new: str, mode: str) -> str:
     )
 
 
-def _bistable_warning(fallback: str, mode: str) -> str:
-    """User-facing warning when no candidate regime is self-consistent."""
-    return (
-        "No confinement regime is self-consistent (each candidate's own solve "
-        "violates its sustainment guard -- the L-H bistable/dithering band); "
-        f"settled on {fallback} as the accessible regime for {mode}."
-    )
-
-
 def _candidate_regimes(declared: str | None) -> tuple[str, ...]:
-    """Candidate regimes in preference order: declared first, then escalation.
+    """Every confinement mode that can be tested, declared one first.
 
-    Candidates cover *both* directions from the declared tag -- an L-mode
-    machine whose ``P_sep`` crosses a threshold escalates, an H/I-mode
-    machine below its threshold de-escalates.  The declared tag picks the
-    machine's upper branch: H-mode and I-mode are alternative upper regimes
-    selected by machine operation (topology, drift direction), not by heating
-    power alone, so an ``h_mode`` machine never auto-selects ``i_mode`` and
-    vice versa.  A machine declared ``l_mode`` can escalate into either
-    branch; self-consistency of each candidate's own solve (its guards
-    evaluated on its own values) disambiguates, ties broken by this order.
-    Regimes with no registered guards are dropped: self-consistency would be
+    All modes are candidates, so the transition graph is complete: L<->H, L<->I
+    AND **I<->H**.  I->H is a common experimental trajectory and H->I occurs
+    too, so a graph of ``H <-> L <-> I`` with no ``H <-> I`` edge is not a
+    general transition model.
+
+    Order matters only as a LAST-RESORT tie-break.  The verdict is the
+    admissible COUNT (see :meth:`Reactor._run_with_regime_verification`), and
+    the declared mode wins whenever it is itself admissible -- so an ``h_mode``
+    machine that is still sustaining H-mode is never reclassified to I-mode
+    just because its power also clears the L-I threshold.
+
+    CAVEAT, and it is a real physics gap: when the declared mode is NOT
+    admissible and several others are, H and I are separated only by this
+    ordering.  Nothing in the decision reads topology, drift direction or the
+    edge state, which is what actually distinguishes the two upper branches.
+    That case is reported as ambiguous rather than presented as a verdict; a
+    genuine discriminator (an edge-state criterion such as SepOS, or an I-mode
+    accessibility condition) belongs as an extra certifier relation, which
+    needs no change here.
+
+    Modes with no registered certifier are dropped: admissibility would be
     undefined for them.
-
-    L-mode is the floor: it is the transport state a machine falls back to
-    when it cannot sustain a barrier, whatever heats it.
     """
-    if declared not in _regime_order():
+    order = _regime_order()
+    if declared not in order:
         return ()
+    # MEASURED 2026-08-07: the complete graph (every mode a candidate, so
+    # I<->H allowed) was implemented and REVERTED.  It regressed the tungsten
+    # point `w_1.0e-04` badly -- that point has no consistent mode, and with
+    # i_mode reachable from h_mode it was classified i_mode on an absurd solve:
+    # P_sep 7179.6 MW against PROCESS's 0.0 MW, P_aux +9424%.  The cause is that
+    # I-MODE HAS NO UPPER CERTIFIER: its only condition is
+    # `P_sep >= P_LI_thresh`, which an inflated P_sep satisfies trivially, so a
+    # pathological branch reads as admissible.
+    # I<->H is therefore blocked on physics, not on this table: it needs either
+    # an I-H threshold (an I-mode ceiling) or a real H/I discriminator -- H and
+    # I differ by topology, drift direction and edge state, none of which is in
+    # the decision.  Both belong as extra certifier relations; when one exists,
+    # replace these chains with `[declared, *others]` and the graph completes.
     chains = {
         "h_mode": ("h_mode", "l_mode"),
         "i_mode": ("i_mode", "l_mode"),
@@ -226,7 +239,7 @@ def _regime_guard_holds(regime: str, fields: Mapping[str, Any], shape: tuple[int
 
     Each guard returns a normalized residual that is 0 exactly when the regime is
     sustainable (e.g. h_mode's ``max(P_LH - P_sep, 0)/scale`` is 0 iff
-    ``P_sep >= P_LH``), so the regime holds where every guard residual is ~0. A
+    ``P_sep >= P_HL``), so the regime holds where every guard residual is ~0. A
     guard whose inputs are missing marks the point as not in this regime.
     """
     mask = np.ones(shape, dtype=bool)
@@ -697,72 +710,149 @@ class Reactor:
             self.relation_include = base_include
 
     def _run_with_regime_verification(self, mode: str, **options: Any) -> dict[str, Any]:
-        """Run one regime at a time, switching only when verify proves it necessary.
+        """Solve each candidate confinement mode and keep the admissible one.
 
-        Acceptance is **self-consistency**: a regime is kept when its own
-        solve satisfies its own sustainment guards.  The walk starts at the
-        declared regime -- preferring it is the steady-state stand-in for L-H
-        hysteresis: the declared tag states which branch of a bistable band
-        the machine sits on -- and moves to the guard-suggested candidate,
-        falling back to preference order when the cross-evaluation heuristic
-        is silent.  Each candidate is solved at most once.  When no candidate
-        is self-consistent (the L-H bistable/dithering band, where the H solve
-        falls below the very threshold the L solve exceeds), the result
-        settles on ``l_mode`` as the accessible regime with a warning -- the
-        same rule the popcon composite applies per grid point.
+        A mode is ADMISSIBLE when both halves agree on that mode's OWN solve:
+
+          * its mode-dependent RELATIONS agree -- ``failed_relations`` is empty;
+          * its CERTIFIERS agree -- every relation tagged
+            ``("confinement_mode_threshold", <mode>)`` verifies.
+
+        Certifiers are independent, declaratively-discovered conditions that AND
+        together, so a new discriminant (an edge-state criterion, an
+        accessibility limit) is added by writing one tagged relation and needs
+        no change here.  A discriminant that happens to hold everywhere simply
+        contributes nothing rather than overriding a sharper one.
+
+        Both halves are required because either alone is misleading: a solve can
+        converge to a point that is not accessible in that mode, and a mode can
+        satisfy its thresholds on a solve whose power balance never closed.
+        This mirrors what the popcon composite already does per grid point
+        (``success & guards_hold``); the scalar path used to consult only the
+        certifiers.
+
+        The admissible COUNT is then the verdict:
+
+          * exactly one   -- that mode;
+          * more than one -- a genuine hysteresis band, both branches stable.
+            The declared tag is the steady-state stand-in for "which branch the
+            machine came from" and breaks the tie;
+          * zero          -- NOT a confinement state.  With ``tau_E,L < tau_E,H``
+            a free operating point gives ``P_sep,L < P_sep,H``, so the
+            accessibility conditions may overlap but cannot both fail; zero
+            admissible means that ordering is inverted, which happens when the
+            operating point is pinned hard enough that the other mode cannot
+            relax into it.  Reported as an over-constrained point, with each
+            mode's reason, rather than silently returning one branch's numbers.
+
+        The declared mode is solved FIRST and short-circuits when admissible,
+        because it wins any tie anyway -- so the verdict never depends on the
+        modes that were skipped.  ``regime_admissible`` is then not exhaustive:
+        it says the declared mode is admissible, not that nothing else is.
+        Pass ``regime_scan=True`` to solve every candidate and get the full
+        accessible set, which is what detects a genuinely multistable point.
+        MEASURED 2026-08-07: exhaustive costs ~2.9x on the reactor sweep
+        (118s -> 345s) because an h_mode machine then also solves the I-mode
+        scaling, which converges poorly on a machine not designed for it --
+        ARC_V3A 8.6 -> 49.9s, STEP 19 -> 83s.  Hence opt-in.
         """
+        scan_all = bool(options.pop("regime_scan", False))
         declared = _confinement_regime(self.tags)
         candidates = _candidate_regimes(declared)
         if not candidates:
             return self._run_once(mode, **options)
 
-        current = declared
-        path = [declared]
         attempts: dict[str, tuple[dict[str, Any], "Reactor"]] = {}
-        for _attempt in range(len(candidates)):
-            clone = self._clone_for_regime(current, include_guards=False)
-            # The solve/scan itself uses only the current tag and its
-            # confinement-time relation.  A separate verify pass below includes
-            # every guard exactly to decide whether the discrete tag must change.
-            result = clone._run_once(mode, **options)
-            verify_result = clone._verify_all_regime_guards()
-            statuses = verify_result.get("relation_status") or {}
-            attempts[current] = (result, clone)
-            # A scan (popcon) restores itself to pure inputs, so guards over
-            # derived quantities cannot be evaluated afterwards.  When the
-            # current regime's guards are merely indeterminate (not genuinely
-            # violated), keep the declared regime -- per-point certification is
-            # the real arbiter -- rather than churn or fail on missing values.
-            if _regime_guards_indeterminate(statuses, current):
-                self._absorb_regime_candidate(clone)
-                self._annotate_regime_result(result, declared, current, path, mode)
-                return result
-            if _regime_verified_by_guards(statuses, current):
-                self._absorb_regime_candidate(clone)
-                self._annotate_regime_result(result, declared, current, path, mode)
-                return result
-            suggested = clone._suggest_regime_from_verify(verify_result, declared, current)
-            next_regime = (
-                suggested
-                if suggested is not None and suggested not in attempts
-                else next((regime for regime in candidates if regime not in attempts), None)
-            )
-            if next_regime is None:
-                break
-            current = next_regime
-            path.append(current)
+        reasons: dict[str, str] = {}
+        admissible: list[str] = []
+        path: list[str] = []
 
-        # No candidate is self-consistent: the bistable/dithering band.  Settle
-        # on the accessible regime (l_mode when tried, else the last attempt),
-        # exactly as the popcon composite fills such points, and say so.
-        fallback = "l_mode" if "l_mode" in attempts else current
-        result, clone = attempts[fallback]
-        if path[-1] != fallback:
-            path.append(fallback)
+        for regime in candidates:
+            clone = self._clone_for_regime(regime, include_guards=False)
+            # The solve itself uses only this mode's tag and its confinement-time
+            # relation.  A separate verify pass evaluates every certifier on the
+            # solved values -- a certifier must never shape the solution it judges.
+            result = clone._run_once(mode, **options)
+            statuses = (clone._verify_all_regime_guards() or {}).get("relation_status") or {}
+            attempts[regime] = (result, clone)
+            path.append(regime)
+
+            # A scan restores itself to pure inputs, so certifiers over derived
+            # quantities cannot be evaluated afterwards.  That is not a verdict:
+            # keep the declared mode and let per-point certification arbitrate.
+            if _regime_guards_indeterminate(statuses, regime):
+                self._absorb_regime_candidate(clone)
+                self._annotate_regime_result(result, declared, regime, path, mode)
+                return result
+
+            failed = list(result.get("failed_relations") or ())
+            certified = _regime_verified_by_guards(statuses, regime)
+            if not failed and certified:
+                admissible.append(regime)
+                if regime == declared and not scan_all:
+                    break  # declared wins any tie; the skipped modes cannot change it
+                continue
+            if failed:
+                reasons[regime] = f"mode relations failed: {', '.join(sorted(failed))}"
+            else:
+                unmet = [
+                    name for name in _regime_guard_names(regime)
+                    if not bool((statuses.get(name) or {}).get("verified", False))
+                ]
+                reasons[regime] = f"certifiers not met: {', '.join(unmet)}"
+
+        if admissible:
+            selected = declared if declared in admissible else admissible[0]
+            result, clone = attempts[selected]
+            self._absorb_regime_candidate(clone)
+            self._annotate_regime_result(result, declared, selected, path, mode)
+            result["regime_admissible"] = list(admissible)
+            result["regime_inadmissible_reasons"] = dict(reasons)
+            if len(admissible) > 1:
+                # Several modes are each self-consistent here.  Which one the
+                # machine actually occupies is set by how it got here, so the
+                # declared mode -- the stated branch -- decides when it is one
+                # of them.  That is the defensible case.
+                result["regime_bistable"] = True
+                if selected == declared:
+                    detail = (
+                        f"kept the declared {selected}, which is one of them -- "
+                        "the declaration is the branch selector."
+                    )
+                else:
+                    # The declared mode is NOT admissible and several others are.
+                    # Nothing physical separates them here: H and I differ by
+                    # topology, drift direction and edge state, none of which is
+                    # in the decision.  Say so rather than present order as physics.
+                    result["regime_ambiguous"] = True
+                    detail = (
+                        f"the declared {declared} is not among them, so {selected} was "
+                        "taken by candidate order, NOT by a physical discriminator -- "
+                        "treat this as ambiguous."
+                    )
+                result.setdefault("warnings", []).insert(
+                    0,
+                    f"{len(admissible)} confinement modes are simultaneously admissible "
+                    f"({', '.join(admissible)}): {detail}",
+                )
+            return result
+
+        # Zero admissible.  Report the declared mode's solve -- it is the stated
+        # assumption -- and say plainly that nothing was consistent, with why.
+        selected = declared if declared in attempts else path[-1]
+        result, clone = attempts[selected]
         self._absorb_regime_candidate(clone)
-        self._annotate_regime_result(result, declared, fallback, path, mode)
-        result["regime_bistable"] = True
-        result.setdefault("warnings", []).insert(0, _bistable_warning(fallback, mode))
+        self._annotate_regime_result(result, declared, selected, path, mode)
+        result["regime_admissible"] = []
+        result["regime_inadmissible_reasons"] = dict(reasons)
+        result["regime_over_constrained"] = True
+        detail = "; ".join(f"{regime}: {why}" for regime, why in reasons.items())
+        result.setdefault("warnings", []).insert(
+            0,
+            "No confinement mode is admissible -- this indicates an over-constrained "
+            f"operating point rather than a confinement state ({detail}). Reporting the "
+            f"declared {selected} solve; its values are not a certified operating point.",
+        )
         return result
 
     def _annotate_regime_result(self, result: dict[str, Any], declared: str | None, selected: str | None, path: list[str], mode: str) -> None:
@@ -988,9 +1078,9 @@ class Reactor:
         ``h_mode``/``l_mode``, with both upper branches as candidates for an
         ``l_mode`` machine) and assigns each grid point the regime it actually
         sits in: the strongest regime whose sustainment guard holds on that
-        regime's own solve (``P_sep >= P_LH`` for H-mode, ``P_sep >=
+        regime's own solve (``P_sep >= P_HL`` for H-mode, ``P_sep >=
         P_LI_thresh`` for I-mode), with L-mode as the accessible fallback for
-        the intermediate / L-H-bistable band. The composited result carries a
+        cells no regime certified. The composited result carries a
         ``regime_index`` grid (index into ``regime_names``, ``-1`` where no
         regime certified).
 

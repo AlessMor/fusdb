@@ -273,6 +273,22 @@ def build_config(mfile_path, profile_size=PROFILE_SIZE):
                 # PROCESS's i_plasma_current = 4 evaluates the IPDG89 shaping fit
                 # at kappa_95; fusdb's default evaluates it at the areal kappa.
                 "Plasma shaping function for q_star (PROCESS IPDG89)",
+                # PLASMA SHAPE.  The MFILE has i_plasma_shape = 0 and
+                # i_plasma_current = 4, so PROCESS takes its non-Sauter branch:
+                # the boundary is the revolution of two intersecting arcs, and
+                # surface / volume / cross-section / perimeter all follow from
+                # (R, a, kappa, triang) through `plasma_angles_arcs`.  fusdb's
+                # defaults are the Sauter forms, which are a different shape
+                # model -- not a worse one, just not the one PROCESS ran.  On
+                # this point the arc relations reproduce PROCESS EXACTLY (0.000e0
+                # relative on all four), whereas the Sauter A_p runs +8.06%.
+                # That A_p error was the whole of the residual P_LH error
+                # (P_LH ~ A_p^0.941 -> +7.57%), so selecting the shape model
+                # PROCESS actually used is the fix, not a threshold knob.
+                "Plasma surface area from arcs",
+                "Plasma volume from arcs",
+                "Plasma cross-section from arcs",
+                "Plasma poloidal perimeter from arcs",
                 # Mavrin's Lz is the TOTAL impurity cooling rate, bremsstrahlung
                 # included.  fusdb's default P_brem is Z_eff-weighted, so it adds
                 # the impurity bremsstrahlung a second time: P_rad ran +10.1% and
@@ -304,22 +320,21 @@ def build_config(mfile_path, profile_size=PROFILE_SIZE):
                 # already includes the core radiation).  PROCESS keeps the two
                 # distinct -- P_loss = P_in - P_rad_core -- so this identity
                 # directly contradicts "Plasma loss power (PROCESS)".
-                # V_p: fusdb's Sauter form, fed the IPB elongation, runs -7.2%
-                # against PROCESS -- which propagates to W_th, P_loss and P_aux.
-                # Dropping it lets "IPB elongation from volume" (kappa_ipb =
-                # V_p / (2 pi^2 R a^2)) run backwards from the supplied
-                # kappa_ipb and reproduce PROCESS's volume EXACTLY, which is how
-                # PROCESS defines kappa_ipb in the first place.
+                # --- plasma shape: the four Sauter defaults displaced by the
+                # arc relations selected above.  Until 2026-08-07 V_p and S_phi
+                # were instead recovered by INVERTING supplied elongations --
+                # "IPB elongation from volume" run backwards from kappa_ipb, and
+                # "Areal elongation from cross-section" run backwards from
+                # kappa_areal.  That reproduced PROCESS's numbers exactly, but by
+                # assuming them rather than computing them, and it left A_p with
+                # no invertible partner and therefore no fix (+8.06%).  Computing
+                # the arc geometry directly gets all four exactly AND turns those
+                # two elongation relations into satisfied consistency checks --
+                # kappa_ipb IS V_p/(2 pi^2 R a^2) by PROCESS's own definition.
                 "Tokamak plasma volume",
-                # Same idiom for the cross-section: kappa_areal is supplied from
-                # PROCESS's own a_plasma_poloidal, so letting "Areal elongation
-                # from cross-section" (kappa_areal = S_phi / (pi a^2)) run
-                # backwards reproduces PROCESS's S_phi EXACTLY.  fusdb's Sauter
-                # form would instead derive S_phi from `kappa` (now correctly the
-                # separatrix 1.85) and over-determine it.
-                # Measured 2026-07-31: S_phi and V_p now both land at -0.0000%
-                # against PROCESS, where S_phi previously ran -3.2%.
                 "Tokamak plasma cross-sectional surface",
+                "Tokamak plasma surface",
+                "Tokamak plasma poloidal length",
             ],
         },
     }

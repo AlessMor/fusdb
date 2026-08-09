@@ -298,3 +298,27 @@ def total_ion_density_from_fuel_and_impurities(n_fuel: Any, n_imp: Any) -> Any:
 def total_ion_density_average_from_fuel_and_impurities(n_fuel_avg: Any, n_imp_avg: Any) -> Any:
     """<n_i> = <n_fuel> + <n_imp> -- volume-averaged total ion density."""
     return n_fuel_avg + n_imp_avg
+
+
+@relation(
+    name="Mean ion charge state from densities",
+    tags=("plasma", "composition"),
+    outputs="Z_bar",
+)
+def mean_ion_charge_state_from_densities(n_e_avg: Any, n_i_avg: Any) -> Any:
+    """Z_bar = <n_e> / <n_i>, the mean charge over the WHOLE ion inventory.
+
+    Distinct from :func:`mean_ion_charge_from_composition` (``Zbar_i_avg``),
+    which divides by the FUEL bucket only; the two coincide only when there are
+    no impurities.  cfspopcon defines this quantity as ``n_e / sum_j n_j`` and
+    leaves it a pure input (``set_by: []``); deriving it here is what makes
+    ``alpha_t`` -- and hence the SepOS L-H criterion -- reachable at all, since
+    both densities are already available.
+
+    APPROXIMATION: ``alpha_t`` is a SEPARATRIX quantity, but this is a
+    core volume-averaged composition ratio.  fusdb carries no separatrix
+    composition, and cfspopcon makes the same approximation by taking a single
+    global input, so the two codes are consistent -- but the mean charge at the
+    separatrix is not in general the core-averaged one.
+    """
+    return n_e_avg / _positive_denominator(n_i_avg, name="total ion density")

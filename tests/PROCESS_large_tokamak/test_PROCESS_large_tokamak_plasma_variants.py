@@ -72,8 +72,14 @@ def test_lh_sustainment_agrees(variants):
     """fusdb and PROCESS agree on which variants can sustain H-mode."""
     for tag, (fields, result) in variants.items():
         process_sustains = fields["P_sep"]["process"] >= fields["P_LH"]["process"]
-        assert process_sustains == (result["regime"] == "h_mode"), (
-            f"{tag}: PROCESS sustains={process_sustains}, fusdb={result['regime']}"
+        # `regime` is the mode REPORTED (the declared assumption when nothing is
+        # admissible); `regime_admissible` is the mode set actually CERTIFIED --
+        # both the mode's relations AND its certifiers agreeing on that mode's
+        # own solve.  A sustainment claim must read the latter.
+        fusdb_sustains = "h_mode" in (result.get("regime_admissible") or [])
+        assert process_sustains == fusdb_sustains, (
+            f"{tag}: PROCESS sustains={process_sustains}, fusdb sustains={fusdb_sustains} "
+            f"(reported regime {result['regime']}, admissible {result.get('regime_admissible')})"
         )
 
 

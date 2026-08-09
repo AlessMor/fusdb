@@ -25,21 +25,19 @@ from _process_fixture import tungsten_sweep
 # Both codes place these below the L-H threshold -- see test_lh_sustainment_agrees.
 UNSUSTAINED = {"w_1.0e-04"}
 
-# Points fusdb resolves into the L-H BISTABLE band: no candidate regime is
-# self-consistent (the h-mode solve falls below the very threshold the l-mode
-# solve exceeds), so `regime_bistable` is set and the walk settles on l_mode.
-# PROCESS keeps H-mode there.  This is a CONVENTION disagreement inside the
-# dithering band, not a composition error -- P_fus agrees to 0.3% (1684.3 vs
-# 1679.9 MW) and the neighbouring w_2.0e-05 P_sep to 0.6% (154.5 vs 155.4).
-# The reported powers are the l-mode branch's and are inconsistent by
-# construction, which is exactly what the bistable flag reports; comparing them
-# against PROCESS's h-mode branch is not meaningful, so these points are
-# excluded rather than xfailed field-by-field.
-# OPEN ISSUE (see TODO.md, top entry): the bistable fallback picks l_mode even
-# when the declared regime is h_mode, which contradicts the hysteresis rationale
-# the same function's docstring gives for preferring the declared regime.
-# Resolve that convention and this exclusion should disappear.
-BISTABLE = {"w_5.0e-05"}
+# RESOLVED 2026-08-07 -- empty, and the exclusion it existed for is gone.
+# `w_5.0e-05` used to report `regime_bistable`: the h-mode solve landed at
+# P_sep/P_LH = 0.968, just under its own guard, so the walk moved on and settled
+# on l_mode -- a branch that is inconsistent by construction, with P_sep +669%,
+# P_aux +890% and tau_E -71% against PROCESS.
+# It was never a dithering band.  fusdb was computing A_p with the SAUTER shape
+# model while this MFILE was produced with i_plasma_shape = 0, PROCESS's
+# two-intersecting-arcs model.  That made A_p +8.06%, hence P_LH +7.57%
+# (P_LH ~ A_p^0.941), which pushed a genuinely H-mode point below threshold.
+# Selecting the arc geometry the run actually used (see _process_fixture.py)
+# makes A_p and P_LH exact, and the point sits at P_sep/P_LH = 1.041 --
+# H-mode outright, regime_path ['h_mode'], on PROCESS's curve at P_sep -0.9%.
+BISTABLE: set[str] = set()
 
 # Points whose powers are not on PROCESS's h-mode curve, for either reason.
 OFF_CURVE = UNSUSTAINED | BISTABLE
@@ -55,13 +53,12 @@ OFF_CURVE = UNSUSTAINED | BISTABLE
 # Narrowed 2026-08-01: helium now radiates (the He bridge no longer prunes on a
 # D-T machine), so P_rad rises ~2% and the P_sep remainder tightens.  The
 # w_2.0e-05 P_sep and w_5.0e-05 Q_sci gaps closed outright.
-# DORMANT while w_5.0e-05 is in BISTABLE: that point is excluded from the
-# tolerance comparison entirely, so this entry cannot fire.  Kept, not deleted,
-# because it becomes live again the moment the bistable-regime convention is
-# settled and the point rejoins PROCESS's h-mode curve.
-KNOWN_GAPS = {
-    ("w_5.0e-05", "P_sep"): "+15.6%: radiation is 71% of heating power here",
-}
+# EMPTIED 2026-08-07: the last entry was ("w_5.0e-05", "P_sep") at +15.6%, kept
+# dormant behind the BISTABLE exclusion.  Selecting PROCESS's own arc geometry
+# put that point back on the h-mode curve at -0.9%, so the gap is closed rather
+# than merely dormant.  The amplification argument above still holds; repopulate
+# if it recurs.
+KNOWN_GAPS: dict[tuple[str, str], str] = {}
 
 
 @pytest.fixture(scope="module")
@@ -96,7 +93,11 @@ def test_lh_sustainment_agrees(sweep):
         if tag in BISTABLE:
             continue
         process_sustains = fields["P_sep"]["process"] >= fields["P_LH"]["process"]
-        fusdb_sustains = result["regime"] == "h_mode"
+        # `regime` is the mode REPORTED (the declared assumption when nothing is
+        # admissible); `regime_admissible` is the mode set actually CERTIFIED --
+        # both the mode's relations AND its certifiers agreeing on that mode's
+        # own solve.  A sustainment claim must read the latter.
+        fusdb_sustains = "h_mode" in (result.get("regime_admissible") or [])
         assert process_sustains == fusdb_sustains, (
             f"{tag}: PROCESS sustains={process_sustains}, fusdb sustains={fusdb_sustains}"
         )

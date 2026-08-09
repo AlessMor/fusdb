@@ -178,7 +178,9 @@ def test_popcon_points_reconcile_to_same_values(serial_scan: tuple[Reactor, dict
             # valid h_mode operating point; its scan value legitimately differs
             # and is skipped -- equivalence is asserted only where the pinned
             # reconcile cleanly succeeds in h_mode.
-            if not reconcile_result["success"] or reconcile_result.get("regime") != "h_mode":
+            if not reconcile_result["success"] or "h_mode" not in (
+                    reconcile_result.get("regime_admissible") or []
+                ):
                 continue
             for name in OUTPUTS:
                 popcon_value = payload["fields"][name][iy, ix]
