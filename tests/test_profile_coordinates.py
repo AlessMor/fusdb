@@ -1,7 +1,14 @@
 import numpy as np
 import pytest
 
-from fusdb.utils.profiles import coordinate_average, normalized_shape, trapezoid, volume_average, weighted_average
+from fusdb.utils.profiles import (
+    coordinate_average,
+    normalized_shape,
+    reinterpolate_profile,
+    trapezoid,
+    volume_average,
+    weighted_average,
+)
 
 
 def test_volume_average_without_geometry_mapping_preserves_legacy_weighting():
@@ -35,8 +42,6 @@ def test_volume_average_can_use_geometry_supplied_normalized_volume():
     rho = np.linspace(0.0, 1.0, 31)
     v_norm = rho**3
 
-    # A function linear in enclosed normalized volume has exact mean 1/2 under
-    # trapezoidal integration when integrated against that same coordinate.
     assert volume_average(v_norm, rho, v_norm=v_norm) == pytest.approx(0.5)
 
 
@@ -83,3 +88,44 @@ def test_weighted_average_rejects_negative_weights():
 
     with pytest.raises(ValueError, match="non-negative"):
         weighted_average(profile, rho, np.asarray([0.0, -1.0, 1.0]))
+
+
+def test_reinterpolate_profile_accepts_arbitrary_source_grid():
+    source_coordinate = np.linspace(0.0, 1.0, 101)
+    source_profile = 2.0 + 3.0 * source_coordinate
+    target_coordinate = np.linspace(0.0, 1.0, 46)
+
+    remapped = reinterpolate_profile(source_profile, source_coordinate, target_coordinate)
+
+    assert remapped.shape == (46,)
+    assert np.allclose(remapped, 2.0 + 3.0 * target_coordinate)
+
+
+def test_reinterpolate_profile_rejects_material_extrapolation():
+    source_coordinate = np.linspace(0.0, 0.9, 20)
+    source_profile = np.ones(20)
+
+    with pytest.raises(ValueError, match="outside source coverage"):
+        reinterpolate_profile(source_profile, source_coordinate, np.linspace(0.0, 1.0, 46))
+
+
+def test_reinterpolate_profile_clamps_roundoff_sized_endpoint_error():
+    source_coordinate = np.linspace(0.0, 1.0, 20)
+    source_profile = source_coordinate**2
+    target_coordinate = np.linspace(0.0, 1.0, 46)
+    target_coordinate[-1] = 1.0 + 5.0e-13
+
+    remapped = reinterpolate_profile(source_profile, source_coordinate, target_coordinate)
+
+    assert remapped[-1] == pytest.approx(1.0)
+
+
+def test_reinterpolate_profile_supports_batched_target_mapping():
+    source_coordinate = np.linspace(0.0, 1.0, 20)
+    source_profile = source_coordinate
+    target = np.stack((np.linspace(0.0, 1.0, 11), np.linspace(0.0, 1.0, 11) ** 1.2))
+
+    remapped = reinterpolate_profile(source_profile, source_coordinate, target)
+
+    assert remapped.shape == target.shape
+    assert np.allclose(remapped, target)

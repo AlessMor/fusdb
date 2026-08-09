@@ -163,3 +163,72 @@ def normalized_shape(
     if np.all(np.abs(shape_avg) > 1.0e-300):
         shape = shape / shape_avg
     return avg, shape
+
+
+def reinterpolate_profile(
+    source_profile: Any,
+    source_coordinate: Any,
+    target_coordinate: Any,
+    *,
+    endpoint_tol: float = 1.0e-12,
+) -> np.ndarray:
+    """Interpolate immutable source-profile data onto a current coordinate map.
+
+    This is the numerical primitive used by geometry-dependent profile
+    conversion. ``source_coordinate`` is the coordinate attached to the input
+    samples; ``target_coordinate`` is the current mapping evaluated on fusdb's
+    common ``rho`` grid. The source data are not changed when geometry moves.
+
+    Interpolation is strict: both coordinates must be finite and strictly
+    increasing, and the current target range must lie inside the supplied source
+    range. Only roundoff-sized endpoint excursions (``endpoint_tol``) are
+    clamped. Material extrapolation is rejected rather than hidden.
+
+    A one-dimensional source profile may be evaluated on a one-dimensional or
+    batched target mapping. A batched source profile is also supported when its
+    leading dimensions exactly match the target mapping's leading dimensions.
+    """
+    values = np.asarray(source_profile, dtype=float)
+    source = np.asarray(source_coordinate, dtype=float)
+    target = np.asarray(target_coordinate, dtype=float)
+    tol = float(endpoint_tol)
+    if tol < 0.0 or not np.isfinite(tol):
+        raise ValueError("endpoint_tol must be finite and non-negative")
+    if source.ndim != 1 or source.size < 2:
+        raise ValueError("source coordinate must be a one-dimensional grid with at least two points")
+    if values.ndim == 0 or values.shape[-1] != source.size:
+        raise ValueError("source profile and source coordinate must share the same last-axis grid")
+    if target.ndim == 0 or target.shape[-1] < 2:
+        raise ValueError("target coordinate must have at least two points on its last axis")
+    if not np.all(np.isfinite(values)) or not np.all(np.isfinite(source)) or not np.all(np.isfinite(target)):
+        raise ValueError("profile interpolation inputs must be finite")
+    if np.any(np.diff(source) <= 0.0):
+        raise ValueError("source coordinate must be strictly increasing")
+    if np.any(np.diff(target, axis=-1) <= 0.0):
+        raise ValueError("target coordinate must be strictly increasing")
+
+    lo = float(source[0])
+    hi = float(source[-1])
+    if np.any(target < lo - tol) or np.any(target > hi + tol):
+        target_lo = float(np.min(target))
+        target_hi = float(np.max(target))
+        raise ValueError(
+            f"target coordinate range [{target_lo:g}, {target_hi:g}] is outside "
+            f"source coverage [{lo:g}, {hi:g}]"
+        )
+    clipped = np.clip(target, lo, hi)
+
+    if values.ndim == 1:
+        return np.interp(clipped.reshape(-1), source, values).reshape(clipped.shape)
+
+    if values.shape[:-1] != clipped.shape[:-1]:
+        raise ValueError(
+            "batched source profile and target coordinate must have identical leading dimensions"
+        )
+    out = np.empty_like(clipped, dtype=float)
+    flat_values = values.reshape(-1, values.shape[-1])
+    flat_target = clipped.reshape(-1, clipped.shape[-1])
+    flat_out = out.reshape(-1, out.shape[-1])
+    for index in range(flat_values.shape[0]):
+        flat_out[index] = np.interp(flat_target[index], source, flat_values[index])
+    return out
