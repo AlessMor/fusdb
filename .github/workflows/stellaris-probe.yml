@@ -29,7 +29,7 @@ jobs:
           from fusdb import Reactor
           result = Reactor.from_yaml("reactors/STELLARIS/reactor.yaml").run("reconcile")
           items = result.get("inputs_beyond_tolerance") or []
-          print("|".join(f"{item['name']}={item['deviation_tol']:.4g}" for item in items))
+          print("|".join(f"{item['name']}={item['deviation_tol']:.17g}" for item in items))
           PY
           )
           curl -sS -L -X POST \
