@@ -180,7 +180,7 @@ def _l34_alpha_31_coefficient(
     outputs="f_BS",
 )
 def bootstrap_fraction_sauter(
-    n_e, T_e, n_i, T_i, rho, S_phi, R, a, B0, delta, q0, q95, Z_eff, I_p, afuel, f_He3=0.0,
+    n_e, T_e, n_i, T_i, rho_minor, S_phi, R, a, B0, delta, q0, q95, Z_eff, I_p, afuel, f_He3=0.0,
 ):
     """Bootstrap current fraction from the Sauter-Angioni-Lin-Liu neoclassical
     model, integrated over fusdb's density/temperature profiles.
@@ -189,14 +189,14 @@ def bootstrap_fraction_sauter(
 
     Args:
         n_e, T_e, n_i, T_i: electron/ion density [m^-3] and temperature [keV] profiles
-        rho: normalized minor radius grid
+        rho_minor: normalized physical minor-radius mapping r/a on the common profile grid
         S_phi: plasma poloidal cross-sectional area [m^2]
         R, a: major/minor radius [m]; B0: toroidal field [T]; delta: triangularity
         q0, q95: safety factors; Z_eff: effective charge; I_p: plasma current [A]
         afuel: main-ion mass [amu]; f_He3: He-3 fuel fraction (sets main-ion charge)
     """
     # CHECK
-    roa = np.asarray(rho, dtype=float)
+    roa = np.asarray(rho_minor, dtype=float)
     nr = roa.size
     rho_local = np.sqrt(S_phi / np.pi) * roa            # circularised minor radius
     sqeps = np.sqrt(roa * (a / R))
