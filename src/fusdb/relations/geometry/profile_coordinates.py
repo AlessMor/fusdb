@@ -1,10 +1,9 @@
 """Geometry-provided mappings for the common fusdb profile grid.
 
-These are deliberately reduced defaults. They establish the coordinate/volume
-contract for each magnetic configuration without pretending to be an external
-equilibrium solver. Higher-fidelity VMEC, field-line or mirror-equilibrium
-adapters can replace any provider with scenario-local ``default_relation``
-selection while consumers keep the same variables.
+The relations in this module are deliberately *reduced* defaults. They make
+coordinate semantics explicit without pretending to replace an equilibrium
+solver: an imported equilibrium may provide the same variables directly and the
+source-aware builder will then suppress these fallbacks.
 """
 
 from __future__ import annotations
@@ -16,19 +15,6 @@ import numpy as np
 from fusdb.relation import relation
 
 
-def _identity(rho: Any) -> np.ndarray:
-    return np.asarray(rho, dtype=float).copy()
-
-
-def _self_similar_enclosed_volume(rho: Any) -> np.ndarray:
-    x = np.asarray(rho, dtype=float)
-    return x**2
-
-
-def _self_similar_volume_weight(rho: Any) -> np.ndarray:
-    return np.asarray(rho, dtype=float).copy()
-
-
 @relation(
     name="Tokamak normalized minor-radius coordinate",
     tags=("geometry", "tokamak", "default"),
@@ -36,8 +22,14 @@ def _self_similar_volume_weight(rho: Any) -> np.ndarray:
     dependency="generated_profile",
 )
 def tokamak_normalized_minor_radius(*, rho: Any) -> np.ndarray:
-    """Return the legacy tokamak mapping ``r/a = rho``."""
-    return _identity(rho)
+    """Return the migration-compatible tokamak mapping ``r/a = rho``.
+
+    This identity is intentional for the initial migration: it makes every
+    relation that really assumes minor radius request ``rho_minor`` explicitly
+    while remaining bit-compatible with the historical tokamak convention.
+    A geometry/equilibrium provider may later replace it.
+    """
+    return np.asarray(rho, dtype=float).copy()
 
 
 @relation(
@@ -47,8 +39,9 @@ def tokamak_normalized_minor_radius(*, rho: Any) -> np.ndarray:
     dependency="generated_profile",
 )
 def tokamak_normalized_enclosed_volume(*, rho: Any) -> np.ndarray:
-    """Return the migration-compatible self-similar tokamak ``v_norm=rho**2``."""
-    return _self_similar_enclosed_volume(rho)
+    """Return the legacy-equivalent reduced tokamak mapping ``v_norm=rho**2``."""
+    x = np.asarray(rho, dtype=float)
+    return x**2
 
 
 @relation(
@@ -58,8 +51,26 @@ def tokamak_normalized_enclosed_volume(*, rho: Any) -> np.ndarray:
     dependency="generated_profile",
 )
 def tokamak_volume_integration_weight(*, rho: Any) -> np.ndarray:
-    """Return the legacy-equivalent volume weight ``w_V=rho``."""
-    return _self_similar_volume_weight(rho)
+    """Return ``w_V=rho``, exactly reproducing the historical discrete average."""
+    return np.asarray(rho, dtype=float).copy()
+
+
+@relation(
+    name="Reduced stellarator normalized minor-radius coordinate",
+    tags=("geometry", "stellarator", "default"),
+    outputs="rho_minor",
+    dependency="generated_profile",
+)
+def reduced_stellarator_normalized_minor_radius(*, rho: Any) -> np.ndarray:
+    """Return a reduced stellarator normalized-minor-radius mapping.
+
+    Some stellarator source data are published explicitly versus normalized
+    minor radius (for example the GIGA profiles imported in ``reactors/GIGA``).
+    Until a fixed-boundary equilibrium mapping is supplied, the reduced model
+    identifies that published coordinate with the common computational grid.
+    This is a compatibility fallback, not an equilibrium-derived ``r/a``.
+    """
+    return np.asarray(rho, dtype=float).copy()
 
 
 @relation(
@@ -69,13 +80,8 @@ def tokamak_volume_integration_weight(*, rho: Any) -> np.ndarray:
     dependency="generated_profile",
 )
 def reduced_stellarator_toroidal_flux_coordinate(*, rho: Any) -> np.ndarray:
-    """Use the common grid as reduced stellarator toroidal-flux radius.
-
-    This is the zero-dimensional fallback when no equilibrium-derived mapping
-    is supplied. A VMEC/equilibrium adapter should provide ``rho_tor(rho)``
-    explicitly and override this relation for nontrivial flux geometry.
-    """
-    return _identity(rho)
+    """Return reduced ``rho_tor=rho`` until an equilibrium mapping is supplied."""
+    return np.asarray(rho, dtype=float).copy()
 
 
 @relation(
@@ -85,8 +91,9 @@ def reduced_stellarator_toroidal_flux_coordinate(*, rho: Any) -> np.ndarray:
     dependency="generated_profile",
 )
 def reduced_stellarator_normalized_enclosed_volume(*, rho: Any) -> np.ndarray:
-    """Fallback self-similar enclosed-volume map for reduced stellarators."""
-    return _self_similar_enclosed_volume(rho)
+    """Return ``v_norm=rho**2`` as the behavior-neutral stellarator fallback."""
+    x = np.asarray(rho, dtype=float)
+    return x**2
 
 
 @relation(
@@ -96,12 +103,8 @@ def reduced_stellarator_normalized_enclosed_volume(*, rho: Any) -> np.ndarray:
     dependency="generated_profile",
 )
 def reduced_stellarator_volume_integration_weight(*, rho: Any) -> np.ndarray:
-    """Fallback volume measure for reduced stellarators.
-
-    ``w_V=rho`` is consistent with the fallback ``v_norm=rho**2``; its overall
-    scale is immaterial because volume averages normalize by its integral.
-    """
-    return _self_similar_volume_weight(rho)
+    """Return ``w_V=rho`` to preserve pre-refactor stellarator averaging exactly."""
+    return np.asarray(rho, dtype=float).copy()
 
 
 @relation(
@@ -111,13 +114,13 @@ def reduced_stellarator_volume_integration_weight(*, rho: Any) -> np.ndarray:
     dependency="generated_profile",
 )
 def reduced_mirror_radial_coordinate(*, rho: Any) -> np.ndarray:
-    """Use the common grid as the reduced mirror radial coordinate.
+    """Return a reduced mirror radial mapping ``rho_radial=rho``.
 
-    Axial mirror physics is intentionally not encoded in this coordinate. It
-    remains represented by mirror-specific scalar/moment relations; a future
-    two-dimensional equilibrium layer must not overload this radial mapping.
+    This coordinate is radial only. Genuinely axial mirror physics belongs in
+    separate reduced moments/scalars and must not overload the common ``rho``
+    profile dimension.
     """
-    return _identity(rho)
+    return np.asarray(rho, dtype=float).copy()
 
 
 @relation(
@@ -127,8 +130,9 @@ def reduced_mirror_radial_coordinate(*, rho: Any) -> np.ndarray:
     dependency="generated_profile",
 )
 def reduced_mirror_normalized_enclosed_volume(*, rho: Any) -> np.ndarray:
-    """Fallback cylindrical/self-similar radial enclosed-volume map."""
-    return _self_similar_enclosed_volume(rho)
+    """Return ``v_norm=rho**2`` as the initial reduced mirror volume mapping."""
+    x = np.asarray(rho, dtype=float)
+    return x**2
 
 
 @relation(
@@ -138,5 +142,5 @@ def reduced_mirror_normalized_enclosed_volume(*, rho: Any) -> np.ndarray:
     dependency="generated_profile",
 )
 def reduced_mirror_volume_integration_weight(*, rho: Any) -> np.ndarray:
-    """Fallback radial volume measure for the reduced mirror model."""
-    return _self_similar_volume_weight(rho)
+    """Return ``w_V=rho`` as the behavior-neutral reduced mirror fallback."""
+    return np.asarray(rho, dtype=float).copy()

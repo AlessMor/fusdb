@@ -84,7 +84,10 @@ def with_coordinate_variables(base: VariableRegistry) -> VariableRegistry:
                 "rho_minor",
                 "Normalized physical minor-radius mapping r/a tabulated on the common rho grid.",
                 aliases=("normalized_minor_radius", "r_over_a", "minor_radius_coordinate"),
-                default_relation=("Tokamak normalized minor-radius coordinate",),
+                default_relation=(
+                    "Tokamak normalized minor-radius coordinate",
+                    "Reduced stellarator normalized minor-radius coordinate",
+                ),
             ),
             _coordinate_spec(
                 "rho_tor",
