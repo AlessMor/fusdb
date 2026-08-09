@@ -8,9 +8,9 @@ the geometry dependency explicitly without introducing another user-facing
 class.
 
 This small overlay keeps the large legacy ``variables.yaml`` stable while the
-coordinate migration is staged. It replaces only the runtime metadata for
-``rho`` and appends the new mapping variables. Once the migration is complete
-these entries can be folded into ``variables.yaml`` mechanically.
+coordinate migration is staged. It updates the process-wide registry object in
+place so existing importers of ``variable_registry.VARIABLES`` and newer
+importers of ``registry.VARIABLES`` always share one canonical registry.
 """
 
 from __future__ import annotations
@@ -51,7 +51,17 @@ def _coordinate_spec(
 
 
 def with_coordinate_variables(base: VariableRegistry) -> VariableRegistry:
-    """Return ``base`` with the explicit profile-coordinate contract applied."""
+    """Apply the explicit profile-coordinate contract to ``base`` in place.
+
+    Mutating the registry container is intentional here: registry metadata is
+    process-global and immutable after package initialization, while several
+    established modules import the singleton directly from
+    ``variable_registry``. Keeping the object identity prevents a split-brain
+    base/augmented registry during the staged migration.
+    """
+    if "rho_minor" in base and "w_V" in base:
+        return base
+
     specs: list[VariableSpec] = []
     for spec in base:
         if spec.name == "rho":
@@ -94,8 +104,11 @@ def with_coordinate_variables(base: VariableRegistry) -> VariableRegistry:
             ),
         )
     )
-    return VariableRegistry(
+    augmented = VariableRegistry(
         specs,
         rel_tol_default=base.rel_tol_default,
         profile_size_default=base.profile_size_default,
     )
+    base._specs = augmented._specs
+    base._alias_to_name = augmented._alias_to_name
+    return base
