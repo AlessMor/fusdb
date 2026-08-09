@@ -15,16 +15,13 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[test]"
-
       - name: Run targeted tests and publish per-file statuses
         env:
           GH_TOKEN: ${{ github.token }}
@@ -45,7 +42,14 @@ jobs:
             tests/test_coordinate_nonpackability.py \
             tests/test_bootstrap_coordinate_mapping.py \
             tests/test_pedestal_coordinate_mapping.py \
-            tests/test_source_profile_measure_dependency.py
+            tests/test_source_profile_measure_dependency.py \
+            tests/test_profile_average_consistency.py \
+            tests/test_relation_contract.py \
+            tests/test_relation_registry_build.py \
+            tests/test_reconcile_sparsity.py \
+            tests/test_popcon_mode.py \
+            tests/test_phase1_contracts.py \
+            tests/cfspopcon_SPARC/test_sparc_prd.py
           do
             python -m pytest "$testfile"
             rc=$?
