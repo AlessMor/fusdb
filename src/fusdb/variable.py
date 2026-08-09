@@ -17,21 +17,23 @@ from .utils import coerce_numeric_value, coerce_to_shape, parse_constraint_specs
 class Variable:
     """One declared scalar or profile variable: an immutable ingestion record.
 
-    A ``Variable`` is its registry :class:`VariableSpec` (the immutable
-    definition: name, aliases, unit, shape, domain, tolerances) plus one
-    scenario's declaration about it. Definition metadata is read through
-    ``self.spec``; scenario-local relation preference may override the registry
-    ``default_relation`` without mutating the process-wide registry.
-
-    Constructing a ``Variable`` is the ingestion event -- unit conversion,
-    shape coercion and domain validation happen exactly once. A solve never
-    writes back into a ``Variable``; solved state lives on the RelationSystem.
+    A ``Variable`` is its registry :class:`VariableSpec` plus one scenario's
+    declaration about it. Constructing a ``Variable`` is the ingestion event:
+    unit conversion, shape coercion and domain validation happen exactly once.
+    A solve never writes back into a ``Variable``; solved state lives on the
+    RelationSystem.
 
     ``default_relation`` has three states: ``None`` inherits the registry
     preference, a string/list replaces it, and an empty list explicitly disables
-    the registry preference for this scenario variable. Multiple relation names
-    mean simultaneous providers/constraints; provider arbitration is performed
-    by the relation registry/compiler rather than here.
+    the registry preference for this scenario variable.
+
+    Profile declarations may additionally retain their immutable source
+    coordinate. ``coordinate`` names the physical normalized coordinate on
+    which the supplied samples were tabulated (``rho`` means the common fusdb
+    grid). ``coordinate_values`` stores that source grid and may have a different
+    length from the RelationSystem grid. These are ingestion data, not solver
+    unknowns. The RelationSystem is responsible for reinterpolating them through
+    the current geometry mapping during completion.
     """
 
     name: str
@@ -43,29 +45,32 @@ class Variable:
     size: int | None = None
     constraints: Any = None
     default_relation: tuple[str, ...] | str | list[str] | None = None
+    coordinate: str | None = None
+    coordinate_values: Any = None
     spec: VariableSpec = field(default=None, init=False)
     input_value: Any = field(default=None, init=False)
     relations: tuple[Relation, ...] = field(default_factory=tuple, init=False)
 
     @property
     def aliases(self) -> tuple[str, ...]:
-        """Registry aliases for this variable."""
         return self.spec.aliases
 
     @property
     def shape(self) -> int:
-        """Registry shape: 0 for scalars, 1 for profiles."""
         return self.spec.shape
 
     @property
     def effective_default_relation(self) -> tuple[str, ...]:
-        """Scenario relation preference, falling back to registry metadata."""
         if self.default_relation is None:
             return self.spec.default_relation
         return tuple(self.default_relation)
 
+    @property
+    def has_source_grid(self) -> bool:
+        """Whether this declaration carries explicit source-coordinate samples."""
+        return self.coordinate_values is not None
+
     def __post_init__(self) -> None:
-        """Resolve registry metadata and normalize the value (the one ingestion pass)."""
         spec = VARIABLES.get(self.name)
         object.__setattr__(self, "spec", spec)
         object.__setattr__(self, "name", spec.name)
@@ -80,12 +85,30 @@ class Variable:
                 local_default = unique_preserve_order(local_default)
             object.__setattr__(self, "default_relation", tuple(str(name) for name in local_default))
 
+        coordinate = self.coordinate
+        coordinate_values = self.coordinate_values
+        if self.shape == 0 and (coordinate is not None or coordinate_values is not None):
+            raise ValueError(f"Scalar variable {spec.name!r} cannot define a profile coordinate.")
+        if coordinate_values is not None and coordinate is None:
+            coordinate = "rho"
+        if coordinate is not None:
+            coordinate = str(coordinate).strip()
+            if not coordinate:
+                raise ValueError(f"Variable {spec.name!r} coordinate cannot be empty.")
+            if coordinate != "rho":
+                try:
+                    coordinate = VARIABLES.resolve(coordinate)
+                except KeyError as exc:
+                    raise ValueError(
+                        f"Variable {spec.name!r} uses unknown source coordinate {coordinate!r}."
+                    ) from exc
+            object.__setattr__(self, "coordinate", coordinate)
+
         value = coerce_numeric_value(self.value)
         if value is not None:
             value = convert_value(value, from_unit=self.unit or spec.unit, to_unit=spec.unit)
         object.__setattr__(self, "value", value)
         object.__setattr__(self, "unit", spec.unit)
-        object.__setattr__(self, "input_value", self._copy_value(self.value))
 
         if self.size is not None:
             size = int(self.size)
@@ -97,9 +120,34 @@ class Variable:
         if self.value is not None and not value_in_domain(self.value, spec.domain):
             raise ValueError(f"Variable {self.name!r} value is outside domain {spec.domain!r}.")
         if self.shape == 1 and self.value is not None:
-            coerced, size = coerce_to_shape(self.name, self.value, is_profile=True, size=self.size)
+            # An explicit source grid owns the supplied profile length. It must
+            # not be coerced to the reactor's common solver-grid size here.
+            source_size = None if coordinate_values is not None else self.size
+            coerced, inferred_size = coerce_to_shape(self.name, self.value, is_profile=True, size=source_size)
             object.__setattr__(self, "value", coerced)
-            object.__setattr__(self, "size", size)
+            object.__setattr__(self, "size", inferred_size)
+
+        if coordinate_values is not None:
+            source = np.asarray(coordinate_values, dtype=float)
+            if source.ndim != 1 or source.size < 2:
+                raise ValueError(
+                    f"Variable {self.name!r} coordinate_values must be a one-dimensional grid with at least two points."
+                )
+            if not np.all(np.isfinite(source)) or np.any(np.diff(source) <= 0.0):
+                raise ValueError(
+                    f"Variable {self.name!r} coordinate_values must be finite and strictly increasing."
+                )
+            if self.value is not None:
+                arr = np.asarray(self.value)
+                if arr.ndim != 1 or arr.shape[0] != source.shape[0]:
+                    raise ValueError(
+                        f"Variable {self.name!r} profile length {arr.shape[0] if arr.ndim else 1} "
+                        f"does not match coordinate_values length {source.shape[0]}."
+                    )
+            object.__setattr__(self, "coordinate_values", source.copy())
+            object.__setattr__(self, "size", int(source.size))
+
+        object.__setattr__(self, "input_value", self._copy_value(self.value))
 
         built: list[Relation] = []
         for index, (text, enforce) in enumerate(parse_constraint_specs(self.constraints)):
@@ -115,11 +163,9 @@ class Variable:
         object.__setattr__(self, "relations", tuple(built))
 
     def clone(self, **changes: Any) -> "Variable":
-        """Return a new independently-ingested ``Variable`` with fields overridden."""
         return dataclasses.replace(self, **changes)
 
     def _copy_value(self, value: Any) -> Any:
-        """Copy a scalar/array value."""
         if isinstance(value, np.ndarray):
             return value.copy()
         return value
