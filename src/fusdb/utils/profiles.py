@@ -1,9 +1,9 @@
 """Numerical integration and averaging helpers for one-dimensional profiles.
 
-``rho`` is the common normalized computational grid used by fusdb.  It is not
-itself a physical radial convention.  Geometry-dependent normalized coordinates
-(e.g. enclosed-volume, minor-radius or flux coordinates) can be tabulated on
-that grid and passed explicitly to the averaging helpers.
+``rho`` is the common normalized computational grid used by fusdb. It is not
+itself a physical radial convention. Geometry-dependent normalized coordinates
+and integration weights are tabulated on that grid and passed explicitly when
+needed.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ def trapezoid(y: Any, x: Any = None) -> Any:
     """Trapezoidal integration over the last axis, implemented with NumPy.
 
     A batched ``(N, P)`` stack keeps the reduced axis as size 1, returning
-    ``(N, 1)`` rather than ``(N,)``.  In the popcon batched namespace scalars
+    ``(N, 1)`` rather than ``(N,)``. In the popcon batched namespace scalars
     carry a trailing ``1`` axis, so a ``(N, 1)`` scalar times this integral
     stays ``(N, 1)`` instead of broadcasting into an ``(N, N)`` outer product;
     a plain ``(P,)`` profile still integrates to a scalar.
@@ -30,11 +30,9 @@ def trapezoid(y: Any, x: Any = None) -> Any:
 def coordinate_average(profile: Any, coordinate: Any) -> Any:
     """Return the normalized average of ``profile`` over ``coordinate``.
 
-    The coordinate is a monotonic one-dimensional mapping tabulated on the
-    same last-axis grid as the profile.  Its absolute range is irrelevant: the
-    integral is divided by the coordinate span.  This makes normalized
-    geometry mappings usable like unit conversions without duplicating the
-    physical profile on every coordinate convention.
+    ``coordinate`` is a finite, strictly increasing normalized coordinate
+    mapping tabulated on the same last-axis grid as ``profile``. Its absolute
+    range is irrelevant because the integral is divided by the coordinate span.
     """
     arr = np.asarray(profile, dtype=float)
     if arr.ndim == 0:
@@ -57,7 +55,7 @@ def line_average(profile: Any, rho: Any) -> Any:
     """Return the straight average over the supplied normalized coordinate.
 
     This is a coordinate average, not by itself a physical diagnostic chord.
-    Device-specific line-average relations should pass the coordinate whose
+    Device-specific line-average relations must pass the coordinate whose
     physical meaning they explicitly document.
     """
     arr = np.asarray(profile, dtype=float)
@@ -73,25 +71,62 @@ def line_average(profile: Any, rho: Any) -> Any:
     return np.mean(arr, axis=-1, keepdims=arr.ndim > 1)
 
 
-def volume_average(profile: Any, rho: Any, *, v_norm: Any | None = None) -> Any:
-    """Return the volume average of a profile.
+def weighted_average(profile: Any, rho: Any, weight: Any) -> Any:
+    """Return ``integral(profile * weight d rho) / integral(weight d rho)``.
 
-    When ``v_norm`` is supplied it is the geometry-provided normalized enclosed
-    volume ``V(<rho) / V_p`` tabulated on the common ``rho`` grid, and the
-    average is simply ``integral(profile, d v_norm)`` normalized by its span.
-
-    When ``v_norm`` is omitted the established self-similar ``rho`` weighting
-    is retained exactly for backward compatibility.  For the default tokamak
-    convention this corresponds to ``v_norm = rho**2`` in the continuum; the
-    legacy discrete formula is intentionally preserved until geometry mappings
-    are wired through the relation graph, so this refactor introduces no
-    numerical regression by itself.
+    Geometry can therefore provide an integration measure such as a quantity
+    proportional to ``dV / d rho`` without changing the common computational
+    grid or duplicating the physical profile in another coordinate system.
+    The weight may vanish at isolated points (for example at the magnetic axis)
+    but must be finite, non-negative and have a positive integral.
     """
     arr = np.asarray(profile, dtype=float)
     if arr.ndim == 0:
         return arr
     if arr.size == 0:
         return np.asarray(0.0)
+    r = np.asarray(rho, dtype=float)
+    w = np.asarray(weight, dtype=float)
+    if r.ndim != 1 or r.size != arr.shape[-1] or w.ndim == 0 or w.shape[-1] != arr.shape[-1]:
+        raise ValueError("profile, rho and weight must share the same last-axis grid")
+    if not np.all(np.isfinite(w)) or np.any(w < 0.0):
+        raise ValueError("profile integration weight must be finite and non-negative")
+    denom = trapezoid(w, x=r)
+    if np.any(np.asarray(denom, dtype=float) <= 0.0):
+        raise ValueError("profile integration weight has zero integral")
+    return trapezoid(arr * w, x=r) / denom
+
+
+def volume_average(
+    profile: Any,
+    rho: Any,
+    *,
+    weight: Any | None = None,
+    v_norm: Any | None = None,
+) -> Any:
+    """Return the volume average of a profile.
+
+    Preferred geometry-aware form: ``weight`` is proportional to ``dV/d rho``.
+    Its normalization is irrelevant. For the legacy self-similar tokamak
+    convention, ``weight=rho`` reproduces fusdb's historical discrete formula
+    exactly.
+
+    ``v_norm`` is accepted when geometry naturally supplies normalized enclosed
+    volume ``V(<rho)/V_p`` rather than its derivative; the profile is integrated
+    directly over that monotonic coordinate.
+
+    Supplying neither retains the historical self-similar ``rho`` weighting for
+    backwards compatibility while relations are migrated to explicit geometry.
+    """
+    if weight is not None and v_norm is not None:
+        raise ValueError("volume_average accepts either weight or v_norm, not both")
+    arr = np.asarray(profile, dtype=float)
+    if arr.ndim == 0:
+        return arr
+    if arr.size == 0:
+        return np.asarray(0.0)
+    if weight is not None:
+        return weighted_average(arr, rho, weight)
     if v_norm is not None:
         return coordinate_average(arr, v_norm)
     r = np.asarray(rho, dtype=float)
@@ -102,28 +137,29 @@ def volume_average(profile: Any, rho: Any, *, v_norm: Any | None = None) -> Any:
     return line_average(arr, rho)
 
 
-def normalized_shape(profile: Any, rho: Any, *, v_norm: Any | None = None) -> tuple[Any, Any]:
+def normalized_shape(
+    profile: Any,
+    rho: Any,
+    *,
+    weight: Any | None = None,
+    v_norm: Any | None = None,
+) -> tuple[Any, Any]:
     """Return ``(average, shape)`` with unit volume-average shape.
 
     This is the canonical profile decomposition used by the solver:
-    ``profile = average * shape`` and ``volume_average(shape) == 1``.  A zero
-    average has no meaningful amplitude-normalized shape, so the uniform shape
-    is used as the neutral fallback, matching fusdb's existing profile default.
+    ``profile = average * shape`` and ``volume_average(shape) == 1``. A zero
+    average has no amplitude-normalized shape, so the uniform shape is the
+    neutral fallback.
     """
     arr = np.asarray(profile, dtype=float)
     if arr.ndim == 0:
         return arr, np.asarray(1.0)
-    avg = np.asarray(volume_average(arr, rho, v_norm=v_norm), dtype=float)
-    if avg.size != 1:
-        # Batched callers keep one scalar average per leading batch dimension;
-        # broadcasting it over the profile axis is the intended decomposition.
-        expanded = avg
-    else:
-        expanded = float(avg.reshape(-1)[0])
+    avg = np.asarray(volume_average(arr, rho, weight=weight, v_norm=v_norm), dtype=float)
+    expanded: Any = avg if avg.size != 1 else float(avg.reshape(-1)[0])
     if np.all(np.abs(avg) <= 1.0e-300):
         return avg, np.ones_like(arr, dtype=float)
     shape = arr / expanded
-    shape_avg = np.asarray(volume_average(shape, rho, v_norm=v_norm), dtype=float)
+    shape_avg = np.asarray(volume_average(shape, rho, weight=weight, v_norm=v_norm), dtype=float)
     if np.all(np.abs(shape_avg) > 1.0e-300):
         shape = shape / shape_avg
     return avg, shape
