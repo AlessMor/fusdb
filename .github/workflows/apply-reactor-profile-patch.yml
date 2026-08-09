@@ -1,0 +1,30 @@
+name: Apply Reactor Profile Patch
+
+on:
+  push:
+    branches:
+      - agent/profile-coordinate-refactor
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/profile-coordinate-refactor
+          fetch-depth: 0
+      - name: Apply patch and clean temporary patch machinery
+        run: |
+          git apply --check patches/reactor-profile-integration.patch
+          git apply patches/reactor-profile-integration.patch
+          rm patches/reactor-profile-integration.patch
+          rm .github/workflows/apply-reactor-profile-patch.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "refactor: wire source profiles into reactor"
+          git push origin HEAD:agent/profile-coordinate-refactor
