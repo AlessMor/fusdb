@@ -10,18 +10,14 @@ from .reaction_registry import *
 from .reaction_registry import REACTIONS, ReactionRegistry, ReactionSpec
 from .species_registry import SPECIES, SpeciesRegistry, SpeciesSpec
 from .tag_registry import TAGS, TagRegistry
-from . import variable_registry as _variable_registry
-from .variable_registry import VariableRegistry, VariableSpec
+from .variable_registry import VARIABLES as _BASE_VARIABLES, VariableRegistry, VariableSpec
 from .coordinate_variables import with_coordinate_variables
 
-# Apply the staged profile-coordinate overlay before relation discovery.  The
-# relation registry imports VARIABLES from variable_registry, so update the
-# module singleton as well as this package-level binding.
-VARIABLES = with_coordinate_variables(_variable_registry.VARIABLES)
-_variable_registry.VARIABLES = VARIABLES
+# Apply the staged coordinate contract before relation discovery.  Importers of
+# ``fusdb.registry.VARIABLES`` therefore see the same augmented registry used to
+# canonicalize every discovered relation.
+VARIABLES = with_coordinate_variables(_BASE_VARIABLES)
 
 from .relation_registry import RELATIONS, RelationRegistry
 from .dataset import DATASETS, DatasetDocument, DatasetRegistry, load_dataset
-
-
 from .unitregistry import convert_value

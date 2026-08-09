@@ -11,8 +11,9 @@ from typing import Any
 
 from ..relation import REGISTERED_RELATIONS, Relation, canonicalize_relation
 from ..utils import normalize_tags
+from . import VARIABLES
 from .tag_registry import TAGS, TagRegistry
-from .variable_registry import VARIABLES, VariableRegistry
+from .variable_registry import VariableRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +131,6 @@ class RelationRegistry:
                                 f"but {out!r} explicitly selects {list(other)!r}. Multi-output relations "
                                 "are atomic; choose compatible providers."
                             )
-                        # Empty explicit override means no provider gate for this side output.
                         continue
                     allowed[out] = {rel.name}
         return allowed, explicit
