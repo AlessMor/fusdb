@@ -42,7 +42,10 @@ jobs:
             tests/test_variable_default_relation.py \
             tests/test_relation_default_overrides.py \
             tests/test_explicit_profile_mappings.py \
-            tests/test_coordinate_nonpackability.py
+            tests/test_coordinate_nonpackability.py \
+            tests/test_bootstrap_coordinate_mapping.py \
+            tests/test_pedestal_coordinate_mapping.py \
+            tests/test_source_profile_measure_dependency.py
           do
             python -m pytest "$testfile"
             rc=$?
