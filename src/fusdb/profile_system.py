@@ -20,13 +20,18 @@ from .variable import Variable
 def _promote_source_measure_dependencies(
     variables: list[Variable], relations: tuple[Relation, ...]
 ) -> tuple[Relation, ...]:
-    """Expose an available geometry volume measure in source-profile graph edges.
+    """Expose an available geometry volume measure in movable source-profile edges.
 
     ``source_profile_relation`` keeps ``w_V``/``v_norm`` optional so profiles
     still work in deliberately geometry-free standalone systems. At the system
     boundary we know which mappings are supplied or produced. Promote the best
     available measure from an optional constant to a real relation input so a
     changing geometry is visible to completion and Jacobian sparsity.
+
+    Only movable source profiles need this dependency: their immutable source
+    curve is re-normalized into ``average * shape``. Fixed absolute source
+    profiles are merely reinterpolated and therefore do not depend on a volume
+    measure.
 
     ``w_V`` has precedence over ``v_norm`` because it reproduces the historical
     discrete tokamak volume average exactly and avoids differentiating an
@@ -41,7 +46,8 @@ def _promote_source_measure_dependencies(
 
     promoted: list[Relation] = []
     for relation in relations:
-        if relation.source_kind != "source_profile" or measure not in relation.constant_names:
+        movable_source = relation.source_kind == "source_profile" and "average" in relation.argument_names
+        if not movable_source or measure not in relation.constant_names:
             promoted.append(relation)
             continue
         promoted.append(
