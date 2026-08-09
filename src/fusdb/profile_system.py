@@ -72,6 +72,40 @@ def _promote_source_measure_dependencies(
     return tuple(promoted)
 
 
+def _drop_defaults_for_supplied_coordinates(
+    variables: list[Variable], relations: tuple[Relation, ...]
+) -> tuple[Relation, ...]:
+    """Make a supplied physical mapping authoritative by default.
+
+    Device coordinate relations are fallbacks. If a scenario supplies
+    ``rho_tor``, ``rho_minor``, ``rho_radial``, ``v_norm`` or ``w_V`` directly,
+    retaining the tagged default producer would enforce the fallback identity or
+    self-similar mapping against the supplied equilibrium data. Drop those
+    fallback producers before compilation.
+
+    A non-empty variable-local ``default_relation`` is the explicit opt-in to
+    keep provider relations alongside supplied data, so users can deliberately
+    certify/reconcile an imported mapping against a chosen model.
+    """
+    authoritative = {
+        variable.name
+        for variable in variables
+        if variable.name in PHYSICAL_COORDINATE_NAMES
+        and variable.input_value is not None
+        and not variable.default_relation
+    }
+    if not authoritative:
+        return relations
+    return tuple(
+        relation
+        for relation in relations
+        if not (
+            "default" in relation.tags
+            and bool(authoritative.intersection(relation.output_names))
+        )
+    )
+
+
 def build_relation_system(
     variables: Iterable[Variable],
     relations: Iterable[Relation],
@@ -89,15 +123,19 @@ def build_relation_system(
     their shape is recomputed whenever the mapping changes.
 
     Physical coordinate mappings are not solver profile degrees of freedom. A
-    supplied mapping is held exactly; an unsupplied mapping remains missing
-    until an active geometry relation computes it. This prevents least squares
-    from inventing an arbitrary pointwise coordinate transformation.
+    supplied mapping is held exactly and suppresses tagged fallback coordinate
+    providers unless the declaration explicitly selects provider relations. An
+    unsupplied mapping remains missing until an active geometry relation computes
+    it. This prevents least squares from inventing an arbitrary pointwise
+    coordinate transformation or forcing imported equilibrium data back onto a
+    reduced default mapping.
     """
     prepared, prepared_relations, _size = prepare_source_profiles(
         variables,
         relations,
         profile_size=profile_size,
     )
+    prepared_relations = _drop_defaults_for_supplied_coordinates(prepared, prepared_relations)
     prepared = [
         variable.clone(fixed=True)
         if variable.name in PHYSICAL_COORDINATE_NAMES and variable.input_value is not None and not variable.fixed

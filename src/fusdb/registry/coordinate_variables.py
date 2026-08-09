@@ -25,7 +25,9 @@ _RHO_LEGACY_ALIASES = {"normalized_minor_radius", "r_over_a"}
 # These are physical mappings/integration measures, not independent profile
 # unknowns. A supplied mapping is authoritative data; an unsupplied mapping must
 # be produced deterministically by an active geometry relation.
-PHYSICAL_COORDINATE_NAMES = frozenset({"rho_minor", "rho_tor", "v_norm", "w_V"})
+PHYSICAL_COORDINATE_NAMES = frozenset(
+    {"rho_minor", "rho_tor", "rho_radial", "v_norm", "w_V"}
+)
 
 
 def _coordinate_spec(
@@ -59,7 +61,7 @@ def with_coordinate_variables(base: VariableRegistry) -> VariableRegistry:
     ``variable_registry``. Keeping the object identity prevents a split-brain
     base/augmented registry during the staged migration.
     """
-    if "rho_minor" in base and "w_V" in base:
+    if "rho_minor" in base and "rho_radial" in base and "w_V" in base:
         return base
 
     specs: list[VariableSpec] = []
@@ -88,19 +90,34 @@ def with_coordinate_variables(base: VariableRegistry) -> VariableRegistry:
                 "rho_tor",
                 "Normalized toroidal-flux radius sqrt(Phi/Phi_edge) tabulated on the common rho grid.",
                 aliases=("normalized_toroidal_flux_radius", "rho_toroidal"),
+                default_relation=("Reduced stellarator toroidal-flux coordinate",),
+            ),
+            _coordinate_spec(
+                "rho_radial",
+                "Normalized physical radial coordinate for reduced mirror models, tabulated on the common rho grid.",
+                aliases=("normalized_radial_coordinate", "mirror_radial_coordinate"),
+                default_relation=("Reduced mirror radial coordinate",),
             ),
             _coordinate_spec(
                 "v_norm",
                 "Normalized enclosed plasma volume V(<rho)/V_p tabulated on the common rho grid.",
                 aliases=("normalized_enclosed_volume", "enclosed_volume_fraction"),
-                default_relation=("Tokamak normalized enclosed volume",),
+                default_relation=(
+                    "Tokamak normalized enclosed volume",
+                    "Reduced stellarator normalized enclosed volume",
+                    "Reduced mirror normalized enclosed volume",
+                ),
             ),
             _coordinate_spec(
                 "w_V",
                 "Non-negative volume-integration weight proportional to dV/drho on the common rho grid.",
                 aliases=("volume_integration_weight", "dV_drho_weight"),
                 domain=(0.0, None, True, True),
-                default_relation=("Tokamak volume integration weight",),
+                default_relation=(
+                    "Tokamak volume integration weight",
+                    "Reduced stellarator volume integration weight",
+                    "Reduced mirror volume integration weight",
+                ),
             ),
         )
     )
