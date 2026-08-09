@@ -12,7 +12,6 @@ from typing import Any
 
 from .profile_sources import prepare_source_profiles
 from .relation import Relation
-from .registry import VARIABLES
 from .registry.coordinate_variables import PHYSICAL_COORDINATE_NAMES
 from .relationsystem import RelationSystem
 from .variable import Variable
@@ -21,28 +20,28 @@ from .variable import Variable
 def _promote_source_measure_dependencies(
     variables: list[Variable], relations: tuple[Relation, ...]
 ) -> tuple[Relation, ...]:
-    """Expose geometry-dependent source-shape normalization in the graph.
+    """Expose an available geometry volume measure in source-profile graph edges.
 
-    ``profile_sources`` keeps ``w_V``/``v_norm`` as optional keyword constants
-    so the legacy source-profile API can still operate when no geometry measure
-    exists. Once the scenario actually supplies or produces one of these
-    measures, a movable source profile depends on it physically: remapping is
-    normalized to unit volume average on every candidate state. Promote the
-    preferred available measure from an optional constant to an ordinary
-    relation input so provider ordering and Jacobian sparsity see that edge.
+    ``source_profile_relation`` keeps ``w_V``/``v_norm`` optional so profiles
+    still work in deliberately geometry-free standalone systems. At the system
+    boundary we know which mappings are supplied or produced. Promote the best
+    available measure from an optional constant to a real relation input so a
+    changing geometry is visible to completion and Jacobian sparsity.
+
+    ``w_V`` has precedence over ``v_norm`` because it reproduces the historical
+    discrete tokamak volume average exactly and avoids differentiating an
+    enclosed-volume coordinate numerically.
     """
-    supplied = {variable.name for variable in variables if variable.input_value is not None}
-    produced = {output for relation in relations for output in relation.output_names}
-    available = supplied | produced
+    available = {
+        variable.name for variable in variables if variable.input_value is not None
+    } | {output for relation in relations for output in relation.output_names}
     measure = "w_V" if "w_V" in available else ("v_norm" if "v_norm" in available else None)
     if measure is None:
         return relations
 
     promoted: list[Relation] = []
     for relation in relations:
-        average = VARIABLES.average_of(relation.source_name) if relation.source_kind == "source_profile" else None
-        movable_source = average is not None and average in relation.input_names
-        if not movable_source or measure not in relation.constant_names:
+        if relation.source_kind != "source_profile" or measure not in relation.constant_names:
             promoted.append(relation)
             continue
         promoted.append(
