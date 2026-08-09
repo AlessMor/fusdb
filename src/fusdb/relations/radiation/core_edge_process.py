@@ -75,11 +75,25 @@ def core_radiation_power_process(
     pden_plasma_sync_mw`` -- synchrotron is assumed to come entirely from the
     core, so it is added whole and is NOT scaled by the core reduction factor.
 
-    Written in terms of the pre-split radiation channels on purpose:
-    ``P_cool_imp`` carries the Mavrin L_z profile shape and ``P_brem`` carries
-    the hydrogenic n_e^2 sqrt(T_e) shape. ``P_brem`` is used directly because
-    fusdb's default ``P_brem`` is the hydrogenic (fuel-only) partner of the
-    whole-L_z ``P_cool_imp``.
+    Written in terms of the PRE-SPLIT radiation channels on purpose:
+
+    * ``P_cool_imp`` -- the impurity cooling-rate total, which carries the Mavrin
+      L_z profile shape; and
+    * ``P_brem`` -- the hydrogenic bremsstrahlung, which carries the flatter
+      n_e^2 sqrt(T_e) shape.
+
+    Those are the two quantities PROCESS itself splits at the core radius (it
+    folds hydrogenic radiation into its impurity array, which is why its
+    ``p_plasma_rad_mw`` needs no separate bremsstrahlung term). Going through the
+    ``P_line``/``P_brem`` pair instead reassigns ~34 MW of impurity
+    bremsstrahlung from the Mavrin-shaped term to the differently-shaped total,
+    which moved ``P_rad_core`` +5.9% and ``P_sep`` past tolerance.
+
+    ``P_brem`` is used DIRECTLY here. It was ``P_brem - P_brem_imp`` while
+    ``P_brem`` meant the TOTAL bremsstrahlung; now that the default ``P_brem`` is
+    the hydrogenic (fuel-only) form -- the partner of a whole-L_z ``P_cool_imp``
+    -- subtracting the impurity part again would drop it twice. That mistake is
+    worth 34.4 MW here, i.e. ``P_rad_core`` -18.7%.
     """
     # CHECK
     rho_grid = np.asarray(rho if rho is not None else rho_minor, dtype=float)
@@ -122,14 +136,24 @@ def plasma_heating_power_process(
 ) -> Any:
     """Total power heating the plasma [W], before any radiation subtraction.
 
-    PROCESS keeps three distinct levels that fusdb's default collapses into two:
-    heating power, transport loss power (heating - P_rad_core), and separatrix
-    power (heating - P_rad_total).
+    PROCESS keeps THREE distinct levels that fusdb's default collapses into two:
 
-    The alpha deposition fraction is applied to the whole charged fusion power
-    here rather than to the alpha channel alone. Non-alpha charged power is
-    ~0.5% of P_charged at reactor conditions, so the difference is ~0.03% and
-    avoids depending on the P_alpha_total aggregator being active.
+    * heating power        = f_alpha_dep*P_alpha + P_non_alpha + P_ohmic + P_inj
+    * transport loss power = heating - P_rad_core   (fed to the tau_E scaling)
+    * separatrix power     = heating - P_rad_total
+
+    fusdb's default ``Plasma loss power`` is ``P_charged + P_aux``, i.e. it is
+    really the HEATING power wearing the ``P_loss`` name. This is emitted as a
+    SEPARATE variable rather than as fusdb's ``P_in``: ``P_in`` has no default
+    producer (it is inferred from the steady-state ``P_in = P_loss`` balance),
+    so providing it here would silently become the sole provider on every
+    reactor -- which broke four popcon/SPARC tests when first tried.
+
+    # CHECK: the alpha deposition fraction is applied to the whole charged
+    # fusion power rather than to the alpha channel alone. Non-alpha charged
+    # power is ~0.5% of P_charged at reactor conditions, so the error is ~0.03%
+    # -- far below the comparison tolerance -- and it avoids depending on the
+    # P_alpha_total aggregator being an active provider.
     """
     return f_p_alpha_plasma_deposited * P_charged + P_ohmic + P_aux
 
@@ -140,7 +164,17 @@ def plasma_heating_power_process(
     outputs="P_loss",
 )
 def plasma_loss_power_process(P_heating: Any, P_rad_core: Any) -> Any:
-    """Transport loss power fed to the confinement scaling [W]."""
+    """Transport loss power fed to the confinement scaling [W].
+
+    PROCESS (``confinement_time.py`` 154-181, ``i_rad_loss = CORE_ONLY``)::
+
+        P_loss = f_alpha_dep * P_alpha + P_non_alpha_charged + P_ohmic
+                 + P_inj  (non-ignited)
+                 - P_rad_core
+
+    Only the CORE radiation is subtracted, and only from the confinement-scaling
+    power -- ``P_sep`` keeps subtracting the total radiation from ``P_in``.
+    """
     return P_heating - P_rad_core
 
 
@@ -150,5 +184,10 @@ def plasma_loss_power_process(P_heating: Any, P_rad_core: Any) -> Any:
     outputs="P_sep",
 )
 def separatrix_power_process(P_heating: Any, P_rad: Any) -> Any:
-    """Power crossing the separatrix [W], PROCESS convention."""
+    """Power crossing the separatrix [W], PROCESS convention.
+
+    The TOTAL radiation comes off the HEATING power -- not off the transport
+    loss power, which has already had the core radiation removed. Taking it off
+    the loss power subtracts the core radiation twice.
+    """
     return P_heating - P_rad
