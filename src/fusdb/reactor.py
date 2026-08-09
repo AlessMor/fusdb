@@ -682,15 +682,51 @@ class Reactor:
 
         mode = _confinement_regime(self.tags)
         mode_axis = set(_regime_order())
+        active_tags = TAGS.expand(self.tags)
         candidates: list[Any] = []
 
-        def input_is_declared_or_defaulted(name: str) -> bool:
-            if name in supplied:
+        def input_is_declared_or_defaulted(
+            name: str,
+            seen: frozenset[str] = frozenset(),
+        ) -> bool:
+            """Whether a shape input is supplied or deterministically available.
+
+            Besides literal registry defaults, an input may be produced by its
+            active ``default_relation``. This matters for geometry mappings such
+            as ``rho_minor``: a tokamak supplies that mapping through the tagged
+            identity provider even though it is not a user-declared scenario
+            variable. Treating only scalar ``default`` values as available made
+            H/I pedestal-profile selection regress when the coordinate migration
+            replaced bare ``rho`` with explicit ``rho_minor``.
+            """
+            if name == "rho" or name in supplied:
                 return True
-            spec = VARIABLES.get(name) if name in VARIABLES else None
-            if spec is None or spec.default is None:
+            if name in seen or name not in VARIABLES:
                 return False
-            return spec.default_requires is None or spec.default_requires in supplied
+            spec = VARIABLES.get(name)
+            if spec.default is not None:
+                requires = (
+                    None
+                    if spec.default_requires is None
+                    else VARIABLES.resolve(spec.default_requires)
+                )
+                if requires is None or requires in supplied:
+                    return True
+
+            next_seen = seen | {name}
+            for provider_name in spec.default_relation:
+                try:
+                    provider = RELATIONS.get(provider_name)
+                except KeyError:
+                    continue
+                if not TAGS.relation_matches(provider.tags, active_tags):
+                    continue
+                if all(
+                    input_is_declared_or_defaulted(inp, next_seen)
+                    for inp in provider.input_names
+                ):
+                    return True
+            return False
 
         for rel in RELATIONS:
             relation = RELATIONS.get(rel) if isinstance(rel, str) else rel
