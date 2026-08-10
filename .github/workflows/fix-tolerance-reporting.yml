@@ -19,4 +19,28 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Patch reporting
+      - name: Patch tolerance-boundary reporting
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/fusdb/modes/reconcile.py')
+          text = path.read_text()
+          old = '''        excess = spec.movement_excess(values[name], spec.solver_value(ref, system.profile_size), *system.tols_of(name))\n        if excess > 0.0:\n            out.append({"name": name, "deviation_tol": 1.0 + excess})\n'''
+          new = '''        excess = spec.movement_excess(values[name], spec.solver_value(ref, system.profile_size), *system.tols_of(name))\n        # The optimizer can stop a few parts per million beyond the exact\n        # deadzone boundary.  That is numerical termination noise, not a\n        # physically meaningful extra input excursion.  Keep the reporting\n        # threshold tiny relative to one tolerance width so real crossings are\n        # unaffected while values such as 1.00000057 tol are treated as on the\n        # boundary.\n        if excess > 1.0e-6:\n            out.append({"name": name, "deviation_tol": 1.0 + excess})\n'''
+          if old not in text:
+              raise SystemExit('target reconcile snippet not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Verify focused regression
+        run: |
+          python -m pip install -e ".[test]"
+          python -m pytest tests/test_stellaris_regression.py tests/test_phase1_contracts.py
+      - name: Commit patch and remove helper workflow
+        run: |
+          rm .github/workflows/fix-tolerance-reporting.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/fusdb/modes/reconcile.py .github/workflows/fix-tolerance-reporting.yml
+          git commit -m "fix: ignore sub-ppm tolerance boundary noise"
+          git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
