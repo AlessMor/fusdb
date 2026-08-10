@@ -57,7 +57,7 @@ def tokamak_volume_integration_weight(*, rho: Any) -> np.ndarray:
 
 @relation(
     name="Sauter self-similar profile volume mapping",
-    tags=("geometry", "tokamak", "default", "sauter"),
+    tags=("geometry", "tokamak", "default"),
     outputs=("v_norm", "w_V"),
     dependency="generated_profile",
 )
