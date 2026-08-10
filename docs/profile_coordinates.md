@@ -90,6 +90,16 @@ when the *shape* of enclosed volume versus the computational coordinate differs
 from the self-similar assumption, which is where equilibrium-derived providers
 enter.
 
+The tokamak relation `Sauter self-similar profile volume mapping` is the first
+opt-in geometry-dependent provider walking this path. It applies the existing
+Sauter total-volume correction to self-similar nested surfaces and therefore
+makes `v_norm` and `w_V` depend on `delta * eps`. It is deliberately **not** the
+tokamak default: the historical `rho**2`/`rho` providers remain the regression
+baseline. A scenario can select the Sauter provider through a variable-local
+`default_relation`; because it produces both `v_norm` and `w_V`, provider
+selection is atomic. Imported equilibrium mappings remain preferable whenever
+available.
+
 ## Geometry defaults and overrides
 
 Reactor/device tags select geometry defaults. Geometry remains ordinary
