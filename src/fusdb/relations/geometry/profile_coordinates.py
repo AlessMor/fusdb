@@ -90,9 +90,13 @@ def sauter_self_similar_profile_volume_mapping(
     forcing a 3-D or flux-surface calculation into the nonlinear systems solve.
     """
     x = np.asarray(rho, dtype=float)
-    c = 0.25 * float(delta) * float(eps)
+    c = 0.25 * np.asarray(delta, dtype=float) * np.asarray(eps, dtype=float)
+    # Scalar scenario values stay scalar. Batched scalar values are promoted to
+    # a trailing singleton dimension so they broadcast over the profile grid.
+    if c.ndim > 0 and c.shape[-1] != 1:
+        c = c[..., None]
     denom = 1.0 - c
-    if not np.isfinite(denom) or denom <= 0.0:
+    if not np.all(np.isfinite(denom)) or np.any(denom <= 0.0):
         raise ValueError("Sauter nested-volume mapping requires 1 - 0.25*delta*eps > 0.")
     v_norm = x**2 * (1.0 - c * x) / denom
     w_V = (x - 1.5 * c * x**2) / denom
