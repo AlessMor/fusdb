@@ -1,0 +1,63 @@
+name: Apply parabolic volume-weight normalization patch
+
+on:
+  push:
+    branches:
+      - agent/profile-coordinate-refactor
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/profile-coordinate-refactor
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Patch parabolic profile normalization
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/fusdb/relations/profiles/peaking.py')
+          text = path.read_text()
+          start = text.index('@lru_cache(maxsize=16)\ndef _peaking_table')
+          stop = text.index('\n\ndef _profile_max', start)
+          replacement = '''@lru_cache(maxsize=32)\ndef _peaking_table(\n    rho_key: tuple[float, ...],\n    weight_key: tuple[float, ...] | None = None,\n) -> tuple[np.ndarray, np.ndarray]:\n    """Return a monotone ``(peakings, alphas)`` table for one grid/measure.\n\n    The profile exponent is defined by peak / *volume* average, so a nontrivial\n    geometry weight is part of the shape convention. ``weight_key=None`` keeps\n    the historical rho-weighted path exactly.\n    """\n    rho = np.asarray(rho_key, dtype=float)\n    weight = None if weight_key is None else np.asarray(weight_key, dtype=float)\n    base = np.maximum(1.0 - rho**2, 0.0)\n    alphas = np.linspace(0.0, 50.0, 2001)\n    peaks = np.empty_like(alphas)\n    for i, alpha in enumerate(alphas):\n        shape = base**alpha\n        shape = shape * (1.0 - _EDGE_PEDESTAL) + _EDGE_PEDESTAL\n        mean = float(volume_average(shape, rho, weight=weight))\n        peaks[i] = shape[0] / max(mean, 1e-300)\n    return peaks, alphas\n\n\ndef _effective_volume_weight(w_V: Any, rho: np.ndarray) -> np.ndarray | None:\n    """Return an explicit non-legacy weight, or None for the exact old path."""\n    if w_V is None:\n        return None\n    weight = np.asarray(w_V, dtype=float)\n    if weight.shape[-1] != rho.size:\n        raise ValueError("w_V and rho must share the profile grid")\n    # The reduced defaults deliberately reproduce the historical measure. Keep\n    # that call on volume_average's legacy branch rather than merely relying on\n    # algebraic equivalence, so regression points remain bit-for-bit stable.\n    if weight.ndim == 1 and np.array_equal(weight, rho):\n        return None\n    return weight\n\n\ndef _alpha_for_peaking(peaking: float, rho: np.ndarray, weight: np.ndarray | None = None) -> float:\n    """Return alpha for shape=(1-rho^2)^alpha with requested peak/volume-average."""\n    target = max(float(peaking), 1.0)\n    if target <= 1.0 + 1e-12:\n        return 0.0\n    if weight is not None and weight.ndim != 1:\n        raise ValueError("single-profile peaking inversion requires a one-dimensional volume weight")\n    weight_key = None if weight is None else tuple(float(v) for v in weight)\n    peaks, alphas = _peaking_table(\n        tuple(float(v) for v in np.asarray(rho, dtype=float)),\n        weight_key,\n    )\n    if target >= peaks[-1]:\n        return float(alphas[-1])\n    return float(np.interp(target, peaks, alphas))\n\n\ndef _parabolic_profile(average: Any, peaking: Any, rho: Any, w_V: Any = None) -> np.ndarray:\n    """Return ``average * shape`` normalized by the current volume measure.\n\n    The analytic shape remains a function of the neutral computational ``rho``;\n    only its amplitude/peaking normalization uses ``w_V``. This keeps the generic\n    profile model device-neutral while making the AVG contract geometry-aware.\n    Batched geometry weights are handled row by row; the common fixed-geometry\n    POPCON path remains vectorized.\n    """\n    rho_arr = np.asarray(rho, dtype=float)\n    if rho_arr.ndim != 1:\n        raise ValueError("rho must be a one-dimensional profile grid")\n    weight = _effective_volume_weight(w_V, rho_arr)\n    peak_arr = np.asarray(peaking, dtype=float).reshape(-1)\n    avg_arr = np.asarray(average, dtype=float)\n\n    if weight is not None and weight.ndim > 1:\n        rows = int(np.prod(weight.shape[:-1]))\n        weights = weight.reshape(rows, rho_arr.size)\n        peaks_in = np.broadcast_to(peak_arr if peak_arr.size > 1 else peak_arr[0], (rows,))\n        avgs_in = np.broadcast_to(avg_arr.reshape(-1) if avg_arr.ndim else float(avg_arr), (rows,))\n        out = np.empty((rows, rho_arr.size), dtype=float)\n        base = np.maximum(1.0 - rho_arr**2, 0.0)\n        for i in range(rows):\n            row_weight = _effective_volume_weight(weights[i], rho_arr)\n            alpha = _alpha_for_peaking(float(peaks_in[i]), rho_arr, row_weight)\n            shape = base**alpha\n            shape = shape * (1.0 - _EDGE_PEDESTAL) + _EDGE_PEDESTAL\n            mean = volume_average(shape, rho_arr, weight=row_weight)\n            out[i] = float(avgs_in[i]) * shape / max(float(mean), 1e-300)\n        return out.reshape((*weight.shape[:-1], rho_arr.size))\n\n    if peak_arr.size == 1:\n        alpha: Any = _alpha_for_peaking(float(peak_arr[0]), rho_arr, weight)\n    else:\n        weight_key = None if weight is None else tuple(float(v) for v in weight)\n        peaks, alphas = _peaking_table(tuple(float(v) for v in rho_arr), weight_key)\n        target = np.maximum(peak_arr, 1.0)\n        alpha = np.where(target >= peaks[-1], alphas[-1], np.interp(target, peaks, alphas))\n        alpha = np.where(target <= 1.0 + 1e-12, 0.0, alpha)[:, None]\n    shape = np.maximum(1.0 - rho_arr**2, 0.0) ** alpha\n    shape = shape * (1.0 - _EDGE_PEDESTAL) + _EDGE_PEDESTAL\n    mean = volume_average(shape, rho_arr, weight=weight)\n    unit = shape / np.maximum(np.asarray(mean, dtype=float), 1e-300)\n    if avg_arr.ndim == 0:\n        return float(avg_arr) * unit\n    return avg_arr.reshape(avg_arr.shape[0], 1) * unit\n'''
+          text = text[:start] + replacement + text[stop:]
+
+          replacements = {
+              'def parabolic_ion_temperature_profile(T_i_avg: float, ion_temperature_peaking: float, rho: Any) -> Any:\n    """Generate an ion-temperature profile from average and peaking factor."""\n    return _parabolic_profile(T_i_avg, ion_temperature_peaking, rho)':
+              'def parabolic_ion_temperature_profile(T_i_avg: float, ion_temperature_peaking: float, rho: Any, w_V: Any = None) -> Any:\n    """Generate an ion-temperature profile from average and peaking factor."""\n    return _parabolic_profile(T_i_avg, ion_temperature_peaking, rho, w_V=w_V)',
+              'def parabolic_electron_temperature_profile(T_e_avg: float, temperature_peaking: float, rho: Any) -> Any:\n    """Generate an electron-temperature profile from average and peaking factor."""\n    return _parabolic_profile(T_e_avg, temperature_peaking, rho)':
+              'def parabolic_electron_temperature_profile(T_e_avg: float, temperature_peaking: float, rho: Any, w_V: Any = None) -> Any:\n    """Generate an electron-temperature profile from average and peaking factor."""\n    return _parabolic_profile(T_e_avg, temperature_peaking, rho, w_V=w_V)',
+              'def parabolic_ion_density_profile(n_fuel_avg: float, ion_density_peaking: float, rho: Any) -> Any:\n    """Generate an ion-density profile from average and peaking factor."""\n    return _parabolic_profile(n_fuel_avg, ion_density_peaking, rho)':
+              'def parabolic_ion_density_profile(n_fuel_avg: float, ion_density_peaking: float, rho: Any, w_V: Any = None) -> Any:\n    """Generate an ion-density profile from average and peaking factor."""\n    return _parabolic_profile(n_fuel_avg, ion_density_peaking, rho, w_V=w_V)',
+              'def parabolic_electron_density_profile(n_e_avg: float, density_peaking: float, rho: Any) -> Any:\n    """Generate an electron-density profile from average and peaking factor."""\n    return _parabolic_profile(n_e_avg, density_peaking, rho)':
+              'def parabolic_electron_density_profile(n_e_avg: float, density_peaking: float, rho: Any, w_V: Any = None) -> Any:\n    """Generate an electron-density profile from average and peaking factor."""\n    return _parabolic_profile(n_e_avg, density_peaking, rho, w_V=w_V)',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'profile relation target not found: {old.splitlines()[0]}')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+      - name: Verify profile contracts
+        run: |
+          python -m pip install -e ".[test]"
+          python -m pytest tests/test_profile_average_consistency.py tests/test_imported_confinement_fast_ion_relations.py tests/cfspopcon_SPARC/test_sparc_prd.py
+      - name: Commit patch and remove helper workflow
+        run: |
+          rm .github/workflows/patch-parabolic-volume-weight.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/fusdb/relations/profiles/peaking.py .github/workflows/patch-parabolic-volume-weight.yml
+          git commit -m "refactor: normalize parabolic profiles with volume weight"
+          git push origin HEAD:agent/profile-coordinate-refactor
