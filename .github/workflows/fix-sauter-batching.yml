@@ -1,0 +1,47 @@
+name: Apply Sauter mapping batching fix
+
+on:
+  push:
+    branches:
+      - agent/profile-coordinate-refactor
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/profile-coordinate-refactor
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Make geometry inputs batch-safe
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/fusdb/relations/geometry/profile_coordinates.py')
+          text = path.read_text()
+          old = '''    x = np.asarray(rho, dtype=float)\n    c = 0.25 * float(delta) * float(eps)\n    denom = 1.0 - c\n    if not np.isfinite(denom) or denom <= 0.0:\n        raise ValueError("Sauter nested-volume mapping requires 1 - 0.25*delta*eps > 0.")\n    v_norm = x**2 * (1.0 - c * x) / denom\n    w_V = (x - 1.5 * c * x**2) / denom\n'''
+          new = '''    x = np.asarray(rho, dtype=float)\n    c = 0.25 * np.asarray(delta, dtype=float) * np.asarray(eps, dtype=float)\n    # Scalar scenario values stay scalar. Batched scalar values are promoted to\n    # a trailing singleton dimension so they broadcast over the profile grid.\n    if c.ndim > 0 and c.shape[-1] != 1:\n        c = c[..., None]\n    denom = 1.0 - c\n    if not np.all(np.isfinite(denom)) or np.any(denom <= 0.0):\n        raise ValueError("Sauter nested-volume mapping requires 1 - 0.25*delta*eps > 0.")\n    v_norm = x**2 * (1.0 - c * x) / denom\n    w_V = (x - 1.5 * c * x**2) / denom\n'''
+          if old not in text:
+              raise SystemExit('Sauter batching target not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Verify existing mapping tests
+        run: |
+          python -m pip install -e ".[test]"
+          python -m pytest tests/test_sauter_profile_volume_mapping.py
+      - name: Commit patch and remove helper workflow
+        run: |
+          rm .github/workflows/fix-sauter-batching.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/fusdb/relations/geometry/profile_coordinates.py .github/workflows/fix-sauter-batching.yml
+          git commit -m "fix: support batched Sauter profile mappings"
+          git push origin HEAD:agent/profile-coordinate-refactor
