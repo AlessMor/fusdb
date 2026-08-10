@@ -40,6 +40,23 @@ def test_sauter_profile_volume_mapping_responds_to_geometry():
     np.testing.assert_allclose(2.0 * w1, derivative, rtol=3e-4, atol=3e-4)
 
 
+def test_sauter_profile_volume_mapping_supports_batched_geometry_inputs():
+    relation = RELATIONS.get(NAME)
+    rho = np.linspace(0.0, 1.0, 51)
+    delta = np.asarray([[0.0], [0.5]])
+    eps = np.asarray([[0.3], [0.3]])
+
+    v_norm, w_V = relation.evaluate({"delta": delta, "eps": eps, "rho": rho})
+
+    assert v_norm.shape == (2, rho.size)
+    assert w_V.shape == (2, rho.size)
+    np.testing.assert_array_equal(v_norm[0], rho**2)
+    np.testing.assert_array_equal(w_V[0], rho)
+    assert not np.allclose(v_norm[0], v_norm[1])
+    assert not np.allclose(w_V[0], w_V[1])
+    np.testing.assert_allclose(v_norm[:, -1], 1.0)
+
+
 def test_sauter_mapping_is_opt_in_and_atomic_for_both_volume_outputs():
     ordinary = {
         relation.name
