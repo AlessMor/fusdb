@@ -585,7 +585,13 @@ def inputs_beyond_tolerance(system: Any, values: Mapping[str, Any]) -> list[dict
         # crossing; deviation in tolerance units is then 1 + excess.
         spec = system.spec_of(name)
         excess = spec.movement_excess(values[name], spec.solver_value(ref, system.profile_size), *system.tols_of(name))
-        if excess > 0.0:
+        # The optimizer can stop a few parts per million beyond the exact
+        # deadzone boundary.  That is numerical termination noise, not a
+        # physically meaningful extra input excursion.  Keep the reporting
+        # threshold tiny relative to one tolerance width so real crossings are
+        # unaffected while values such as 1.00000057 tol are treated as on the
+        # boundary.
+        if excess > 1.0e-6:
             out.append({"name": name, "deviation_tol": 1.0 + excess})
     return sorted(out, key=lambda item: -item["deviation_tol"])
 
