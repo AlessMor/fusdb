@@ -56,6 +56,7 @@ struct["direct_ok"] = bool(direct.get("success"))
 struct["residual_calls"] = solver.get("residual_calls")
 struct["residual_mean_ms"] = solver.get("residual_eval_mean_ms")
 struct["nfev"] = solver.get("nfev")
+struct["beyond"] = len(direct.get("inputs_beyond_tolerance") or ())
 struct["stage_history"] = [
     {
         "stage": x.get("stage"),
@@ -64,6 +65,7 @@ struct["stage_history"] = [
         "jac_mode": x.get("jac_mode"),
         "residual_size": x.get("residual_size"),
         "verified": x.get("verified"),
+        "inputs_beyond_tolerance": x.get("inputs_beyond_tolerance"),
     }
     for x in (solver.get("stage_history") or [])
 ]
@@ -102,6 +104,19 @@ def post(context: str, description: str) -> None:
     ], check=True)
 
 
+def stage_text(data: dict) -> str:
+    pieces = []
+    for x in data["stage_history"]:
+        pieces.append(
+            "%s:n%s/t%.2f/%s/b%s"
+            % (
+                x["stage"], x["nfev"], x["elapsed_s"], x["jac_mode"],
+                "-" if x["inputs_beyond_tolerance"] is None else x["inputs_beyond_tolerance"],
+            )
+        )
+    return " ".join(pieces)
+
+
 def main() -> None:
     main_data = run("main", MAIN)
     head_data = run("head", HEAD)
@@ -118,20 +133,16 @@ def main() -> None:
     )
     post(
         "fusdb/diag/reconcile-runtime",
-        "main/head solve=%.2f/%.2fs calls=%s/%s mean=%.2f/%.2fms nfev=%s/%s stages=%s/%s"
+        "main/head solve=%.2f/%.2fs calls=%s/%s mean=%.2f/%.2fms beyond=%s/%s"
         % (
             main_data["direct_s"], head_data["direct_s"],
             main_data["residual_calls"], head_data["residual_calls"],
             main_data["residual_mean_ms"], head_data["residual_mean_ms"],
-            main_data["nfev"], head_data["nfev"],
-            len(main_data["stage_history"]), len(head_data["stage_history"]),
+            main_data["beyond"], head_data["beyond"],
         ),
     )
-    post(
-        "fusdb/diag/reconcile-stages",
-        "main=" + json.dumps(main_data["stage_history"], separators=(",", ":"))[:55]
-        + " head=" + json.dumps(head_data["stage_history"], separators=(",", ":"))[:55],
-    )
+    post("fusdb/diag/reconcile-stages-main", stage_text(main_data))
+    post("fusdb/diag/reconcile-stages-head", stage_text(head_data))
 
 
 if __name__ == "__main__":
