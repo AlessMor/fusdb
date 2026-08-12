@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from fusdb.profile_system import build_relation_system
+from fusdb.registry import RELATIONS
 from fusdb.utils.profiles import volume_average
 from fusdb.variable import Variable
 
@@ -41,3 +42,29 @@ def test_movable_source_profile_promotes_available_volume_weight_to_graph_input(
     values = system.complete(system.solver_values())
     average = float(np.asarray(values["n_e_avg"]).reshape(-1)[0])
     assert volume_average(values["n_e"], values["rho"], weight=values["w_V"]) == pytest.approx(average)
+
+
+def test_reduced_stellarator_weight_stays_optional_for_profile_generators():
+    """A deterministic compatibility mapping must not perturb the solver graph."""
+    system = build_relation_system(
+        [
+            Variable("T_e_avg", value=8.0),
+            Variable("temperature_peaking", value=2.0),
+        ],
+        [
+            RELATIONS.get("Reduced stellarator volume integration weight"),
+            RELATIONS.get("Parabolic electron temperature profile"),
+        ],
+        profile_size=31,
+    )
+    profile = next(
+        relation
+        for relation in system.candidate_primary_relations
+        if relation.name == "Parabolic electron temperature profile"
+    )
+
+    assert "Reduced stellarator volume integration weight" in {
+        relation.name for relation in system.candidate_primary_relations
+    }
+    assert "w_V" not in profile.input_names
+    assert "w_V" in profile.constant_names
