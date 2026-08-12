@@ -7,6 +7,24 @@ from fusdb.utils import volume_average
 from fusdb.variable import Variable
 
 
+_VOLUME_INTEGRATED_FUSION_RELATIONS = (
+    "DT reaction rate",
+    "DD (He3+n) reaction rate",
+    "DD (T+p) reaction rate",
+    "D-He3 reaction rate",
+    "He3-He3 reaction rate",
+    "T-He3 alpha+D reaction rate",
+    "T-He3 alpha+n+p reaction rate",
+    "T-T reaction rate",
+)
+
+
+def test_volume_integrated_fusion_relations_expose_geometry_measure():
+    for name in _VOLUME_INTEGRATED_FUSION_RELATIONS:
+        relation = RELATIONS.get(name)
+        assert "w_V" in relation.constant_names, name
+
+
 def test_dt_reaction_rate_uses_supplied_volume_measure():
     rho = np.linspace(0.0, 1.0, 9)
     weight = 0.2 + rho**3
@@ -80,3 +98,12 @@ def test_thermal_pressure_uses_supplied_volume_measure():
     assert np.isfinite(weighted)
     assert weighted != pytest.approx(legacy)
     assert "w_V" in relation.constant_names
+
+
+def test_density_weighted_temperatures_expose_geometry_measure():
+    for name in (
+        "Density-weighted electron temperature",
+        "Density-weighted ion temperature",
+    ):
+        relation = RELATIONS.get(name)
+        assert "w_V" in relation.constant_names, name
