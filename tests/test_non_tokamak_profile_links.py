@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import numpy as np
+
 from fusdb import Reactor
 from fusdb.registry import RELATIONS, TAGS
 
@@ -52,7 +54,13 @@ def test_stellaris_keeps_n_la_and_sudo_chain_active():
     system.compile()
     active = {relation.name for relation in system.primary_relations}
 
-    assert "Reduced stellarator volume integration weight" in active
+    # The reduced w_V=rho fallback is now materialized as fixed framework data
+    # before RelationSystem compilation.  It therefore no longer appears as an
+    # active provider, while the physical profile-average and density-limit
+    # relations that consume it remain active exactly as before.
+    assert "Reduced stellarator volume integration weight" not in active
+    assert "w_V" in system.fixed
+    np.testing.assert_array_equal(system.inputs["w_V"], system.inputs["rho"])
     assert "Electron density volume-average consistency" in active
     assert "Reduced non-tokamak electron density line-average" in active
     assert "Sudo density limit" in active
