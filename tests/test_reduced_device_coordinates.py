@@ -88,9 +88,10 @@ def test_supplied_equilibrium_mapping_suppresses_reduced_default_provider():
 
 def test_coordinate_registry_exposes_reduced_device_mappings():
     assert "rho_radial" in VARIABLES
-    assert VARIABLES.get("rho_tor").default_relation == (
+    assert set(VARIABLES.get("rho_tor").default_relation) == {
+        "Tokamak normalized toroidal-flux coordinate",
         "Reduced stellarator toroidal-flux coordinate",
-    )
+    }
     assert VARIABLES.get("rho_radial").default_relation == (
         "Reduced mirror radial coordinate",
     )

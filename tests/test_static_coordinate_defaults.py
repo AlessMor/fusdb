@@ -10,6 +10,7 @@ def test_static_tokamak_coordinate_defaults_are_materialized_not_providers():
         RELATIONS.get(name)
         for name in (
             "Tokamak normalized minor-radius coordinate",
+            "Tokamak normalized toroidal-flux coordinate",
             "Tokamak normalized enclosed volume",
             "Tokamak volume integration weight",
         )
@@ -18,14 +19,16 @@ def test_static_tokamak_coordinate_defaults_are_materialized_not_providers():
 
     candidate_names = {relation.name for relation in system.candidate_primary_relations}
     assert "Tokamak normalized minor-radius coordinate" not in candidate_names
+    assert "Tokamak normalized toroidal-flux coordinate" not in candidate_names
     assert "Tokamak normalized enclosed volume" not in candidate_names
     assert "Tokamak volume integration weight" not in candidate_names
 
     rho = np.linspace(0.0, 1.0, 46)
     assert np.array_equal(system.inputs["rho_minor"], rho)
+    assert np.array_equal(system.inputs["rho_tor"], rho)
     assert np.array_equal(system.inputs["w_V"], rho)
     assert np.array_equal(system.inputs["v_norm"], rho**2)
-    assert {"rho_minor", "v_norm", "w_V"} <= system.fixed
+    assert {"rho_minor", "rho_tor", "v_norm", "w_V"} <= system.fixed
 
 
 def test_static_mapping_is_constant_but_dynamic_mapping_stays_input():
