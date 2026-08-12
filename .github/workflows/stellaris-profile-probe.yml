@@ -1,0 +1,47 @@
+name: STELLARIS Profile Probe
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[test]"
+      - name: Publish reconcile probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python - <<'PY' > /tmp/probe.txt
+          from pathlib import Path
+          from fusdb import Reactor
+          result = Reactor.from_yaml(Path('reactors/STELLARIS/reactor.yaml')).run('reconcile')
+          values = result.get('values') or {}
+          bad = result.get('inputs_beyond_tolerance') or []
+          print('success=' + str(bool(result.get('success'))))
+          print('tau_p=' + repr(values.get('tau_p')))
+          print('tau_E=' + repr(values.get('tau_E')))
+          print('T_e_avg=' + repr(values.get('T_e_avg')))
+          print('n_e_avg=' + repr(values.get('n_e_avg')))
+          print('bad=' + str(len(bad)))
+          print('bad_names=' + ','.join(str(item.get('variable', item.get('name', '?'))) if isinstance(item, dict) else str(item) for item in bad))
+          PY
+          desc=$(tr '\n' ' ' < /tmp/probe.txt | cut -c1-140)
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/statuses/$SHA" \
+            -d "$(python -c 'import json,sys; print(json.dumps({"state":"success","context":"fusdb/diag/stellaris-values","description":sys.stdin.read().strip()}))' < /tmp/probe.txt)"
