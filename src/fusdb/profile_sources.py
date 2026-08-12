@@ -92,6 +92,16 @@ def source_profile_relation(variable: Variable, *, average_name: str | None) -> 
     source = _source_grid(variable)
     source_values = np.asarray(variable.input_value, dtype=float).copy()
     fixed = bool(variable.fixed)
+    rebuild_spec = {
+        "kind": "source_profile",
+        "version": 1,
+        "variable": name,
+        "coordinate": coordinate,
+        "source_coordinate": source.copy(),
+        "source_values": source_values.copy(),
+        "fixed": fixed,
+        "average_name": average_name,
+    }
 
     def shape_on(mapping: Any, rho: Any, w_V: Any = None, v_norm: Any = None) -> np.ndarray:
         mapped = reinterpolate_profile(source_values, source, mapping)
@@ -116,6 +126,7 @@ def source_profile_relation(variable: Variable, *, average_name: str | None) -> 
                 function_name=f"source_profile_{name}",
                 source_kind="source_profile",
                 source_name=name,
+                rebuild_spec=rebuild_spec,
             )
         else:
             if average_name is None:
@@ -136,6 +147,7 @@ def source_profile_relation(variable: Variable, *, average_name: str | None) -> 
                 argument_names=("average",),
                 source_kind="source_profile",
                 source_name=name,
+                rebuild_spec=rebuild_spec,
             )
     else:
         if fixed:
@@ -154,6 +166,7 @@ def source_profile_relation(variable: Variable, *, average_name: str | None) -> 
                 argument_names=("mapping",),
                 source_kind="source_profile",
                 source_name=name,
+                rebuild_spec=rebuild_spec,
             )
         else:
             if average_name is None:
@@ -174,8 +187,31 @@ def source_profile_relation(variable: Variable, *, average_name: str | None) -> 
                 argument_names=("average", "mapping"),
                 source_kind="source_profile",
                 source_name=name,
+                rebuild_spec=rebuild_spec,
             )
     return relation
+
+
+def source_profile_relation_from_spec(spec: Mapping[str, Any]) -> Relation:
+    """Rebuild a generated source-profile relation from a picklable worker recipe."""
+    if spec.get("kind") != "source_profile":
+        raise ValueError(f"Unsupported generated relation kind {spec.get('kind')!r}.")
+    if int(spec.get("version", 1)) != 1:
+        raise ValueError(f"Unsupported source-profile rebuild spec version {spec.get('version')!r}.")
+    source_values = np.asarray(spec["source_values"], dtype=float)
+    source_coordinate = np.asarray(spec["source_coordinate"], dtype=float)
+    variable = Variable(
+        str(spec["variable"]),
+        value=source_values,
+        fixed=bool(spec.get("fixed", False)),
+        coordinate=str(spec.get("coordinate") or "rho"),
+        coordinate_values=source_coordinate,
+    )
+    average_name = spec.get("average_name")
+    return source_profile_relation(
+        variable,
+        average_name=None if average_name is None else str(average_name),
+    )
 
 
 def prepare_source_profiles(
