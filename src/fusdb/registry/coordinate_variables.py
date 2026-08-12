@@ -93,7 +93,10 @@ def with_coordinate_variables(base: VariableRegistry) -> VariableRegistry:
                 "rho_tor",
                 "Normalized toroidal-flux radius sqrt(Phi/Phi_edge) tabulated on the common rho grid.",
                 aliases=("normalized_toroidal_flux_radius", "rho_toroidal"),
-                default_relation=("Reduced stellarator toroidal-flux coordinate",),
+                default_relation=(
+                    "Tokamak normalized toroidal-flux coordinate",
+                    "Reduced stellarator toroidal-flux coordinate",
+                ),
             ),
             _coordinate_spec(
                 "rho_pol",

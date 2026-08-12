@@ -225,12 +225,12 @@ def _fuse_hmode_profile(
     exponent_inner: Any,
     exponent_outer: Any,
     width: Any,
-    rho: Any,
+    rho_tor: Any,
 ) -> np.ndarray:
-    """FUSE/IMAS ``Hmode_profiles`` on the fusdb radial grid."""
-    x = np.asarray(rho, dtype=float)
+    """FUSE/IMAS ``Hmode_profiles`` evaluated on normalized toroidal-flux radius."""
+    x = np.asarray(rho_tor, dtype=float)
     if x.ndim != 1:
-        raise ValueError("rho must be a one-dimensional profile grid")
+        raise ValueError("rho_tor must be a one-dimensional profile grid")
     edge_v = _column(edge)
     ped = _column(pedestal)
     core_v = _column(core)
@@ -263,11 +263,11 @@ def fuse_imas_hmode_electron_temperature_profile(
     T0: Any,
     alphat: Any,
     pedestal_width: Any,
-    rho: Any,
+    rho_tor: Any,
 ) -> np.ndarray:
-    """FUSE/IMAS H-mode temperature shape; also applicable to I-mode."""
+    """FUSE/IMAS H-mode temperature shape versus ``sqrt(Phi/Phi_edge)``; also applicable to I-mode."""
     return _fuse_hmode_profile(
-        T_sep, temp_plasma_pedestal_kev, T0, alphat, alphat, pedestal_width, rho
+        T_sep, temp_plasma_pedestal_kev, T0, alphat, alphat, pedestal_width, rho_tor
     )
 
 
@@ -283,9 +283,9 @@ def fuse_imas_hmode_electron_density_profile(
     n0: Any,
     alphan: Any,
     pedestal_width: Any,
-    rho: Any,
+    rho_tor: Any,
 ) -> np.ndarray:
-    """FUSE/IMAS H-mode density shape; deliberately excluded from I-mode."""
+    """FUSE/IMAS H-mode density shape versus ``sqrt(Phi/Phi_edge)``; excluded from I-mode."""
     return _fuse_hmode_profile(
-        n_sep, nd_plasma_pedestal_electron, n0, alphan, alphan, pedestal_width, rho
+        n_sep, nd_plasma_pedestal_electron, n0, alphan, alphan, pedestal_width, rho_tor
     )

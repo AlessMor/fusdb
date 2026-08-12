@@ -33,6 +33,21 @@ def tokamak_normalized_minor_radius(*, rho: Any) -> np.ndarray:
 
 
 @relation(
+    name="Tokamak normalized toroidal-flux coordinate",
+    tags=("geometry", "tokamak", "default"),
+    outputs="rho_tor",
+    dependency="generated_profile",
+)
+def tokamak_normalized_toroidal_flux_coordinate(*, rho: Any) -> np.ndarray:
+    """Return the migration-compatible tokamak fallback ``rho_tor=rho``.
+
+    The identity preserves the historical profile grid until an equilibrium
+    supplies the physical ``sqrt(Phi/Phi_edge)`` mapping explicitly.
+    """
+    return np.asarray(rho, dtype=float).copy()
+
+
+@relation(
     name="Tokamak normalized enclosed volume",
     tags=("geometry", "tokamak", "default"),
     outputs="v_norm",
