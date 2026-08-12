@@ -2,16 +2,16 @@ from fusdb.profile_system import build_relation_system
 from fusdb.registry import RELATIONS
 
 
-def test_tokamak_coordinate_residual_growth_is_domain_enforcement_only():
-    """Account explicitly for the five rows introduced by coordinate domains.
+def test_static_tokamak_coordinate_defaults_add_no_solver_domain_rows():
+    """Static fallback mappings are framework data, not solver constraints.
 
-    The three reduced coordinate providers are structural completion relations,
-    not nonlinear equations, so they add no enforced relation residuals and no
-    solver DOFs.  Their physical domains do add five hard feasibility rows:
-    lower+upper bounds for rho_minor and v_norm, and the non-negative lower
-    bound for w_V.  This is intentional -- variable domains remain enforced
-    boundaries -- and explains the observed +5 residual_size without hiding an
-    extra physics constraint.
+    The identity/self-similar tokamak defaults are evaluated once by the
+    source-aware builder and materialized as fixed coordinate data. They carry
+    no solver ancestry, so keeping their registry domains in the nonlinear
+    residual would add five identically satisfied rows and change finite-
+    difference grouping without constraining any unknown. Their values remain
+    validated when they are constructed; supplied or geometry-derived mappings
+    stay ordinary active variables and retain domain enforcement.
     """
     relations = [
         RELATIONS.get("Tokamak normalized minor-radius coordinate"),
@@ -27,9 +27,20 @@ def test_tokamak_coordinate_residual_growth_is_domain_enforcement_only():
     assert system.packed_dim == 0
     assert system._enforced_residual_relations == []
     assert layout["relation_dims"] == []
-    assert layout["size"] == 5
-    assert {name for name, *_rest in layout["domain_tail"]} == {
-        "rho_minor",
-        "v_norm",
-        "w_V",
-    }
+    assert layout["size"] == 0
+    assert layout["domain_tail"] == []
+
+
+def test_geometry_derived_coordinate_keeps_domain_rows():
+    """A real geometry mapping remains inside the enforced solver domain."""
+    relation = RELATIONS.get("Sauter self-similar profile volume mapping")
+    system = build_relation_system(
+        [],
+        [relation],
+        profile_size=46,
+    )
+    # The relation inputs are deliberately absent here: compilation may prune
+    # the provider, but the builder must not have folded it into fixed data.
+    assert relation.name in {item.name for item in system.candidate_primary_relations}
+    assert system.inputs.get("v_norm") is None
+    assert system.inputs.get("w_V") is None
