@@ -12,24 +12,25 @@ from fusdb.relation import relation
     tags=('power_balance',),
     outputs='P_brem',
 )
-def bremsstrahlung_radiation(n_e: float, T_e: float, Z_eff: float, V_p: float, rho: float) -> Any:
+def bremsstrahlung_radiation(
+    n_e: float,
+    T_e: float,
+    Z_eff: float,
+    V_p: float,
+    rho: float,
+    w_V: Any = None,
+) -> Any:
     """Return total bremsstrahlung radiated power from an explicit local profile law.
 
-    Args:
-        n_e: Electron density [1/m^3].
-        T_e: Electron temperature [keV].
-        Z_eff: Effective charge [dimensionless].
-        V_p: Plasma volume [m^3].
-        rho: Normalized minor-radius grid for profile integration.
-
-    Return:
-        Total bremsstrahlung radiated power [W].
+    ``rho`` is the computational sampling grid. ``w_V`` supplies the physical
+    volume measure when available; omitting it retains the historical
+    self-similar weighting.
     """
     n_e20 = n_e / 1e20
-    Tm = 511.0  # keV, electron rest mass energy
+    Tm = 511.0
     xrel = (1.0 + 2.0 * T_e / Tm) * (1.0 + (2.0 / Z_eff) * (1.0 - 1.0 / (1.0 + T_e / Tm)))
-    p_brem = 5.35e-3 * Z_eff * (n_e20 ** 2) * (T_e ** 0.5) * xrel * 1e6  # [W/m^3]
-    return V_p * volume_average(p_brem, rho)
+    p_brem = 5.35e-3 * Z_eff * (n_e20 ** 2) * (T_e ** 0.5) * xrel * 1e6
+    return V_p * volume_average(p_brem, rho, weight=w_V)
 
 
 @relation(
@@ -37,35 +38,24 @@ def bremsstrahlung_radiation(n_e: float, T_e: float, Z_eff: float, V_p: float, r
     tags=('power_balance',),
     outputs='P_brem',
 )
-def hydrogenic_bremsstrahlung_cfspopcon(n_e: float, T_e: float, V_p: float, rho: float) -> Any:
+def hydrogenic_bremsstrahlung_cfspopcon(
+    n_e: float, T_e: float, V_p: float, rho: float, w_V: Any = None
+) -> Any:
     """Bremsstrahlung from the hydrogenic (fuel) plasma only, i.e. at Z_eff = 1.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
 
     Same Stott 2005 formula as :func:`bremsstrahlung_radiation`, evaluated at
-    ``Z_eff = 1``.  cfspopcon's ``calc_intrinsic_radiated_power_from_core`` sums
-    ``P_brem(Z_eff=1) + P_sync + P_line`` whenever an impurity radiation method
-    is active, because the impurity cooling curves L_z already include each
-    impurity's own bremsstrahlung and recombination continuum; keeping the
-    Z_eff-scaled bremsstrahlung alongside them would double-count it.  Select
-    this relation whenever ``P_line`` is driven by supplied impurity
-    concentrations (the default Z_eff-scaled relation is the standalone form).
-
-    Args:
-        n_e: Electron density [1/m^3].
-        T_e: Electron temperature [keV].
-        V_p: Plasma volume [m^3].
-        rho: Normalized minor-radius grid for profile integration.
-
-    Return:
-        Hydrogenic bremsstrahlung radiated power [W].
+    ``Z_eff = 1``. cfspopcon's impurity cooling curves already contain impurity
+    bremsstrahlung and recombination continuum, so this relation is the paired
+    hydrogenic contribution when those curves are active.
     """
     # CHECK
     n_e20 = n_e / 1e20
-    Tm = 511.0  # keV, electron rest mass energy
+    Tm = 511.0
     xrel = (1.0 + 2.0 * T_e / Tm) * (1.0 + 2.0 * (1.0 - 1.0 / (1.0 + T_e / Tm)))
-    p_brem = 5.35e-3 * (n_e20 ** 2) * (T_e ** 0.5) * xrel * 1e6  # [W/m^3]
-    return V_p * volume_average(p_brem, rho)
+    p_brem = 5.35e-3 * (n_e20 ** 2) * (T_e ** 0.5) * xrel * 1e6
+    return V_p * volume_average(p_brem, rho, weight=w_V)
 
 
 @relation(
@@ -77,27 +67,13 @@ def impurity_bremsstrahlung(
     n_e: Any, T_e: Any, T_e_avg: Any, V_p: Any, rho: Any,
     c_Xe: Any = 0.0, c_He: Any = 0.0, c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0,
     c_N: Any = 0.0, c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0,
-    c_W: Any = 0.0,
+    c_W: Any = 0.0, w_V: Any = None,
 ) -> Any:
     """Bremsstrahlung radiated by the impurities alone [W].
 
-    A SUM over impurity species, never a difference of two totals.
-
-    The local law is linear in Z: expanding its relativistic factor,
-    ``p(Z) = C (1 + 2 T_e/Tm) (Z + 2 b)``, so the impurity part is
-    ``C (1 + 2 T_e/Tm) (Z_eff - 1)`` exactly.  Quasineutrality then gives
-
-        Z_eff - 1 = sum_z c_z Zbar_z (Zbar_z - 1)
-
-    (cfspopcon's ``change_in_zeff``), and every term of that is >= 0 because
-    Zbar >= 1.  So this quantity is NON-NEGATIVE BY CONSTRUCTION, and a
-    pure-hydrogenic plasma returns exactly 0.0 because the sum is EMPTY.
-
-    Previously it was ``brems(Z_eff) - brems(1)``.  That is the same number when
-    Z_eff is exact, but Z_eff is SOLVED: on ARC_V0 it converges to 0.99999997
-    and the difference came out at -0.159 W, tripping the ``[0, inf)`` domain.
-    Same structural defect as the old negative-``P_line`` bug, which was a
-    subtraction for the same reason.
+    A SUM over impurity species, never a difference of two totals. The local law
+    is linear in charge after separating the hydrogenic part, which keeps this
+    quantity non-negative by construction.
     """
     # CHECK
     from ..composition.impurities import _mavrin_charge_terms
@@ -109,9 +85,9 @@ def impurity_bremsstrahlung(
         change_in_zeff = change_in_zeff + concentration * zbar * (zbar - 1.0)
 
     n_e20 = n_e / 1e20
-    Tm = 511.0  # keV, electron rest mass energy
+    Tm = 511.0
     p_brem_imp = 5.35e-3 * change_in_zeff * (n_e20 ** 2) * (T_e ** 0.5) * (1.0 + 2.0 * T_e / Tm) * 1e6
-    return V_p * volume_average(p_brem_imp, rho)
+    return V_p * volume_average(p_brem_imp, rho, weight=w_V)
 
 
 @relation(
@@ -122,17 +98,9 @@ def impurity_bremsstrahlung(
 def line_radiation_from_cooling_rate(P_cool_imp: float, P_brem_imp: float) -> Any:
     """Line (plus recombination) radiated power [W].
 
-    Cooling-rate tables -- Mavrin, radas, Post-Jensen, PROCESS's own -- return the
-    TOTAL impurity radiated power: line, recombination continuum and the
-    impurities' own bremsstrahlung. ``P_brem`` is meanwhile defined as the TOTAL
-    bremsstrahlung, hydrogenic and impurity alike. So the impurity bremsstrahlung
-    appears in both, and summing them into ``P_rad`` would count it twice -- ~16%
-    of the radiated power at reactor conditions.
-
-    Removing it here is what keeps each variable meaning what its name says and
-    leaves ``P_rad = P_brem + P_line + P_sync`` self-consistent. Recombination
-    stays inside ``P_line`` because the tables do not separate it from line
-    emission.
+    Cooling-rate tables include the impurities' own bremsstrahlung. Subtract it
+    here when ``P_brem`` is defined as the total bremsstrahlung so
+    ``P_rad = P_brem + P_line + P_sync`` does not double-count it.
     """
     # CHECK
     return P_cool_imp - P_brem_imp
@@ -146,17 +114,8 @@ def line_radiation_from_cooling_rate(P_cool_imp: float, P_brem_imp: float) -> An
 def line_radiation_equals_cooling_rate(P_cool_imp: float) -> Any:
     """``P_line = P_cool_imp`` -- cfspopcon's radiation decomposition.
 
-    cfspopcon does not split the impurities' own bremsstrahlung out of its L_z
-    curves at all: it pairs the L_z total with a HYDROGENIC-only ``P_brem``, so
-    the impurity bremsstrahlung is carried inside what it calls the impurity
-    radiation.  That is self-consistent -- ``P_rad`` comes out right -- but it
-    means its ``P_brem`` is not the total bremsstrahlung and its impurity term is
-    not line radiation alone.
-
-    Reproducing cfspopcon therefore needs this identity *together with* its
-    hydrogenic ``P_brem``; the two go as a pair.  fusdb's default instead derives
-    ``P_line`` properly (see ``Line radiation from impurity cooling rate``) so
-    that ``P_brem`` can mean the total bremsstrahlung.
+    This convention is paired with hydrogenic-only ``P_brem``; impurity
+    bremsstrahlung remains inside the cooling-curve contribution.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
     """
