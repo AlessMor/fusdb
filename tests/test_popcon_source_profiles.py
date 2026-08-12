@@ -40,6 +40,10 @@ def test_source_profile_worker_recipe_is_picklable_and_preserves_grid():
     assert len(generated) == 1
     assert generated[0]["variable"] == "n_e"
     assert np.asarray(generated[0]["source_values"]).shape == (101,)
+    assert any(
+        item.get("kind") == "registry" and item.get("name") == "Electron density rho-average"
+        for item in spec["relations"]
+    )
 
     rebuilt = popcon_mode._rebuild_system(spec)
     rebuilt.compile()
