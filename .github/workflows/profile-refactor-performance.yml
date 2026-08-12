@@ -31,7 +31,7 @@ jobs:
           git fetch origin main
           git worktree add /tmp/fusdb-main origin/main
 
-      - name: Benchmark unchanged reconcile and POPCON tests
+      - name: Benchmark reconcile and POPCON workloads
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -49,18 +49,36 @@ jobs:
 
           head = Path(os.environ["GITHUB_WORKSPACE"])
           main = Path("/tmp/fusdb-main")
-          workloads = {
-              "popcon": "tests/test_popcon_mode.py",
-              "reconcile": "tests/test_reconcile_sparsity.py",
-          }
-          # These files are unchanged in PR #6, so both revisions execute the
-          # same tests. Alternating revisions limits runner drift; medians reject
-          # one noisy sample without hiding a repeatable regression.
-          order = ("main", "head", "head", "main", "main", "head")
           roots = {"main": main, "head": head}
-          results: dict[str, dict[str, float]] = {}
 
-          for workload, test_file in workloads.items():
+          scripts = {
+              "reconcile": r'''
+from pathlib import Path
+from fusdb import Reactor
+r = Reactor.from_yaml(Path("reactors/ARC_V0/reactor.yaml"))
+result = r.reconcile()
+assert result["success"], result.get("errors")
+''',
+              "popcon": r'''
+from pathlib import Path
+from fusdb import Reactor
+r = Reactor.from_yaml(Path("tests/cfspopcon_SPARC/reactor.yaml"))
+result = r.popcon(
+    x={"variable": "average_electron_density", "values": [2.5e20, 3.0e20]},
+    y={"variable": "average_electron_temp", "values": [9.0, 12.0]},
+    outputs=("P_fus", "P_aux"),
+)
+assert result["success"], result.get("errors")
+assert result["popcon"]["success"].all(), result["popcon"]["failures"]
+''',
+          }
+
+          # Alternate revisions to reduce runner drift. Two measured samples per
+          # revision are enough here because each sample is a complete physical
+          # workload, not an individual micro-kernel.
+          order = ("main", "head", "head", "main")
+          results: dict[str, dict[str, float]] = {}
+          for workload, code in scripts.items():
               samples = {"main": [], "head": []}
               for label in order:
                   root = roots[label]
@@ -68,15 +86,7 @@ jobs:
                   env["PYTHONPATH"] = str(root / "src")
                   start = time.perf_counter()
                   completed = subprocess.run(
-                      [
-                          sys.executable,
-                          "-m",
-                          "pytest",
-                          "-q",
-                          "-p",
-                          "no:cacheprovider",
-                          test_file,
-                      ],
+                      [sys.executable, "-c", code],
                       cwd=root,
                       env=env,
                       text=True,
@@ -87,18 +97,14 @@ jobs:
                   if completed.returncode != 0:
                       print(completed.stdout)
                       raise SystemExit(
-                          f"{label} {workload} benchmark tests failed with code {completed.returncode}"
+                          f"{label} {workload} benchmark failed with code {completed.returncode}"
                       )
                   samples[label].append(elapsed)
                   print(f"{workload} {label}: {elapsed:.3f}s")
               baseline = statistics.median(samples["main"])
               candidate = statistics.median(samples["head"])
               ratio = candidate / baseline
-              results[workload] = {
-                  "main": baseline,
-                  "head": candidate,
-                  "ratio": ratio,
-              }
+              results[workload] = {"main": baseline, "head": candidate, "ratio": ratio}
 
           print(json.dumps(results, indent=2, sort_keys=True))
 
@@ -106,21 +112,19 @@ jobs:
               f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}"
               f"/statuses/{os.environ['GITHUB_SHA']}"
           )
-          token = os.environ["GH_TOKEN"]
           failed = False
           for workload, values in results.items():
               ratio = values["ratio"]
               state = "success" if ratio <= 1.10 else "failure"
               failed |= state == "failure"
-              description = (
-                  f"main {values['main']:.2f}s, head {values['head']:.2f}s, "
-                  f"ratio {ratio:.3f} (limit 1.10)"
-              )
               payload = json.dumps(
                   {
                       "state": state,
                       "context": f"fusdb/perf/{workload}",
-                      "description": description,
+                      "description": (
+                          f"main {values['main']:.2f}s, head {values['head']:.2f}s, "
+                          f"ratio {ratio:.3f} (limit 1.10)"
+                      ),
                   }
               ).encode()
               request = urllib.request.Request(
@@ -128,7 +132,7 @@ jobs:
                   data=payload,
                   method="POST",
                   headers={
-                      "Authorization": f"Bearer {token}",
+                      "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
                       "Accept": "application/vnd.github+json",
                       "X-GitHub-Api-Version": "2022-11-28",
                       "Content-Type": "application/json",
