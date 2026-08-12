@@ -48,6 +48,11 @@ def measured_run(label: str, workload: str, code: str) -> float:
     root = ROOTS[label]
     env = dict(os.environ)
     env["PYTHONPATH"] = str(root / "src")
+    # Relation-system compilation uses sets in several structural passes.  A
+    # fixed hash seed keeps provider/matching order identical across subprocess
+    # repetitions, so this benchmark measures the code change rather than a
+    # different legal solver trajectory chosen by Python's per-process hash seed.
+    env["PYTHONHASHSEED"] = "0"
     completed = subprocess.run(
         [sys.executable, "-c", code],
         cwd=root,
@@ -79,8 +84,8 @@ def publish_status(workload: str, values: dict[str, float]) -> bool:
             "context": f"fusdb/perf/{workload}",
             "description": (
                 f"main {values['main']:.2f}s, head {values['head']:.2f}s, "
-                f"ratio {ratio:.3f} (limit 1.10)"
-            ),
+                f"ratio {ratio:.3f} (limit 1.10, PYTHONHASHSEED=0)"
+            )[:140],
         }
     )
     url = (
@@ -128,9 +133,15 @@ def main() -> None:
         }
 
     print(json.dumps(results, indent=2, sort_keys=True))
-    failed = any(publish_status(workload, values) for workload, values in results.items())
-    if failed:
-        raise SystemExit("Performance regression exceeded 10% threshold")
+    failures = [
+        workload
+        for workload, values in results.items()
+        if publish_status(workload, values)
+    ]
+    if failures:
+        raise SystemExit(
+            "Performance regression exceeded 10% threshold: " + ", ".join(failures)
+        )
 
 
 if __name__ == "__main__":
