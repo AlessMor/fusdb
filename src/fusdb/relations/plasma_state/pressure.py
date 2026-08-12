@@ -22,20 +22,22 @@ def _thermal_pressure_profile(n_e: Any, T_e: Any, n_i: Any, T_i: Any) -> Any:
     tags=('plasma',),
     outputs='p_th',
 )
-def thermal_pressure(n_e: float, T_e: float, n_i: float, T_i: float, rho: float) -> Any:
+def thermal_pressure(
+    n_e: float,
+    T_e: float,
+    n_i: float,
+    T_i: float,
+    rho: float,
+    w_V: Any = None,
+) -> Any:
     """Return volume-averaged thermal pressure from profile/local quantities.
 
-    Args:
-        n_e: Electron density profile.
-        T_e: Electron temperature profile.
-        n_i: Ion density profile.
-        T_i: Ion temperature profile.
-        rho: Radial grid.
-
-    Returns:
-        Volume-averaged thermal pressure.
+    ``rho`` is the computational sampling grid. ``w_V`` may supply the physical
+    volume measure; omitting it retains the historical self-similar weighting.
     """
-    return volume_average(_thermal_pressure_profile(n_e, T_e, n_i, T_i), rho)
+    return volume_average(
+        _thermal_pressure_profile(n_e, T_e, n_i, T_i), rho, weight=w_V
+    )
 
 
 @relation(
