@@ -69,7 +69,7 @@ def test_batched_sauter_weights_normalize_each_profile_row():
 
     assert profiles.shape == (3, rho.size)
     np.testing.assert_allclose(
-        volume_average(profiles, rho, weight=weight),
+        np.asarray(volume_average(profiles, rho, weight=weight), dtype=float).reshape(-1),
         averages,
         rtol=2e-12,
         atol=0.0,
