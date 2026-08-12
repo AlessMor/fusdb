@@ -42,10 +42,15 @@ def test_worker_rebuild_preserves_foreign_coordinate_source_profile():
         item.get("kind") == "source_profile" and item.get("coordinate") == "rho_minor"
         for item in spec["relations"]
     )
-    assert any(
-        item.get("kind") == "registry" and item.get("name") == MAPPING
-        for item in spec["relations"]
-    )
+
+    # Geometry-independent tokamak coordinate defaults are materialized by the
+    # source-aware builder and removed from the solver graph. Worker rebuilds
+    # must therefore preserve the resulting fixed mapping as serialized input
+    # data rather than require the original fallback provider relation.
+    serialized = {name: (value, fixed) for name, value, fixed, *_ in spec["variables"]}
+    assert "rho_minor" in serialized
+    serialized_mapping, mapping_fixed = serialized["rho_minor"]
+    assert mapping_fixed
 
     rebuilt = popcon_mode._rebuild_system(spec)
     rebuilt.compile()
@@ -53,6 +58,7 @@ def test_worker_rebuild_preserves_foreign_coordinate_source_profile():
     rebuilt_values = rebuilt.complete(dict(rebuilt.input_values()))
 
     assert rebuilt.profile_size == 31
+    np.testing.assert_array_equal(serialized_mapping, original_values["rho_minor"])
     np.testing.assert_array_equal(rebuilt_values["rho_minor"], original_values["rho_minor"])
     np.testing.assert_allclose(rebuilt_values["n_e"], original_values["n_e"], rtol=0.0, atol=0.0)
 
