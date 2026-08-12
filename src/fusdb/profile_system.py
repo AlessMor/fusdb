@@ -131,20 +131,26 @@ def _materialize_static_coordinate_defaults(
     relations: tuple[Relation, ...],
     profile_size: int,
 ) -> tuple[list[Variable], tuple[Relation, ...], frozenset[str]]:
-    """Fold geometry-independent coordinate fallbacks into fixed profile data.
+    """Fold geometry-independent *tokamak* coordinate fallbacks into fixed data.
 
-    Identity/self-similar device defaults such as ``rho_minor=rho`` and
-    ``w_V=rho`` are deterministic framework data: they contain no reactor
-    unknown and no geometry input. Keeping them as completion providers changes
-    provider ordering and finite-difference completion paths even though their
-    values are constant. On large reconcile problems that altered the numerical
-    trajectory enough to cause a multi-fold runtime regression.
+    The identity/self-similar tokamak defaults ``rho_minor=rho``,
+    ``v_norm=rho**2`` and ``w_V=rho`` are deterministic migration scaffolding:
+    they contain no reactor unknown and no geometry input. Keeping those three
+    providers in every large tokamak reconcile changed provider ordering and
+    finite-difference completion paths despite adding no information, producing
+    a material runtime regression.
 
-    Only a very narrow class is folded here: tagged ``default`` relations whose
-    outputs are all physical coordinate variables, with no ordinary inputs and
-    no constants except the framework ``rho`` grid. Geometry-dependent mappings
-    (for example the opt-in Sauter volume mapping) remain ordinary relations, so
-    their dependencies stay visible to completion and Jacobian sparsity.
+    This optimization is deliberately tokamak-only. The reduced stellarator and
+    mirror fallbacks remain ordinary active providers. Those providers restore
+    the pre-coordinate-refactor profile/average and line-average behavior on
+    non-tokamak devices, and keeping them explicit makes that compatibility
+    contract visible rather than silently changing those systems' relation
+    graphs. A future equilibrium-derived non-tokamak mapping can supersede them
+    through the normal provider mechanism.
+
+    Geometry-dependent tokamak mappings (for example the opt-in Sauter volume
+    mapping) also remain ordinary relations, so their dependencies stay visible
+    to completion and Jacobian sparsity.
     """
     by_name = {variable.name: variable for variable in variables}
     rho = VARIABLES.uniform_profile_grid(profile_size)
@@ -155,6 +161,7 @@ def _materialize_static_coordinate_defaults(
         outputs = tuple(relation.output_names)
         static_default = (
             "default" in relation.tags
+            and "tokamak" in relation.tags
             and bool(outputs)
             and set(outputs) <= PHYSICAL_COORDINATE_NAMES
             and not relation.input_names
@@ -193,14 +200,14 @@ def _materialize_static_coordinate_defaults(
 def _demote_static_coordinate_dependencies(
     relations: tuple[Relation, ...], static_names: frozenset[str]
 ) -> tuple[Relation, ...]:
-    """Treat materialized fallback mappings as constants in this compiled graph.
+    """Treat materialized tokamak fallback mappings as constants in this graph.
 
     Their values remain ordinary registered variables in the namespace, but a
     static fallback has no solver ancestry. Removing it from a relation's
     structural input list avoids adding zero domain/Jacobian rows and restores
-    the pre-migration graph for the behavior-neutral default case. A supplied or
-    geometry-derived mapping is never demoted and therefore remains a genuine
-    dependency.
+    the pre-migration graph for the behavior-neutral tokamak default case. A
+    supplied or geometry-derived mapping, and every reduced non-tokamak default,
+    is never demoted and therefore remains a genuine dependency/provider.
     """
     if not static_names:
         return relations
@@ -243,12 +250,14 @@ def build_relation_system(
 
     Physical coordinate mappings are not solver profile degrees of freedom. A
     supplied mapping is held exactly and suppresses tagged fallback coordinate
-    providers unless the declaration explicitly selects provider relations. An
-    unsupplied geometry-independent default is materialized once as fixed
-    profile data; a geometry-dependent mapping remains missing until an active
-    geometry relation computes it. This prevents least squares from inventing an
-    arbitrary pointwise coordinate transformation while keeping real geometry
-    dependencies inside the relation graph.
+    providers unless the declaration explicitly selects provider relations. For
+    tokamaks, the geometry-independent migration defaults are materialized once
+    as fixed profile data so they add no artificial solver ancestry; reduced
+    stellarator/mirror defaults stay explicit providers to preserve their legacy
+    compatibility links. A geometry-dependent mapping remains missing until an
+    active geometry relation computes it. This prevents least squares from
+    inventing an arbitrary pointwise coordinate transformation while keeping
+    real geometry dependencies inside the relation graph.
     """
     prepared, prepared_relations, common_size = prepare_source_profiles(
         variables,
