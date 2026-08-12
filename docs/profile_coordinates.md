@@ -10,17 +10,19 @@ radius, enclosed-volume radius, toroidal-flux radius, poloidal-flux radius, or a
 mirror axial coordinate. All core profiles are represented once on this common
 grid.
 
-Geometry relations may provide normalized coordinate mappings on that grid,
-for example:
+Geometry relations may provide normalized mappings on that grid:
 
 - `v_norm(rho) = V(<rho) / V_p`
 - `rho_minor(rho) = r / a`
 - `rho_tor(rho) = sqrt(Phi / Phi_edge)`
 - `rho_pol(rho) = sqrt(psi / psi_edge)`
-- `rho_radial(rho)` for a reduced mirror radial coordinate
+- `rho_radial(rho)` for the reduced mirror radial coordinate
+- `w_V(rho)`, proportional to `dV / d rho`
 
 A relation must request the physical coordinate it actually assumes. Bare
-`rho` is only a sampling/index coordinate.
+`rho` is a sampling/index coordinate. It may also be used deliberately as the
+integration parameter when a separate physical measure such as `w_V` is
+supplied.
 
 ## Profiles
 
@@ -28,48 +30,29 @@ Every solved/generated profile is represented as
 
 `profile(rho) = volume_average * shape(rho)`
 
-with the shape normalized using the geometry-provided volume measure. In the
-`v_norm` form this means
+with the shape normalized using the selected volume measure. In the `v_norm`
+form,
 
 `integral(shape, d v_norm) = 1`.
 
 If no shape information is available the default shape is uniform. Scalar
-reductions such as volume average, center value, maximum and physical line
-average remain separate registered variables and ordinary relations; they are
-not metadata attached to the profile value.
+reductions such as volume average, center value, maximum, and physical line
+average remain registered variables and ordinary relations; they are not
+metadata attached to the profile value.
 
-A supplied absolute profile is retained as source data. Its samples determine
-the input shape and initial volume average. During reconciliation the scalar
-average is the amplitude degree of freedom rather than one independent solver
-unknown per profile point.
+A supplied absolute profile is retained as immutable source data. Its source
+coordinate is retained as provenance. The profile used by relations is
+reinterpolated onto the common `rho` grid through the current geometry mapping.
+If geometry changes during a solve, the mapping and reinterpolation change with
+it. The scalar average, rather than every source sample, is the amplitude degree
+of freedom when the profile level is free.
 
-## Coordinate conversion
-
-External profiles may be supplied on another normalized coordinate/grid. The
-source samples and source coordinate are retained, while the physical profile
-used by relations is evaluated on the common `rho` grid through the current
-geometry mapping. If geometry changes during a solve, that mapping and the
-reinterpolation change with it.
-
-Coordinate conversion is therefore treated like a geometry-dependent unit
-conversion: it is deterministic, visible to the dependency graph, and is not
-an independent set of solver degrees of freedom.
-
-Interpolation is allowed only inside the supplied coordinate interval, apart
-from a small numerical endpoint tolerance. Fusdb must not silently extrapolate
-a core profile into an uncovered region. If a digitized/source dataset omits a
-small axis or separatrix interval, any extension must be an explicit input-model
-choice rather than an interpolator option. The GIGA reactor demonstrates this:
-the untouched Fig. 3 digitizations are retained, while separate `*_rho01.csv`
-files explicitly add `rho=0` and `rho=1` with a documented zero-order endpoint
-hold before strict interpolation is applied.
-
-A supplied physical mapping (`rho_minor`, `rho_tor`, `rho_radial`, `v_norm`, or
-`w_V`) is authoritative by default. Device fallback providers are removed from
-the compiled system in that case, so imported equilibrium data are not forced
-back onto a reduced default mapping. A non-empty variable-local
-`default_relation` explicitly opts back into simultaneous provider
-certification/reconciliation.
+Interpolation is strict: the current target mapping must remain within the
+source-coordinate interval apart from roundoff-sized endpoint tolerance. Fusdb
+does not silently extrapolate profiles. If a source omits a small axis or
+separatrix interval, extending it is an explicit input-model choice. The GIGA
+reactor demonstrates this with separate `*_rho01.csv` files that document the
+endpoint extension while retaining the untouched digitized source files.
 
 ## Volume average
 
@@ -77,28 +60,20 @@ The general definition is
 
 `<f>_V = integral(f w_V d rho) / integral(w_V d rho)`
 
-where `w_V` is proportional to `dV/drho`. If geometry instead supplies
+where `w_V` is proportional to `dV/d rho`. If geometry instead supplies
 `v_norm`, the equivalent direct-coordinate form is
 
 `<f>_V = integral(f d v_norm) / integral(d v_norm)`.
 
-For the self-similar reduced defaults, `v_norm = rho**2` and `w_V = rho`. This
-choice preserves fusdb's historical discrete averaging exactly. The normalized
-weight does not need an absolute factor involving `R`, `a`, or `kappa`: such a
-constant cancels in a normalized average. A nontrivial mapping is required only
-when the *shape* of enclosed volume versus the computational coordinate differs
-from the self-similar assumption, which is where equilibrium-derived providers
-enter.
+For the reduced self-similar defaults, `v_norm = rho**2` and `w_V = rho`. This
+preserves fusdb's historical discrete averaging exactly. The weight needs no
+absolute factor involving `R`, `a`, or `kappa` because such a constant cancels
+in a normalized average.
 
-The tokamak relation `Sauter self-similar profile volume mapping` is the first
-opt-in geometry-dependent provider walking this path. It applies the existing
-Sauter total-volume correction to self-similar nested surfaces and therefore
-makes `v_norm` and `w_V` depend on `delta * eps`. It is deliberately **not** the
-tokamak default: the historical `rho**2`/`rho` providers remain the regression
-baseline. A scenario can select the Sauter provider through a variable-local
-`default_relation`; because it produces both `v_norm` and `w_V`, provider
-selection is atomic. Imported equilibrium mappings remain preferable whenever
-available.
+`Sauter self-similar profile volume mapping` is an opt-in tokamak provider whose
+mapping depends on geometry. It is intentionally not the default: imported
+equilibrium mappings are preferable, while the reduced defaults remain the
+regression baseline.
 
 ## Geometry defaults and overrides
 
@@ -108,66 +83,87 @@ mandatory single geometry model.
 
 Current reduced coordinate defaults are:
 
-- tokamak: `rho_minor = rho`, `v_norm = rho**2`, `w_V = rho`;
+- tokamak: `rho_minor = rho`, `rho_tor = rho`, `v_norm = rho**2`, `w_V = rho`;
 - stellarator: `rho_tor = rho`, and where source data are explicitly published
   against normalized minor radius also `rho_minor = rho`; `v_norm = rho**2` and
   `w_V = rho` until an equilibrium-derived mapping is supplied;
 - mirror: `rho_radial = rho`, `v_norm = rho**2`, `w_V = rho` for the reduced
-  radial model, with axial physics deliberately represented separately.
+  radial model, with axial physics represented separately.
 
-The stellarator and mirror defaults are low-dimensional fallbacks, not claims of
-high-fidelity equilibrium geometry. Future VMEC/stellarator or mirror-equilibrium
-adapters should reduce external equilibria to these same mapping variables and
-replace the fallback providers without changing profile consumers.
+The tokamak `rho_tor = rho` relation is a migration-compatible fallback for
+FUSE/IMAS H-mode profiles, which are defined versus normalized toroidal-flux
+radius. It preserves the historical fusdb sampling when no equilibrium-derived
+`rho_tor` is available; it is not a claim that `sqrt(Phi/Phi_edge) = r/a` for a
+real equilibrium.
 
-The current off-tokamak `n_la` provider is likewise deliberately
-behavior-neutral: stellarator and mirror scenarios retain the historical
-straight-`rho` average so existing consumers such as the Sudo density limit do
-not disappear during an architectural migration. A physical diagnostic chord
-or equilibrium-specific line integral should be added as a stronger provider,
-not smuggled into this compatibility step.
+The stellarator and mirror mappings are likewise low-dimensional fallbacks, not
+high-fidelity equilibrium claims. Future equilibrium adapters should reduce
+external equilibria to these same mapping variables and replace the fallback
+providers without changing profile consumers.
 
-A scenario may override a variable's `default_relation`. A list of relations
-means those providers are active simultaneously and must reconcile. A
-multi-output provider is atomic: selecting it makes all of its outputs part of
-that physical model, and incompatible explicit provider selections must fail
-at compile time rather than be silently resolved.
+A supplied physical mapping (`rho_minor`, `rho_tor`, `rho_pol`, `rho_radial`,
+`v_norm`, or `w_V`) is authoritative by default. Device fallback providers are
+removed in that case so imported equilibrium data are not forced back onto a
+reduced identity/self-similar mapping. A non-empty variable-local
+`default_relation` explicitly opts into simultaneous provider
+certification/reconciliation.
 
-Mixed geometry conventions are allowed when they can reconcile. Provenance of
-each geometry quantity remains visible through the compiler's default/derived
-provider maps.
+A list of selected provider relations means those providers are active
+simultaneously and must reconcile. Multi-output providers are atomic. Mixed
+geometry conventions are allowed when they can reconcile, and provider
+provenance remains visible through the compiler maps.
 
-## Solver rows and coordinate domains
+## Static and dynamic mappings
 
-Physical coordinate mappings are deterministic/non-packed variables, so their
-provider relations do not add nonlinear unknowns or structural relation
-residuals. Their variable domains are still hard feasibility constraints. With
-the current tokamak reduced set this accounts for five residual rows:
+Geometry-independent tokamak fallback mappings are materialized once as fixed
+profile data by `build_relation_system`. They are not nonlinear unknowns, do not
+add relation residuals, and do not add solver-domain rows. Their registry domains
+are checked when the fixed mappings are constructed.
 
-- lower and upper bounds of `rho_minor`;
-- lower and upper bounds of `v_norm`;
-- the non-negative lower bound of `w_V`.
+Supplied or geometry-derived mappings remain ordinary active variables and keep
+their dependency ancestry and domain enforcement. Dynamic volume measures are
+promoted into profile-generator graph dependencies; reduced deterministic
+fallback measures remain constants so the legacy solver topology and runtime are
+preserved.
 
-Those rows explain the observed `residual_size +5` while `packed_dim` and `nfev`
-remain unchanged. They are intentional domain enforcement, not five extra
-physics equations.
+The reduced stellarator and mirror providers intentionally remain explicit
+relations. This keeps their compatibility contract visible and allows a future
+stronger provider to supersede them through the normal selection mechanism.
+
+## Line averages and coordinate-space reductions
+
+A physical line average must name the physical coordinate it assumes. The
+tokamak electron-density line average therefore uses `rho_minor`. The current
+reduced stellarator/mirror `n_la` relation intentionally retains the historical
+straight-`rho` average until a device-specific diagnostic or equilibrium model
+is supplied.
+
+Not every mathematical reduction over a profile is a physical line integral.
+For example, the steady-state species-balance relations reduce a profile
+residual to the scalar degree of freedom carried by each species fraction. That
+reduction deliberately uses computational `rho`; changing it to `rho_minor` or
+`w_V` would change the balance model rather than merely clarify geometry.
 
 ## Separatrix and edge
 
-The common core coordinate stops at the separatrix: `rho = 1`. Edge/SOL
-profiles are a separate future subsystem and are not represented by extending
-core `rho` beyond one.
+The common core coordinate stops at the separatrix: `rho = 1`. Edge/SOL profiles
+are a separate subsystem and are not represented by extending core `rho` beyond
+one.
 
-For mirrors, the same limitation is explicit: the common profile coordinate
-represents a radial/nested-volume description only. Genuinely axial mirror
-physics enters through mirror-specific reduced quantities/moments rather than
-overloading `rho` with a second physical direction.
+For mirrors, the common profile coordinate represents a radial/nested-volume
+description only. Genuinely axial physics enters through mirror-specific reduced
+quantities or moments rather than overloading `rho` with a second physical
+direction.
 
 ## Migration rule
 
-Existing tokamak/Sauter results are the regression baseline. Relations that
-still interpret bare `rho` as a physical coordinate must be migrated one at a
-time to an explicit mapping such as `rho_minor`, `rho_tor`, or `rho_radial`.
-Numerical changes are physics changes, not an acceptable side effect of this
-architectural refactor, and must be isolated and quantified before becoming
-defaults.
+Existing reduced-device results are the numerical regression baseline.
+Relations that use `rho` merely for sampling, profile maxima, computational
+coordinate reductions, or as the integration parameter paired with an explicit
+measure may keep it. Relations that interpret the coordinate itself as a
+physical radius or flux label must request the corresponding explicit mapping.
+
+A numerical change caused only by replacing an identity fallback with an
+explicitly supplied/equilibrium-derived mapping is a geometry-physics change and
+must be isolated and tested; it is not an acceptable accidental side effect of
+the architecture migration.
