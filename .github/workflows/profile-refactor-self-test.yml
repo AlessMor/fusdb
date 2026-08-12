@@ -53,7 +53,7 @@ jobs:
             tests/test_phase1_contracts.py \
             tests/cfspopcon_SPARC/test_sparc_prd.py
 
-  performance:
+  reconcile-diagnostic:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -69,9 +69,9 @@ jobs:
         run: |
           git fetch origin main
           git worktree add /tmp/fusdb-main origin/main
-      - name: Benchmark reconcile and POPCON against main
+      - name: Diagnose ARC reconcile regression
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python tests/profile_refactor_performance_probe.py
+        run: python tests/profile_refactor_reconcile_diag.py
