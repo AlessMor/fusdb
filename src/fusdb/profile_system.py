@@ -51,29 +51,51 @@ def _copy_relation(
 def _promote_profile_measure_dependencies(
     variables: list[Variable], relations: tuple[Relation, ...]
 ) -> tuple[Relation, ...]:
-    """Expose an available geometry volume measure in profile-generator edges.
+    """Expose a genuinely dynamic geometry measure in profile-generator edges.
 
-    Profile generators keep ``w_V``/``v_norm`` optional so they remain usable as
-    standalone relations and preserve the historical reduced geometry when no
-    explicit measure is present. At the system boundary we know which mappings
-    are supplied or produced. Promote the best available measure from an
-    optional constant to a real relation input so a changing geometry is visible
-    to completion ordering and Jacobian sparsity.
+    Profile generators keep ``w_V``/``v_norm`` optional so standalone relations
+    and reduced geometry defaults retain their historical behavior. At the
+    system boundary an explicitly supplied measure, or one produced by a
+    geometry-dependent relation, is promoted from an optional constant to a real
+    relation input so completion ordering and Jacobian sparsity see that geometry
+    dependency.
 
-    This applies both to runtime source-profile adapters and to ordinary profile
-    generators such as parabolic and PRF profiles. Fixed absolute source profiles
-    are excluded: they are merely reinterpolated and their amplitude must not be
-    renormalized by the volume measure.
+    Geometry-independent fallback mappings such as ``w_V=rho`` are deliberately
+    *not* promoted. They carry no reactor-state ancestry and making them graph
+    inputs can perturb nonlinear provider ordering even though their numerical
+    value is identical to the legacy measure. This distinction keeps reduced
+    tokamak/stellarator/mirror models behavior-neutral while allowing imported or
+    equilibrium-derived measures to participate structurally.
+
+    Fixed absolute source profiles are excluded: they are merely reinterpolated
+    and their amplitude must not be renormalized by the volume measure.
 
     ``w_V`` has precedence over ``v_norm`` because it reproduces the historical
     discrete tokamak volume average exactly and avoids differentiating an
     enclosed-volume coordinate numerically.
     """
-    available = {
+    supplied = {
         variable.name for variable in variables if variable.input_value is not None
-    } | {output for relation in relations for output in relation.output_names}
+    }
+    produced = {output for relation in relations for output in relation.output_names}
+    available = supplied | produced
     measure = "w_V" if "w_V" in available else ("v_norm" if "v_norm" in available else None)
     if measure is None:
+        return relations
+
+    def is_static_fallback(relation: Relation) -> bool:
+        return (
+            "default" in relation.tags
+            and measure in relation.output_names
+            and not relation.input_names
+            and set(relation.constant_names) <= {"rho"}
+        )
+
+    dynamic = measure in supplied or any(
+        measure in relation.output_names and not is_static_fallback(relation)
+        for relation in relations
+    )
+    if not dynamic:
         return relations
 
     promoted: list[Relation] = []
@@ -264,9 +286,9 @@ def build_relation_system(
     real geometry dependencies inside the relation graph.
 
     When a profile generator exposes ``w_V``/``v_norm`` as an optional argument,
-    an available dynamic measure is promoted into a structural dependency. A
-    static materialized tokamak fallback is subsequently demoted back to a
-    constant, preserving the behavior-neutral fast path.
+    a supplied or geometry-dependent measure is promoted into a structural
+    dependency. Geometry-independent fallback measures stay optional constants,
+    preserving the behavior-neutral reduced-device path.
     """
     prepared, prepared_relations, common_size = prepare_source_profiles(
         variables,
@@ -274,6 +296,10 @@ def build_relation_system(
         profile_size=profile_size,
     )
     prepared_relations = _drop_defaults_for_supplied_coordinates(prepared, prepared_relations)
+    # Promote while fallback providers are still visible: this lets us
+    # distinguish true geometry-dependent measures from deterministic
+    # ``f(rho)`` compatibility relations before tokamak ones are materialized.
+    prepared_relations = _promote_profile_measure_dependencies(prepared, prepared_relations)
     prepared, prepared_relations, static_coordinates = _materialize_static_coordinate_defaults(
         prepared,
         prepared_relations,
@@ -285,7 +311,6 @@ def build_relation_system(
         else variable
         for variable in prepared
     ]
-    prepared_relations = _promote_profile_measure_dependencies(prepared, prepared_relations)
     prepared_relations = _demote_static_coordinate_dependencies(prepared_relations, static_coordinates)
     return RelationSystem(
         prepared,
