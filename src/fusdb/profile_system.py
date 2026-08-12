@@ -20,6 +20,34 @@ from .relationsystem import RelationSystem
 from .variable import Variable
 
 
+def _copy_relation(
+    relation: Relation,
+    *,
+    input_names: tuple[str, ...] | None = None,
+    constant_names: tuple[str, ...] | None = None,
+    argument_names: tuple[str, ...] | None = None,
+) -> Relation:
+    """Return ``relation`` with only dependency metadata replaced."""
+    return Relation(
+        name=relation.name,
+        func=relation.func,
+        input_names=relation.input_names if input_names is None else input_names,
+        outputs=relation.outputs,
+        op=relation.op,
+        rhs=relation.rhs,
+        tags=relation.tags,
+        enforce=relation.enforce,
+        constraints=relation.constraints,
+        source_kind=relation.source_kind,
+        source_name=relation.source_name,
+        constant_names=relation.constant_names if constant_names is None else constant_names,
+        dependency=relation.dependency,
+        function_name=relation.function_name,
+        argument_names=relation.argument_names if argument_names is None else argument_names,
+        rebuild_spec=relation.rebuild_spec,
+    )
+
+
 def _promote_source_measure_dependencies(
     variables: list[Variable], relations: tuple[Relation, ...]
 ) -> tuple[Relation, ...]:
@@ -54,23 +82,11 @@ def _promote_source_measure_dependencies(
             promoted.append(relation)
             continue
         promoted.append(
-            Relation(
-                name=relation.name,
-                func=relation.func,
+            _copy_relation(
+                relation,
                 input_names=(*relation.input_names, measure),
-                outputs=relation.outputs,
-                op=relation.op,
-                rhs=relation.rhs,
-                tags=relation.tags,
-                enforce=relation.enforce,
-                constraints=relation.constraints,
-                source_kind=relation.source_kind,
-                source_name=relation.source_name,
                 constant_names=tuple(name for name in relation.constant_names if name != measure),
-                dependency=relation.dependency,
-                function_name=relation.function_name,
                 argument_names=(*relation.argument_names, measure),
-                rebuild_spec=relation.rebuild_spec,
             )
         )
     return tuple(promoted)
@@ -114,7 +130,7 @@ def _materialize_static_coordinate_defaults(
     variables: list[Variable],
     relations: tuple[Relation, ...],
     profile_size: int,
-) -> tuple[list[Variable], tuple[Relation, ...]]:
+) -> tuple[list[Variable], tuple[Relation, ...], frozenset[str]]:
     """Fold geometry-independent coordinate fallbacks into fixed profile data.
 
     Identity/self-similar device defaults such as ``rho_minor=rho`` and
@@ -129,10 +145,6 @@ def _materialize_static_coordinate_defaults(
     no constants except the framework ``rho`` grid. Geometry-dependent mappings
     (for example the opt-in Sauter volume mapping) remain ordinary relations, so
     their dependencies stay visible to completion and Jacobian sparsity.
-
-    Explicitly supplied mappings and declarations with a local
-    ``default_relation`` are also left alone; those are user-selected provenance
-    choices rather than implicit fallbacks.
     """
     by_name = {variable.name: variable for variable in variables}
     rho = VARIABLES.uniform_profile_grid(profile_size)
@@ -166,29 +178,51 @@ def _materialize_static_coordinate_defaults(
             value = np.asarray(mapped[name], dtype=float)
             existing = by_name.get(name)
             if existing is None:
-                materialized[name] = Variable(
-                    name,
-                    value=value,
-                    fixed=True,
-                    size=profile_size,
-                )
+                materialized[name] = Variable(name, value=value, fixed=True, size=profile_size)
             else:
-                materialized[name] = existing.clone(
-                    value=value,
-                    fixed=True,
-                    size=profile_size,
-                )
+                materialized[name] = existing.clone(value=value, fixed=True, size=profile_size)
 
     if not materialized:
-        return variables, relations
+        return variables, relations, frozenset()
 
     prepared = [materialized.get(variable.name, variable) for variable in variables]
-    prepared.extend(
-        materialized[name]
-        for name in sorted(materialized)
-        if name not in by_name
-    )
-    return prepared, tuple(kept)
+    prepared.extend(materialized[name] for name in sorted(materialized) if name not in by_name)
+    return prepared, tuple(kept), frozenset(materialized)
+
+
+def _demote_static_coordinate_dependencies(
+    relations: tuple[Relation, ...], static_names: frozenset[str]
+) -> tuple[Relation, ...]:
+    """Treat materialized fallback mappings as constants in this compiled graph.
+
+    Their values remain ordinary registered variables in the namespace, but a
+    static fallback has no solver ancestry. Removing it from a relation's
+    structural input list avoids adding zero domain/Jacobian rows and restores
+    the pre-migration graph for the behavior-neutral default case. A supplied or
+    geometry-derived mapping is never demoted and therefore remains a genuine
+    dependency.
+    """
+    if not static_names:
+        return relations
+    out: list[Relation] = []
+    for relation in relations:
+        pairs = list(zip(relation.argument_names, relation.input_names))
+        moved = [(arg, name) for arg, name in pairs if name in static_names and arg == name]
+        if not moved:
+            out.append(relation)
+            continue
+        moved_names = tuple(name for _arg, name in moved)
+        kept_pairs = [(arg, name) for arg, name in pairs if name not in moved_names]
+        constants = tuple(dict.fromkeys((*relation.constant_names, *moved_names)))
+        out.append(
+            _copy_relation(
+                relation,
+                input_names=tuple(name for _arg, name in kept_pairs),
+                constant_names=constants,
+                argument_names=tuple(arg for arg, _name in kept_pairs),
+            )
+        )
+    return tuple(out)
 
 
 def build_relation_system(
@@ -222,7 +256,7 @@ def build_relation_system(
         profile_size=profile_size,
     )
     prepared_relations = _drop_defaults_for_supplied_coordinates(prepared, prepared_relations)
-    prepared, prepared_relations = _materialize_static_coordinate_defaults(
+    prepared, prepared_relations, static_coordinates = _materialize_static_coordinate_defaults(
         prepared,
         prepared_relations,
         common_size,
@@ -234,6 +268,7 @@ def build_relation_system(
         for variable in prepared
     ]
     prepared_relations = _promote_source_measure_dependencies(prepared, prepared_relations)
+    prepared_relations = _demote_static_coordinate_dependencies(prepared_relations, static_coordinates)
     return RelationSystem(
         prepared,
         prepared_relations,

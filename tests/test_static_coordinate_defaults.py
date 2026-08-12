@@ -28,6 +28,33 @@ def test_static_tokamak_coordinate_defaults_are_materialized_not_providers():
     assert {"rho_minor", "v_norm", "w_V"} <= system.fixed
 
 
+def test_static_mapping_is_constant_but_dynamic_mapping_stays_input():
+    avg = RELATIONS.get("Electron temperature volume-average consistency")
+    static = RELATIONS.get("Tokamak volume integration weight")
+    static_system = build_relation_system(
+        [Variable("T_e_avg", value=10.0), Variable("T_e", value=np.full(46, 10.0), fixed=True)],
+        [static, avg],
+        profile_size=46,
+    )
+    migrated = next(rel for rel in static_system.candidate_primary_relations if rel.name == avg.name)
+    assert "w_V" not in migrated.input_names
+    assert "w_V" in migrated.constant_names
+
+    dynamic = RELATIONS.get("Sauter self-similar profile volume mapping")
+    dynamic_system = build_relation_system(
+        [
+            Variable("delta", value=0.3),
+            Variable("eps", value=0.3),
+            Variable("T_e_avg", value=10.0),
+            Variable("T_e", value=np.full(46, 10.0), fixed=True),
+        ],
+        [dynamic, avg],
+        profile_size=46,
+    )
+    migrated_dynamic = next(rel for rel in dynamic_system.candidate_primary_relations if rel.name == avg.name)
+    assert "w_V" in migrated_dynamic.input_names
+
+
 def test_geometry_dependent_coordinate_provider_remains_a_relation():
     relation = RELATIONS.get("Sauter self-similar profile volume mapping")
     system = build_relation_system(
