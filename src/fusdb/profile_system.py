@@ -48,21 +48,22 @@ def _copy_relation(
     )
 
 
-def _promote_source_measure_dependencies(
+def _promote_profile_measure_dependencies(
     variables: list[Variable], relations: tuple[Relation, ...]
 ) -> tuple[Relation, ...]:
-    """Expose an available geometry volume measure in movable source-profile edges.
+    """Expose an available geometry volume measure in profile-generator edges.
 
-    ``source_profile_relation`` keeps ``w_V``/``v_norm`` optional so profiles
-    still work in deliberately geometry-free standalone systems. At the system
-    boundary we know which mappings are supplied or produced. Promote the best
-    available measure from an optional constant to a real relation input so a
-    changing geometry is visible to completion and Jacobian sparsity.
+    Profile generators keep ``w_V``/``v_norm`` optional so they remain usable as
+    standalone relations and preserve the historical reduced geometry when no
+    explicit measure is present. At the system boundary we know which mappings
+    are supplied or produced. Promote the best available measure from an
+    optional constant to a real relation input so a changing geometry is visible
+    to completion ordering and Jacobian sparsity.
 
-    Only movable source profiles need this dependency: their immutable source
-    curve is re-normalized into ``average * shape``. Fixed absolute source
-    profiles are merely reinterpolated and therefore do not depend on a volume
-    measure.
+    This applies both to runtime source-profile adapters and to ordinary profile
+    generators such as parabolic and PRF profiles. Fixed absolute source profiles
+    are excluded: they are merely reinterpolated and their amplitude must not be
+    renormalized by the volume measure.
 
     ``w_V`` has precedence over ``v_norm`` because it reproduces the historical
     discrete tokamak volume average exactly and avoids differentiating an
@@ -77,8 +78,11 @@ def _promote_source_measure_dependencies(
 
     promoted: list[Relation] = []
     for relation in relations:
-        movable_source = relation.source_kind == "source_profile" and "average" in relation.argument_names
-        if not movable_source or measure not in relation.constant_names:
+        if measure not in relation.constant_names or "profile" not in relation.tags:
+            promoted.append(relation)
+            continue
+        fixed_source = relation.source_kind == "source_profile" and "average" not in relation.argument_names
+        if fixed_source:
             promoted.append(relation)
             continue
         promoted.append(
@@ -258,6 +262,11 @@ def build_relation_system(
     active geometry relation computes it. This prevents least squares from
     inventing an arbitrary pointwise coordinate transformation while keeping
     real geometry dependencies inside the relation graph.
+
+    When a profile generator exposes ``w_V``/``v_norm`` as an optional argument,
+    an available dynamic measure is promoted into a structural dependency. A
+    static materialized tokamak fallback is subsequently demoted back to a
+    constant, preserving the behavior-neutral fast path.
     """
     prepared, prepared_relations, common_size = prepare_source_profiles(
         variables,
@@ -276,7 +285,7 @@ def build_relation_system(
         else variable
         for variable in prepared
     ]
-    prepared_relations = _promote_source_measure_dependencies(prepared, prepared_relations)
+    prepared_relations = _promote_profile_measure_dependencies(prepared, prepared_relations)
     prepared_relations = _demote_static_coordinate_dependencies(prepared_relations, static_coordinates)
     return RelationSystem(
         prepared,
