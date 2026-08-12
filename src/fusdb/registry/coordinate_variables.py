@@ -26,7 +26,7 @@ _RHO_LEGACY_ALIASES = {"normalized_minor_radius", "r_over_a"}
 # unknowns. A supplied mapping is authoritative data; an unsupplied mapping must
 # be produced deterministically by an active geometry relation.
 PHYSICAL_COORDINATE_NAMES = frozenset(
-    {"rho_minor", "rho_tor", "rho_radial", "v_norm", "w_V"}
+    {"rho_minor", "rho_tor", "rho_pol", "rho_radial", "v_norm", "w_V"}
 )
 
 
@@ -61,7 +61,7 @@ def with_coordinate_variables(base: VariableRegistry) -> VariableRegistry:
     ``variable_registry``. Keeping the object identity prevents a split-brain
     base/augmented registry during the staged migration.
     """
-    if "rho_minor" in base and "rho_radial" in base and "w_V" in base:
+    if "rho_minor" in base and "rho_pol" in base and "rho_radial" in base and "w_V" in base:
         return base
 
     specs: list[VariableSpec] = []
@@ -94,6 +94,11 @@ def with_coordinate_variables(base: VariableRegistry) -> VariableRegistry:
                 "Normalized toroidal-flux radius sqrt(Phi/Phi_edge) tabulated on the common rho grid.",
                 aliases=("normalized_toroidal_flux_radius", "rho_toroidal"),
                 default_relation=("Reduced stellarator toroidal-flux coordinate",),
+            ),
+            _coordinate_spec(
+                "rho_pol",
+                "Normalized poloidal-flux radius sqrt(psi/psi_edge) tabulated on the common rho grid.",
+                aliases=("normalized_poloidal_flux_radius", "rho_poloidal"),
             ),
             _coordinate_spec(
                 "rho_radial",
