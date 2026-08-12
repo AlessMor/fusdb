@@ -93,11 +93,13 @@ def test_geometry_change_recomputes_weighted_parabolic_profile_without_extra_dof
     system.compile()
     system.pack()
 
-    base = system.complete(system.solver_values())
+    base = system.complete(system.input_values())
     profile0 = np.asarray(base["n_e"], dtype=float).copy()
     weight0 = np.asarray(base["w_V"], dtype=float).copy()
 
-    changed = dict(base)
+    # Solver residual evaluations rebuild from immutable inputs on each unpack;
+    # derived/default outputs from the previous candidate are not carried over.
+    changed = system.input_values()
     changed["delta"] = 0.55
     system.complete(changed)
     profile1 = np.asarray(changed["n_e"], dtype=float)
