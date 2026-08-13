@@ -3403,7 +3403,7 @@ ion_density_peaking_offset:  # CHECK imported from cfspopcon (plasma_profiles/de
   description: Scalar offset added to the Angioni ion density-peaking scaling.
   default: 0.0
   abs_tol: 0.001
-dilution:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking); CFSPOPCON variables.yaml
+dilution:  # imported from cfspopcon (plasma_profiles/density_peaking); CFSPOPCON variables.yaml
   aliases:
   - fuel_dilution
   - plasma_dilution  # OpenPOPCON src/openpopcon.py
@@ -3428,7 +3428,9 @@ dilution:  # CHECK imported from cfspopcon (plasma_profiles/density_peaking); CF
   # concentrations (1 - sum_X c_X Zbar_X).  That is faithful THERE -- cfspopcon
   # has no He3 fuel and treats all helium as an impurity -- but it is a
   # SIMPLIFICATION here, so it is not the default; tests/cfspopcon_SPARC selects
-  # it by name so that comparison uses cfspopcon's own definition.
+  # it by name AND excludes the default below, since `include` ADDS rather than
+  # replaces and the two forms are different quantities: holding both would
+  # impose f_p = 2 f_He3, which nothing in the physics asserts.
   default_relation:
   - Fuel dilution from fuel fractions
 P_in:  # CFSPOPCON variables.yaml
