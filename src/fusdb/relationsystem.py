@@ -1227,6 +1227,14 @@ class RelationSystem:
                 break
             self._unevaluable_names |= newly
 
+        # Packing detects raw profile cores because only the packed layout
+        # knows whether a profile would be represented pointwise.  Keep that
+        # detection as the pruning oracle above, but finalize the role here:
+        # later mode-owned pack() calls must not mutate a compile verdict.
+        for name in self.underdetermined_profiles:
+            if self.variable_roles.get(name) == "computed":
+                self.variable_roles[name] = "assumed"
+
     def _refresh_seeds(self) -> None:
         """Re-run the seeding oracle against the current input values.
 
@@ -1869,13 +1877,6 @@ class RelationSystem:
             specs.append((name, start, len(lower), np.asarray(offsets, dtype=float), np.asarray(scales, dtype=float), spec.shape, span_transform))
         self.packed_specs = specs
         self.packed_dim = len(lower)
-        # A profile packed as raw free elements has no physics pinning its
-        # level -- it sits where its start put it -- so its role is the
-        # warning label, not "computed".  Only knowable here, once packing
-        # has run.
-        for name in self.underdetermined_profiles:
-            if self.variable_roles.get(name) == "computed":
-                self.variable_roles[name] = "assumed"
         self._classify_avg_to_profile()
         self._compiler_report_cache = None
         # Immutable input values are the base every solver vector is layered
@@ -3311,6 +3312,13 @@ def initial_values_from_graph(system: "RelationSystem", tape: list | None = None
     system.apply_profile_specs(values)
     original = set(values)
     seeded: dict[str, str] = {}
+    # One discovery-run cache.  A relation is retried only after the set of
+    # its available variables/constants changes; seeding never overwrites a
+    # known value, so an unchanged availability signature would repeat the
+    # same deterministic failure or no-progress evaluation.  Strict and
+    # non-strict propagation are distinct attempts because their inversion
+    # eligibility differs.
+    attempted: dict[tuple[str, bool], tuple[bool, ...]] = {}
     # Constant defaults are known values from the start (they are held, not
     # solved), so downstream propagation can use them.
     for name, value in system.constant_default_values.items():
@@ -3327,7 +3335,7 @@ def initial_values_from_graph(system: "RelationSystem", tape: list | None = None
     # plants the whole downstream chain in the wrong basin (measured: the
     # peaking closure seeded density_peaking = 1 from the flat profile, then
     # Angioni inverted to beta_T ~ 0.15 -- 10x -- and reconcile stayed there).
-    _propagate_known(system, values, seeded, original, tape, strict=True)
+    _propagate_known(system, values, seeded, original, tape, strict=True, attempted=attempted)
     # Seed registry defaults for variables that supplied-propagation left
     # missing, then re-propagate so downstream values (n_X = n_i * f_X, ...)
     # fill in.  Defaults are pure x0 seeds -- never enforced -- applied to a
@@ -3336,7 +3344,7 @@ def initial_values_from_graph(system: "RelationSystem", tape: list | None = None
     for _ in range(50):
         if not _seed_defaults(system, values, seeded, original, tape):
             break
-        _propagate_known(system, values, seeded, original, tape, strict=True)
+        _propagate_known(system, values, seeded, original, tape, strict=True, attempted=attempted)
     # Fallback for cycles: a coupled loop (peaking -> profile -> pressure ->
     # beta -> peaking) has no all-forward entry, so allow ONE deferred
     # inversion (e.g. a flat profile from its average), then resume the
@@ -3344,8 +3352,10 @@ def initial_values_from_graph(system: "RelationSystem", tape: list | None = None
     # forward -- entering the cycle anywhere else (a closure pinning the
     # produced variable, a producer inverted backwards) seeds the wrong basin.
     # Each step seeds at least one variable, so this terminates.
-    while _compute_direct_outputs(system, values, seeded, original, tape, strict=False, single=True):
-        _propagate_known(system, values, seeded, original, tape, strict=True)
+    while _compute_direct_outputs(
+        system, values, seeded, original, tape, strict=False, single=True, attempted=attempted
+    ):
+        _propagate_known(system, values, seeded, original, tape, strict=True, attempted=attempted)
     return {name: values[name] for name in values if name in seeded}, seeded
 
 
@@ -3436,7 +3446,15 @@ def _replay_seed_tape(system: "RelationSystem") -> tuple[dict[str, Any], dict[st
     return {name: values[name] for name in seeded}, seeded
 
 
-def _propagate_known(system: "RelationSystem", values: dict[str, Any], seeded: dict[str, str], original: set[str], tape: list | None = None, strict: bool = False) -> None:
+def _propagate_known(
+    system: "RelationSystem",
+    values: dict[str, Any],
+    seeded: dict[str, str],
+    original: set[str],
+    tape: list | None = None,
+    strict: bool = False,
+    attempted: dict[tuple[str, bool], tuple[bool, ...]] | None = None,
+) -> None:
     """Fill values derivable from the currently known namespace.
 
     Stage 1 runs direct 1x1/acausal propagation to a fixed point; stage 2
@@ -3447,7 +3465,7 @@ def _propagate_known(system: "RelationSystem", values: dict[str, Any], seeded: d
     """
     # Stage 1: direct 1x1/acausal propagation to a fixed point.
     for _direct_pass in range(50):
-        if not _compute_direct_outputs(system, values, seeded, original, tape, strict):
+        if not _compute_direct_outputs(system, values, seeded, original, tape, strict, attempted=attempted):
             break
     # Stage 2: solve the determined blocks (2x2 ... N x N) for their cores.
     progress = True
@@ -3457,7 +3475,9 @@ def _propagate_known(system: "RelationSystem", values: dict[str, Any], seeded: d
             if _compute_planned_block(system, block, values, seeded, original, tape):
                 progress = True
                 for _direct_pass in range(50):
-                    if not _compute_direct_outputs(system, values, seeded, original, tape, strict):
+                    if not _compute_direct_outputs(
+                        system, values, seeded, original, tape, strict, attempted=attempted
+                    ):
                         break
     merged = tuple(
         name
@@ -3467,7 +3487,9 @@ def _propagate_known(system: "RelationSystem", values: dict[str, Any], seeded: d
     )
     if merged and _compute_planned_block(system, merged, values, seeded, original, tape):
         for _direct_pass in range(50):
-            if not _compute_direct_outputs(system, values, seeded, original, tape, strict):
+            if not _compute_direct_outputs(
+                system, values, seeded, original, tape, strict, attempted=attempted
+            ):
                 break
 
 
@@ -3545,7 +3567,16 @@ def _seed_accepts(system: "RelationSystem", name: str, original: set[str]) -> bo
     return name not in system.fixed
 
 
-def _compute_direct_outputs(system: "RelationSystem", values: dict[str, Any], seeded: dict[str, str], original: set[str], tape: list | None = None, strict: bool = False, single: bool = False) -> bool:
+def _compute_direct_outputs(
+    system: "RelationSystem",
+    values: dict[str, Any],
+    seeded: dict[str, str],
+    original: set[str],
+    tape: list | None = None,
+    strict: bool = False,
+    single: bool = False,
+    attempted: dict[tuple[str, bool], tuple[bool, ...]] | None = None,
+) -> bool:
     """Seed values by solving every relation that has exactly one unknown.
 
     Seeding is *adirectional*: a relation is an equation, so whenever all but
@@ -3581,6 +3612,14 @@ def _compute_direct_outputs(system: "RelationSystem", values: dict[str, Any], se
     # the caller's final non-strict pass.
     produced = {out for r in pool for out in r.output_names} if strict else frozenset()
     for rel in pool:
+        if attempted is not None:
+            signature = tuple(
+                values.get(name) is not None for name in (*rel.variables, *rel.constant_names)
+            )
+            cache_key = (rel.name, strict)
+            if attempted.get(cache_key) == signature:
+                continue
+            attempted[cache_key] = signature
         # Primary path: a relation with exactly one unknown variable is
         # solved in whatever direction closes it (input or output).
         if not rel.implicit:

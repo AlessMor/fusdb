@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from fusdb import Reactor
+from fusdb import Reactor, RelationSystem
 from fusdb.variable import Variable
 
 DEMO_YAML = Path(__file__).parents[1] / "reactors" / "DEMO_2022" / "reactor.yaml"
@@ -142,6 +142,21 @@ def test_reported_roles_origins():
     assert {"T_e", "n_e", "T_i"} <= s.avg_to_profile
     assert s.avg_to_profile <= set(rel)
     assert not (s.avg_to_profile & {"P_fus", "kappa"})
+
+
+def test_pack_does_not_mutate_compiled_roles():
+    """Packing reports raw profile cores but never changes compile verdicts."""
+    system = RelationSystem([], [])
+    system.track("T_e")
+    system.variable_roles["T_e"] = "computed"
+    system.packed_variables.add("T_e")
+    system.initial_guesses["T_e"] = [1.0] * system.profile_size
+    roles = dict(system.variable_roles)
+
+    system.pack()
+
+    assert system.underdetermined_profiles == ["T_e"]
+    assert system.variable_roles == roles
 
 
 def test_polomac_profiles_are_reconstructed_not_undetermined():

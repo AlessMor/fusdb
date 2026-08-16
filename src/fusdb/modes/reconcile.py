@@ -25,50 +25,8 @@ from ._common import (
     solver_report,
 )
 
-_MOVEMENT_OBJECTIVES = frozenset({"count", "sum", "least_squares", "robust"})
+_MOVEMENT_OBJECTIVES = frozenset({"count", "sum", "least_squares"})
 _MOVEMENT_METRICS = frozenset({"auto", "absolute", "log"})
-
-
-def _movement_robust_loss(n_head: int, f_scale: float):
-    """Build a SciPy ``loss`` applying Cauchy only to the movement rows.
-
-    SciPy's built-in ``loss`` names apply one rho to EVERY residual row, which
-    is wrong here: the vector mixes three semantically different blocks --
-    relation rows (physics, must hold), domain rows (feasibility) and movement
-    rows (supplied data, which may be wrong).  A global robust loss makes it
-    cheap to violate physics, which is the opposite of the intent (MEASURED on
-    a planted gross error: global ``loss="cauchy"`` kept the bad input AND
-    tripled the relation residual against plain least squares).
-
-    SciPy also accepts a callable taking ``z = f**2`` and returning
-    ``(3, m)`` -- value, first and second derivative -- so the rho can be
-    chosen per row.  Rows are laid out relations, domains, then movement
-    (see :meth:`RelationSystem.residual_layout`), so the movement block is the
-    contiguous tail after ``n_head``.
-
-    Head rows keep ``rho(z) = z`` (plain least squares).  Movement rows use
-    ``rho(z) = C**2 * ln(1 + z/C**2)``, SciPy's ``cauchy`` under ``f_scale=C``:
-    a saturating penalty whose cost grows logarithmically, so abandoning one
-    input outright stays cheaper than nudging many, without the unbounded
-    growth of L1.  Movement rows are ``sqrt(weight * excess)``, so with no IRLS
-    weights ``z`` IS the beyond-tolerance excess and the knee ``C**2`` is read
-    directly in tolerance widths.
-    """
-    c2 = float(f_scale) ** 2
-
-    def loss(z: np.ndarray) -> np.ndarray:
-        z = np.asarray(z, dtype=float)
-        out = np.empty((3, z.size), dtype=float)
-        out[0, :n_head] = z[:n_head]
-        out[1, :n_head] = 1.0
-        out[2, :n_head] = 0.0
-        tail = z[n_head:] / c2
-        out[0, n_head:] = c2 * np.log1p(tail)
-        out[1, n_head:] = 1.0 / (1.0 + tail)
-        out[2, n_head:] = -1.0 / (c2 * (1.0 + tail) ** 2)
-        return out
-
-    return loss
 
 
 def run(
@@ -80,7 +38,6 @@ def run(
     movement_metric: str = "auto",
     irls_iterations: int = 3,
     movement_eps: float = 0.1,
-    movement_f_scale: float = 1.0,
     relation_weight: float = 1.0,
     relation_weight_schedule: Iterable[float] | None = None,
     initial_guesses: Any = None,
@@ -167,25 +124,6 @@ def run(
       proportion to their tolerances.  This is the right choice when the
       inputs are measurements with error bars rather than design declarations,
       and it never names a culprit.
-    * ``"robust"`` is the process-industry gross-error estimator: a saturating
-      (Cauchy) penalty ``C**2 * ln(1 + excess/C**2)`` applied to the movement
-      rows ONLY, via a per-row SciPy ``loss`` callable, with the knee ``C``
-      given by ``movement_f_scale`` in tolerance widths.  It puts the
-      saturation directly in the objective instead of approximating it with
-      IRLS, so it needs no re-solves.
-
-      DO NOT reach for this to cure a collapsing solve.  MEASURED 2026-08-16
-      on SPARC (no fixed inputs, infeasible declared point): saturation makes
-      the degenerate branch CHEAPER to reach, because a dead plasma requires
-      many inputs to move far and this is exactly the penalty that stops
-      charging for distance.  ``f_scale`` 1 gave ``P_fus`` 0.134 MW, and
-      ``f_scale`` 10 certified ``success=True`` with ZERO failed relations at
-      ``P_fus = 2.9e-5 MW`` -- the trivial branch reported as green, which is
-      the worst outcome the mode can produce.  Large ``f_scale`` merely
-      unwinds the saturation back toward ``"sum"``.  It is the right estimator
-      only where the constraint set is satisfiable and a FEW inputs are
-      suspected of gross error; the collapse is an eligibility problem
-      (``fixed: true``), and no loss shape substitutes for it.
 
     ``movement_metric`` -- how far one input has moved:
 
@@ -482,16 +420,6 @@ def run(
             final_probe_size = int(layout["size"])
             stage_kwargs = dict(base_common_kwargs)
             stage_kwargs["max_nfev"] = stage_max_nfev
-            # The saturating movement penalty lives in the loss, not the row,
-            # so it needs the frozen layout: only this stage's movement tail is
-            # made robust.  A stage without movement rows keeps plain least
-            # squares (no tail to soften).
-            if movement_objective == "robust":
-                n_movement = len(layout["movement_names"] or ())
-                if n_movement:
-                    stage_kwargs["loss"] = _movement_robust_loss(
-                        int(layout["size"]) - n_movement, float(movement_f_scale)
-                    )
             # Jacobian strategy, best first.  The structural pattern follows
             # the completion-dependency graph and is conservative: it has an edge
             # for every output of every completion relation, so it never omits a
@@ -633,7 +561,6 @@ def run(
         movement_weight=float(current_movement_weight),
         movement_objective=movement_objective,
         movement_metric=movement_metric,
-        movement_f_scale=float(movement_f_scale),
         initial_guess_variables=int(len(initial_values)),
         profile_solver_spans=profile_spans,
     )
