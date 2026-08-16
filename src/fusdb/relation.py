@@ -196,6 +196,42 @@ class Relation:
         self.constraint_relations = tuple(built)
 
     @property
+    def optional_variable_names(self) -> tuple[str, ...]:
+        """Registry variables this relation reads as OPTIONAL contributors.
+
+        A signature default on a parameter that names a registry variable does
+        not mean "constant" -- it means *optional contributor*: :meth:`evaluate`
+        uses the namespace value when the scenario provides one and falls back
+        to the default otherwise, so ``def total(a=0.0, b=0.0)`` reads "whichever
+        of these you tell me about; the rest are zero".
+
+        The group is inherently RELATION-scoped, which is the point: the same
+        variable may be an optional contributor here and a required input
+        elsewhere, and nothing has to be declared on the variable itself.
+
+        Coordinates are excluded -- they are framework constants with a grid
+        default, and the coordinate providers (``rho_minor``, ``v_norm``,
+        ``w_V``) are precisely the relations with no required inputs at all.
+        """
+        registry = _variable_registry()
+        return tuple(
+            name for name in self.constant_names
+            if name in self._constant_defaults
+            and name not in COORDINATE_NAMES
+            and name in registry
+        )
+
+    @property
+    def all_contributors_optional(self) -> bool:
+        """Whether this relation has no required inputs but does have optional ones.
+
+        Such a relation says nothing until at least one contributor exists, so
+        the forward closure must not fire it on the vacuous truth of
+        ``all(inp in known for inp in ())``.
+        """
+        return bool(self.optional_variable_names) and not self.input_names
+
+    @property
     def output_names(self) -> tuple[str, ...]:
         """Declared output names."""
         return self.outputs

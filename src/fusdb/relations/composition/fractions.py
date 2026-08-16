@@ -76,12 +76,23 @@ def average_fuel_mass_number(f_D: Any, f_T: Any, f_He3: Any = 0.0) -> Any:
     Including them would lighten the apparent fuel mix on a D-He3 point where
     the proton inventory is large.  PROCESS's ``m_fuel_amu`` is fuel-only for
     the same reason.
+
+    Weighted by ``isotopic_mass_u`` (D 2.014, T 3.016), NOT by the mass number
+    ``atomic_mass`` (D 2, T 3).  This is a real mass in amu despite the relation
+    name: a 50:50 DT mix gives 2.515, not 2.5.  PROCESS's ``m_fuel_amu`` is
+    2.51453 on the same mix, so the mass numbers ran a systematic -0.59% low.
+
+    cfspopcon takes the other convention: its ``average_ion_mass`` is a user
+    input, supplied as the mass NUMBER 2.5 in the SPARC PRD.  The SPARC fixture
+    still derives ``afuel`` here rather than supplying cfspopcon's 2.5, so that
+    comparison carries a 0.6% offset on the fuel mass -- ~0.1% on ``tau_E``
+    through the isotope exponent, well inside its 6% anchor tolerance.
     """
     fuel_total = _positive_denominator(f_D + f_T + f_He3, name="fuel ion inventory")
     numerator = (
-        f_D * float(SPECIES["D"].atomic_mass)
-        + f_T * float(SPECIES["T"].atomic_mass)
-        + f_He3 * float(SPECIES["He3"].atomic_mass)
+        f_D * float(SPECIES["D"].isotopic_mass_u)
+        + f_T * float(SPECIES["T"].isotopic_mass_u)
+        + f_He3 * float(SPECIES["He3"].isotopic_mass_u)
     )
     return numerator / fuel_total
 
@@ -118,12 +129,15 @@ def average_total_ion_mass_number(
     would double it.  fusdb has no fast-ion inventory, so the beam term has no
     counterpart; on a beam-heated design point this runs slightly light.
 
+    Weighted by ``isotopic_mass_u``, not by the mass number -- see
+    :func:`average_fuel_mass_number`.
+
     Adapted from PROCESS; see README.md section "Third-party Notices".
     """
     fuel_masses = {"D": f_D, "T": f_T, "He3": f_He3, "He4": f_He4, "p": f_p}
     impurities = {"Li": c_Li, "Be": c_Be, "C": c_C, "N": c_N, "O": c_O,
                   "Ne": c_Ne, "Ar": c_Ar, "Kr": c_Kr, "Xe": c_Xe, "W": c_W}
-    fuel_mass = sum(frac * float(SPECIES[name].atomic_mass) for name, frac in fuel_masses.items())
-    impurity_mass = sum(conc * float(SPECIES[name].atomic_mass) for name, conc in impurities.items())
+    fuel_mass = sum(frac * float(SPECIES[name].isotopic_mass_u) for name, frac in fuel_masses.items())
+    impurity_mass = sum(conc * float(SPECIES[name].isotopic_mass_u) for name, conc in impurities.items())
     total_ions = _positive_denominator(n_i_avg, name="total ion inventory")
     return (n_fuel_avg * fuel_mass + n_e_avg * impurity_mass) / total_ions

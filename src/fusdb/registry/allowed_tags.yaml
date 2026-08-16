@@ -85,6 +85,9 @@ descriptive:
   - inverse
   - loc
   - neutronics
+  # Marks a checked-only guard asserting that the solve landed on a real
+  # operating point rather than the relation set's trivial no-plasma branch.
+  - operating_point
   - plasma
   - power_balance
   - power_exhaust

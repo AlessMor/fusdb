@@ -172,13 +172,28 @@ class VariableSpec:
     def solver_value(self, value: Any, size: int) -> Any:
         """Convert a public value to canonical solver shape.
 
-        Values lying exactly on a physical-domain boundary are projected onto
-        the corresponding solver-domain boundary; this is the inverse of
+        Values lying on a physical-domain boundary are projected onto the
+        corresponding solver-domain boundary; this is the inverse of
         :meth:`public_value`, so a profile edge stored publicly as ``T = 0`` is
         evaluated at the numerically safe solver bound (for example 1e-12)
-        instead of hitting singular physics formulas.  Only values within
-        ``ZERO_TOL`` of the boundary are projected: interior values and real
+        instead of hitting singular physics formulas.  Interior values and real
         domain violations are never clipped.
+
+        What counts as "on the boundary" differs by shape, and this asymmetry
+        is deliberate rather than incidental:
+
+        * SCALARS use exact equality.  A window of +/-``ZERO_TOL`` is an
+          absolute magnitude, so for a variable whose values are far below it
+          the window swallows the entire physical range -- L_int (~1e-30) was
+          projected onto its 1e-45 solver bound at every value it could ever
+          take, erasing the quantity it was supposed to protect.
+        * PROFILES keep the +/-``ZERO_TOL`` window.  This is the deferred half
+          of the fix (see TODO, "ZERO_TOL as an absolute magnitude"): no reactor
+          currently packs a profile, and only Zbar_i and chi_e -- both O(1) --
+          have the exclusive-zero domain that makes the window reachable, so
+          changing it would be an unmeasurable behaviour change to the profile
+          machinery. The window's motivating case (an edge stored as T = 0) is
+          a profile case, so it keeps working exactly as before.
         """
         if self.solver_proj_low is None and self.solver_proj_high is None:
             # Fast path: no projection applies; only shape coercion matters.
@@ -190,12 +205,13 @@ class VariableSpec:
                 return value
             return self.coerce(value, size)
         out = np.asarray(self.coerce(value, size), dtype=float).astype(float, copy=True)
+        window = ZERO_TOL if self.shape == 1 else 0.0
         if self.solver_proj_low is not None:
             lo, target = self.solver_proj_low
-            out = np.where((out >= lo - ZERO_TOL) & (out <= lo + ZERO_TOL), target, out)
+            out = np.where((out >= lo - window) & (out <= lo + window), target, out)
         if self.solver_proj_high is not None:
             hi, target = self.solver_proj_high
-            out = np.where((out >= hi - ZERO_TOL) & (out <= hi + ZERO_TOL), target, out)
+            out = np.where((out >= hi - window) & (out <= hi + window), target, out)
         return float(out) if out.ndim == 0 else out
 
     def public_value(self, value: Any, size: int) -> Any:
@@ -300,15 +316,24 @@ class VariableSpec:
             return False
         return lower > 0.0 or (lower == 0.0 and not lower_inclusive)
 
-    def movement_log_width(self, width: float, reference: Any) -> float | None:
+    def movement_log_width(self, width: float, reference: Any, *, metric: str = "auto") -> float | None:
         """Deadzone half-width in log space, or None to use absolute movement.
 
         ``log1p(width / |reference|)`` is the log-distance spanned by one
         absolute tolerance width at the reference, so the two metrics agree to
         first order for small deviations and the deadzone boundary does not
         move; only the far field changes.
+
+        ``metric`` selects which variables get log space at all:
+        ``"auto"`` defers to :attr:`movement_is_multiplicative` (the domain
+        decides, per variable), ``"absolute"`` never uses it, and ``"log"``
+        uses it wherever it is *defined* -- a strictly-positive reference --
+        falling back to absolute per variable where it is not (a ``c_*`` or
+        ``f_He4`` supplied as exactly zero has no log distance).
         """
-        if not self.movement_is_multiplicative:
+        if metric == "absolute":
+            return None
+        if metric != "log" and not self.movement_is_multiplicative:
             return None
         ref = np.asarray(reference, dtype=float).reshape(-1)
         ref = ref[np.isfinite(ref)]
@@ -317,7 +342,7 @@ class VariableSpec:
         log_width = float(np.log1p(width / float(np.min(np.abs(ref)))))
         return log_width if log_width > 0.0 else None
 
-    def movement_excess(self, current: Any, reference: Any, rel_tol: float, abs_tol: float) -> float:
+    def movement_excess(self, current: Any, reference: Any, rel_tol: float, abs_tol: float, *, metric: str = "auto") -> float:
         """Return this input's worst movement past its tolerance band.
 
         The deadzone excess ``max(distance - 1, 0)`` reduced over the
@@ -326,15 +351,18 @@ class VariableSpec:
         reconcile objective drives toward zero for as many inputs as possible.
 
         ``distance`` is ``|value - input| / tolerance``, or the multiplicative
-        ``|log(value / input)| / log_width`` for strictly-positive variables
-        (see :attr:`movement_is_multiplicative`).
+        ``|log(value / input)| / log_width`` where ``metric`` selects log space
+        (see :meth:`movement_log_width`).  Note that the two are *different
+        units* in the far field, so excesses computed under mixed metrics are
+        not comparable across variables -- which is why the reconcile objective
+        and its ``inputs_beyond_tolerance`` report always use the same metric.
         """
         cur = np.asarray(current, dtype=float).reshape(-1)
         ref = np.asarray(reference, dtype=float).reshape(-1)
         if cur.size == 0 or cur.shape != ref.shape:
             return 0.0
         width = self.tolerance_width(self.scale_of(rel_tol, abs_tol, reference), rel_tol, abs_tol)
-        log_width = self.movement_log_width(float(np.max(width)), reference)
+        log_width = self.movement_log_width(float(np.max(width)), reference, metric=metric)
         if log_width is not None and bool(np.all(cur > 0.0)):
             distance = np.abs(np.log(cur / ref)) / log_width
         else:
@@ -349,8 +377,13 @@ class VariableSpec:
         so the per-point penalty is reduced to the worst point -- exact for
         feasibility and one row per bound instead of one per grid point.  A
         non-numeric or non-finite value yields one large row per bound.
+
+        The boundary is the CLOSED domain bound: an exclusive bound is not
+        offset by a global epsilon, because that epsilon is an absolute
+        magnitude and the variable may live far below it (see the domain-plan
+        comment in RelationSystem, which this is the fallback path for).
         """
-        lower, upper, lower_inc, upper_inc = self.domain
+        lower, upper, _lower_inc, _upper_inc = self.domain
         if lower is None and upper is None:
             return []
         sides = int(lower is not None) + int(upper is not None)
@@ -364,12 +397,10 @@ class VariableSpec:
         rows: list[np.ndarray] = []
         is_profile = arr.size > 1
         if lower is not None:
-            boundary = float(lower) + (ZERO_TOL if not lower_inc else 0.0)
-            viol = np.maximum(boundary - arr, 0.0) / tol
+            viol = np.maximum(float(lower) - arr, 0.0) / tol
             rows.append(np.asarray([float(np.max(viol))]) if is_profile else viol)
         if upper is not None:
-            boundary = float(upper) - (ZERO_TOL if not upper_inc else 0.0)
-            viol = np.maximum(arr - boundary, 0.0) / tol
+            viol = np.maximum(arr - float(upper), 0.0) / tol
             rows.append(np.asarray([float(np.max(viol))]) if is_profile else viol)
         return rows
 

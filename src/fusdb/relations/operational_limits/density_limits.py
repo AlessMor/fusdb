@@ -303,3 +303,28 @@ def sudo_density_fraction(n_SUDO: float, n_avg: float) -> Any:
 def sudo_margin(n_avg: float, n_SUDO: float) -> Any:
     """Return Sudo margin (<=0 satisfied)."""
     return n_avg - n_SUDO
+
+
+# Non-triviality certifier.  Plasma physics is multiplicative (P_fus ~ n^2<sv>V,
+# beta ~ nT/B^2, W ~ nTV), so n -> 0, T -> 0 satisfies essentially every relation
+# EXACTLY -- a legitimate but useless solution reconcile takes whenever the
+# declared point is infeasible.  MEASURED 2026-08-13: a proxy at n_e = 2e15,
+# T_e = 20 eV reconciles with ZERO failed relations at P_fus = 3.5e-8 MW.
+# f_GW is the discriminator because it is dimensionless and device-independent:
+# real operating points span 0.175 (SPARC) to 1.2 (DEMO_2022); the floor sits
+# ~17x below that and ~500x above ARC_V3A's collapsed 2.0e-5.  See TODO.
+_TRIVIAL_BRANCH_FLOOR = 0.01
+
+
+@relation(
+    name='Operating point is non-trivial (f_GW >= 1%)',
+    tags=('plasma', 'tokamak', 'operating_point'),
+    enforce=False,
+)
+def operating_point_non_trivial(f_GW: float) -> Any:
+    """Certifier that the solve did not collapse onto the trivial no-plasma branch.
+
+    Zero while the plasma is a plasma; positive once the density falls orders of
+    magnitude below the Greenwald limit, which no operating tokamak does.
+    """
+    return np.maximum(_TRIVIAL_BRANCH_FLOOR - np.asarray(f_GW, dtype=float), 0.0) / _TRIVIAL_BRANCH_FLOOR

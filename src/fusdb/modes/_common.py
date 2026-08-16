@@ -123,6 +123,8 @@ def solver_report(**overrides: Any) -> dict[str, Any]:
         "phase_schedule": [],
         "stage_history": [],
         "movement_weight": 0.0,
+        "movement_objective": "",
+        "movement_metric": "",
         "initial_guess_variables": 0,
     }
     report.update(overrides)

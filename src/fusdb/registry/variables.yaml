@@ -7,6 +7,8 @@ R:  # OpenPOPCON src/openpopcon.py
   aliases:
   - major_radius  # CFSPOPCON variables.yaml
   - rmajor  # PROCESS physics_variables.py
+  - R0  # ARC V3A parameter workbook
+  - Raxis  # ARC V3A parameter workbook
   default_unit: m
   description: Major radius.
   domain: (0, inf)
@@ -16,6 +18,7 @@ a:  # OpenPOPCON src/openpopcon.py
   - minor_radius  # CFSPOPCON variables.yaml
   - r_minor
   - rminor  # PROCESS physics_variables.py
+  - ageo  # ARC V3A parameter workbook
   default_unit: m
   description: Minor radius.
   domain: (0, inf)
@@ -36,6 +39,7 @@ eps:  # PROCESS physics_variables.py
   aliases:
   - epsilon
   - inverse_aspect_ratio  # CFSPOPCON variables.yaml
+  - ε=a/R0  # ARC V3A parameter workbook
   description: Inverse aspect ratio (a/R).
   domain: (0, inf)
   abs_tol: 0.001
@@ -46,6 +50,7 @@ kappa:  # OpenPOPCON src/openpopcon.py; PROCESS physics_variables.py
   - k_geom
   - kappa_geom
   - kappa_geometric
+  - κ  # ARC V3A parameter workbook
   description: >-
     GEOMETRIC elongation of the last closed flux surface, b/a, with
     a = (R_max - R_min)/2 the horizontal minor radius and b = (Z_max - Z_min)/2
@@ -78,6 +83,7 @@ kappa_separatrix:  # CHECK imported from cfspopcon (radiated_power/synchrotron);
   - separatrix_elongation  # CFSPOPCON variables.yaml
   - k_sep
   - kappa_sep
+  - κsep  # ARC V3A parameter workbook
   description: >-
     ACTUAL elongation of the separatrix, (Z_max - Z_min)/(R_max - R_min)
     measured on the real last closed flux surface INCLUDING the X-point
@@ -97,6 +103,7 @@ kappa_95:
   - kappa95  # PROCESS physics_variables.py
   - k_95
   - elongation_psi95  # CFSPOPCON variables.yaml
+  - κ95  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: >-
     GEOMETRIC elongation at the 95% poloidal-flux surface, psi_N = 0.95. Sits
@@ -148,6 +155,8 @@ delta:  # OpenPOPCON src/openpopcon.py
   aliases:
   - triangularity
   - triang  # PROCESS physics_variables.py
+  - δsep  # ARC V3A parameter workbook; closest available fusdb triangularity
+  - δ  # ARC V3A parameter workbook
   description: Core triangularity.
   domain: '[-1, 1]'
   abs_tol: 0.001
@@ -162,6 +171,7 @@ delta_95:
   aliases:
   - triangularity_psi95
   - triang95  # CHECK PROCESS name (plasma_geometry); PROCESS physics_variables.py
+  - δ95  # ARC V3A parameter workbook
   description: Triangularity at 95% flux surface.
   # Negative triangularity is a real configuration, and `delta` (= 1.5 delta_95)
   # already allows it, so the domain matches delta's rather than clipping at 0.
@@ -174,6 +184,7 @@ V_p:
   - plasma_volume  # CFSPOPCON variables.yaml
   - vol_plasma  # CHECK PROCESS name (plasma_geometry); PROCESS physics_variables.py
   - V  # OpenPOPCON src/openpopcon.py
+  - Vp  # ARC V3A parameter workbook
   description: Plasma volume.
   domain: (0, inf)
   abs_tol: 1.0
@@ -187,6 +198,7 @@ A_p:
   - surface_area
   - S_p
   - a_plasma_surface  # CHECK PROCESS name (density_limit); PROCESS physics_variables.py
+  - Sp  # ARC V3A parameter workbook
   description: Surface area around the LCFS in the toroidal and poloidal direction.
   domain: (0, inf)
   abs_tol: 0.1
@@ -307,6 +319,9 @@ B0:  # OpenPOPCON src/openpopcon.py
   aliases:
   - magnetic_field_on_axis  # CFSPOPCON variables.yaml
   - b_plasma_toroidal_on_axis  # PROCESS physics_variables.py
+  - BT  # ARC V3A parameter workbook
+  - Bt  # ARC V3A parameter workbook
+  - Baxis  # ARC V3A parameter workbook
   description: Toroidal field on axis.
   domain: '(0, 30]'
   abs_tol: 0.001
@@ -319,6 +334,7 @@ B_p:
   default_unit: T
   aliases:
   - b_plasma_surface_poloidal_average  # CHECK PROCESS name (plasma_fields); PROCESS physics_variables.py
+  - Bpol,sep  # ARC V3A parameter workbook
   description: Poloidal field.
   domain: '[0, 30]'
   solver_domain: '[1e-12, 30]'
@@ -372,6 +388,7 @@ q_cyl:
   - cylindrical_safety_factor  # CFSPOPCON variables.yaml
   - q_cylindrical
   - q_I
+  - qcyl  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Cylindrical edge safety factor.
   domain: '(0, 50]'
@@ -379,6 +396,7 @@ q_cyl:
 qstar:  # PROCESS physics_variables.py
   aliases:
   - q_star  # CFSPOPCON variables.yaml
+  - q*  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Equivalent cylindrical edge safety factor.
   domain: '(0, 50]'
@@ -413,6 +431,8 @@ beta_N:
   - normalized_beta  # CFSPOPCON variables.yaml
   - beta_norm_total  # PROCESS physics_variables.py
   - BetaN  # OpenPOPCON src/openpopcon.py
+  - βN  # ARC V3A parameter workbook
+  - βN,th  # ARC V3A parameter workbook
   description: Normalized beta stored as a fraction (literature beta_N=3.9 is 0.039 here).
   domain: '[0, 0.2]'
   abs_tol: 0.0002
@@ -529,6 +549,8 @@ p_peak:
   abs_tol: 1000.0
 W_th:
   default_unit: J
+  aliases:
+  - Wth  # ARC V3A parameter workbook
   description: Thermal stored energy.
   domain: '[0, inf)'
   abs_tol: 1000000.0
@@ -545,6 +567,7 @@ T_e_avg:
   - average_electron_temp  # CFSPOPCON variables.yaml
   - ten
   - temp_plasma_electron_vol_avg_kev  # PROCESS physics_variables.py
+  - <Te>  # ARC V3A parameter workbook
   default_unit: keV
   description: Volume-averaged electron temperature.
   domain: '(0, 300]'
@@ -565,6 +588,7 @@ T_sep:
   aliases:
   - separatrix_electron_temp  # CFSPOPCON variables.yaml
   - temp_plasma_separatrix_kev  # PROCESS physics_variables.py
+  - Tsep  # ARC V3A parameter workbook
   default_unit: keV
   description: Separatrix electron temperature.
   domain: '[0, 300]'
@@ -574,6 +598,7 @@ pedestal_width:
   default_unit: dimensionless
   aliases:
   - w_ped
+  - Δped,ψ  # ARC V3A parameter workbook
   description: >-
     Full pedestal width in normalized minor radius, measured from the
     separatrix to the pedestal top (FUSE/IMAS convention).
@@ -584,6 +609,7 @@ T_edge:
   aliases:
   - edge_electron_temp  # CFSPOPCON variables.yaml
   - edge_electron_temperature  # CFSPOPCON variables.yaml
+  - Te,u  # ARC V3A parameter workbook
   default_unit: keV
   description: Edge collision temperature used by AMJUEL H.2 atomic-physics rate fits.
   domain: '(0, 300]'
@@ -591,6 +617,7 @@ T_edge:
 n_e_edge:
   aliases:
   - edge_electron_density  # CFSPOPCON variables.yaml
+  - ne,u  # ARC V3A parameter workbook
   default_unit: 1/m^3
   description: Edge electron density used by AMJUEL H.4 atomic-physics rate fits.
   domain: (0, inf)
@@ -644,6 +671,7 @@ T_i_avg:
   - T_i_vol_avg
   - average_ion_temp  # CFSPOPCON variables.yaml
   - temp_plasma_ion_vol_avg_kev  # PROCESS physics_variables.py
+  - <Ti>  # ARC V3A parameter workbook
   description: Volume-averaged ion temperature.
   domain: '[0, 300]'
   solver_domain: '[1e-12, 300]'
@@ -672,6 +700,7 @@ T_i_peak:
 ion_to_electron_temp_ratio:  # CFSPOPCON variables.yaml
   aliases:
   - f_temp_plasma_ion_electron  # PROCESS physics_variables.py
+  - Ti/Te  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Ratio of volume-averaged ion temperature to electron temperature.
   domain: (0, inf)
@@ -689,6 +718,7 @@ n_e_avg:
   - n_vol_avg
   - average_electron_density  # CFSPOPCON variables.yaml
   - nd_plasma_electrons_vol_avg  # PROCESS physics_variables.py
+  - <ne>  # ARC V3A parameter workbook
   default_unit: 1/m^3
   description: Volume-averaged electron density.
   domain: (0, inf)
@@ -705,6 +735,7 @@ n_sep:
   aliases:
   - separatrix_electron_density  # CFSPOPCON variables.yaml
   - nd_plasma_separatrix_electron  # PROCESS physics_variables.py
+  - nsep  # ARC V3A parameter workbook
   default_unit: 1/m^3
   description: Separatrix electron density.
   domain: '[0, inf)'
@@ -902,6 +933,9 @@ f_GW:
   - greenwald_fraction  # CFSPOPCON variables.yaml
   - f_nd_plasma_greenwald  # PROCESS physics_variables.py
   - f_G  # SPARC PRD Table 1
+  - fG  # ARC V3A parameter workbook
+  - fGW  # ARC V3A parameter workbook
+  - <ne>/nGW  # ARC V3A parameter workbook
   description: Greenwald fraction.
   domain: '[0, inf)'
   abs_tol: 0.001
@@ -920,8 +954,15 @@ Z_eff:
   - z_effective
   - n_charge_plasma_effective_vol_avg  # PROCESS physics_variables.py
   - n_charge_plasma_effective_profile  # PROCESS physics_variables.py
+  - Zeff  # ARC V3A parameter workbook
+  - Zeff,core  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Effective charge.
+  # PHYSICALLY Z_eff >= 1 ALWAYS (Cauchy-Schwarz on sum(n_z Z_z^2)/n_e under
+  # quasineutrality); '[1, inf)' is the correct domain and is NOT set, because
+  # declaring it also re-parameterises the solve -- pack_scalar gates its log
+  # transform on the solver lower bound.  MEASURED 2026-08-13: STELLARIS moves off
+  # its pinned design point.  Decouple that first; see TODO.
   domain: '[0, inf)'
   abs_tol: 0.001
   # ONE definition (2026-08-01). The two entries this replaces were partial
@@ -1207,6 +1248,10 @@ c_H:
   # species loop can cover the fuel on the same footing as the impurities.
   # Isotopes collapse: radiation is set by nuclear charge and charge state, not
   # mass, so D, T and protium share one Z=1 cooling curve and one concentration.
+  aliases:
+  - nH/ne  # ARC V3A parameter workbook
+  - fH,top  # ARC V3A parameter workbook
+  - fH,axis  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Hydrogenic (D+T+H) ion concentration n_H/n_e for radiation.
   # NOT bounded above at 1: an undiluted D-T plasma sits EXACTLY on that
@@ -1306,6 +1351,11 @@ c_Ne:
   default_requires: tau_p
   abs_tol: 0.001
 c_Ar:
+  aliases:
+  - cAr  # ARC V3A parameter workbook
+  - cAr,core  # ARC V3A parameter workbook
+  - fAr,max  # ARC V3A parameter workbook
+  - cz  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Argon concentration n_Ar/n_e for line radiation.
   domain: '[0, 1]'
@@ -1339,6 +1389,10 @@ c_Xe:
   default_requires: tau_p
   abs_tol: 0.001
 c_W:
+  aliases:
+  - nW/ne  # ARC V3A parameter workbook
+  - fW,top  # ARC V3A parameter workbook
+  - fW,axis  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Tungsten concentration n_W/n_e for line radiation.
   domain: '[0, 1]'
@@ -1513,12 +1567,15 @@ tau_E:
   - tauE_scalinglaw  # OpenPOPCON src/openpopcon.py
   - tauE_H98  # OpenPOPCON src/openpopcon.py
   - tauE_H89  # OpenPOPCON src/openpopcon.py
+  - τE  # ARC V3A parameter workbook
   description: Energy confinement time.
   default_relation:
   - tau_E_iter_ipb98y2
   domain: (0, inf)
   abs_tol: 0.005
 nu_star:
+  aliases:
+  - ν*  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Normalized collisionality.
   domain: '[0, inf)'
@@ -1534,6 +1591,8 @@ nu_ei:
   domain: '[0, inf)'
   abs_tol: 1.0
 rho_star:
+  aliases:
+  - ρ*  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Normalized gyroradius.
   domain: '[0, inf)'
@@ -1548,6 +1607,8 @@ rho_L:
   domain: '[0, inf)'
   abs_tol: 1.0e-6
 alpha_t:  # CFSPOPCON variables.yaml
+  aliases:
+  - αt  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Turbulence parameter.
   domain: '[0, inf)'
@@ -1583,6 +1644,8 @@ tau_p_He4:
   domain: (0, inf)
   abs_tol: 0.005
 tau_pulse:
+  aliases:
+  - τpulse  # ARC V3A parameter workbook
   default_unit: s
   description: Pulse length.
   domain: (0, inf)
@@ -1595,6 +1658,7 @@ H98_y2:
   aliases:
   - H98y2  # CFSPOPCON variables.yaml
   - H_98y2  # SPARC PRD Table 1
+  - H98,y2  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: H98(y,2) confinement enhancement factor, applied to the IPB98(y,2)
     scalings. Composes with the generic H_factor.
@@ -1610,6 +1674,7 @@ P_fus:
   aliases:
   - P_fusion  # CFSPOPCON variables.yaml
   - p_fusion_total_mw  # PROCESS physics_variables.py
+  - Pfus  # ARC V3A parameter workbook
   description: Fusion power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
@@ -2104,6 +2169,7 @@ P_fus_DT_alpha:
   - P_alpha  # CFSPOPCON variables.yaml
   - p_alpha_total_mw  # PROCESS physics_variables.py
   - p_plasma_alpha_mw  # PROCESS physics_variables.py
+  - Pα  # ARC V3A parameter workbook
   default_unit: W
   description: Alpha power from D-T fusion.
   domain: '[0, inf)'
@@ -2285,6 +2351,8 @@ P_neutron:  # CFSPOPCON variables.yaml
   domain: '[0, inf)'
   abs_tol: 1000000.0
 neutron_rate:  # CHECK imported from cfspopcon (fusion_reaction/neutron_flux_to_walls); CFSPOPCON variables.yaml
+  aliases:
+  - Ndot_n  # ARC V3A parameter workbook
   default_unit: 1/s
   description: Total neutron production rate, summed over all neutron-producing fusion channels.
   domain: '[0, inf)'
@@ -2295,6 +2363,8 @@ P_th_tot:
   # or consumes it; it is declaration-only.
   aliases:
   - P_therm  # Helios
+  - Pth,pulse  # ARC V3A parameter workbook
+  - <Pth>cycle  # ARC V3A parameter workbook
   default_unit: W
   description: Total thermal power.
   domain: '[0, inf)'
@@ -2302,6 +2372,8 @@ P_th_tot:
 P_elec_tot:
   aliases:
   - P_e_net
+  - Pe,net  # ARC V3A parameter workbook
+  - Pe,gross  # ARC V3A parameter workbook
   default_unit: W
   description: Gross electric power.
   domain: '[0, inf)'
@@ -2316,10 +2388,13 @@ P_aux:
   aliases:
   - P_auxiliary_absorbed  # CFSPOPCON variables.yaml
   - P_aux_absorbed  # fusdb legacy alias
+  - Prf,abs  # ARC V3A parameter workbook
   description: Total auxiliary heating power absorbed by the plasma.
   domain: '[0, inf)'
   abs_tol: 1000000.0
 P_aux_el:
+  aliases:
+  - Paux,plant  # ARC V3A parameter workbook
   default_unit: W
   description: Electrical power required by the auxiliary systems.
   domain: '[0, inf)'
@@ -2327,6 +2402,7 @@ P_aux_el:
 P_ohmic:  # CFSPOPCON variables.yaml
   aliases:
   - p_plasma_ohmic_mw  # PROCESS physics_variables.py
+  - Pohm  # ARC V3A parameter workbook
   default_unit: W
   description: Ohmic heating power.
   domain: '[0, inf)'
@@ -2455,11 +2531,15 @@ flux_needed_from_CS_over_rampup:  # CHECK imported from cfspopcon (plasma_curren
   description: Total flux needed from the central solenoid over the ramp-up.
   abs_tol: 0.001
 total_flux_available_from_CS:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  aliases:
+  - Φtot  # ARC V3A parameter workbook
   default_unit: Wb
   description: Total flux available from the central solenoid.
   domain: '[0, inf)'
   abs_tol: 0.001
 max_flattop_duration:  # CHECK imported from cfspopcon (plasma_current/flux_consumption)
+  aliases:
+  - τflattop  # ARC V3A parameter workbook
   default_unit: s
   description: Maximum flat-top duration that can be driven by the central solenoid.
   # [0, inf), CLOSED at 0: a zero flat-top is a valid (marginal) operating
@@ -2475,11 +2555,15 @@ breakdown_flux_consumption:  # CHECK imported from cfspopcon (plasma_current/flu
   description: Resistive flux required for plasma breakdown.
   abs_tol: 0.001
 P_heating:
+  aliases:
+  - Pheat  # ARC V3A parameter workbook
   default_unit: W
   description: Total plasma heating power (ohmic + charged fusion + auxiliary).
   domain: '[0, inf)'
   abs_tol: 1000000.0
 eta_th:
+  aliases:
+  - ηe  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Plant thermal/electric efficiency.
   domain: '[0, 1]'
@@ -2505,12 +2589,23 @@ P_NBI:
   description: Neutral beam injected power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
+  # NO registry default, deliberately: which heating systems a machine HAS is a fact
+  # about that machine, and a registry default would claim it for every device.
+  # 'Total auxiliary power' reads the channels as OPTIONAL CONTRIBUTORS instead
+  # (signature defaults), so a scenario declares only the systems it has.
 P_LHCD:
   default_unit: W
   description: Lower hybrid coupled power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
+  # NO registry default, deliberately: which heating systems a machine HAS is a fact
+  # about that machine, and a registry default would claim it for every device.
+  # 'Total auxiliary power' reads the channels as OPTIONAL CONTRIBUTORS instead
+  # (signature defaults), so a scenario declares only the systems it has.
 P_ICRF:
+  aliases:
+  - PRF,max,coupled  # ARC V3A parameter workbook
+  - PRF,max  # ARC V3A parameter workbook
   default_unit: W
   description: ICRF coupled power.
   domain: '[0, inf)'
@@ -2520,11 +2615,16 @@ P_ECRH:
   description: ECRH coupled power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
+  # NO registry default, deliberately: which heating systems a machine HAS is a fact
+  # about that machine, and a registry default would claim it for every device.
+  # 'Total auxiliary power' reads the channels as OPTIONAL CONTRIBUTORS instead
+  # (signature defaults), so a scenario declares only the systems it has.
 P_LH:
   default_unit: W
   aliases:
   - P_LH_thresh  # CFSPOPCON variables.yaml
   - p_l_h_threshold_mw  # PROCESS physics_variables.py
+  - PL-H  # ARC V3A parameter workbook
   description: L-H transition threshold power.
   domain: '[0, inf)'
   abs_tol: 1000000.0
@@ -2613,6 +2713,10 @@ P_LI_thresh:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_p
   default_relation:
   - L-I threshold Hubbard-2017
 ratio_of_P_SOL_to_P_LH:  # CHECK imported from cfspopcon (separatrix_conditions/threshold_power)
+  aliases:
+  - Psep/PL-H,ITPA2008  # ARC V3A parameter workbook
+  - PSOL/PLH  # ARC V3A parameter workbook
+  - Psep/PL-H  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Ratio of power crossing the separatrix to the L-H threshold power.
   domain: '[0, inf)'
@@ -2632,6 +2736,8 @@ P_sep:
   - P_SOL
   - power_crossing_separatrix  # CFSPOPCON variables.yaml
   - p_plasma_separatrix_mw  # PROCESS physics_variables.py
+  - PSOL  # ARC V3A parameter workbook
+  - Psep  # ARC V3A parameter workbook
   default_unit: W
   description: Power across the separatrix.
   domain: '[0, inf)'
@@ -2646,6 +2752,7 @@ lambda_q:  # CHECK imported from cfspopcon (scrape_off_layer/lambda_q); cfspopco
   default_unit: m
   aliases:
   - heat_flux_decay_length  # fusdb legacy alias
+  - λq,u  # ARC V3A parameter workbook
   description: Scrape-off-layer heat-flux decay length.
   domain: (0, inf)
   abs_tol: 1.0e-5
@@ -2657,6 +2764,7 @@ B_pol_out_mid:  # CHECK imported from cfspopcon (scrape_off_layer)
   default_unit: T
   aliases:
   - B_pol_omp  # CFSPOPCON variables.yaml
+  - Bpol,u  # ARC V3A parameter workbook
   description: Poloidal magnetic field at the outboard midplane.
   domain: (0, inf)
   abs_tol: 0.001
@@ -2683,6 +2791,7 @@ fieldline_pitch_at_omp:  # CHECK imported from cfspopcon (scrape_off_layer/heat_
 fraction_of_P_SOL_to_divertor:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_density); CFSPOPCON variables.yaml
   aliases:
   - f_p_div_lower  # PROCESS physics_variables.py
+  - fodiv  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Fraction of the scrape-off-layer power directed to the divertor target considered.
   domain: '[0, 1]'
@@ -2691,6 +2800,7 @@ q_parallel:  # CHECK imported from cfspopcon (scrape_off_layer/heat_flux_density
   default_unit: W/m^2
   aliases:
   - parallel_heat_flux_density  # CFSPOPCON variables.yaml
+  - q||,u  # ARC V3A parameter workbook
   description: Parallel heat-flux density entering the flux tube at the outboard midplane.
   domain: '[0, inf)'
   abs_tol: 1000.0
@@ -2714,6 +2824,8 @@ PBpRnSq:  # CHECK imported from cfspopcon (metrics/heat_exhaust_metrics); CFSPOP
   domain: '[0, inf)'
 # --- SOL two-point model (cfspopcon scrape_off_layer/two_point_model) ---------
 parallel_connection_length:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON variables.yaml
+  aliases:
+  - L||  # ARC V3A parameter workbook
   default_unit: m
   description: Parallel connection length from the outboard midplane to the target.
   domain: (0, inf)
@@ -2742,11 +2854,15 @@ SOL_conduction_fraction:  # CHECK imported from cfspopcon (two_point_model)
   default: 1.0
   abs_tol: 0.001
 SOL_power_loss_fraction:  # CHECK imported from cfspopcon (two_point_model)
+  aliases:
+  - fpow  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Fraction of the parallel heat flux lost (cooled) along the SOL (f_cooling).
   domain: '[0, 1]'
   abs_tol: 0.001
 SOL_momentum_loss_fraction:  # CHECK imported from cfspopcon (two_point_model)
+  aliases:
+  - fmom,loss  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Fraction of momentum lost along the SOL (f_mom-loss).
   domain: '[0, 1]'
@@ -2781,6 +2897,9 @@ target_q_parallel:  # CHECK imported from cfspopcon (two_point_model); CFSPOPCON
   domain: '[0, inf)'
   abs_tol: 1000.0
 target_electron_temp:  # CHECK imported from cfspopcon (two_point_model); cfspopcon uses eV, fusdb uses keV
+  aliases:
+  - Tdiv  # ARC V3A parameter workbook
+  - Te,t  # ARC V3A parameter workbook
   default_unit: keV
   description: Electron temperature at the divertor target.
   domain: '[0, 300]'
@@ -2889,6 +3008,8 @@ ionization_volume:  # CHECK imported from cfspopcon (scrape_off_layer/reattachme
   domain: (0, inf)
   abs_tol: 0.001
 wall_temperature:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models)
+  aliases:
+  - Twall  # ARC V3A parameter workbook
   default_unit: K
   description: First-wall temperature (sets the neutral thermal velocity).
   domain: (0, inf)
@@ -2906,6 +3027,9 @@ neutral_flux_density_factor:  # CHECK imported from cfspopcon (scrape_off_layer/
   domain: (0, inf)
   abs_tol: 1.0e15
 target_neutral_pressure:  # CHECK imported from cfspopcon (scrape_off_layer/reattachment_models); kallenbach producer deferred
+  aliases:
+  - p0,div  # ARC V3A parameter workbook
+  - pdiv  # ARC V3A parameter workbook
   default_unit: Pa
   description: Neutral pressure at the divertor target.
   domain: '[0, inf)'
@@ -2993,6 +3117,7 @@ P_loss:
   - p_plasma_loss
   - p_plasma_loss_mw  # PROCESS physics_variables.py
   - pscalingmw  # PROCESS physics_variables.py
+  - Ploss  # ARC V3A parameter workbook
   default_unit: W
   description: Power loss across the plasma boundary.
   domain: '[0, inf)'
@@ -3133,6 +3258,8 @@ L_int:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc); Lengyel
   default_relation:
   - L_int cooling integral Ne
 edge_impurity_concentration:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc); CFSPOPCON variables.yaml
+  aliases:
+  - cAr,div  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Edge impurity concentration required to cool the SOL (Lengyel model).
   domain: '[0, inf)'
@@ -3143,6 +3270,10 @@ edge_impurity_concentration_in_core:  # CHECK imported from cfspopcon (impuritie
   domain: '[0, inf)'
   abs_tol: 0.001
 edge_impurity_enrichment:  # CHECK imported from cfspopcon (impurities/edge_radiator_conc); CFSPOPCON variables.yaml
+  aliases:
+  - εAr  # ARC V3A parameter workbook
+  - cAr,div/cAr,core  # ARC V3A parameter workbook
+  - cHe,div/cHe,core  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Edge-to-core enrichment factor of the seeded edge impurity.
   domain: (0, inf)
@@ -3179,6 +3310,8 @@ P_rad:
   aliases:
   - P_radiation  # CFSPOPCON variables.yaml
   - p_plasma_rad_mw  # PROCESS physics_variables.py
+  - Prad  # ARC V3A parameter workbook
+  - <Prad>  # ARC V3A parameter workbook
   default_unit: W
   description: Core radiated power (or total if not separated).
   domain: '[0, inf)'
@@ -3194,6 +3327,7 @@ f_rad:  # CHECK imported from cfspopcon (radiated_power/basic_algorithms)
   aliases:
   - core_radiated_power_fraction  # CFSPOPCON variables.yaml
   - rad_fraction_total  # PROCESS physics_variables.py
+  - frad,core  # ARC V3A parameter workbook
   description: Core radiated power fraction (P_rad / P_in).
   domain: '[0, inf)'
   abs_tol: 0.001
@@ -3219,6 +3353,7 @@ Q_sci:
   aliases:
   - Q
   - Q_phy
+  - Qplasma  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: scientific gain factor Q
   domain: '[0, inf)'
@@ -3251,6 +3386,8 @@ kappa_areal:
   aliases:
   - kappa_a
   - areal_elongation  # CFSPOPCON variables.yaml
+  - κareal  # ARC V3A parameter workbook
+  - κa  # ARC V3A parameter workbook
   description: Areal elongation, S_phi / (pi a^2) -- the elongation of the equivalent
     ellipse with the same horizontal minor radius a and the same poloidal
     cross-sectional area. This is the ITER Physics Basis kappa_A, and the elongation
@@ -3292,8 +3429,13 @@ afuel:
   - aion
   - M_i  # OpenPOPCON src/openpopcon.py
   - m_fuel_amu  # PROCESS physics_variables.py
+  - mDT  # ARC V3A parameter workbook
+  - <mi>  # ARC V3A parameter workbook
   default_unit: amu
-  description: Average fuel mass number (D/T/He3 only).
+  description: Average fuel ion mass, D/T/He3 only. A real mass in amu, weighted
+    by the isotopic masses (a 50:50 DT mix is 2.515), not by the mass numbers
+    (2.5) -- PROCESS's m_fuel_amu uses the same convention. cfspopcon's
+    average_ion_mass is the mass NUMBER and is supplied, not derived.
   domain: (0, inf)
   abs_tol: 0.001
 rho:
@@ -3309,7 +3451,7 @@ temperature_peaking:
   default_unit: dimensionless
   aliases:
   - nu_T_e  # SPARC PRD Table 1 (electron temperature peaking)
-  description: Peak-to-average electron-temperature profile peaking factor. Sets the electron temperature profile; the ion profile uses ion_temperature_peaking (which defaults to this value).
+  description: Peak-to-average electron-temperature profile peaking factor. Sets the electron temperature profile; the ion profile uses ion_temperature_peaking (which defaults to this value, and supplies it in return when only the ion peaking is declared).
   # Peaking is NOT bounded below at 1: a HOLLOW profile (peak below the
   # volume average) is physical -- it occurs at the very centre of the core
   # in real discharges -- and is admissible as long as the density itself
@@ -3322,7 +3464,19 @@ temperature_peaking:
   solver_domain: '[1e-6, inf)'
   rel_tol: 0.05
   abs_tol: 0.001
+  # Mirrors ion_temperature_peaking: the definitional peak/average ratio, plus
+  # the equality-to-ion default as the fallback. The whitelist excludes nothing
+  # that exists (peak/average is this variable's only other producer); it is
+  # required because the profile-shape opt-in resolves a peaking through
+  # `default_relation` only, so without the reverse entry a scenario declaring
+  # just the ion peaking leaves the electron profile uniform.
+  default_relation:
+  - Electron temperature peaking from peak and average
+  - Default electron temperature peaking from ion temperature peaking
 ion_temperature_peaking:  # ion temperature peaking; defaults to temperature_peaking unless set
+  aliases:
+  - Ti(0)/<Ti>  # ARC V3A parameter workbook
+  - νTi  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Peak-to-average ion-temperature profile peaking factor. Defaults to the (electron) temperature_peaking; supply it for an independent ion temperature profile.
   # Peaking is NOT bounded below at 1: a HOLLOW profile (peak below the
@@ -3340,6 +3494,8 @@ ion_temperature_peaking:  # ion temperature peaking; defaults to temperature_pea
 density_peaking:  # electron density peaking; alias electron_density_peaking (cfspopcon name)
   aliases:
   - electron_density_peaking  # CFSPOPCON variables.yaml
+  - νne  # ARC V3A parameter workbook
+  - ne(ψ=0.2)/<ne>  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Peak-to-average electron-density profile peaking factor. Sets the electron density profile; the ion profile uses ion_density_peaking (which defaults to this value).
   # Peaking is NOT bounded below at 1: a HOLLOW profile (peak below the
@@ -3367,6 +3523,7 @@ ion_density_peaking:  # ion density peaking; defaults to density_peaking unless 
   default_unit: dimensionless
   aliases:
   - nu_n_i  # SPARC PRD Table 1
+  - νni  # ARC V3A parameter workbook
   description: Peak-to-average ion-density profile peaking factor. Defaults to the electron density_peaking; supply it (or include the Angioni ion variant) for an independent ion density profile.
   # Peaking is NOT bounded below at 1: a HOLLOW profile (peak below the
   # volume average) is physical -- it occurs at the very centre of the core
@@ -3407,6 +3564,7 @@ dilution:  # imported from cfspopcon (plasma_profiles/density_peaking); CFSPOPCO
   aliases:
   - fuel_dilution
   - plasma_dilution  # OpenPOPCON src/openpopcon.py
+  - (nD+nT)/ne  # ARC V3A parameter workbook
   default_unit: dimensionless
   # TERMINOLOGY: f_X are FRACTIONS (n_X/n_i), c_X are CONCENTRATIONS (n_X/n_e),
   # and this is the FUEL DILUTION -- the fuel share of the electron density.
@@ -3480,6 +3638,7 @@ debye_length:  # CHECK imported from PROCESS (physics.py, DetailedPhysics)
 beta_norm_max:  # CHECK imported from PROCESS (physics.py, PlasmaBeta); PROCESS physics_variables.py
   aliases:
   - beta_vol_avg_max  # PROCESS physics_variables.py
+  - βN,limit  # ARC V3A parameter workbook
   default_unit: dimensionless
   description: Normalised-beta upper limit (beta_N_max) as a fraction from the selected scaling.
   domain: '[0, 0.2]'
@@ -3637,11 +3796,15 @@ radius_plasma_pedestal_temp_norm:
   solver_domain: '[1e-3, 1]'
   abs_tol: 0.001
 nd_plasma_pedestal_electron:  # CHECK imported from PROCESS (bootstrap_current, Sugiyama H)
+  aliases:
+  - nped  # ARC V3A parameter workbook
   default_unit: 1/m^3
   description: Electron number density at the pedestal.
   domain: '[0, inf)'
   abs_tol: 1.0e+18
 temp_plasma_pedestal_kev:  # CHECK imported from PROCESS (bootstrap_current, Sugiyama H)
+  aliases:
+  - Te,ped  # ARC V3A parameter workbook
   default_unit: keV
   description: Electron temperature at the pedestal.
   domain: '[0, 300]'

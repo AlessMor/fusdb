@@ -25,14 +25,62 @@ from ._common import (
     solver_report,
 )
 
+_MOVEMENT_OBJECTIVES = frozenset({"count", "sum", "least_squares", "robust"})
+_MOVEMENT_METRICS = frozenset({"auto", "absolute", "log"})
+
+
+def _movement_robust_loss(n_head: int, f_scale: float):
+    """Build a SciPy ``loss`` applying Cauchy only to the movement rows.
+
+    SciPy's built-in ``loss`` names apply one rho to EVERY residual row, which
+    is wrong here: the vector mixes three semantically different blocks --
+    relation rows (physics, must hold), domain rows (feasibility) and movement
+    rows (supplied data, which may be wrong).  A global robust loss makes it
+    cheap to violate physics, which is the opposite of the intent (MEASURED on
+    a planted gross error: global ``loss="cauchy"`` kept the bad input AND
+    tripled the relation residual against plain least squares).
+
+    SciPy also accepts a callable taking ``z = f**2`` and returning
+    ``(3, m)`` -- value, first and second derivative -- so the rho can be
+    chosen per row.  Rows are laid out relations, domains, then movement
+    (see :meth:`RelationSystem.residual_layout`), so the movement block is the
+    contiguous tail after ``n_head``.
+
+    Head rows keep ``rho(z) = z`` (plain least squares).  Movement rows use
+    ``rho(z) = C**2 * ln(1 + z/C**2)``, SciPy's ``cauchy`` under ``f_scale=C``:
+    a saturating penalty whose cost grows logarithmically, so abandoning one
+    input outright stays cheaper than nudging many, without the unbounded
+    growth of L1.  Movement rows are ``sqrt(weight * excess)``, so with no IRLS
+    weights ``z`` IS the beyond-tolerance excess and the knee ``C**2`` is read
+    directly in tolerance widths.
+    """
+    c2 = float(f_scale) ** 2
+
+    def loss(z: np.ndarray) -> np.ndarray:
+        z = np.asarray(z, dtype=float)
+        out = np.empty((3, z.size), dtype=float)
+        out[0, :n_head] = z[:n_head]
+        out[1, :n_head] = 1.0
+        out[2, :n_head] = 0.0
+        tail = z[n_head:] / c2
+        out[0, n_head:] = c2 * np.log1p(tail)
+        out[1, n_head:] = 1.0 / (1.0 + tail)
+        out[2, n_head:] = -1.0 / (c2 * (1.0 + tail) ** 2)
+        return out
+
+    return loss
+
 
 def run(
     system: Any,
     *,
     max_nfev: int | None = None,
     movement_weight: float = 1.0,
+    movement_objective: str = "count",
+    movement_metric: str = "auto",
     irls_iterations: int = 3,
     movement_eps: float = 0.1,
+    movement_f_scale: float = 1.0,
     relation_weight: float = 1.0,
     relation_weight_schedule: Iterable[float] | None = None,
     initial_guesses: Any = None,
@@ -42,15 +90,124 @@ def run(
 ) -> dict[str, Any]:
     """Run structural simultaneous reconciliation.
 
-    The objective changes the fewest non-fixed inputs *beyond their tolerance*.
-    Input movement is free within tolerance (a deadzone) and penalised by a
-    reweighted-L1 term beyond it; after the relation-weight continuation reaches
-    a solution, ``irls_iterations`` iteratively-reweighted-L1 passes re-solve
-    with weights ``1/(excess + movement_eps)`` so marginal inputs are pushed back
-    inside tolerance and only a sparse set is left changed.  ``movement_eps``
-    controls aggressiveness (smaller = sparser, less stable); ``movement_weight``
-    scales the movement term.  The solved-state input deviations are returned as
-    ``inputs_beyond_tolerance``.
+    By default the objective changes the fewest non-fixed inputs *beyond their
+    tolerance*.  Input movement is free within tolerance (a deadzone) and
+    penalised beyond it.  ``movement_weight`` scales the movement term.  The
+    solved-state input deviations are returned as ``inputs_beyond_tolerance``.
+
+    WHAT THIS ACTUALLY OPTIMISES, and its one failure mode
+    ------------------------------------------------------
+    Relation residuals carry weight 100 (the continuation schedule) against a
+    movement weight of 1, so satisfying the physics DOMINATES and minimum-change
+    is only a tie-breaker *among points that already satisfy it*.  Read that way
+    the behaviour is exactly as advertised -- but it has a consequence that is
+    not obvious and has cost real debugging time:
+
+    **The relation set has a trivial branch.**  Plasma physics is overwhelmingly
+    multiplicative (``P_fus ~ n^2<sv>V``, ``beta ~ nT/B^2``, ``W ~ nTV``,
+    ``P_rad ~ n^2``), so ``n -> 0, T -> 0`` satisfies essentially every relation
+    EXACTLY.  MEASURED 2026-08-13: a scenario at ``n_e = 2e15, T_e = 20 eV``
+    reconciles with ZERO failed relations at ``max_residual 1.3e-4`` and
+    ``P_fus = 3.5e-8 MW``.  It is not an error; it is a correct answer to the
+    question as posed.
+
+    So the outcome splits cleanly on whether the declared point is feasible:
+
+    * feasible   -> the solver lands on it and never looks further (the case for
+      most reactors in ``reactors/``);
+    * infeasible -> the nearest EXACTLY feasible region is the trivial branch,
+      and the solver goes there, reporting few failed relations at a physically
+      meaningless point.
+
+    No solver setting fixes this, and several were measured trying: an unbounded
+    movement metric (``movement_metric="log"``) prices the collapse at thousands
+    of tolerances and the solver pays it, because the alternative is no solution
+    at all.  What fixes it is removing the freedom -- ``fixed: true`` on the
+    quantities that define the scenario -- or removing the contradiction that
+    made the declared point infeasible.  ARC_V3A went from ``P_fus = 0.06 MW``
+    with 2 failed relations to ``P_fus = 1124.6 MW`` (declared 1133) with 37
+    failed relations by pinning its paper-sourced inputs: the same physics
+    disagreements, now reported at the operating point instead of hidden by a
+    walk away from it.
+
+    Two consequences for reading a result:
+
+    * judge a solve by ``max_residual`` and the physics values TOGETHER -- a low
+      failed-relation count at an absurd point is the signature of this branch;
+    * ``success=False`` with MANY failed relations at plausible values is a
+      better outcome than ``success=False`` with few at implausible ones.  The
+      first names the contradictions; the second hides them.
+
+    The ``Operating point is non-trivial (f_GW >= 1%)`` certifier
+    (``relations/operational_limits/density_limits.py``) denies certification to
+    the collapsed branch wherever ``f_GW`` is derivable.  It is checked-only, so
+    it never enters the residual and cannot pull a solve toward it.
+
+    That verdict is an optimiser *outcome*, not a ranking, and two independent
+    choices decide it.  Both are exposed, and both default to the behaviour
+    that shipped before they existed:
+
+    ``movement_objective`` -- how per-input movement is aggregated, i.e. what
+    belief about the supplied data is being encoded:
+
+    * ``"count"`` (default) approximates L0, "minimise how *many* inputs are
+      contradicted".  Once the relation-weight continuation reaches a
+      solution, ``irls_iterations`` iteratively-reweighted-L1 passes re-solve
+      with weights ``1/(excess + movement_eps)``, pushing marginal inputs back
+      inside tolerance so only a sparse set is left changed.  ``movement_eps``
+      controls aggressiveness (smaller = sparser, less stable).  This gives a
+      short, nameable verdict -- the right prior for published design points,
+      and a good model-bug detector -- at the cost of being willing to abandon
+      one input entirely to save the rest.
+    * ``"sum"`` is plain L1: still sparse and cheaper (it skips the
+      warm-started re-solves), but it never actively abandons an input, so it
+      typically leaves several inputs sitting marginally past tolerance
+      instead of naming a culprit.  Equivalent to ``irls_iterations=0``.
+    * ``"least_squares"`` is L2: the correction is spread across the inputs in
+      proportion to their tolerances.  This is the right choice when the
+      inputs are measurements with error bars rather than design declarations,
+      and it never names a culprit.
+    * ``"robust"`` is the process-industry gross-error estimator: a saturating
+      (Cauchy) penalty ``C**2 * ln(1 + excess/C**2)`` applied to the movement
+      rows ONLY, via a per-row SciPy ``loss`` callable, with the knee ``C``
+      given by ``movement_f_scale`` in tolerance widths.  It puts the
+      saturation directly in the objective instead of approximating it with
+      IRLS, so it needs no re-solves.
+
+      DO NOT reach for this to cure a collapsing solve.  MEASURED 2026-08-16
+      on SPARC (no fixed inputs, infeasible declared point): saturation makes
+      the degenerate branch CHEAPER to reach, because a dead plasma requires
+      many inputs to move far and this is exactly the penalty that stops
+      charging for distance.  ``f_scale`` 1 gave ``P_fus`` 0.134 MW, and
+      ``f_scale`` 10 certified ``success=True`` with ZERO failed relations at
+      ``P_fus = 2.9e-5 MW`` -- the trivial branch reported as green, which is
+      the worst outcome the mode can produce.  Large ``f_scale`` merely
+      unwinds the saturation back toward ``"sum"``.  It is the right estimator
+      only where the constraint set is satisfiable and a FEW inputs are
+      suspected of gross error; the collapse is an eligibility problem
+      (``fixed: true``), and no loss shape substitutes for it.
+
+    ``movement_metric`` -- how far one input has moved:
+
+    * ``"auto"`` (default) lets each variable's declared domain decide: a
+      domain excluding zero from below gets decades, everything else gets
+      tolerance widths.  This is the shipped behaviour, and it means
+      ``inputs_beyond_tolerance`` deviations are *not* in one unit across
+      variables -- ``tau_E`` (domain ``(0, inf)``) is log-normalised while
+      ``P_fus`` (domain ``[0, inf)``) is not, although both are physically
+      positive.
+    * ``"absolute"`` measures every input in tolerance widths, making the
+      report comparable across variables.  Note it bounds any collapse toward
+      zero at ``x0/width``, so driving a positive input twelve decades to zero
+      costs no more than doubling it, with no gradient left to pull it back.
+    * ``"log"`` measures in decades wherever a log distance is defined, and
+      falls back to absolute per variable where it is not (an input supplied
+      as exactly zero -- ``f_He4``, the ``c_*`` concentrations).
+
+    The metric applies to the objective and to the ``inputs_beyond_tolerance``
+    report together, deliberately: the report's count is the IRLS loop's own
+    stopping criterion, so a report on a different metric than the objective
+    would stop the solve on a quantity it was not minimising.
 
     Two strengths of input anchoring exist, chosen at ingestion:
 
@@ -60,23 +217,49 @@ def run(
       their tolerance band, penalised beyond it as above.
 
     ``exact=True`` removes the free tolerance band from the *objective*:
-    supplied inputs are penalised from the first deviation (in tolerance
-    units), so a consistent system reconciles with essentially no input
-    movement and an inconsistent one distributes the smallest movement the
-    relations allow.  This is only well-posed when the system is square or
-    underdetermined -- over-determined inconsistent inputs have no exact
-    solution, which is what tolerances exist to absorb.  The
-    ``inputs_beyond_tolerance`` report keeps its tolerance-based meaning
-    either way.
+    supplied inputs are penalised from the first deviation (in units of the
+    selected ``movement_metric``), so a consistent system reconciles with
+    essentially no input movement and an inconsistent one distributes the
+    smallest movement the relations allow.  This is only well-posed when the
+    system is square or underdetermined -- over-determined inconsistent inputs
+    have no exact solution, which is what tolerances exist to absorb.  The
+    ``inputs_beyond_tolerance`` report is computed on the same metric either
+    way, so its "beyond tolerance" threshold is unaffected by ``exact``.
     """
     self = system
     mode = "reconcile"
     # exact=True drops the movement deadzone in every objective term; the
     # residual, the IRLS weights and the grouped Jacobian must all agree.
+    # movement_metric and the objective's row norm travel the same three call
+    # sites for the same reason -- a metric threaded into the residual but not
+    # the Jacobian is a wrong derivative that fails silently.
     deadzone = not exact
     result = new_result(self, mode)
     if reject_unknown_options(result, _unused):
         return result
+    # Validate before anything else: an unrecognised value must fail loudly
+    # rather than fall through to the default and silently reconcile under an
+    # objective the caller did not ask for.
+    movement_objective = str(movement_objective)
+    movement_metric = str(movement_metric)
+    bad_options = [
+        f"{option}={value!r} (expected one of {', '.join(sorted(allowed))})"
+        for option, value, allowed in (
+            ("movement_objective", movement_objective, _MOVEMENT_OBJECTIVES),
+            ("movement_metric", movement_metric, _MOVEMENT_METRICS),
+        )
+        if value not in allowed
+    ]
+    if bad_options:
+        result["errors"].append("Invalid reconcile option(s): " + "; ".join(bad_options))
+        result["termination"] = "invalid options"
+        return result
+    # "count" is the IRLS-reweighted L1 surrogate for L0; "sum" is the same
+    # rows solved once; "least_squares" changes the row itself and is never
+    # reweighted (reweighting an L2 term does not sparsify it).
+    movement_norm = "l2" if movement_objective == "least_squares" else "l1"
+    if movement_objective != "count":
+        irls_iterations = 0
     # Initial guesses are precomputed by compile() (run() always compiles
     # before dispatching); reported here so the solver block records how many
     # variables were seeded.  Caller-supplied ``initial_guesses`` (a warm
@@ -105,6 +288,8 @@ def run(
             residual_size=int(current_certificate["residuals"].size),
             relation_weight=float(relation_weight),
             movement_weight=float(movement_weight),
+            movement_objective=movement_objective,
+            movement_metric=movement_metric,
             initial_guess_variables=int(len(initial_values)),
         )
         return result_from_certificate(
@@ -184,7 +369,12 @@ def run(
             if domain_rows.size:
                 blocks.append(current_relation_weight * domain_rows)
             if layout["movement_names"] is not None:
-                blocks.append(current_movement_weight * self.layout_movement_rows(values, layout, irls_weights, deadzone=deadzone))
+                blocks.append(
+                    current_movement_weight
+                    * self.layout_movement_rows(
+                        values, layout, irls_weights, deadzone=deadzone, metric=movement_metric, norm=movement_norm
+                    )
+                )
             parts = [block for block in blocks if block.size]
             out = np.concatenate(parts) if parts else np.empty(0, dtype=float)
             if out.size != size or not np.all(np.isfinite(out)):
@@ -292,6 +482,16 @@ def run(
             final_probe_size = int(layout["size"])
             stage_kwargs = dict(base_common_kwargs)
             stage_kwargs["max_nfev"] = stage_max_nfev
+            # The saturating movement penalty lives in the loss, not the row,
+            # so it needs the frozen layout: only this stage's movement tail is
+            # made robust.  A stage without movement rows keeps plain least
+            # squares (no tail to soften).
+            if movement_objective == "robust":
+                n_movement = len(layout["movement_names"] or ())
+                if n_movement:
+                    stage_kwargs["loss"] = _movement_robust_loss(
+                        int(layout["size"]) - n_movement, float(movement_f_scale)
+                    )
             # Jacobian strategy, best first.  The structural pattern follows
             # the completion-dependency graph and is conservative: it has an edge
             # for every output of every completion relation, so it never omits a
@@ -318,6 +518,8 @@ def run(
                     irls_weights=irls_weights,
                     residual_function=residual_function,
                     deadzone=deadzone,
+                    metric=movement_metric,
+                    norm=movement_norm,
                 )
                 jac_sparsity = plan["sparsity"]
                 jac_sparsity_used = True
@@ -384,14 +586,16 @@ def run(
             # Warm-started reweighting needs only a few steps; cap it so a hard
             # (inconsistent) re-solve cannot burn the full budget per pass.
             irls_max_nfev = int(min(max_nfev, max(40, 15 * int(x0.size))))
-            prev_beyond = len(inputs_beyond_tolerance(self, completed_values))
+            prev_beyond = len(inputs_beyond_tolerance(self, completed_values, metric=movement_metric))
             for irls_index in range(int(irls_iterations)):
                 if prev_beyond == 0:
                     break
                 # Reweight from the latest solution, then re-solve warm-started.
-                irls_weights = self.movement_weights(completed_values, eps=float(movement_eps), deadzone=deadzone)
+                irls_weights = self.movement_weights(
+                    completed_values, eps=float(movement_eps), deadzone=deadzone, metric=movement_metric
+                )
                 entry = run_stage(f"irls_{irls_index}", stage_max_nfev=irls_max_nfev, include_movement=True)
-                new_beyond = len(inputs_beyond_tolerance(self, completed_values))
+                new_beyond = len(inputs_beyond_tolerance(self, completed_values, metric=movement_metric))
                 entry["inputs_beyond_tolerance"] = new_beyond
                 # Stop once a pass stops reducing the number beyond tolerance:
                 # further reweighting only churns (common for inconsistent data).
@@ -427,6 +631,9 @@ def run(
         phase_schedule=[{"relation_weight": float(rw), "movement_weight": float(mw)} for rw, mw in phase_schedule],
         stage_history=stage_history,
         movement_weight=float(current_movement_weight),
+        movement_objective=movement_objective,
+        movement_metric=movement_metric,
+        movement_f_scale=float(movement_f_scale),
         initial_guess_variables=int(len(initial_values)),
         profile_solver_spans=profile_spans,
     )
@@ -453,7 +660,7 @@ def run(
     validation["likely_culprits"] = rank_input_culprits(self, validation.get("relation_status", {}))
     # The objective minimises this set: non-fixed inputs whose solved value left
     # their tolerance band, worst deviation first.
-    validation["inputs_beyond_tolerance"] = inputs_beyond_tolerance(self, completed_values)
+    validation["inputs_beyond_tolerance"] = inputs_beyond_tolerance(self, completed_values, metric=movement_metric)
     return validation
 
 
@@ -469,6 +676,8 @@ def grouped_jacobian(
     irls_weights: Mapping[str, float],
     residual_function: Any,
     deadzone: bool = True,
+    metric: str = "auto",
+    norm: str = "l1",
 ):
     """Return the grouped two-point-difference Jacobian callable for one stage.
 
@@ -481,6 +690,11 @@ def grouped_jacobian(
     are pinned by ``layout``, so every block difference is well-defined; an
     unexpected group failure falls back to one full residual call for that
     group, which can make the Jacobian slower but never wrong.
+
+    ``deadzone``, ``metric`` and ``norm`` must be the same values the stage's
+    ``residual_function`` uses: this differentiates the stage objective, so a
+    movement row built here under different settings is a wrong derivative
+    that the solver would follow without complaint.
     """
     csc = plan["sparsity"]
     groups = plan["groups"]
@@ -503,7 +717,7 @@ def grouped_jacobian(
             blocks0.append(rows if rows.size == rdim else np.full(rdim, 1.0e12, dtype=float))
         domain0 = system.layout_domain_rows(values0, layout)
         move0 = (
-            system.layout_movement_rows(values0, layout, irls_weights, deadzone=deadzone)
+            system.layout_movement_rows(values0, layout, irls_weights, deadzone=deadzone, metric=metric, norm=norm)
             if include_movement
             else np.empty(0, dtype=float)
         )
@@ -541,7 +755,9 @@ def grouped_jacobian(
                 domain_new = system.layout_domain_rows(ns, layout)
                 df[total:total + domain0.size] = relation_weight * (domain_new - domain0)
                 if move0.size:
-                    move_new = system.layout_movement_rows(ns, layout, irls_weights, deadzone=deadzone)
+                    move_new = system.layout_movement_rows(
+                        ns, layout, irls_weights, deadzone=deadzone, metric=metric, norm=norm
+                    )
                     df[total + domain0.size:] = movement_weight * (move_new - move0)
             except Exception:
                 if f0_weighted is None:
@@ -561,18 +777,25 @@ def grouped_jacobian(
     return jac
 
 
-def inputs_beyond_tolerance(system: Any, values: Mapping[str, Any]) -> list[dict[str, Any]]:
+def inputs_beyond_tolerance(system: Any, values: Mapping[str, Any], *, metric: str = "auto") -> list[dict[str, Any]]:
     """Return supplied non-fixed inputs whose solved value left their tolerance.
 
-    Reports, per input variable, the maximum tolerance-normalized deviation
-    ``|value - input| / tolerance``; an input is "beyond tolerance" when that
-    exceeds one.  The count of these is exactly the quantity the reconcile
-    objective tries to minimise, so it is surfaced on the result for the
-    caller to inspect.
+    Reports, per input variable, the maximum normalized deviation; an input is
+    "beyond tolerance" when that exceeds one.  The count of these is exactly
+    the quantity the ``count`` reconcile objective tries to minimise, so it is
+    surfaced on the result for the caller to inspect.
+
+    ``metric`` must be the one the solve used, since the count is also the
+    IRLS loop's stopping criterion.  Under the default ``"auto"`` the
+    normalization is *per variable*: ``|value - input| / tolerance`` for most,
+    but ``|log(value / input)| / log_width`` for those whose domain excludes
+    zero, so ``deviation_tol`` is only comparable across variables under
+    ``metric="absolute"``.
 
     Args:
         system: The compiled relation system.
         values: Solver-unit namespace produced by the solve.
+        metric: Movement distance; see :func:`run`.
 
     Returns:
         ``{"name", "deviation_tol"}`` entries with deviation > 1, worst first.
@@ -584,7 +807,9 @@ def inputs_beyond_tolerance(system: Any, values: Mapping[str, Any]) -> list[dict
         # excess is (deviation/tol - 1) clipped at 0, so excess > 0 marks a
         # crossing; deviation in tolerance units is then 1 + excess.
         spec = system.spec_of(name)
-        excess = spec.movement_excess(values[name], spec.solver_value(ref, system.profile_size), *system.tols_of(name))
+        excess = spec.movement_excess(
+            values[name], spec.solver_value(ref, system.profile_size), *system.tols_of(name), metric=metric
+        )
         # The optimizer can stop a few parts per million beyond the exact
         # deadzone boundary.  That is numerical termination noise, not a
         # physically meaningful extra input excursion.  Keep the reporting

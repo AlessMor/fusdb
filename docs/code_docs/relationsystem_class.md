@@ -54,8 +54,14 @@ objects; per-variable numerics live on the process-lifetime `VariableSpec`)
   protocol; modes weight and stack the blocks.
   `certify_relations(values)` builds the full per-relation certification
   statuses. IRLS movement weights are mode-owned and produced by
-  `movement_weights(values, eps=...)`; movement references and tolerance
-  widths are frozen into a movement plan at `pack()` time.
+  `movement_weights(values, eps=..., metric=...)`; movement references,
+  tolerance widths and both candidate log widths are frozen into a movement
+  plan at `pack()` time. The movement penalty's two shape parameters --
+  `metric` (how far an input has moved) and `norm` (how the per-input
+  movements are aggregated) -- are passed per call, exactly like `deadzone`,
+  and must be the same across the residual, the IRLS weights and the
+  Jacobian. Modes choose them: see reconcile's `movement_metric` /
+  `movement_objective`.
 - `build_jac_sparsity(layout)` / `jacobian_plan(layout)`: conservative
   Jacobian sparsity and the grouped-difference plan for the frozen layout.
 - `store(values)`: overwrite the system's current public `values` from a
@@ -69,6 +75,18 @@ Per-variable numerics (solver/public value conversion, shape coercion, domain
 checks, scales and tolerances) are owned by the frozen `VariableSpec`
 (computed once per process, with precomputed bounds/projection constants);
 the system passes its `profile_size` and resolved tolerances as arguments.
+
+Domain rows measure distance outside the **closed** domain: an exclusive bound
+contributes its own value, never value ± a global epsilon. Strictness is
+qualitative, and turning it into an absolute margin invents a scale the
+variable may not have — `L_int` lives at ~1e-30, so a 1e-12 margin over its
+1e-40 `abs_tol` produced a 1e28 row no physical value could satisfy. Keeping
+the solver strictly *inside* an open domain is the packer's job (bounds plus
+the log transform); the row reports how far outside a value already is. The
+one place still keyed to an absolute epsilon is `VariableSpec.solver_value`'s
+boundary projection for **profiles** — scalars project on exact equality. That
+asymmetry is deliberate and measured; see TODO, "ZERO_TOL as an absolute
+magnitude".
 `Variable` is a boundary input record only (see
 [Variable Class](variable_class.md)).
 

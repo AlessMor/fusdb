@@ -135,6 +135,14 @@ def _forward_decision_rounds(
             forward_changed = False
             for group in (non_default, defaults):
                 for rel in group:
+                    # An ALL-OPTIONAL relation must not fire on vacuous truth:
+                    # with no required inputs, ``all(inp in rounds for inp in ())``
+                    # is True, so it would produce its output from nothing and
+                    # cascade (MEASURED: 42 variables forward-derivable in one
+                    # step -- the whole power-balance and SOL chain).  It says
+                    # nothing until at least one contributor is known.
+                    if rel.all_contributors_optional and not any(name in rounds for name in rel.optional_variable_names):
+                        continue
                     if rel.output_names and all(inp in rounds for inp in rel.input_names):
                         for out in rel.output_names:
                             if out not in rounds:
@@ -150,6 +158,8 @@ def _forward_decision_rounds(
             continue
         for group in (non_default, defaults):
             for rel in group:
+                if rel.all_contributors_optional and not any(name in rounds for name in rel.optional_variable_names):
+                    continue
                 undecided = [v for v in rel.variables if v not in rounds]
                 if len(undecided) == 1 and undecided[0] not in rounds and undecided[0] not in pure_input:
                     v = undecided[0]
@@ -673,6 +683,17 @@ class RelationSystem:
         # the packed profile arrays, so _domain_rows checks each kind as
         # one vectorized batch per call; values of an unexpected type fall
         # back to the per-variable spec check.
+        #
+        # The bounds are the CLOSED domain: an exclusive bound contributes its
+        # own value, never value +/- a global epsilon.  Strictness is a
+        # qualitative property ("x > 0"), and turning it into an absolute
+        # margin invents a scale the variable may not have -- L_int lives at
+        # ~1e-30, so a 1e-12 margin normalized by its 1e-40 abs_tol produced a
+        # 1e28 row that no physical value could satisfy, swamping the whole
+        # least-squares objective.  Keeping the solver strictly INSIDE an open
+        # domain is the packer's job (bounds + log transform), not a residual's:
+        # this row reports how far outside the domain a value already is.
+        # Mirrored by VariableSpec.domain_violation_rows for the fallback path.
         plan: list[tuple[str, Any, float, float, int]] = []
         names: list[str] = []
         lows: list[float] = []
@@ -690,23 +711,23 @@ class RelationSystem:
             if self.variable_roles[name] == "inactive" or name not in self.variable_registry:
                 continue
             spec = self.variable_registry.get(name)
-            lower, upper, lower_inc, upper_inc = spec.domain
+            lower, upper, _lower_inc, _upper_inc = spec.domain
             if lower is None and upper is None:
                 continue
             rel_tol, abs_tol = self.tols_of(name)
             if spec.shape == 1:
                 plan.append((name, spec, rel_tol, abs_tol, -1))
                 profile_index[name] = len(p_lows)
-                p_lows.append(-np.inf if lower is None else float(lower) + (ZERO_TOL if not lower_inc else 0.0))
-                p_highs.append(np.inf if upper is None else float(upper) - (ZERO_TOL if not upper_inc else 0.0))
+                p_lows.append(-np.inf if lower is None else float(lower))
+                p_highs.append(np.inf if upper is None else float(upper))
                 p_rel_tols.append(rel_tol)
                 p_abs_tols.append(abs_tol)
                 p_floors.append(spec.tolerance_floor(rel_tol, abs_tol))
                 continue
             plan.append((name, spec, rel_tol, abs_tol, len(names)))
             names.append(name)
-            lows.append(-np.inf if lower is None else float(lower) + (ZERO_TOL if not lower_inc else 0.0))
-            highs.append(np.inf if upper is None else float(upper) - (ZERO_TOL if not upper_inc else 0.0))
+            lows.append(-np.inf if lower is None else float(lower))
+            highs.append(np.inf if upper is None else float(upper))
             rel_tols.append(rel_tol)
             abs_tols.append(abs_tol)
             floors.append(spec.tolerance_floor(rel_tol, abs_tol))
@@ -972,6 +993,24 @@ class RelationSystem:
         structural blocks and the partition diagnostics.  Returns ``(active,
         decidable, active_vars)``.
         """
+        # Relations that cannot survive pruning under ANY matching are removed
+        # BEFORE the Dulmage-Mendelsohn decomposition.  The partition's output is
+        # saved as ``structural_blocks`` and never recomputed, and its consumers
+        # (popcon's certification cone, reconcile's x0 block solver) read it as if
+        # it described the ACTIVE system -- so a relation that is about to be
+        # pruned should not shape the blocking on its way out.
+        impossible = self._structurally_impossible(pool, forward, supplied)
+        if impossible:
+            for rel in impossible:
+                exclusive = self._exclusive_unknowns(rel, pool, forward, supplied)
+                if exclusive:
+                    reason = ("inactive_structurally_impossible: one equation cannot determine "
+                              + ", ".join(sorted(exclusive)))
+                else:
+                    reason = ("inactive_all_optional: no contributor available among "
+                              + ", ".join(rel.optional_variable_names))
+                self._mark_relation_inactive(rel, reason, replace=True)
+            pool = [rel for rel in pool if rel not in impossible]
         partition = self._structural_partition(pool, forward)
         block_decidable = set(partition["determined_variables"])
         decidable = supplied | forward | block_decidable
@@ -1362,6 +1401,52 @@ class RelationSystem:
             edata.pop("provider", None)
         self._provider_view = None
 
+    @staticmethod
+    def _exclusive_unknowns(rel: Relation, pool: list[Relation], forward: set[str], supplied: set[str]) -> set[str]:
+        """Unknown variables of ``rel`` that appear in no other relation of ``pool``."""
+        known = supplied | forward
+        others = {name for other in pool if other is not rel for name in other.variables}
+        return {name for name in rel.variables if name not in known and name not in others}
+
+    @classmethod
+    def _structurally_impossible(cls, pool: list[Relation], forward: set[str], supplied: set[str]) -> list[Relation]:
+        """Relations that cannot survive pruning under ANY maximum matching.
+
+        A relation carrying two or more variables that are unsupplied, not
+        forward-derivable and exclusive to it is unsatisfiable by counting: in
+        :meth:`_structural_partition` it contributes one row per declared output
+        but two or more unmatched columns, so at least one stays underdetermined
+        however the matching is chosen, and the relation is deactivated.  Pure
+        set arithmetic -- no decomposition needed.
+
+        Deliberately NOT "has no declared output", which would be unsound: the
+        relations are adirectional, so a variable can be determined by inverting
+        a relation it merely appears in, and the DM rows are counted from outputs
+        while the columns come from all variables.
+
+        Iterated to a fixpoint: removing one relation lowers its neighbours'
+        degrees and can expose further impossibilities.
+        """
+        removed: list[Relation] = []
+        current = list(pool)
+        while True:
+            known = supplied | forward
+            batch = [
+                rel for rel in current
+                if len(cls._exclusive_unknowns(rel, current, forward, supplied)) >= 2
+                # An all-optional relation with no available contributor is
+                # equally unable to contribute, and must go before the
+                # decomposition: as constants its parameters are absent from
+                # ``variables``, so it would present as a matched 1x1 producer
+                # of its output and restructure the blocking around it.
+                or (rel.all_contributors_optional
+                    and not (set(rel.optional_variable_names) & known))
+            ]
+            if not batch:
+                return removed
+            removed.extend(batch)
+            current = [rel for rel in current if rel not in batch]
+
     def _mark_relation_active(self, rel: Relation) -> None:
         data = self._structural_graph().nodes[("relation", rel.name)]
         data["active"] = True
@@ -1700,6 +1785,12 @@ class RelationSystem:
         structural/numerical -- scalar variable, positive solver lower bound,
         positive finite initial value; no variable-name or physics-category
         assumptions are used.
+
+        The gate reads the SOLVER lower bound, which is why ~30 variables declare
+        ``solver_domain: [1e-12, inf)`` purely to trip this branch.  Widening it to
+        "physical domain bounded below by zero" was MEASURED and REVERTED 2026-08-13:
+        it is a solver-behaviour change, not a refactor (GIGA 0 -> 2 inputs beyond
+        tolerance).  See TODO.
         """
         scale = self.spec_of(name).scale_of(*self.tols_of(name), scale_ref)
         if self.spec_of(name).shape == 0 and np.isfinite(lb) and lb > 0.0 and np.isfinite(init) and init > 0.0:
@@ -2254,30 +2345,45 @@ class RelationSystem:
         weights: Mapping[str, float] | None = None,
         *,
         deadzone: bool = True,
+        metric: str = "auto",
+        norm: str = "l1",
     ) -> np.ndarray:
         """Movement rows for one namespace at a frozen layout.
 
-        Each movement input contributes ``sqrt(weight * excess)``, so its
-        squared cost is ``weight * excess`` -- a deadzone L1 penalty on the
-        beyond-tolerance excess.  The per-input ``weight`` (default 1) is what
-        the reconcile IRLS loop adjusts via :meth:`movement_weights`:
-        down-weighting inputs already far past tolerance and up-weighting the
-        marginal ones reweights the L1 so repeated solves drive the *number*
-        of crossings down (the convex, iteratively-reweighted surrogate for
-        the L0 "fewest inputs beyond tolerance" aim).  The weights are
-        mode-owned state, passed in per call; references and tolerance widths
-        come from the pack-time movement plan.  A movement input missing from
-        ``values`` fills its row with the large penalty.
+        Under ``norm="l1"`` each movement input contributes
+        ``sqrt(weight * excess)``, so its squared cost -- which is what the
+        least-squares backend actually minimises -- is ``weight * excess``, a
+        deadzone L1 penalty on the beyond-tolerance excess.  The per-input
+        ``weight`` (default 1) is what the reconcile IRLS loop adjusts via
+        :meth:`movement_weights`: down-weighting inputs already far past
+        tolerance and up-weighting the marginal ones reweights the L1 so
+        repeated solves drive the *number* of crossings down (the convex,
+        iteratively-reweighted surrogate for the L0 "fewest inputs beyond
+        tolerance" aim).
+
+        Under ``norm="l2"`` the row is ``weight * excess`` instead, whose
+        squared cost is quadratic in the excess: the correction is spread over
+        the inputs in proportion to their tolerances rather than concentrated
+        on a few, so no input is ever named a culprit.  That is reconcile's
+        ``movement_objective="least_squares"``, and it is not reweighted.
+
+        The weights are mode-owned state, passed in per call; references and
+        tolerance widths come from the pack-time movement plan.  A movement
+        input missing from ``values`` fills its row with the large penalty.
         """
         names = layout["movement_names"] or ()
         if not names:
             return np.empty(0, dtype=float)
         weights = weights or {}
-        excess_by_name = dict(self._movement_rows(values, deadzone=deadzone))
+        excess_by_name = dict(self._movement_rows(values, deadzone=deadzone, metric=metric))
         rows = np.empty(len(names), dtype=float)
         for i, name in enumerate(names):
             excess = excess_by_name.get(name)
-            rows[i] = 1.0e12 if excess is None else np.sqrt(weights.get(name, 1.0) * excess)
+            if excess is None:
+                rows[i] = 1.0e12
+                continue
+            cost = weights.get(name, 1.0) * excess
+            rows[i] = cost if norm == "l2" else np.sqrt(cost)
         return rows
 
     def build_jac_sparsity(self, layout: Mapping[str, Any]):
@@ -2527,8 +2633,8 @@ class RelationSystem:
             rows.append(np.full(n_rows, 1.0e12, dtype=float))
         return np.concatenate(rows) if rows else np.empty(0, dtype=float)
 
-    def _build_movement_plan(self) -> list[tuple[str, Any, float, bool, float | None]]:
-        """Return movement records ``(name, reference, width, is_scalar, log_width)``.
+    def _build_movement_plan(self) -> list[tuple[str, Any, float, bool, float | None, float | None]]:
+        """Return records ``(name, reference, width, is_scalar, log_auto, log_forced)``.
 
         Movement inputs are the packed variables (from the layout stored by
         :meth:`pack`) with a supplied reference, plus the supplied variables
@@ -2540,7 +2646,7 @@ class RelationSystem:
         all iterate this one plan (:meth:`_movement_rows`) so their rows stay
         aligned.
         """
-        plan: list[tuple[str, Any, float, bool, float | None]] = []
+        plan: list[tuple[str, Any, float, bool, float | None, float | None]] = []
         packed: set[str] = set()
         for name, *_rest in self.packed_specs:
             packed.add(name)
@@ -2564,22 +2670,26 @@ class RelationSystem:
             plan.append(self._movement_record(name, self.solver_value(name, ref_input)))
         return plan
 
-    def _movement_record(self, name: str, reference: Any) -> tuple[str, Any, float, bool, float | None]:
+    def _movement_record(self, name: str, reference: Any) -> tuple[str, Any, float, bool, float | None, float | None]:
         """Build one movement-plan record from a solver-form reference value.
 
-        ``log_width`` is non-None for strictly-positive variables, whose
-        movement is measured multiplicatively (see
-        :attr:`VariableSpec.movement_is_multiplicative`).
+        Both log widths are resolved here, once, so the per-call ``metric``
+        choice costs nothing at residual time: ``log_auto`` is non-None only
+        for strictly-positive variables (the ``"auto"`` metric, where the
+        domain decides per variable), ``log_forced`` whenever a log distance
+        is defined at all (the ``"log"`` metric).  ``"absolute"`` uses
+        neither.
         """
         spec = self.spec_of(name)
         rel_tol, abs_tol = self.tols_of(name)
         width = max(float(spec.tolerance_width(spec.scale_of(rel_tol, abs_tol, reference), rel_tol, abs_tol)), 1.0e-300)
-        log_width = spec.movement_log_width(width, reference)
+        log_auto = spec.movement_log_width(width, reference)
+        log_forced = spec.movement_log_width(width, reference, metric="log")
         if spec.shape == 0:
-            return name, float(np.asarray(reference, dtype=float).reshape(-1)[0]), width, True, log_width
-        return name, reference, width, False, log_width
+            return name, float(np.asarray(reference, dtype=float).reshape(-1)[0]), width, True, log_auto, log_forced
+        return name, reference, width, False, log_auto, log_forced
 
-    def _movement_rows(self, values: Mapping[str, Any], *, deadzone: bool = True):
+    def _movement_rows(self, values: Mapping[str, Any], *, deadzone: bool = True, metric: str = "auto"):
         """Yield ``(name, excess)`` for every movement input present in ``values``.
 
         The scalar fast path computes the deadzone excess in plain float
@@ -2589,8 +2699,15 @@ class RelationSystem:
         ``deadzone=False`` (reconcile's ``exact`` option) drops the free
         tolerance band: movement is penalised from the first deviation, in
         units of the pack-time tolerance width.
+
+        ``metric`` selects the distance (reconcile's ``movement_metric``):
+        ``"auto"`` lets each variable's domain decide, ``"absolute"`` measures
+        every input in tolerance widths, ``"log"`` measures in decades wherever
+        that is defined.  It must match across the residual, the IRLS weights
+        and the Jacobian, exactly like ``deadzone``.
         """
-        for name, reference, width, is_scalar, log_width in self._movement_plan:
+        for name, reference, width, is_scalar, log_auto, log_forced in self._movement_plan:
+            log_width = None if metric == "absolute" else (log_forced if metric == "log" else log_auto)
             current = values.get(name)
             if current is None:
                 continue
@@ -2608,9 +2725,9 @@ class RelationSystem:
                     excess = abs(current - reference) / width - 1.0
                 yield name, excess if excess > 0.0 else 0.0
             else:
-                yield name, self.spec_of(name).movement_excess(current, reference, *self.tols_of(name))
+                yield name, self.spec_of(name).movement_excess(current, reference, *self.tols_of(name), metric=metric)
 
-    def movement_weights(self, values: Mapping[str, Any], *, eps: float, deadzone: bool = True) -> dict[str, float]:
+    def movement_weights(self, values: Mapping[str, Any], *, eps: float, deadzone: bool = True, metric: str = "auto") -> dict[str, float]:
         """Return movement L1 weights from the current solution (one IRLS step).
 
         ``weight = 1 / (excess + eps)`` per input: an input already well
@@ -2624,8 +2741,13 @@ class RelationSystem:
             values: Latest solved namespace.
             eps: Reweighting floor; smaller drives sparser (more aggressive)
                 solutions at some cost to stability.
+            metric: Movement distance; must match the residual's (see
+                :meth:`_movement_rows`).
         """
-        return {name: 1.0 / (excess + float(eps)) for name, excess in self._movement_rows(values, deadzone=deadzone)}
+        return {
+            name: 1.0 / (excess + float(eps))
+            for name, excess in self._movement_rows(values, deadzone=deadzone, metric=metric)
+        }
 
     # ── Store and final-value checks ──────────────────────────────────────
 

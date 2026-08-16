@@ -12,9 +12,19 @@ from fusdb.relation import relation
     tags=('auxiliary_power',),
     outputs='P_aux',
 )
-def auxiliary_power_from_sources(P_NBI: float, P_ICRF: float, P_LHCD: float, P_ECRH: float) -> Any:
-    """Return total auxiliary power from injected sources.
-    # TODO: check if additional power sources should be included here (e.g. ECRH, EBW,...).
+def auxiliary_power_from_sources(P_NBI: float = 0.0, P_ICRF: float = 0.0, P_LHCD: float = 0.0, P_ECRH: float = 0.0) -> Any:
+    """Return total auxiliary power from the heating channels a scenario declares.
+
+    Each channel carries a signature default, making it an OPTIONAL CONTRIBUTOR
+    rather than a constant: a declared channel is read from the namespace, an
+    undeclared one is zero.  Which systems a machine HAS is a fact about that
+    machine, so it belongs in its reactor file, not in a registry default that
+    would claim the same for every device.
+
+    Being all-optional, this relation stays out of the graph until at least one
+    channel is supplied or derivable -- the guard is in the forward closure,
+    because with no required inputs ``all(inp in known for inp in ())`` is
+    vacuously true and it would otherwise fire from nothing.  See TODO.
     """
     return P_NBI + P_ICRF + P_LHCD + P_ECRH
 
