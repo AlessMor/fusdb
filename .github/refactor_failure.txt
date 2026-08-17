@@ -1,17 +1,46 @@
 >>> python .github/refactor_relationsystem.py loc /tmp/loc-before.json
+{
+  "src/fusdb/modes/popcon.py": 665,
+  "src/fusdb/modes/reconcile.py": 453,
+  "src/fusdb/relationsystem.py": 2336,
+  "total": 3454
+}
+>>> python .github/refactor_relationsystem.py snapshot /tmp/before.json
+Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF electron density profile' is not a preferred provider of 'n_e'; it overrides the effective default_relation set (n_e: ['Default electron density profile from average density', 'PROCESS pedestal electron density profile', 'Parabolic electron density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'cfspopcon_imodey2_confinement_time' is not a preferred provider of 'tau_E'; it overrides the effective default_relation set (tau_E: ['tau_E_iter_ipb98y2']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF electron density profile' is not a preferred provider of 'n_e'; it overrides the effective default_relation set (n_e: ['Default electron density profile from average density', 'PROCESS pedestal electron density profile', 'Parabolic electron density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+/home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:311: ComplexWarning: Casting complex values to real discards the imaginary part
+  arr = np.asarray(value, dtype=float)
+/home/runner/work/fusdb/fusdb/src/fusdb/relations/radiation/synchrotron.py:71: RuntimeWarning: overflow encountered in exp
+  Gs = 0.93 * (1 + 0.85 * np.exp(-0.82 * R / a))
+/home/runner/work/fusdb/fusdb/src/fusdb/relation.py:449: ComplexWarning: Casting complex values to real discards the imaginary part
+  scale = np.maximum(np.maximum(np.abs(np.asarray(lhs, dtype=float)), np.abs(np.asarray(rhs, dtype=float))), base_scale)
+/home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:396: ComplexWarning: Casting complex values to real discards the imaginary part
+  right = np.asarray(rhs, dtype=float)
+Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+>>> python .github/refactor_relationsystem.py stage1
 Traceback (most recent call last):
   File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 547, in <module>
     main()
     ~~~~^^
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 539, in main
-    loc(Path(sys.argv[2]))
-    ~~~^^^^^^^^^^^^^^^^^^^
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 513, in loc
-    payload = {str(p.relative_to(ROOT)): implementation_loc(p) for p in files}
-                                         ~~~~~~~~~~~~~~~~~~^^^
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 499, in implementation_loc
-    docs = docstring_lines(source)
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 491, in docstring_lines
-    first = body[0]
-            ~~~~^^^
-TypeError: 'GeneratorExp' object is not subscriptable
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 531, in main
+    stage1()
+    ~~~~~~^^
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 181, in stage1
+    reconcile = sub_once(
+        reconcile,
+    ...<3 lines>...
+        "grouped jacobian uses packed helper",
+    )
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 29, in sub_once
+    raise RuntimeError(f"{label}: expected one regex match, found {count}")
+RuntimeError: grouped jacobian uses packed helper: expected one regex match, found 0
