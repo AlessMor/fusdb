@@ -9,6 +9,7 @@ to the existing RelationSystem.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -29,23 +30,11 @@ def _copy_relation(
     argument_names: tuple[str, ...] | None = None,
 ) -> Relation:
     """Return ``relation`` with only dependency metadata replaced."""
-    return Relation(
-        name=relation.name,
-        func=relation.func,
+    return replace(
+        relation,
         input_names=relation.input_names if input_names is None else input_names,
-        outputs=relation.outputs,
-        op=relation.op,
-        rhs=relation.rhs,
-        tags=relation.tags,
-        enforce=relation.enforce,
-        constraints=relation.constraints,
-        source_kind=relation.source_kind,
-        source_name=relation.source_name,
         constant_names=relation.constant_names if constant_names is None else constant_names,
-        dependency=relation.dependency,
-        function_name=relation.function_name,
         argument_names=relation.argument_names if argument_names is None else argument_names,
-        rebuild_spec=relation.rebuild_spec,
     )
 
 

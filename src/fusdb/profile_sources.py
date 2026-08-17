@@ -2,7 +2,7 @@
 
 A source profile remains immutable input data, but it is exposed to the
 RelationSystem as an ordinary generated relation on fusdb's common ``rho``
-grid.  This keeps coordinate conversion in the existing relation/provider
+grid. This keeps coordinate conversion in the existing relation/provider
 graph: geometry mappings are relation inputs, so completion and Jacobian
 sparsity see the dependency without a new Profile or Coordinate class.
 """
@@ -10,6 +10,7 @@ sparsity see the dependency without a new Profile or Coordinate class.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from functools import partial
 from typing import Any
 
 import numpy as np
@@ -37,8 +38,8 @@ def _initial_average(
 ) -> float:
     """Best available volume-average seed for a source profile.
 
-    The seed is not a physical constraint.  When the requested coordinate and
-    volume measure are already supplied, it uses them.  Otherwise it falls back
+    The seed is not a physical constraint. When the requested coordinate and
+    volume measure are already supplied, it uses them. Otherwise it falls back
     to a straight average over the source coordinate; dynamic completion then
     recomputes the shape with the actual geometry on every candidate state.
     """
@@ -79,12 +80,41 @@ def _initial_average(
     return float(coordinate_average(values, source))
 
 
+def _evaluate_source_profile(
+    *,
+    source_values: np.ndarray,
+    source_coordinate: np.ndarray,
+    fixed: bool,
+    average: Any = None,
+    mapping: Any = None,
+    rho: Any,
+    w_V: Any = None,
+    v_norm: Any = None,
+) -> np.ndarray:
+    """Evaluate a generated source-profile provider.
+
+    Keeping the evaluator at module scope removes the four near-duplicate
+    closures formerly created by :func:`source_profile_relation`. The bound
+    source arrays are carried by ``functools.partial``, which is also picklable
+    and therefore compatible with worker-process execution.
+    """
+    target = rho if mapping is None else mapping
+    mapped = reinterpolate_profile(source_values, source_coordinate, target)
+    if fixed:
+        return np.asarray(mapped, dtype=float)
+
+    weight = None if w_V is None else np.asarray(w_V, dtype=float)
+    enclosed = None if weight is not None or v_norm is None else np.asarray(v_norm, dtype=float)
+    _avg, shape = normalized_shape(mapped, rho, weight=weight, v_norm=enclosed)
+    return np.asarray(average) * np.asarray(shape, dtype=float)
+
+
 def source_profile_relation(variable: Variable, *, average_name: str | None) -> Relation:
     """Build the ordinary relation that maps one immutable source profile.
 
     For a movable supplied profile, ``average_name`` is the sole amplitude
     degree of freedom and the dynamically reinterpolated source curve supplies
-    only the shape.  For a fixed supplied profile, the absolute source values
+    only the shape. For a fixed supplied profile, the absolute source values
     are mapped directly and no amplitude variable is introduced.
     """
     name = variable.name
@@ -92,6 +122,9 @@ def source_profile_relation(variable: Variable, *, average_name: str | None) -> 
     source = _source_grid(variable)
     source_values = np.asarray(variable.input_value, dtype=float).copy()
     fixed = bool(variable.fixed)
+    if not fixed and average_name is None:
+        raise ValueError(f"Movable source profile {name!r} has no registered volume-average variable.")
+
     rebuild_spec = {
         "kind": "source_profile",
         "version": 1,
@@ -102,94 +135,36 @@ def source_profile_relation(variable: Variable, *, average_name: str | None) -> 
         "fixed": fixed,
         "average_name": average_name,
     }
+    func = partial(
+        _evaluate_source_profile,
+        source_values=source_values,
+        source_coordinate=source,
+        fixed=fixed,
+    )
 
-    def shape_on(mapping: Any, rho: Any, w_V: Any = None, v_norm: Any = None) -> np.ndarray:
-        mapped = reinterpolate_profile(source_values, source, mapping)
-        weight = None if w_V is None else np.asarray(w_V, dtype=float)
-        enclosed = None if weight is not None or v_norm is None else np.asarray(v_norm, dtype=float)
-        _avg, shape = normalized_shape(mapped, rho, weight=weight, v_norm=enclosed)
-        return np.asarray(shape, dtype=float)
+    input_names: tuple[str, ...] = ()
+    argument_names: tuple[str, ...] = ()
+    if not fixed:
+        input_names += (str(average_name),)
+        argument_names += ("average",)
+    if coordinate != "rho":
+        input_names += (coordinate,)
+        argument_names += ("mapping",)
 
-    if coordinate == "rho":
-        if fixed:
-            def evaluate(*, rho: Any, w_V: Any = None, v_norm: Any = None) -> np.ndarray:
-                return reinterpolate_profile(source_values, source, rho)
-
-            relation = Relation(
-                name=f"Source profile {name}",
-                func=evaluate,
-                input_names=(),
-                outputs=(name,),
-                tags=("profile",),
-                constant_names=("rho", "w_V", "v_norm"),
-                dependency="generated_profile",
-                function_name=f"source_profile_{name}",
-                source_kind="source_profile",
-                source_name=name,
-                rebuild_spec=rebuild_spec,
-            )
-        else:
-            if average_name is None:
-                raise ValueError(f"Movable source profile {name!r} has no registered volume-average variable.")
-
-            def evaluate(average: Any, *, rho: Any, w_V: Any = None, v_norm: Any = None) -> np.ndarray:
-                return np.asarray(average) * shape_on(rho, rho, w_V=w_V, v_norm=v_norm)
-
-            relation = Relation(
-                name=f"Source profile {name}",
-                func=evaluate,
-                input_names=(average_name,),
-                outputs=(name,),
-                tags=("profile",),
-                constant_names=("rho", "w_V", "v_norm"),
-                dependency="generated_profile",
-                function_name=f"source_profile_{name}",
-                argument_names=("average",),
-                source_kind="source_profile",
-                source_name=name,
-                rebuild_spec=rebuild_spec,
-            )
-    else:
-        if fixed:
-            def evaluate(mapping: Any, *, rho: Any, w_V: Any = None, v_norm: Any = None) -> np.ndarray:
-                return reinterpolate_profile(source_values, source, mapping)
-
-            relation = Relation(
-                name=f"Source profile {name} on {coordinate}",
-                func=evaluate,
-                input_names=(coordinate,),
-                outputs=(name,),
-                tags=("profile",),
-                constant_names=("rho", "w_V", "v_norm"),
-                dependency="generated_profile",
-                function_name=f"source_profile_{name}_on_{coordinate}",
-                argument_names=("mapping",),
-                source_kind="source_profile",
-                source_name=name,
-                rebuild_spec=rebuild_spec,
-            )
-        else:
-            if average_name is None:
-                raise ValueError(f"Movable source profile {name!r} has no registered volume-average variable.")
-
-            def evaluate(average: Any, mapping: Any, *, rho: Any, w_V: Any = None, v_norm: Any = None) -> np.ndarray:
-                return np.asarray(average) * shape_on(mapping, rho, w_V=w_V, v_norm=v_norm)
-
-            relation = Relation(
-                name=f"Source profile {name} on {coordinate}",
-                func=evaluate,
-                input_names=(average_name, coordinate),
-                outputs=(name,),
-                tags=("profile",),
-                constant_names=("rho", "w_V", "v_norm"),
-                dependency="generated_profile",
-                function_name=f"source_profile_{name}_on_{coordinate}",
-                argument_names=("average", "mapping"),
-                source_kind="source_profile",
-                source_name=name,
-                rebuild_spec=rebuild_spec,
-            )
-    return relation
+    return Relation(
+        name=f"Source profile {name}" if coordinate == "rho" else f"Source profile {name} on {coordinate}",
+        func=func,
+        input_names=input_names,
+        outputs=(name,),
+        tags=("profile",),
+        constant_names=("rho", "w_V", "v_norm"),
+        dependency="generated_profile",
+        function_name=f"source_profile_{name}" if coordinate == "rho" else f"source_profile_{name}_on_{coordinate}",
+        argument_names=argument_names,
+        source_kind="source_profile",
+        source_name=name,
+        rebuild_spec=rebuild_spec,
+    )
 
 
 def source_profile_relation_from_spec(spec: Mapping[str, Any]) -> Relation:
@@ -222,13 +197,12 @@ def prepare_source_profiles(
 ) -> tuple[list[Variable], tuple[Relation, ...], int]:
     """Return RelationSystem-ready variables and source-profile relations.
 
-    External source arrays never set the common solver-grid length.  The common
+    External source arrays never set the common solver-grid length. The common
     size is the reactor grid when supplied, otherwise the unique size of
-    ordinary profile declarations, otherwise the registry default.  Each source
+    ordinary profile declarations, otherwise the registry default. Each source
     profile declaration is replaced only in the RelationSystem input records by
     a missing common-grid profile; its immutable source data live in the
-    generated relation closure.  The user-facing Reactor declaration is not
-    mutated.
+    generated relation. The user-facing Reactor declaration is not mutated.
     """
     records = list(variables)
     by_name = {record.name: record for record in records}
