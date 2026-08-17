@@ -1,0 +1,55 @@
+name: Update PR description
+
+on:
+  push:
+    branches:
+      - agent/profile-coordinate-refactor
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  update-description:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update PR #6 body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BODY: |
+            ## Summary
+
+            Refactors fusdb profile-coordinate handling and `RelationSystem` compilation while preserving existing numerical behavior and defaults.
+
+            ### Profile and geometry groundwork
+
+            - defines `rho` explicitly as the common normalized computational grid rather than a physical-radius convention;
+            - adds `coordinate_average(...)` for normalized monotonic coordinate mappings;
+            - extends `volume_average(...)` with an optional geometry-provided `v_norm = V(<rho)/V_p` mapping while preserving the existing self-similar rho-weighted formula when no mapping is supplied;
+            - adds `normalized_shape(...)` implementing the `profile = volume_average * shape` decomposition with unit volume-average shape;
+            - documents geometry-dependent coordinate mappings, dynamic reinterpolation, separatrix/edge separation, mixed geometry providers, stellarator/mirror scope, and the no-regression migration rule.
+
+            ### RelationSystem compilation refactor
+
+            - makes structural compilation one-way and fixed-point based, with provisional plans used only for seeding and the final compiled system authoritative;
+            - separates pure compile-time packability/layout analysis from runtime `pack()` side effects;
+            - exposes a public compiled execution protocol used by POPCON and reconcile instead of private implementation fields;
+            - consolidates completion-provider scheduling into one tuple-valued `provider_plan`;
+            - prunes unevaluable relations before structural partitioning so final structural blocks reference only the active system;
+            - centralizes packed-coordinate application for both normal unpacking and grouped reconcile Jacobians;
+            - preserves scalar/batched completion behavior, side outputs, seed-tape semantics, and numerical results.
+
+            ## Validation
+
+            The refactor was certified with:
+
+            - targeted lifecycle, POPCON, phase-contract, seed-tape, and Stellaris regression tests;
+            - the full pytest suite;
+            - all-reactor before/after behavioral and numerical comparison at `rtol=5e-6`, `atol=1e-10`;
+            - `git diff --check`;
+            - an implementation-LOC gate requiring the affected implementation total not to exceed the 3454-line baseline;
+            - the normal GitHub Actions matrix on Python 3.12, 3.13, 3.14, plus latest compatible dependencies.
+
+            The dedicated refactor certification and the normal CI matrix are green. Temporary certification workflows and helper files were removed from the final source tree.
+        run: |
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/6" -f body="$PR_BODY"
