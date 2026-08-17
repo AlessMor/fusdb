@@ -15,10 +15,12 @@ jobs:
   apply-and-certify:
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    env:
+      TARGET_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          ref: ${{ env.TARGET_BRANCH }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -45,4 +47,4 @@ jobs:
           git add src/fusdb/relation.py src/fusdb/variable.py src/fusdb/registry/variable_registry.py
           git diff --cached --check
           git commit -m 'refactor: centralize constraint relation construction'
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git push origin HEAD:${TARGET_BRANCH}
