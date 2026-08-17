@@ -5,127 +5,21 @@
   "src/fusdb/relationsystem.py": 2336,
   "total": 3454
 }
->>> python .github/refactor_relationsystem.py snapshot /tmp/before.json
-Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'PRF electron density profile' is not a preferred provider of 'n_e'; it overrides the effective default_relation set (n_e: ['Default electron density profile from average density', 'PROCESS pedestal electron density profile', 'Parabolic electron density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'cfspopcon_imodey2_confinement_time' is not a preferred provider of 'tau_E'; it overrides the effective default_relation set (tau_E: ['tau_E_iter_ipb98y2']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'PRF electron density profile' is not a preferred provider of 'n_e'; it overrides the effective default_relation set (n_e: ['Default electron density profile from average density', 'PROCESS pedestal electron density profile', 'Parabolic electron density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
-/home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:311: ComplexWarning: Casting complex values to real discards the imaginary part
-  arr = np.asarray(value, dtype=float)
-/home/runner/work/fusdb/fusdb/src/fusdb/relations/radiation/synchrotron.py:71: RuntimeWarning: overflow encountered in exp
-  Gs = 0.93 * (1 + 0.85 * np.exp(-0.82 * R / a))
-/home/runner/work/fusdb/fusdb/src/fusdb/relation.py:449: ComplexWarning: Casting complex values to real discards the imaginary part
-  scale = np.maximum(np.maximum(np.abs(np.asarray(lhs, dtype=float)), np.abs(np.asarray(rhs, dtype=float))), base_scale)
-/home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:396: ComplexWarning: Casting complex values to real discards the imaginary part
-  right = np.asarray(rhs, dtype=float)
-Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
 >>> python .github/refactor_stage1_fix2.py
->>> python -m compileall -q src/fusdb tests
->>> python -m pytest tests/test_popcon_mode.py tests/test_phase1_contracts.py tests/test_seed_tape.py
-============================= test session starts ==============================
-platform linux -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0
-rootdir: /home/runner/work/fusdb/fusdb
-configfile: pyproject.toml
-collected 29 items
-
-tests/test_popcon_mode.py ..........                                     [ 34%]
-tests/test_phase1_contracts.py ................                          [ 89%]
-tests/test_seed_tape.py ...                                              [100%]
-
-=============================== warnings summary ===============================
-tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
-tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
-tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
-tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
-tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
-tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
-tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
-  /home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:311: ComplexWarning: Casting complex values to real discards the imaginary part
-    arr = np.asarray(value, dtype=float)
-
-tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
-tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
-tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
-tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
-tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
-tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
-tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
-  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/separatrix_operational_space.py:53: RuntimeWarning: invalid value encountered in scalar power
-    return 1.2 * (1.0 + factor * alpha_t**1.9) * poloidal_sound_larmor_radius
-
-tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
-tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
-tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
-tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
-tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
-tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
-tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
-  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/separatrix_operational_space.py:57: RuntimeWarning: invalid value encountered in scalar power
-    return 17.3 * alpha_t**0.298 * _MM_TO_M  # cfspopcon returns mm
-
-tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
-tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
-tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
-tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
-tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
-tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
-tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
-  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/separatrix_operational_space.py:61: RuntimeWarning: invalid value encountered in scalar power
-    lambda_Te = 2.1 * (1.0 + 2.1 * alpha_t**1.7) * poloidal_sound_larmor_radius
-
-tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
-tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
-tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
-tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
-tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
-tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
-tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
-  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/scrape_off_layer/two_point_model.py:156: RuntimeWarning: divide by zero encountered in scalar divide
-    return (1.0 - SOL_momentum_loss_fraction) ** 3 / (1.0 - SOL_power_loss_fraction) ** 2
-
-tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
-tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
-tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
-tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
-tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
-tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
-tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
-  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/scrape_off_layer/two_point_model.py:170: RuntimeWarning: divide by zero encountered in scalar divide
-    return (1.0 - SOL_momentum_loss_fraction) ** 2 / (1.0 - SOL_power_loss_fraction)
-
-tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
-tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
-tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
-tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
-tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
-tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
-tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
-  /home/runner/work/fusdb/fusdb/src/fusdb/relation.py:446: RuntimeWarning: invalid value encountered in scalar subtract
-    diff = lhs - rhs
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-================= 29 passed, 49 warnings in 182.06s (0:03:02) ==================
 >>> python .github/refactor_relationsystem.py stage2
 >>> python .github/refactor_stage3.py
+>>> python .github/refactor_stage5.py
 >>> python -m compileall -q src/fusdb tests
 >>> python .github/refactor_relationsystem.py loc /tmp/loc-after.json
 {
   "src/fusdb/modes/popcon.py": 665,
   "src/fusdb/modes/reconcile.py": 450,
-  "src/fusdb/relationsystem.py": 2365,
-  "total": 3480
+  "src/fusdb/relationsystem.py": 2343,
+  "total": 3458
 }
 >>> python .github/refactor_relationsystem.py compare-loc /tmp/loc-before.json /tmp/loc-after.json
 implementation LOC before: {'src/fusdb/modes/popcon.py': 665, 'src/fusdb/modes/reconcile.py': 453, 'src/fusdb/relationsystem.py': 2336, 'total': 3454}
-implementation LOC after: {'src/fusdb/modes/popcon.py': 665, 'src/fusdb/modes/reconcile.py': 450, 'src/fusdb/relationsystem.py': 2365, 'total': 3480}
+implementation LOC after: {'src/fusdb/modes/popcon.py': 665, 'src/fusdb/modes/reconcile.py': 450, 'src/fusdb/relationsystem.py': 2343, 'total': 3458}
 Traceback (most recent call last):
   File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 547, in <module>
     main()
@@ -135,4 +29,4 @@ Traceback (most recent call last):
     ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 525, in compare_loc
     raise AssertionError(f"implementation LOC increased: {before['total']} -> {after['total']}")
-AssertionError: implementation LOC increased: 3454 -> 3480
+AssertionError: implementation LOC increased: 3454 -> 3458
