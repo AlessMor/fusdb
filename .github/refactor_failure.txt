@@ -28,7 +28,14 @@ Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; 
   right = np.asarray(rhs, dtype=float)
 Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
 >>> python .github/refactor_stage1_fix2.py
-Traceback (most recent call last):
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_stage1_fix2.py", line 40, in <module>
-    raise RuntimeError(f"unexpected grouped Jacobian coordinate block: {actual!r}")
-RuntimeError: unexpected grouped Jacobian coordinate block: ['for name, start, stop, offs, scales, shape, transform in group["spans"]:', 'local = x_new[start:stop]', 'actual = offs * np.exp(local) if transform == "log" else offs + scales * local', 'ns[name] = actual.copy() if shape == 1 else float(actual[0])', 'system.applyprofile_specs(ns)']
+>>> python -m compileall -q src/fusdb
+>>> python -m pytest tests/test_popcon_mode.py tests/test_phase1_contracts.py tests/test_seed_tape.py tests/test_jacobian_structure.py
+ERROR: file or directory not found: tests/test_jacobian_structure.py
+
+============================= test session starts ==============================
+platform linux -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/runner/work/fusdb/fusdb
+configfile: pyproject.toml
+collected 0 items
+
+============================ no tests ran in 0.00s =============================
