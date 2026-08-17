@@ -26,7 +26,7 @@ def test_prf_uses_supplied_minor_radius_and_volume_measure_as_dependencies():
         ],
         (RELATIONS.get(PRF),),
         profile_size=31,
-    )
+    ).compile()
 
     relation = _prf_relation(system)
     assert "rho_minor" in relation.input_names
@@ -42,7 +42,7 @@ def test_prf_static_tokamak_coordinate_defaults_keep_fast_constant_path():
         ],
         (RELATIONS.get(MINOR), RELATIONS.get(WEIGHT), RELATIONS.get(PRF)),
         profile_size=31,
-    )
+    ).compile()
 
     relation = _prf_relation(system)
     assert "rho_minor" not in relation.input_names

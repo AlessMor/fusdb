@@ -127,12 +127,12 @@ def _table_column(source: Any) -> SolvedColumn:
             getattr(source, "last_result", None) or {},
         )
     # Reactor: its Variable records supply the declared inputs and tolerances;
-    # current values read through last_system's solved state when present (a
+    # current values read through last_plan's solved state when present (a
     # Variable's own declaration never changes after a solve), falling back
     # to the declaration itself for an unsolved reactor.
     records = source.variables.values()
-    last_system = getattr(source, "last_system", None)
-    solved = last_system.values if last_system is not None else {}
+    last_plan = getattr(source, "last_plan", None)
+    solved = last_plan.values if last_plan is not None else {}
     current = {v.name: solved.get(v.name, v.value) for v in records}
     return SolvedColumn(
         source.name,

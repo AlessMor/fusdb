@@ -15,7 +15,7 @@ def test_arc_reconcile_jacobian_sparsity_matches_live_residual_shape() -> None:
     # Mirror Reactor._run_with_regime_verification's solve candidate: the
     # reconciliation itself uses the declared confinement tag without guards.
     candidate = reactor._clone_for_regime("i_mode", include_guards=False)
-    system = candidate.relation_system()
+    system = candidate.relation_system().compile()
     system.compile()
 
     x0, _lower, _upper = system.pack()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .io import load_result, save_result
 from .relation import Relation, RelationSolveError, RelationUnderdeterminedError, RelationVerificationError, constraint_from_expression, relation
-from .relationsystem import RelationSystem
+from .relationsystem import CompilePlan, RelationSystem
 from .profile_system import build_relation_system
 from .variable import Variable
 from .reactor import Reactor, run_many, solve_reactors
@@ -39,6 +39,7 @@ __all__ = [
     "RelationUnderdeterminedError",
     "RelationVerificationError",
     "RelationSystem",
+    "CompilePlan",
     "build_relation_system",
     "Reactor",
     "Variable",

@@ -177,7 +177,7 @@ def test_ordered_mode_resolves_step_by_function_name():
         ],
         list(RELATIONS),
         name="ordered_by_function",
-    )
+    ).compile()
     assert system.relation_by_identifier("parabolic_electron_temperature_profile").name == (
         "Parabolic electron temperature profile"
     )

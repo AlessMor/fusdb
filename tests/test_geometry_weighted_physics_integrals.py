@@ -58,7 +58,7 @@ def test_dynamic_volume_measure_is_graph_dependency_for_nonprofile_physics():
         [Variable("w_V", value=weight)],
         [relation],
         profile_size=rho.size,
-    )
+    ).compile()
     migrated = next(
         item for item in system.candidate_primary_relations if item.name == relation.name
     )
@@ -70,7 +70,7 @@ def test_dynamic_volume_measure_is_graph_dependency_for_nonprofile_physics():
 def test_reduced_static_volume_measure_stays_off_physics_graph():
     relation = RELATIONS.get("DT reaction rate")
     fallback = RELATIONS.get("Reduced stellarator volume integration weight")
-    system = build_relation_system([], [fallback, relation], profile_size=9)
+    system = build_relation_system([], [fallback, relation], profile_size=9).compile()
     migrated = next(
         item for item in system.candidate_primary_relations if item.name == relation.name
     )

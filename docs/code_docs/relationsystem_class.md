@@ -1,10 +1,6 @@
 # RelationSystem
 
-`RelationSystem` compiles a selected set of `Relation` objects and a set of
-`Variable` objects into one numeric system. Execution modes (`fusdb.modes`)
-drive a compiled system through its public interface and own their own
-algorithm and result shape; the SciPy backend uses
-`scipy.optimize.least_squares` for reconcile/optimize solves.
+`RelationSystem` is the reusable prepared model: it owns the candidate relations, variable declarations and canonical relation/variable graph topology. `RelationSystem.compile()` returns an independent `CompilePlan`, which owns one scenario's supplied/fixed state, structural verdicts, solver layout, completion/residual plans and solved values. Execution modes (`fusdb.modes`) operate on `CompilePlan`; multiple plans from one model may coexist without mutating the model or each other.
 
 **Core inputs**
 - `variables`: an iterable of `Variable` instances (the system's variables)

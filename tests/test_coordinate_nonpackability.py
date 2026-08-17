@@ -19,7 +19,7 @@ def test_supplied_physical_coordinate_mapping_is_held_not_packed():
         [Variable("rho_tor", value=grid)],
         [relation],
         profile_size=46,
-    )
+    ).compile()
     system.compile()
     system.pack()
 
@@ -46,7 +46,7 @@ def test_derived_tokamak_mapping_is_computed_not_packed():
         argument_names=("mapping",),
         function_name="synthetic_minor_radius_consumer",
     )
-    system = build_relation_system([], [rho_relation, consumer], profile_size=46)
+    system = build_relation_system([], [rho_relation, consumer], profile_size=46).compile()
     system.compile()
     system.pack()
 

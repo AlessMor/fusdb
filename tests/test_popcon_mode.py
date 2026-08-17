@@ -69,7 +69,7 @@ def test_axis_spec_parsing() -> None:
 def test_popcon_option_validation() -> None:
     # Direct mode invocation: the option-validation paths return before any
     # solve, so one system serves every case.
-    system = Reactor.from_yaml(POPCON_YAML).relation_system()
+    system = Reactor.from_yaml(POPCON_YAML).relation_system().compile()
 
     result = popcon_mode.run(system, y=Y_AXIS)
     assert not result["success"] and "requires 'x' and 'y'" in result["errors"][0]
@@ -88,7 +88,7 @@ def test_popcon_option_validation() -> None:
 
 
 def test_certification_cone_scales_with_targets() -> None:
-    system = Reactor.from_yaml(POPCON_YAML).relation_system()
+    system = Reactor.from_yaml(POPCON_YAML).relation_system().compile()
     system.compile()
     lean_rels, lean_vars = popcon_mode.certification_cone(system, ("P_fus",))
     wide_rels, wide_vars = popcon_mode.certification_cone(system, ("P_fus", "P_LH", "P_aux"))
@@ -184,7 +184,7 @@ def test_popcon_points_reconcile_to_same_values(serial_scan: tuple[Reactor, dict
                 continue
             for name in OUTPUTS:
                 popcon_value = payload["fields"][name][iy, ix]
-                reconcile_value = float(np.asarray(reference.last_system.values[name]).reshape(-1)[0])
+                reconcile_value = float(np.asarray(reference.last_plan.values[name]).reshape(-1)[0])
                 # 5e-6 rather than 1e-6: OUTPUTS contains quotients of other
                 # asserted fields (Q_sci = P_fus / P_aux), which compound both
                 # factors' solver tolerances -- near ignition P_aux is small,
@@ -199,7 +199,7 @@ def test_popcon_points_reconcile_to_same_values(serial_scan: tuple[Reactor, dict
 
 def test_popcon_restores_system_state(serial_scan: tuple[Reactor, dict]) -> None:
     reactor, _ = serial_scan
-    system = reactor.last_system
+    system = reactor.last_plan
     # The scan must leave the system in its pre-scan pure-input state: no
     # derived values, no pinned axes, and the reactor absorbed nothing new.
     assert "P_fus" not in system.values

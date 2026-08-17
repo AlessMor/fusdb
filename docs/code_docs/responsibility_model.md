@@ -51,7 +51,7 @@ construction path rather than copying fields.
 Nothing writes a solved value back onto it. `RelationSystem.values` is the only
 mutable per-run state, and `Reactor` answers enriched reads by pairing the frozen
 record with that state in a `SolvedVariable` view — `declared` is what the user
-supplied, `value` reads through to `last_system` and is resolved fresh on every
+supplied, `value` reads through to `last_plan` and is resolved fresh on every
 access.
 
 This buys four things:

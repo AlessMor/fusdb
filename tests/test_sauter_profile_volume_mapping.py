@@ -97,7 +97,7 @@ def test_sauter_geometry_flows_through_mapping_and_source_profile_normalization(
         (mapping,),
         profile_size=46,
     )
-    system = RelationSystem(prepared, relations, name="sauter_profile_mapping_test")
+    system = RelationSystem(prepared, relations, name="sauter_profile_mapping_test").compile()
     system.compile()
     system.pack()
 

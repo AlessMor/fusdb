@@ -38,7 +38,7 @@ def test_variable_table_data_combines_multiple_reactors():
 def test_variable_table_data_can_display_existing_system_state():
     reactor = _reactor("Solved", 3.2)
     reactor.relations = lambda: ()
-    system = reactor.relation_system()
+    system = reactor.relation_system().compile()
     system.values["R"] = 4.4
 
     html = render_table(variable_table_data(system, variable_names=("R",)))
@@ -67,17 +67,17 @@ def test_variable_table_data_renders_solved_column_snapshot():
     assert "4.4" in html
 
 
-def test_run_absorbs_solved_values_and_keeps_last_system():
+def test_run_absorbs_solved_values_and_keeps_last_plan():
     reactor = _reactor("Absorb", 3.2)
     reactor.relations = lambda: ()
 
     reactor.run("verify")
 
-    assert reactor.last_system is not None
+    assert reactor.last_plan is not None
     # Variable is immutable, so a run never rewrites the declaration; nothing
     # moves it here (verify performs no solve) so the read-through .value
     # still agrees with the declared value and with the solved system.
-    assert reactor.R.value == reactor.last_system.values["R"]
+    assert reactor.R.value == reactor.last_plan.values["R"]
     assert reactor.R.declared.value == reactor.R.value
 
 
@@ -104,7 +104,7 @@ def test_reconcile_moves_value_without_touching_the_declaration():
     # genuinely differs from the declaration here.
     assert reactor.A.value == pytest.approx(3.0)
     assert reactor.A.value != reactor.A.declared.value
-    assert reactor.A.value == reactor.last_system.values["A"]
+    assert reactor.A.value == reactor.last_plan.values["A"]
     # A fixed variable never moves: declared and solved agree trivially.
     assert reactor.R.value == reactor.R.declared.value == 3.0
 

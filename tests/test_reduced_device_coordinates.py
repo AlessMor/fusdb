@@ -14,7 +14,7 @@ def _selected_names(device: str) -> set[str]:
 
 def _mapping_system(*names: str):
     relations = [RELATIONS.get(name) for name in names]
-    system = build_relation_system([], relations, profile_size=46)
+    system = build_relation_system([], relations, profile_size=46).compile()
     system.compile()
     system.pack()
     values = system.complete(system.solver_values())
@@ -76,7 +76,7 @@ def test_supplied_equilibrium_mapping_suppresses_reduced_default_provider():
         [Variable("rho_tor", value=supplied)],
         [fallback],
         profile_size=46,
-    )
+    ).compile()
     assert fallback.name not in {relation.name for relation in system.candidate_primary_relations}
     system.compile()
     system.pack()

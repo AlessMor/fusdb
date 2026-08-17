@@ -27,7 +27,7 @@ def test_movable_source_profile_promotes_available_volume_weight_to_graph_input(
         ],
         [],
         profile_size=46,
-    )
+    ).compile()
     source_relation = next(
         relation
         for relation in system.candidate_primary_relations
@@ -56,7 +56,7 @@ def test_reduced_stellarator_weight_stays_optional_for_profile_generators():
             RELATIONS.get("Parabolic electron temperature profile"),
         ],
         profile_size=31,
-    )
+    ).compile()
     profile = next(
         relation
         for relation in system.candidate_primary_relations

@@ -1,4 +1,4 @@
-"""RelationSystem container, graph compiler, seeding oracle and mode dispatcher."""
+"""Reusable relation models and ephemeral compiled execution plans."""
 
 from __future__ import annotations
 
@@ -211,8 +211,8 @@ def _structural_block_plan(
 
 
 
-class RelationSystem:
-    """Variables and relations compiled into one numeric system.
+class CompilePlan:
+    """One compiled, executable realization of a :class:`RelationSystem`.
 
     Execution modes (:mod:`fusdb.modes`) drive a compiled system through this
     public interface and own their own algorithm and result shape:
@@ -251,7 +251,9 @@ class RelationSystem:
         *,
         constraints: Any = None,
         name: str | None = None,
+        model: "RelationSystem | None" = None,
     ) -> None:
+        self.model = model
         self.name = str(name or "relation_system")
         # Result of the most recent run(); read by table rendering for header
         # colouring. None until a mode has been dispatched.
@@ -398,7 +400,6 @@ class RelationSystem:
         ] | None = None
         self._compiler_report_cache: dict[str, Any] | None = None
         self._completion_acyclic = False
-        self._run_compile_pass()
 
 
     def _canonicalize_candidates(self, relations: Iterable[Relation], constraints: Any) -> None:
@@ -537,7 +538,7 @@ class RelationSystem:
             return rel
         return self.relations_by_function.get(text)
 
-    def compile(self, *, force: bool = False) -> None:
+    def compile(self, *, force: bool = False) -> "CompilePlan":
         """Compile the active system, pruning relations needing unevaluable variables.
 
         Public entry to the compiled-execution interface; modes assume it has
@@ -575,12 +576,13 @@ class RelationSystem:
             uninitialized, _under = self._packing_issues()
             if set(uninitialized) <= self._unevaluable_names:
                 self.pack()
-                return
+                return self
         # Cleared first so an exception mid-compile can never leave a stale
         # fingerprint claiming the partial products are valid.
         self._compile_fingerprint = None
         self._compile_with_pruning()
         self._compile_fingerprint = fingerprint
+        return self
 
     def run(self, mode: str = "verify", *, save: Any = None, **options: Any) -> dict[str, Any]:
         """Prepare runtime initialization and dispatch to an isolated execution mode.
@@ -590,7 +592,6 @@ class RelationSystem:
         """
         from .modes import get_mode
 
-        self.compile()
         self.last_result = get_mode(mode)(self, **options)
         if save is not None:
             from .io import save_result
@@ -1352,7 +1353,11 @@ class RelationSystem:
         # The mutable per-pass annotations (supplied/fixed/decidability and
         # the relation/provider verdicts) are written only by
         # :meth:`_reset_graph_verdicts` and the compile phases.
-        graph = relation_bipartite_graph(self.candidate_primary_relations)
+        graph = (
+            self.model.graph.copy()
+            if self.model is not None
+            else relation_bipartite_graph(self.candidate_primary_relations)
+        )
         for node, data in graph.nodes(data=True):
             if data["kind"] == "variable":
                 name = node[1]
@@ -2946,10 +2951,100 @@ class RelationSystem:
             self.abs_tols[name] = float(spec.abs_tol or 0.0)
         return name
 
+class RelationSystem:
+    """Reusable prepared relation model.
+
+    The model owns immutable declarations, candidate relations and the canonical
+    relation/variable graph topology. :meth:`compile` creates an independent
+    :class:`CompilePlan` containing one scenario's values, structural verdicts,
+    numerical plans and solved state. Multiple plans may coexist without
+    mutating this model or one another.
+    """
+
+    def __init__(
+        self,
+        variables: Iterable[Variable],
+        relations: Iterable[Relation],
+        *,
+        constraints: Any = None,
+        name: str | None = None,
+    ) -> None:
+        self.name = str(name or "relation_system")
+        self.variable_registry = VARIABLES
+        self.constraints_spec = constraints
+        self.variables = tuple(variables)
+        self.relations = tuple(relations)
+        self.candidate_primary_relations = tuple(
+            canonicalize_relation(rel, self.variable_registry) for rel in self.relations
+        )
+        self._graph: nx.DiGraph | None = None
+
+    @property
+    def graph(self) -> nx.DiGraph:
+        """Canonical immutable relation/variable topology for this model."""
+        if self._graph is None:
+            graph = relation_bipartite_graph(self.candidate_primary_relations)
+            for node, data in graph.nodes(data=True):
+                if data["kind"] == "variable":
+                    name = node[1]
+                    data["shape"] = (
+                        self.variable_registry.get(name).shape
+                        if name in self.variable_registry
+                        else 0
+                    )
+            self._graph = graph
+        return self._graph
+
+    def compile(
+        self,
+        *,
+        inputs: Mapping[str, Any] | None = None,
+        fixed: Iterable[str] | None = None,
+    ) -> CompilePlan:
+        """Compile one independent executable scenario.
+
+        ``inputs`` overlays declaration values by canonical name; assigning
+        ``None`` explicitly makes a declaration unsupplied. ``fixed`` replaces
+        the declaration fixed-set when provided. The reusable model itself is
+        never mutated.
+        """
+        overrides = {} if inputs is None else {
+            self.variable_registry.resolve(str(name)): value
+            for name, value in inputs.items()
+        }
+        fixed_names = None if fixed is None else {
+            self.variable_registry.resolve(str(name)) for name in fixed
+        }
+        records: list[Variable] = []
+        seen: set[str] = set()
+        for variable in self.variables:
+            name = variable.name
+            seen.add(name)
+            changes: dict[str, Any] = {}
+            if name in overrides:
+                changes["value"] = overrides[name]
+                if variable.has_source_grid:
+                    changes.update(coordinate=None, coordinate_values=None)
+            if fixed_names is not None:
+                changes["fixed"] = name in fixed_names
+            records.append(variable.clone(**changes) if changes else variable)
+        for name, value in overrides.items():
+            if name not in seen:
+                records.append(Variable(name, value=value, fixed=name in (fixed_names or set())))
+        plan = CompilePlan(
+            records,
+            self.relations,
+            constraints=self.constraints_spec,
+            name=self.name,
+            model=self,
+        )
+        return plan.compile()
+
+
 # ── Batched completion: popcon grid namespaces ────────────────────────────
 #
-# The batched counterpart of :meth:`RelationSystem.apply_completion_providers`
-# / :meth:`RelationSystem.complete`: one namespace holds every grid point at
+# The batched counterpart of :meth:`CompilePlan.apply_completion_providers`
+# / :meth:`CompilePlan.complete`: one namespace holds every grid point at
 # once and the compiled provider plan is replayed on it.  Kept here, next to
 # the per-point completion loop it mirrors, so the two cannot drift apart
 # unseen; they differ in exactly four deliberate ways:
@@ -3140,7 +3235,7 @@ def apply_completion_providers_batched(
 ) -> set[str]:
     """Run the compiled completion plan on the batched namespace, in place.
 
-    Mirrors :meth:`RelationSystem.apply_completion_providers` -- providers in
+    Mirrors :meth:`CompilePlan.apply_completion_providers` -- providers in
     dependency order, explicit providers recompute, defaults fill only
     missing outputs, cyclic plans iterate to a fixed point -- with the four
     deliberate differences listed in the section comment above.  Solver-domain
@@ -3231,7 +3326,7 @@ def apply_completion_providers_batched(
 # in to profile-valued cores via allow_profile_core).
 
 
-def initial_values_from_graph(system: "RelationSystem", tape: list | None = None) -> tuple[dict[str, Any], dict[str, str]]:
+def initial_values_from_graph(system: "CompilePlan", tape: list | None = None) -> tuple[dict[str, Any], dict[str, str]]:
     """Fill solver start values by direct propagation from supplied values.
 
     Iteratively solves every relation that has exactly one missing variable
@@ -3304,7 +3399,7 @@ def initial_values_from_graph(system: "RelationSystem", tape: list | None = None
     return {name: values[name] for name in values if name in seeded}, seeded
 
 
-def _replay_seed_tape(system: "RelationSystem") -> tuple[dict[str, Any], dict[str, str]] | None:
+def _replay_seed_tape(system: "CompilePlan") -> tuple[dict[str, Any], dict[str, str]] | None:
     """Replay the recorded seeding tape at the current input values.
 
     The tape (recorded by :func:`initial_values_from_graph`) freezes *which*
@@ -3392,7 +3487,7 @@ def _replay_seed_tape(system: "RelationSystem") -> tuple[dict[str, Any], dict[st
 
 
 def _propagate_known(
-    system: "RelationSystem",
+    system: "CompilePlan",
     values: dict[str, Any],
     seeded: dict[str, str],
     original: set[str],
@@ -3438,7 +3533,7 @@ def _propagate_known(
                 break
 
 
-def _seed_defaults(system: "RelationSystem", values: dict[str, Any], seeded: dict[str, str], original: set[str], tape: list | None = None) -> bool:
+def _seed_defaults(system: "CompilePlan", values: dict[str, Any], seeded: dict[str, str], original: set[str], tape: list | None = None) -> bool:
     """Seed still-missing variables from the compiled default plan.
 
     Seeds are pure initial points: a variable a relation determines is moved
@@ -3475,7 +3570,7 @@ def _seed_defaults(system: "RelationSystem", values: dict[str, Any], seeded: dic
     return progress
 
 
-def _direct_relation_pool(system: "RelationSystem") -> list[Relation]:
+def _direct_relation_pool(system: "CompilePlan") -> list[Relation]:
     """Relations allowed for direct output initial computation.
 
     The global reconcile still uses ``system.relations``.  For initial guesses
@@ -3492,7 +3587,7 @@ def _direct_relation_pool(system: "RelationSystem") -> list[Relation]:
     return list(by_name.values())
 
 
-def _seed_accepts(system: "RelationSystem", name: str, original: set[str]) -> bool:
+def _seed_accepts(system: "CompilePlan", name: str, original: set[str]) -> bool:
     """Return whether seeding may write a value for one variable.
 
     Seeding only fills genuinely missing degrees of freedom: it never
@@ -3513,7 +3608,7 @@ def _seed_accepts(system: "RelationSystem", name: str, original: set[str]) -> bo
 
 
 def _compute_direct_outputs(
-    system: "RelationSystem",
+    system: "CompilePlan",
     values: dict[str, Any],
     seeded: dict[str, str],
     original: set[str],
@@ -3619,7 +3714,7 @@ def _compute_direct_outputs(
 
 
 def _compute_planned_block(
-    system: "RelationSystem",
+    system: "CompilePlan",
     block: tuple[str, ...],
     values: dict[str, Any],
     seeded: dict[str, str],
@@ -3652,7 +3747,7 @@ def _compute_planned_block(
     return True
 
 
-def _block_closure(system: "RelationSystem", unknowns: tuple[str, ...], values: Mapping[str, Any]) -> tuple[tuple[str, ...], list[Relation]]:
+def _block_closure(system: "CompilePlan", unknowns: tuple[str, ...], values: Mapping[str, Any]) -> tuple[tuple[str, ...], list[Relation]]:
     """Extend a planned block with variables producible from it.
 
     Returns the extended unknown set and the participating relations:
@@ -3687,7 +3782,7 @@ def _block_closure(system: "RelationSystem", unknowns: tuple[str, ...], values: 
 
 
 def solve_block(
-    system: "RelationSystem",
+    system: "CompilePlan",
     unknowns: tuple[str, ...],
     rels: list[Relation],
     values: Mapping[str, Any],
@@ -3892,7 +3987,7 @@ def solve_block(
     return solved
 
 
-def _block_producers(system: "RelationSystem", unknowns: tuple[str, ...], rels: list[Relation], values: Mapping[str, Any]) -> dict[str, Relation]:
+def _block_producers(system: "CompilePlan", unknowns: tuple[str, ...], rels: list[Relation], values: Mapping[str, Any]) -> dict[str, Relation]:
     """Return produced-unknown -> relation, in evaluation order.
 
     A block unknown is produced when one block relation declares it as an

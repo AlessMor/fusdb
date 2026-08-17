@@ -65,10 +65,10 @@ reactor = Reactor(
   to load a YAML once and run several independent cases safely.
 - `run(**kwargs)` convenience wrapper that builds a `RelationSystem` and runs
   the configured `mode`. `Variable` is immutable, so a solve never rewrites
-  the reactor's declarations; the solved system is kept on `last_system`, and
+  the reactor's declarations; the solved system is kept on `last_plan`, and
   `reactor.<var>` (`get_variable`) returns a `SolvedVariable` read-through
   view -- `.declared` is the original, unchanged `Variable`, `.value` reads
-  the latest solved value from `last_system` when one exists (falling back to
+  the latest solved value from `last_plan` when one exists (falling back to
   the declaration otherwise). A later `run()` therefore starts from the same
   declarations again, not the previous solution; call
   `reactor.restart_from_solution()` first to opt into that explicitly.

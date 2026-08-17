@@ -24,7 +24,7 @@ SPARC_YAML = Path(__file__).parent / "cfspopcon_SPARC" / "reactor.yaml"
 def _demo_system():
     reactor = Reactor.from_yaml(DEMO_YAML)
     candidate = reactor._clone_for_regime("h_mode", include_guards=False)
-    system = candidate.relation_system()
+    system = candidate.relation_system().compile()
     system.compile()
     return system
 
@@ -146,7 +146,7 @@ def test_reported_roles_origins():
 
 def test_pack_does_not_mutate_compiled_roles():
     """Packing reports raw profile cores but never changes compile verdicts."""
-    system = RelationSystem([], [])
+    system = RelationSystem([], []).compile()
     system.track("T_e")
     system.variable_roles["T_e"] = "computed"
     system.packed_variables.add("T_e")
@@ -170,7 +170,7 @@ def test_polomac_profiles_are_reconstructed_not_undetermined():
     a 100 eV device.  With the generators device-agnostic, the profiles are a
     uniform shape at the average value, so S9 reports nothing under-determined.
     """
-    s = Reactor.from_yaml(POLOMAC_YAML).relation_system()
+    s = Reactor.from_yaml(POLOMAC_YAML).relation_system().compile()
     s.compile()
     s.pack()
     rel = s.reported_roles()
@@ -243,7 +243,7 @@ def test_optimize_constraints_and_seed_options():
 def test_run_many_carries_every_mode_result():
     """`run_many` is faithful for scalar modes and keeps popcon's payload.
 
-    The worker used to snapshot ``last_system.last_result``, which popcon never
+    The worker used to snapshot ``last_plan.last_result``, which popcon never
     writes -- so a POPCON case silently returned empty columns.  Columns now
     carry whatever that mode's ``run`` returned.
     """

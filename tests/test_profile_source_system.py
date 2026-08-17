@@ -64,7 +64,7 @@ def _source_system(*, fixed_profile=False, dynamic_mapping=True, scaled_mapping=
     prepared, relations, size = prepare_source_profiles(
         variables, relations, profile_size=common_size
     )
-    system = RelationSystem(prepared, relations, name="source_profile_test")
+    system = RelationSystem(prepared, relations, name="source_profile_test").compile()
     system.compile()
     return system, source_profile, source_coordinate, size
 
