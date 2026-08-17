@@ -1,0 +1,128 @@
+name: One-shot RelationSystem refactor retry 11
+
+on:
+  push:
+    branches:
+      - agent/profile-coordinate-refactor
+    paths:
+      - .github/workflows/refactor-relationsystem-retry11.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/profile-coordinate-refactor
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+      - name: Execute final RelationSystem validation
+        shell: bash
+        run: |
+          set -uo pipefail
+          LOG=/tmp/relationsystem-refactor.log
+          : > "$LOG"
+          run() { echo ">>> $*" | tee -a "$LOG"; "$@" 2>&1 | tee -a "$LOG"; return ${PIPESTATUS[0]}; }
+          fail() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              cp "$LOG" .github/refactor_failure.txt
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add .github/refactor_failure.txt
+              git commit -m "chore: update relationsystem refactor failure" || true
+              git push origin HEAD:agent/profile-coordinate-refactor || true
+            fi
+            exit "$status"
+          }
+          trap fail EXIT
+
+          patch_runner() {
+            python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/refactor_relationsystem.py')
+          s = p.read_text()
+          s = s.replace('(ast.Str, ast.Constant)', '(ast.Constant,)')
+          s = s.replace('        if not body:', '        if not isinstance(body, list) or not body:')
+          s = s.replace('        rs = rs.replace(old, new)', '        rs = re.sub(rf"(?<!\\w){re.escape(old)}(?!\\w)", new, rs)')
+          s = s.replace('        reconcile = reconcile.replace(old, new)', '        reconcile = re.sub(rf"(?<!\\w){re.escape(old)}(?!\\w)", new, reconcile)')
+          s = s.replace('        popcon = popcon.replace(old, new)', '        popcon = re.sub(rf"(?<!\\w){re.escape(old)}(?!\\w)", new, popcon)')
+          p.write_text(s)
+          PY
+          }
+          migrate_tests() {
+            python - <<'PY'
+          import re
+          from pathlib import Path
+          renames = {
+              "_profile_specs": "profile_specs",
+              "_constant_defaults_solver": "constant_defaults_solver",
+              "_provider_plan": "provider_plan",
+              "_completion_passes": "completion_passes",
+              "_enforced_residual_relations": "residual_relations",
+              "_apply_completion_providers": "apply_completion_providers",
+          }
+          for path in Path('tests').rglob('*.py'):
+              text = path.read_text()
+              for old, new in renames.items():
+                  text = re.sub(rf"(?<!\\w){re.escape(old)}(?!\\w)", new, text)
+              path.write_text(text)
+          PY
+          }
+          apply_refactor() {
+            patch_runner
+            run python .github/refactor_stage1_fix2.py
+            run python .github/refactor_relationsystem.py stage2
+            run python .github/refactor_stage3.py
+            run python .github/refactor_stage5.py
+            migrate_tests
+            run python -m compileall -q src/fusdb tests
+          }
+
+          patch_runner
+          run python .github/refactor_relationsystem.py loc /tmp/loc-before.json
+          apply_refactor
+          run python .github/refactor_relationsystem.py loc /tmp/loc-after.json
+          run python .github/refactor_relationsystem.py compare-loc /tmp/loc-before.json /tmp/loc-after.json
+
+          git reset --hard HEAD
+          patch_runner
+          run python .github/refactor_relationsystem.py snapshot /tmp/before.json
+          apply_refactor
+          run python -m pytest tests/test_relationsystem_lifecycle.py tests/test_popcon_mode.py tests/test_phase1_contracts.py tests/test_seed_tape.py tests/test_stellaris_regression.py
+          run python -m pytest
+          run python .github/refactor_relationsystem.py snapshot /tmp/after.json
+          run python .github/refactor_relationsystem.py compare /tmp/before.json /tmp/after.json
+          run python .github/refactor_relationsystem.py loc /tmp/loc-final.json
+          run python .github/refactor_relationsystem.py compare-loc /tmp/loc-before.json /tmp/loc-final.json
+          run git diff --check
+
+          rm -f .github/refactor_failure.txt .github/refactor_relationsystem.py .github/refactor_stage1_fix.py .github/refactor_stage1_fix2.py .github/refactor_stage3.py .github/refactor_stage4.py .github/refactor_stage5.py \
+            .github/workflows/refactor-relationsystem.yml \
+            .github/workflows/refactor-relationsystem-retry.yml \
+            .github/workflows/refactor-relationsystem-retry2.yml \
+            .github/workflows/refactor-relationsystem-retry3.yml \
+            .github/workflows/refactor-relationsystem-retry4.yml \
+            .github/workflows/refactor-relationsystem-retry5.yml \
+            .github/workflows/refactor-relationsystem-retry6.yml \
+            .github/workflows/refactor-relationsystem-retry7.yml \
+            .github/workflows/refactor-relationsystem-retry8.yml \
+            .github/workflows/refactor-relationsystem-retry9.yml \
+            .github/workflows/refactor-relationsystem-retry10.yml \
+            .github/workflows/refactor-relationsystem-retry11.yml
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A src/fusdb tests .github
+          git commit -m "refactor: make RelationSystem compilation one-way"
+          git push origin HEAD:agent/profile-coordinate-refactor
+          trap - EXIT
