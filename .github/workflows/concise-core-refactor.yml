@@ -1,0 +1,33 @@
+name: Concise core refactor certification
+
+on:
+  push:
+    branches:
+      - refactor/concise-core-20260817
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Reconcile regression suite
+        run: python -m pytest -q -k reconcile
+      - name: SPARC PRD
+        run: python -m pytest -q tests/cfspopcon_SPARC/test_sparc_prd.py
+      - name: PROCESS large tokamak
+        run: python -m pytest -q tests/PROCESS_large_tokamak
+      - name: Full suite
+        run: python -m pytest -q
+      - name: Diff check
+        run: git diff --check
