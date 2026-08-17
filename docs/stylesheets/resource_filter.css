@@ -1,0 +1,115 @@
+.resource-catalog {
+  margin: 1.25rem 0 1.75rem;
+  padding: 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.75rem;
+  background: var(--md-default-bg-color);
+}
+
+.resource-search-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.resource-search-label {
+  grid-column: 1 / -1;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--md-default-fg-color--light);
+}
+
+.resource-search {
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.5rem;
+  background: var(--md-code-bg-color);
+  color: var(--md-default-fg-color);
+  font: inherit;
+}
+
+.resource-search:focus {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 1px;
+}
+
+.resource-clear,
+.resource-tag {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--md-default-fg-color);
+  cursor: pointer;
+  font: inherit;
+}
+
+.resource-clear {
+  padding: 0.55rem 0.85rem;
+}
+
+.resource-filter-summary {
+  margin-top: 0.65rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.78rem;
+}
+
+.resource-filter-tags,
+.resource-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.resource-filter-tags {
+  margin-top: 0.75rem;
+  max-height: 10rem;
+  overflow-y: auto;
+}
+
+.resource-tag {
+  padding: 0.18rem 0.5rem;
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.resource-tag:hover,
+.resource-tag.is-active {
+  border-color: var(--md-accent-fg-color);
+  background: var(--md-accent-fg-color);
+  color: var(--md-accent-bg-color);
+}
+
+.resource-item {
+  margin-bottom: 0.85rem;
+}
+
+.resource-item-tags {
+  margin-top: 0.35rem;
+}
+
+.resource-tag--item {
+  opacity: 0.82;
+}
+
+.resource-marker {
+  display: none;
+}
+
+.resource-no-results {
+  margin: 0.85rem 0 0;
+  color: var(--md-typeset-color);
+  font-weight: 600;
+}
+
+@media screen and (max-width: 44.9375em) {
+  .resource-search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-clear {
+    justify-self: start;
+  }
+}
