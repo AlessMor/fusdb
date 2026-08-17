@@ -19,7 +19,7 @@ def test_reconcile_persists_forward_completed_output() -> None:
     system = RelationSystem(
         [Variable("R", 3.0), Variable("a", 1.0), Variable("A")],
         [aspect_ratio],
-    )
+    ).compile()
 
     result = system.reconcile()
 
@@ -35,7 +35,7 @@ def test_optimize_no_dof_result_keeps_optimize_mode() -> None:
             Variable("A", 3.0, fixed=True),
         ],
         [aspect_ratio],
-    )
+    ).compile()
 
     result = system.optimize(objective="A")
 
@@ -43,8 +43,8 @@ def test_optimize_no_dof_result_keeps_optimize_mode() -> None:
     assert result["success"]
 
 
-def test_relationsystem_popcon_shortcut_delegates(monkeypatch) -> None:
-    system = RelationSystem([], [])
+def test_compileplan_popcon_shortcut_delegates(monkeypatch) -> None:
+    system = RelationSystem([], []).compile()
     captured = {}
 
     def fake_run(mode, **options):

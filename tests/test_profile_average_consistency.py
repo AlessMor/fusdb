@@ -30,7 +30,7 @@ def _system(t_e_avg: float, profile: np.ndarray, *, avg_fixed: bool = False) -> 
         Variable("T_e", value=profile, fixed=True),
         Variable("T_e_avg", value=t_e_avg, fixed=avg_fixed),
     ]
-    return RelationSystem(variables, [rel], name="profile_average_test")
+    return RelationSystem(variables, [rel], name="profile_average_test").compile()
 
 
 def test_fixed_profile_conflicting_average_is_flagged_on_verify():
@@ -103,7 +103,7 @@ def test_profile_line_average_provides_n_la():
         RELATIONS.get("Electron density line-average"),
         RELATIONS.get("Electron density volume-average consistency"),
     ]
-    system = RelationSystem(variables, relations, name="line_average_provider_test")
+    system = RelationSystem(variables, relations, name="line_average_provider_test").compile()
     result = system.run("verify")
     assert result["success"]
     system.complete(system.values)
@@ -140,6 +140,6 @@ def test_shape_locked_profile_residual_is_trivially_satisfied():
         Variable("w_V", value=rho, fixed=True),
         Variable("T_e", value=profile, fixed=False),
     ]
-    system = RelationSystem(variables, [RELATIONS.get(_CONSISTENCY)], name="level_free_test")
+    system = RelationSystem(variables, [RELATIONS.get(_CONSISTENCY)], name="level_free_test").compile()
     result = system.run("verify")
     assert result["relation_status"][_CONSISTENCY]["verified"]

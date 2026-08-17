@@ -34,7 +34,7 @@ def test_reactor_yaml_reads_two_column_source_profile_without_forcing_grid_size(
     assert np.allclose(declared.coordinate_values, source)
     assert np.allclose(declared.value, values)
 
-    system = reactor.relation_system()
+    system = reactor.relation_system().compile()
     assert system.profile_size == 46
     assert any(rel.source_kind == "source_profile" and "n_e" in rel.output_names for rel in system.candidate_primary_relations)
 
@@ -85,7 +85,7 @@ def test_restart_from_solution_turns_source_profile_into_canonical_snapshot():
             )
         },
     )
-    reactor.last_system = SimpleNamespace(values={"n_e": np.full(46, 8.0e19)})
+    reactor.last_plan = SimpleNamespace(values={"n_e": np.full(46, 8.0e19)})
 
     reactor.restart_from_solution()
     restarted = reactor.variables["n_e"]

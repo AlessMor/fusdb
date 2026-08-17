@@ -707,10 +707,9 @@ def _solve_batched_cases_from_spec(
     cases: tuple[tuple[int, float, float], ...],
 ) -> list[dict[str, Any]]:
     """Process worker entry point for a vectorized POPCON chunk."""
-    system = _rebuild_system(spec)
-    system.compile()
+    plan = _rebuild_system(spec).compile()
     return _solve_batched_cases(
-        system,
+        plan,
         cases,
         x_name=x_name,
         y_name=y_name,

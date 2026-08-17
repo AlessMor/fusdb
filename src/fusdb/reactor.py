@@ -16,7 +16,7 @@ from .batch import map_chunks, parallel_chunk_size
 from .modes import MODE_NAMES
 from .profile_system import build_relation_system
 from .registry import RELATIONS, TAGS, VARIABLES
-from .relationsystem import RelationSystem
+from .relationsystem import CompilePlan, RelationSystem
 from .plotting.tables import SolvedColumn, _table_column
 from .variable import Variable
 
@@ -30,7 +30,7 @@ class SolvedVariable:
     Returned by :meth:`Reactor.get_variable` and attribute access
     (``reactor.<name>``).  ``declared`` is the :class:`Variable` exactly as
     supplied -- a solve never mutates it.  ``value`` is the latest solved
-    value from the reactor's :attr:`Reactor.last_system` when one is active
+    value from the reactor's :attr:`Reactor.last_plan` when one is active
     for this name, falling back to the declared value otherwise; it is
     resolved fresh on every access, so it always reflects the most recent
     run.  Every other attribute (``unit``, ``fixed``, ``rel_tol``, ``spec``,
@@ -39,12 +39,12 @@ class SolvedVariable:
     """
 
     declared: Variable
-    _system: RelationSystem | None
+    _plan: CompilePlan | None
 
     @property
     def value(self) -> Any:
-        if self._system is not None:
-            solved = self._system.values.get(self.declared.name)
+        if self._plan is not None:
+            solved = self._plan.values.get(self.declared.name)
             if solved is not None:
                 return solved
         return self.declared.value
@@ -444,7 +444,7 @@ class Reactor:
         # System produced by the most recent run(); displayed in place of the
         # loaded inputs so a solved reactor shows its reconciled values. None
         # until a mode has run. Set here so __getattr__ never intercepts it.
-        self.last_system: RelationSystem | None = None
+        self.last_plan: CompilePlan | None = None
         # YAML this reactor was loaded from, if any; lets solve_reactors ship it
         # to a worker process. Set by from_yaml. Here so __getattr__ skips it.
         self.source_path: Path | None = None
@@ -589,7 +589,7 @@ class Reactor:
 
         Returns:
             :class:`SolvedVariable` pairing the frozen declaration with its
-            latest solved value (from :attr:`last_system`, when active for
+            latest solved value (from :attr:`last_plan`, when active for
             this name), or ``None`` if no such variable was declared.
         """
         try:
@@ -599,7 +599,7 @@ class Reactor:
         var = self.variables.get(canonical)
         if var is None:
             return None
-        return SolvedVariable(var, self.last_system)
+        return SolvedVariable(var, self.last_plan)
 
     def __getattr__(self, name: str) -> "SolvedVariable":
         """Expose loaded variables through attribute access."""
@@ -780,11 +780,11 @@ class Reactor:
         )
 
     def run(self, mode: str = "verify", **options: Any) -> dict[str, Any]:
-        """Build a RelationSystem, run one mode, and keep the solved system.
+        """Build a RelationSystem, run one mode, and keep the solved plan.
 
         Declared variables (:attr:`variables`) are never changed by a run --
-        a solve produces a new :class:`RelationSystem`, kept on
-        :attr:`last_system`, and ``reactor.<var>`` (via :meth:`get_variable`)
+        a solve produces a new :class:`CompilePlan`, kept on
+        :attr:`last_plan`, and ``reactor.<var>`` (via :meth:`get_variable`)
         reads through to its solved values without mutating the declaration.
         A later ``reactor.run(...)`` therefore starts from the same
         declarations again, not from the previous solution; call
@@ -821,13 +821,11 @@ class Reactor:
     def _run_once(self, mode: str, **options: Any) -> dict[str, Any]:
         """Run one mode with the currently configured relation set."""
         chosen = mode
-        system = self.relation_system()
-        self.last_system = system
+        plan = self.relation_system().compile()
+        self.last_plan = plan
         if chosen == "ordered":
-            result = system.ordered(order=self.relation_order or None, **options)
-        else:
-            result = system.run(chosen, **options)
-        return result
+            options = {"order": self.relation_order or None, **options}
+        return plan.run(chosen, **options)
 
     def restart_from_solution(self) -> None:
         """Replace each declared variable's value with its latest solved value.
@@ -835,14 +833,14 @@ class Reactor:
         The explicit form of what earlier fusdb versions did implicitly after
         every solve: nothing is mutated in place -- each affected declaration
         is replaced by a fresh one (:meth:`Variable.clone`) built from
-        :attr:`last_system`'s solved value, so the *next* ``run()`` starts
+        :attr:`last_plan`'s solved value, so the *next* ``run()`` starts
         from where this one ended.  Fixed variables are unaffected (their
         solved value already equals their declared one).  A no-op if this
         reactor has not been run yet.
         """
-        if self.last_system is None:
+        if self.last_plan is None:
             return
-        for name, value in self.last_system.values.items():
+        for name, value in self.last_plan.values.items():
             var = self.variables.get(name)
             if var is not None and value is not None:
                 changes: dict[str, Any] = {"value": value}
@@ -1033,7 +1031,7 @@ class Reactor:
         RelationSystem per solve.  A guard whose variables the solve could
         not value reports unverified, exactly as it would after pruning.
         """
-        system = self.last_system if self.last_system is not None else self.relation_system()
+        system = self.last_plan if self.last_plan is not None else self.relation_system().compile()
         excluded = set()
         for item in self.relation_exclude:
             try:
@@ -1170,10 +1168,10 @@ class Reactor:
         ``candidate.variables`` are frozen declarations cloned verbatim from
         ``self.variables`` by :meth:`_clone_for_regime` and never mutated by a
         solve, so they are adopted directly rather than merged field-by-field;
-        the candidate's solved state comes along on ``last_system``.
+        the candidate's solved state comes along on ``last_plan``.
         """
         self.tags = candidate.tags
-        self.last_system = candidate.last_system
+        self.last_plan = candidate.last_plan
         self.variables = dict(candidate.variables)
 
     def verify(self) -> dict[str, Any]:
@@ -1298,7 +1296,7 @@ class Reactor:
             for warning in per_regime[regime].get("warnings", ()):  # e.g. underivable output
                 if warning not in warnings:
                     warnings.append(warning)
-        self.last_system = clones[chain[0]].last_system
+        self.last_plan = clones[chain[0]].last_plan
 
         base = per_regime[chain[0]]["popcon"]
         shape = base["success"].shape
@@ -1380,7 +1378,7 @@ def _solve_reactor_path(task: tuple[str, str, Mapping[str, Any]]) -> SolvedColum
         # Carry the value ``run`` returned rather than whatever the system
         # happened to record: ``popcon`` returns its scan payload without
         # writing ``last_result``, so snapshotting the system alone drops it.
-        return _table_column(reactor.last_system)._replace(result=result)
+        return _table_column(reactor.last_plan)._replace(result=result)
     except Exception as exc:  # report the failure as a column; keep the batch alive
         location = Path(path)
         return SolvedColumn(
@@ -1421,7 +1419,7 @@ def _run_case(
         result = reactor.run(mode, **options)
         # See _solve_reactor_path: take the result ``run`` returned so every
         # mode's payload survives the process boundary, popcon included.
-        column = _table_column(reactor.last_system)._replace(result=result)
+        column = _table_column(reactor.last_plan)._replace(result=result)
         label = ", ".join(f"{name}={value:g}" if isinstance(value, (int, float)) else f"{name}={value}" for name, value in overrides.items())
         return column._replace(name=label or column.name)
     except Exception as exc:

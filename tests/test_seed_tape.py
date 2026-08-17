@@ -45,7 +45,7 @@ def test_forward_step_replays_bit_identically() -> None:
 
     system = RelationSystem(
         [Variable("R", 3.0), Variable("A"), Variable("a")], [split_forward_probe]
-    )
+    ).compile()
     system.compile()
     assert any(step[0] == "forward" for step in system._seed_tape)
 
@@ -59,7 +59,7 @@ def test_registry_default_step_replays_bit_identically() -> None:
     system = RelationSystem(
         [Variable("n_fuel", 1.0e20), Variable("tau_p", 1.0), Variable("f_D"), Variable("n_D")],
         [rel],
-    )
+    ).compile()
     system.compile()
     assert any(step[0] == "default" for step in system._seed_tape)
     assert system.seed_provenance.get("f_D") == "registry_default"
@@ -72,7 +72,7 @@ def test_unchanged_failed_seed_attempt_is_not_repeated() -> None:
     system = RelationSystem(
         [Variable("R", 3.0), Variable("a", 1.0), Variable("A")],
         [aspect_ratio],
-    )
+    ).compile()
     rel = system.relation_by_identifier("aspect_ratio")
     assert rel is not None
     values = system.input_values()

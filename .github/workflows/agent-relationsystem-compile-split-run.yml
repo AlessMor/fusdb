@@ -1,0 +1,33 @@
+name: RelationSystem compile split
+
+on:
+  push:
+    branches:
+      - agent/relationsystem-model-refactor-work
+    paths:
+      - .github/workflows/agent-relationsystem-compile-split-run.yml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: |
+          python .github/agent_relationsystem_model_refactor.py
+          python .github/agent_relationsystem_model_fix.py
+          python .github/agent_relationsystem_model_fix2.py
+          python .github/agent_relationsystem_graph_verdict_refactor.py
+          python .github/agent_relationsystem_compile_split.py
+      - run: python -m pip install -e '.[test]' >/dev/null 2>&1
+      - run: |
+          python -m pytest \
+            tests/test_relation_system_compile_plan.py \
+            tests/test_relation_graph_centralization.py \
+            tests/test_public_api.py \
+            tests/test_coordinate_domain_rows.py \
+            tests/test_popcon_source_profiles.py \
+            tests/test_popcon_source_profile_mappings.py
+      - run: git diff --check

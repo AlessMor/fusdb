@@ -89,7 +89,7 @@ def test_geometry_change_recomputes_weighted_parabolic_profile_without_extra_dof
         ],
         (mapping, profile_relation),
         profile_size=46,
-    )
+    ).compile()
     system.compile()
     system.pack()
 

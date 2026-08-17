@@ -20,7 +20,7 @@ def test_giga_uses_explicit_source_coordinates_with_independent_sample_counts():
     assert reactor.variables["n_e"].coordinate_values[-1] == 1.0
 
     # The source sample counts no longer compete to define the solver grid.
-    system = reactor.relation_system()
+    system = reactor.relation_system().compile()
     assert system.profile_size == 46
     system.compile()
     values = system.complete(system.solver_values())

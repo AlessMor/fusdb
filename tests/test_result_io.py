@@ -15,7 +15,7 @@ def _small_system() -> RelationSystem:
     return RelationSystem(
         [Variable("R", 3.0), Variable("a", 1.0), Variable("A")],
         [RELATIONS.get("aspect_ratio")],
-    )
+    ).compile()
 
 
 def test_reconcile_result_roundtrips_through_h5(tmp_path) -> None:

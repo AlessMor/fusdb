@@ -71,7 +71,7 @@ resolved tolerances as arguments.
 A `Reactor` never rewrites a declaration after a solve either: it exposes a
 read-through view instead (`reactor.<name>` /
 `reactor.get_variable(name)` -> `fusdb.reactor.SolvedVariable`, pairing the
-frozen declaration with the latest value from `reactor.last_system`).  See
+frozen declaration with the latest value from `reactor.last_plan`).  See
 [Reactor Class](reactor_class.md).
 
 Profiles (shape==1) accept scalar inputs (broadcast to the profile length) or

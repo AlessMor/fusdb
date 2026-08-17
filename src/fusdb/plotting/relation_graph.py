@@ -1,11 +1,7 @@
-"""Relation graph visualizations from the registry.
-
-Reusable version of ``examples/relation_graph_generator.ipynb``.
-"""
+"""Canonical relation-graph presentation helpers."""
 
 from __future__ import annotations
 
-from itertools import combinations
 from typing import Any, Iterable
 
 import networkx as nx
@@ -24,112 +20,36 @@ def _short_label(label: str, *, limit: int = 6) -> str:
 
 
 def build_relation_graph(relations: Iterable[Any] | None = None) -> nx.DiGraph:
-    """Build a directed relation -> variable graph.
+    """Return the canonical directed incidence graph with display metadata.
 
-    Each relation becomes a ``kind="relation"`` node; its inputs point into it
-    and its outputs point out of it (both ``kind="variable"`` nodes).  The
-    structure comes from the shared
-    :func:`fusdb.relationsystem.relation_bipartite_graph` builder (the same
-    graph the compiled system analyses); this view relabels its tuple node ids
-    to the ``"kind::name"`` strings used by the plotters and adds display
-    labels.
-
-    Args:
-        relations: Relations to include. Defaults to the registry's filtered
-            relations (one producer per output where ``default_relation`` is set).
-
-    Returns:
-        A :class:`networkx.DiGraph` with ``kind`` and ``label`` node attributes.
+    The topology always comes from :func:`relation_bipartite_graph`; plotting
+    only relabels node ids and decorates those canonical nodes for presentation.
     """
     if relations is None:
         relations = RELATIONS.get_filtered_relations()
-
     graph = relation_bipartite_graph(relations)
-    graph = nx.relabel_nodes(graph, {node: f"{node[0]}::{node[1]}" for node in graph.nodes})
+    graph = nx.relabel_nodes(
+        graph, {node: f"{node[0]}::{node[1]}" for node in graph.nodes}
+    )
     for node, data in graph.nodes(data=True):
-        data["label"] = node.split("::", 1)[1]
-    return graph
-
-
-def build_variable_relation_graph(relations: Iterable[Any] | None = None) -> nx.Graph:
-    """Build an undirected variable graph with relations stored on edges.
-
-    Relations in FusDB are acausal, so this projection treats every variable
-    touched by a relation as mutually connected. A relation touching more than
-    two variables becomes pairwise edges among those variables; multiple
-    relations on the same variable pair are aggregated on one edge.
-    """
-    if relations is None:
-        relations = RELATIONS.get_filtered_relations()
-
-    graph = nx.Graph()
-    for relation in relations:
-        variable_names = tuple(relation.variables)
-        for name in variable_names:
+        name = node.split("::", 1)[1]
+        data["label"] = name
+        if data["kind"] == "variable":
             spec = VARIABLES.get(name)
-            graph.add_node(
-                name,
-                kind="variable",
-                label=name,
-                aliases=", ".join(spec.aliases),
-                unit=spec.unit,
-                description=spec.description,
-            )
-
-        for source, target in combinations(variable_names, 2):
-            if graph.has_edge(source, target):
-                data = graph[source][target]
-                data["relations"].append(relation.name)
-                data["relation_tags"].extend(
-                    tag for tag in relation.tags if tag not in data["relation_tags"]
-                )
-            else:
-                graph.add_edge(
-                    source,
-                    target,
-                    relations=[relation.name],
-                    relation_tags=list(relation.tags),
-                )
-
-    for _, _, data in graph.edges(data=True):
-        data["relation_count"] = len(data["relations"])
-        data["label"] = ", ".join(data["relations"])
-        data["tags"] = ", ".join(data["relation_tags"])
-
-    return graph
-
-
-def build_relation_node_graph(relations: Iterable[Any] | None = None) -> nx.Graph:
-    """Build an undirected graph with both variables and relations as nodes."""
-    if relations is None:
-        relations = RELATIONS.get_filtered_relations()
-
-    graph = nx.Graph()
-    for relation in relations:
-        relation_node = f"relation::{relation.name}"
-        graph.add_node(
-            relation_node,
-            kind="relation",
-            label=relation.name,
-            aliases="",
-            unit="",
-            tags=", ".join(relation.tags),
-            description=relation.source_name,
-        )
-        for name in relation.variables:
-            spec = VARIABLES.get(name)
-            variable_node = f"variable::{name}"
-            graph.add_node(
-                variable_node,
-                kind="variable",
-                label=name,
+            data.update(
                 aliases=", ".join(spec.aliases),
                 unit=spec.unit,
                 tags="",
                 description=spec.description,
             )
-            graph.add_edge(relation_node, variable_node)
-
+        else:
+            relation = data["relation"]
+            data.update(
+                aliases="",
+                unit="",
+                tags=", ".join(relation.tags),
+                description=relation.source_name,
+            )
     return graph
 
 
@@ -157,7 +77,7 @@ def plot_relation_graph(
         graph = build_relation_graph()
 
     ax = axes(ax, figsize=(16, 10))
-    positions = nx.spring_layout(graph, seed=seed, k=k)
+    positions = nx.spring_layout(graph.to_undirected(as_view=True), seed=seed, k=k)
     relation_nodes = [node for node, data in graph.nodes(data=True) if data["kind"] == "relation"]
     variable_nodes = [node for node, data in graph.nodes(data=True) if data["kind"] == "variable"]
 
@@ -194,7 +114,7 @@ def bokeh_relation_graph(
     label; hover exposes the full name and metadata.
     """
     if graph is None:
-        graph = build_relation_node_graph()
+        graph = build_relation_graph()
 
     from bokeh.layouts import column
     from bokeh.models import (
@@ -207,7 +127,7 @@ def bokeh_relation_graph(
     )
     from bokeh.plotting import figure
 
-    positions = nx.spring_layout(graph, seed=seed, k=k)
+    positions = nx.spring_layout(graph.to_undirected(as_view=True), seed=seed, k=k)
     if positions:
         x_values = [float(x) for x, _ in positions.values()]
         y_values = [float(y) for _, y in positions.values()]

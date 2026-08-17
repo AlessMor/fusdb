@@ -23,7 +23,7 @@ def test_fixed_source_profile_does_not_gain_volume_measure_dependency():
         ],
         [],
         profile_size=46,
-    )
+    ).compile()
     source_relation = next(
         relation
         for relation in system.candidate_primary_relations

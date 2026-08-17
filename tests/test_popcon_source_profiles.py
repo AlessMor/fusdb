@@ -27,12 +27,11 @@ def _source_system(profile_size: int = 31):
         ],
         (RELATIONS.get("Electron density rho-average"),),
         profile_size=profile_size,
-    )
+    ).compile()
 
 
 def test_source_profile_worker_recipe_is_picklable_and_preserves_grid():
-    original = _source_system(profile_size=31)
-    original.compile()
+    original = _source_system(profile_size=31).compile()
     spec = popcon_mode._system_spec(original)
 
     pickle.dumps(spec)
@@ -45,8 +44,7 @@ def test_source_profile_worker_recipe_is_picklable_and_preserves_grid():
         for item in spec["relations"]
     )
 
-    rebuilt = popcon_mode._rebuild_system(spec)
-    rebuilt.compile()
+    rebuilt = popcon_mode._rebuild_system(spec).compile()
     assert rebuilt.profile_size == 31
 
     original_values = original.complete(dict(original.input_values()))
@@ -60,9 +58,9 @@ def test_parallel_popcon_with_source_profile_matches_serial():
     y = {"variable": "density_peaking", "values": [1.2, 1.8]}
     outputs = ("n_e_rho_avg",)
 
-    serial = popcon_mode.run(_source_system(), x=x, y=y, outputs=outputs)
+    serial = popcon_mode.run(_source_system().compile(), x=x, y=y, outputs=outputs)
     parallel = popcon_mode.run(
-        _source_system(),
+        _source_system().compile(),
         x=x,
         y=y,
         outputs=outputs,

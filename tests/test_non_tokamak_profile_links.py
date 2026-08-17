@@ -48,7 +48,7 @@ def test_mirror_profile_average_links_have_reduced_volume_measure():
 
 def test_stellaris_keeps_n_la_and_sudo_chain_active():
     reactor = Reactor.from_yaml(STELLARIS)
-    system = reactor.relation_system()
+    system = reactor.relation_system().compile()
     system.compile()
     active = {relation.name for relation in system.primary_relations}
 

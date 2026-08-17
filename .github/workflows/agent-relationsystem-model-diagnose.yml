@@ -1,0 +1,40 @@
+name: RelationSystem model diagnose
+
+on:
+  push:
+    branches:
+      - agent/relationsystem-model-refactor-work
+    paths:
+      - .github/workflows/agent-relationsystem-model-diagnose.yml
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python .github/agent_relationsystem_model_refactor.py
+      - run: python -m pip install -e '.[test]' >/dev/null 2>&1
+      - name: Capture failures
+        shell: bash
+        run: |
+          python -m pytest -x -vv \
+            tests/test_relation_system_compile_plan.py \
+            tests/test_relation_graph_centralization.py \
+            tests/test_public_api.py \
+            tests/test_coordinate_domain_rows.py \
+            tests/test_popcon_source_profiles.py \
+            tests/test_popcon_source_profile_mappings.py \
+            > .github/agent_relationsystem_model_failure.txt 2>&1 || true
+      - name: Record diagnostics
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/agent_relationsystem_model_failure.txt
+          git commit -m 'chore: record RelationSystem refactor failure'
+          git push

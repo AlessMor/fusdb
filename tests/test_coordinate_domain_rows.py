@@ -18,7 +18,7 @@ def test_static_tokamak_coordinate_defaults_add_no_solver_domain_rows():
         RELATIONS.get("Tokamak normalized enclosed volume"),
         RELATIONS.get("Tokamak volume integration weight"),
     ]
-    system = build_relation_system([], relations, profile_size=46)
+    system = build_relation_system([], relations, profile_size=46).compile()
     system.compile()
     system.pack()
     values = system.complete(system.solver_values())
@@ -38,7 +38,7 @@ def test_geometry_derived_coordinate_keeps_domain_rows():
         [],
         [relation],
         profile_size=46,
-    )
+    ).compile()
     # The relation inputs are deliberately absent here: compilation may prune
     # the provider, but the builder must not have folded it into fixed data.
     assert relation.name in {item.name for item in system.candidate_primary_relations}
