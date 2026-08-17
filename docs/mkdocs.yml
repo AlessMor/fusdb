@@ -27,6 +27,7 @@ theme:
     - navigation.expand
     - content.code.copy
     - search.highlight
+    - search.suggest
   palette:
     - scheme: default
       primary: teal
@@ -34,10 +35,12 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+  - stylesheets/resource_filter.css
 
 extra_javascript:
   - javascripts/header_home.js
   - javascripts/home_hero.js
+  - javascripts/resource_filter.js
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 

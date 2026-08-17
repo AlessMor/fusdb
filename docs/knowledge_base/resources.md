@@ -6,31 +6,86 @@ bibliography: ../bibliography/bibliography.bib
 
 Curated set of online resources for plasma physics and fusion energy.
 
+<div class="resource-catalog" data-resource-catalog>
+  <div class="resource-search-row">
+    <label class="resource-search-label" for="resource-search">Search resources</label>
+    <input id="resource-search" class="resource-search" type="search" placeholder="Search by title, topic, level, format, institution…" autocomplete="off">
+    <button class="resource-clear" type="button" data-resource-clear>Clear</button>
+  </div>
+  <div class="resource-filter-summary"><span data-resource-count></span></div>
+  <div class="resource-filter-tags" data-resource-tags aria-label="Filter resources by tag"></div>
+  <p class="resource-no-results" data-resource-empty hidden>No resources match the current search and tag filters.</p>
+</div>
+
+Each resource below is searchable by its text and tags. Select one or more tags to combine filters; selected tags use AND logic.
+
 ## Wikis and Notes
 
-- [FusionWiki (CIEMAT)](https://wiki.fusion.ciemat.es/wiki/Main_Page)
-- [Plasma Physics online notes (R. Fitzpatrick)](https://farside.ph.utexas.edu/teaching/plasma/Plasma/Plasmahtml.html) 
+- <span class="resource-marker" data-tags="plasma-physics fusion wiki reference introductory"></span>[FusionWiki (CIEMAT)](https://wiki.fusion.ciemat.es/wiki/Main_Page) — Community reference for fusion and plasma-physics concepts.
+- <span class="resource-marker" data-tags="plasma-physics notes theory graduate reference"></span>[Plasma Physics online notes (R. Fitzpatrick)](https://farside.ph.utexas.edu/teaching/plasma/Plasma/Plasmahtml.html) — University-level plasma-physics notes covering particle motion, fluids, waves, MHD, and kinetic theory.
 
-## Books on Nuclear Fusion and Plasma Physics 
+## Books on Nuclear Fusion and Plasma Physics
 
-- 
+- <span class="resource-marker" data-tags="fusion plasma-physics books bibliography reference"></span>[Princeton University Library — Plasma Physics and Fusion bibliography](https://libguides.princeton.edu/c.php?g=84106&p=542104) — Curated library guide to books and reference material.
+- <span class="resource-marker" data-tags="fusion plasma-physics books bibliography introductory graduate specialist"></span>[FusionWiki — Books](http://wiki.fusenet.eu/wiki/Books) — Categorized reading list spanning general-public, historical, university-level, and specialist material.
 
-See other curated lists of books on:
+## Courses, Lecture Series, and Schools
 
-- [Princeton Univerity Library](https://libguides.princeton.edu/c.php?g=84106&p=542104)
-- [FusionWiki](http://wiki.fusenet.eu/wiki/Books) (categorized into "general public", "history", "university level" and "specialist")
+> Lesson counts and runtimes marked with `≈` are estimates. For non-video university courses, total time is scheduled classroom time. For annual schools and evolving archives, counts and runtimes are per edition or marked as variable.
+
+- <span class="resource-marker" data-tags="plasma-physics fusion mit course graduate theory mhd kinetic-theory magnetic-confinement notes"></span>[MIT — Introduction to Plasma Physics I (2003)](https://ocw.mit.edu/courses/22-611j-introduction-to-plasma-physics-i-fall-2003/) / [2006](https://ocw.mit.edu/courses/22-611j-introduction-to-plasma-physics-i-fall-2006/) — **Level:** Graduate, foundational. **Main coverage:** Charged-particle motion, collisions, fluid plasma, MHD, equilibrium and stability, waves, kinetic theory, the Vlasov equation, Landau damping, confinement, and fusion applications. **Format:** MIT OpenCourseWare course with lecture notes, problem sets, and exams; primarily non-video. **Lessons:** 23 lectures. **Total time:** ≈34.5 h of scheduled class time.
+
+- <span class="resource-marker" data-tags="plasma-physics mit course graduate advanced transport neoclassical-theory kinetic-theory notes"></span>[MIT — Plasma Transport Theory](https://ocw.mit.edu/courses/22-616-plasma-transport-theory-fall-2003/) — **Level:** Graduate / advanced. **Main coverage:** Fokker–Planck theory, collisional transport, Braginskii transport, neoclassical transport, banana, plateau and Pfirsch–Schlüter regimes, alpha particles, and runaway electrons. **Format:** MIT OpenCourseWare course with notes, problem sets, and exams. **Lessons:** 25 lectures. **Total time:** ≈37.5 h of scheduled class time.
+
+- <span class="resource-marker" data-tags="plasma-physics fusion mit course graduate advanced diagnostics spectroscopy thomson-scattering video"></span>[MIT — Principles of Plasma Diagnostics](https://ocw.mit.edu/courses/22-67j-principles-of-plasma-diagnostics-fall-2023/) — **Level:** Graduate / advanced. **Main coverage:** Magnetic diagnostics, Langmuir probes, interferometry and refractometry, electron cyclotron emission, bolometry, spectroscopy, imaging, proton imaging, nuclear diagnostics, and Thomson scattering. **Format:** Full recorded university course with lecture videos, problem sets, and exam material. **Lessons:** 23 lectures. **Total time:** ≈34.5 h of scheduled class time.
+
+- <span class="resource-marker" data-tags="fusion plasma-physics mit seminar undergraduate intermediate tokamak mhd magnets propulsion notes"></span>[MIT — Seminar: Fusion and Plasma Physics](https://ocw.mit.edu/courses/22-012-seminar-fusion-and-plasma-physics-spring-2006/) — **Level:** Undergraduate / intermediate. **Main coverage:** Fusion nuclear physics, magnetic confinement, tokamaks, reactor concepts, MHD, disruptions, superconducting ITER magnets, aneutronic fusion, and plasma propulsion. **Format:** MIT OpenCourseWare seminar with lecture notes and assignments. **Lessons:** 14 sessions. **Total time:** ≈28 h of scheduled class time.
+
+- <span class="resource-marker" data-tags="plasma-physics university-sydney course upper-undergraduate graduate waves fluid-theory youtube video"></span>[University of Sydney — Senior Plasma Physics Lectures](https://www.youtube.com/playlist?list=PL4LrjiXK631fjF8NWs1Hf2Ng1I15TWskB) — **Level:** Upper-undergraduate / graduate. **Main coverage:** Core plasma physics, charged-particle dynamics, collective behaviour, fluid descriptions, plasma waves, and related theory. **Format:** Sequential YouTube university lecture course. **Lessons:** 18 videos. **Total time:** ≈15–18 h.
+
+- <span class="resource-marker" data-tags="plasma-physics iit-delhi university-wisconsin course upper-undergraduate graduate waves fluid-theory youtube video"></span>[Plasma Physics — IIT Delhi / University of Wisconsin lecture compilation](https://www.youtube.com/playlist?list=PLkmCRrIU3Cbtl0GpvPWU-hLY8zdMid3wt) — **Level:** Upper-undergraduate / graduate. **Main coverage:** Broad plasma-physics fundamentals, single-particle dynamics, fluid concepts, waves, and collective phenomena. **Format:** Long YouTube lecture playlist / course compilation. **Lessons:** ≈100 videos. **Total time:** ≈60–80 h; playlist length may change.
+
+- <span class="resource-marker" data-tags="fusion derplasma course intermediate graduate tokamak stellarator magnetic-confinement equilibrium flux-surfaces youtube video"></span>[DerPlasma — Fusion Research Lecture](https://www.youtube.com/playlist?list=PL9F2aQG5CnOdw9MXqS309tojBUvChQ9jm) — **Level:** Intermediate to graduate. **Main coverage:** Fusion reactions, Lawson criterion, magnetic confinement, flux surfaces, tokamaks, stellarators, magnetic islands, equilibrium, beta limits, and device construction. **Format:** Sequential fusion lecture course / YouTube playlist. **Lessons:** 13 core topics. **Total time:** ≈4.5–6.5 h.
+
+- <span class="resource-marker" data-tags="fusion plasma-physics pppl ornl course undergraduate intermediate tokamak stellarator turbulence reconnection diagnostics materials computational machine-learning video school"></span>[PPPL/ORNL — Introduction to Plasma and Fusion Course](https://suli.pppl.gov/) — **Level:** Undergraduate to intermediate. **Main coverage:** Plasma fundamentals, particle motion, fluid plasmas, waves, turbulence, tokamaks, stellarators, alternative confinement, inertial fusion and HEDP, reconnection, heating and current drive, plasma–material interactions, blankets, fuel cycle, materials, diagnostics, computational plasma physics, and AI/ML. **Format:** Annual virtual course archive with recorded lectures, slides, and computational workshops. **Lessons:** ≈25–40 sessions per annual edition. **Total time:** ≈25–35 h of instruction per edition.
+
+- <span class="resource-marker" data-tags="fusion plasma-physics ictp iaea school graduate advanced kinetic-theory diagnostics modeling computational magnetic-confinement video"></span>[ICTP–IAEA — College on Plasma Physics for Fusion Applications](https://indico.ictp.it/event/9838/) — **Level:** Graduate / advanced. **Main coverage:** Plasma theory, particle drifts, fluid and kinetic topics, magnetic confinement, plasma diagnostics, modelling, numerical computation, and fusion applications. **Format:** Intensive international school with recorded lectures, PDFs, and course material. **Lessons:** ≈30 lecture and special sessions. **Total time:** ≈35–40 h.
+
+- <span class="resource-marker" data-tags="fusion plasma-physics iaea e-learning graduate advanced modeling computational self-paced"></span>[IAEA — Fundamentals and Application of Plasma Physics including Fusion Plasmas](https://www.iaea.org/online-courses) — **Level:** Graduate / advanced. **Main coverage:** Experimental, theoretical, modelling, and numerical-computation approaches to plasma physics, including fusion plasmas. **Format:** Self-paced IAEA e-learning material derived from ICTP–IAEA lectures. **Lessons:** Not specified; modular e-learning resource. **Total time:** Self-paced; no fixed duration published.
+
+- <span class="resource-marker" data-tags="fusion simons-foundation research advanced stellarator quasisymmetry mhd gyrokinetics turbulence transport optimization coils divertor video seminar"></span>[Simons Foundation — Hidden Symmetries and Fusion Energy: 2019](https://www.simonsfoundation.org/event/simons-collaboration-on-hidden-symmetries-and-fusion-energy-annual-meeting-2019/) / [2021](https://www.simonsfoundation.org/event/simons-collaboration-on-hidden-symmetries-and-fusion-energy-annual-meeting-2021/) / [2022](https://www.simonsfoundation.org/event/simons-collaboration-on-hidden-symmetries-and-fusion-energy-annual-meeting-2022/) / [2023](https://www.simonsfoundation.org/event/simons-collaboration-on-hidden-symmetries-and-fusion-energy-annual-meeting-2023/) / [2024](https://www.simonsfoundation.org/event/simons-collaboration-on-hidden-symmetries-and-fusion-energy-annual-meeting-2024/) / [2025](https://www.simonsfoundation.org/event/simons-collaboration-on-hidden-symmetries-and-fusion-energy-annual-meeting-2025/) — **Level:** Advanced / research. **Main coverage:** Stellarator physics, quasisymmetry, quasi-isodynamicity, MHD equilibria, near-axis theory, transport, turbulence, gyrokinetics, SIMSOPT, coil optimization, adjoint methods, divertors, and stellarator reactor optimization. **Format:** Multi-year research lecture and video archive built from annual specialist meetings. **Lessons:** 40+ research talks across the listed annual meetings. **Total time:** ≈35–45 h.
+
+- <span class="resource-marker" data-tags="fusion ipam tutorial graduate research computational tokamak stellarator turbulence transport materials machine-learning uncertainty-quantification optimization inertial-confinement video"></span>[IPAM — Multi-Fidelity Methods for Fusion Energy Tutorials](https://www.ipam.ucla.edu/programs/workshops/multi-fidelity-methods-for-fusion-energy-tutorials/) — **Level:** Graduate / research. **Main coverage:** Tokamak and stellarator confinement, plasma models, turbulence, integrated transport, computational plasma physics, fusion materials, data-driven modelling, uncertainty quantification, optimization, and inertial confinement fusion. **Format:** Recorded intensive tutorial school. **Lessons:** 14 formal tutorials. **Total time:** ≈17.5 h.
+
+- <span class="resource-marker" data-tags="fusion plasma-physics ipam workshop research computational kinetic-theory fluid-theory turbulence transport multi-fidelity video"></span>[IPAM — Workshop I: Multi-Fidelity Methods for Fusion Plasma Physics](https://www.ipam.ucla.edu/programs/workshops/workshop-i-multi-fidelity-methods-for-fusion-plasma-physics/) — **Level:** Research. **Main coverage:** Plasma models across fidelity levels, kinetic and fluid modelling, turbulence, transport, and computational fusion physics. **Format:** Recorded research workshop and lecture archive. **Lessons:** 17 research talks + 3 discussion sessions. **Total time:** ≈15 h of technical sessions.
+
+- <span class="resource-marker" data-tags="fusion plasma-physics ipam workshop research machine-learning data-driven computational surrogate-models reduced-models video"></span>[IPAM — Workshop II: Learning Models from Data for Multi-Fidelity Fusion Plasma Physics](https://www.ipam.ucla.edu/programs/workshops/workshop-ii-learning-models-from-data-for-multi-fidelity-fusion-plasma-physics/) — **Level:** Research. **Main coverage:** Machine learning and data-driven plasma models, surrogate and reduced models, fusion simulation, and experimental data. **Format:** Recorded research workshop and tutorials. **Lessons:** 22 talks. **Total time:** ≈17 h.
+
+- <span class="resource-marker" data-tags="fusion ipam workshop research engineering device-design optimization magnets materials computational video"></span>[IPAM — Workshop III: Fusion Device Design and Engineering](https://www.ipam.ucla.edu/programs/workshops/workshop-iii-fusion-device-design-and-engineering/) — **Level:** Research. **Main coverage:** Fusion-device optimization, coupled physics and engineering design, computational design, magnets, materials, and device constraints. **Format:** Recorded research workshop. **Lessons:** 20 research talks + 2 discussion sessions. **Total time:** ≈18 h of technical sessions.
+
+- <span class="resource-marker" data-tags="fusion ipam workshop research control optimization uncertainty-quantification real-time computational multi-fidelity video"></span>[IPAM — Workshop IV: Robust Optimization and Real-Time Control of Fusion Processes](https://www.ipam.ucla.edu/programs/workshops/workshop-iv-multi-fidelity-methods-to-enable-robust-optimization-and-real-time-control-of-fusion-processes/) — **Level:** Research. **Main coverage:** Robust optimization, uncertainty, control, real-time fusion applications, and reduced and multi-fidelity models. **Format:** Recorded research workshop. **Lessons:** 17 research talks + 5 discussion sessions. **Total time:** ≈17.75 h of technical sessions.
+
+- <span class="resource-marker" data-tags="fusion ipam seminar research computational modeling mathematics optimization machine-learning video"></span>[IPAM — Multi-Fidelity Methods for Fusion Energy Seminar Series](https://www.ipam.ucla.edu/programs/long-programs/multi-fidelity-methods-for-fusion-energy/?tab=seminar-series) — **Level:** Research. **Main coverage:** Specialist fusion-plasma topics spanning computational science, modelling, applied mathematics, optimization, and machine learning. **Format:** Research seminar video series associated with the 2026 long program. **Lessons:** 6 listed seminars. **Total time:** ≈6 h.
+
+- <span class="resource-marker" data-tags="plasma-physics fusion mipse seminar graduate research magnetic-confinement inertial-confinement hedp plasma-material-interaction pulsed-power propulsion diagnostics computational video"></span>[MIPSE — Plasma Science and Engineering Seminars](https://mipse.umich.edu/seminars.php) — **Level:** Graduate / research. **Main coverage:** Magnetic fusion, inertial confinement fusion and HEDP, plasma–material interactions, pulsed power, propulsion, diagnostics, and computational plasma science. **Format:** Large ongoing specialist seminar archive with recordings and slides. **Lessons:** 100+ recorded seminars in the multi-year archive. **Total time:** 100+ h; ongoing archive.
+
+- <span class="resource-marker" data-tags="plasma-physics fusion mipse video intermediate research hedp lasers materials propulsion space-plasma interview"></span>[MIPSE — Plasma in Our Lives](https://www.mipse.umich.edu/life_overview.php) — **Level:** Intermediate to research, depending on talk. **Main coverage:** Fusion and HEDP, fundamental plasma physics, lasers and acceleration, materials, electromagnetic and plasma technologies, propulsion, and space plasmas. **Format:** Thematic video and researcher-interview collection; not sequential. **Lessons:** Dozens of thematic videos and interviews. **Total time:** Several hours; collection is not fixed.
+
+- <span class="resource-marker" data-tags="fusion ornl mpex intermediate advanced plasma-material-interaction materials boundary-plasma engineering video"></span>[ORNL — Fusion Educational Media / MPEX](https://www.ornl.gov/content/fusion-educational-media) — **Level:** Intermediate / advanced. **Main coverage:** Plasma–material interactions, fusion-facing materials, boundary plasma physics, MPEX, and the coupling between plasma conditions and reactor materials. **Format:** Technical video and Q&A series. **Lessons:** 7 MPEX videos in the listed Q&A series. **Total time:** <1 h.
+
+- <span class="resource-marker" data-tags="fusion plasma-physics fusenet collection introductory graduate advanced magnetic-confinement engineering course lecture video"></span>[FuseNet — Educational Multimedia Collection](https://fusenet.eu/media) — **Level:** Introductory to advanced. **Main coverage:** Recorded fusion courses and lectures from the European fusion-education community, including magnetic confinement, plasma physics, and fusion technology. **Format:** Aggregated lecture, course, and video archive containing multiple independent series. **Lessons:** Variable; dozens of linked courses, lectures, and videos. **Total time:** Tens of hours; evolving collection.
 
 ## Databases
 
-- [NIST Atomic Spectra Database](https://physics.nist.gov/asd) [@nist_asd]
-- [ADAS: Atomic Data and Analysis Structure](https://adas.ac.uk/) [@adas]
-- [ENDF: Evaluated Nuclear Data File](https://www.nndc.bnl.gov/endf/) [@nobre_2024_endfb_viii1]
-- [NNDC: National Nuclear Data Center](https://www.nndc.bnl.gov/)
+- <span class="resource-marker" data-tags="atomic-physics spectroscopy database reference nist"></span>[NIST Atomic Spectra Database](https://physics.nist.gov/asd) [@nist_asd]
+- <span class="resource-marker" data-tags="atomic-physics plasma-physics database radiation spectroscopy adas"></span>[ADAS: Atomic Data and Analysis Structure](https://adas.ac.uk/) [@adas]
+- <span class="resource-marker" data-tags="nuclear-data fusion database neutronics endf"></span>[ENDF: Evaluated Nuclear Data File](https://www.nndc.bnl.gov/endf/) [@nobre_2024_endfb_viii1]
+- <span class="resource-marker" data-tags="nuclear-data fusion database neutronics nndc"></span>[NNDC: National Nuclear Data Center](https://www.nndc.bnl.gov/)
 
-## Open-Source Softwares
+## Open-Source Software
 
-- [PlasmaPy](https://www.plasmapy.org/) [@plasmapy]
-- [BOUT++](https://boutproject.github.io/) [@boutpp]
+- <span class="resource-marker" data-tags="plasma-physics software python open-source computational plasmapy"></span>[PlasmaPy](https://www.plasmapy.org/) [@plasmapy]
+- <span class="resource-marker" data-tags="plasma-physics fusion software open-source computational fluid edge-plasma bout++"></span>[BOUT++](https://boutproject.github.io/) [@boutpp]
 
 ### Bibliography
 
