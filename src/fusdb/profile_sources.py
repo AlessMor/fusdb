@@ -94,9 +94,8 @@ def _evaluate_source_profile(
     """Evaluate a generated source-profile provider.
 
     Keeping the evaluator at module scope removes the four near-duplicate
-    closures formerly created by :func:`source_profile_relation`. The bound
-    source arrays are carried by ``functools.partial``, which is also picklable
-    and therefore compatible with worker-process execution.
+    closures formerly created for the coordinate/fixed combinations. Bound
+    source arrays are carried by ``functools.partial`` and are picklable.
     """
     target = rho if mapping is None else mapping
     mapped = reinterpolate_profile(source_values, source_coordinate, target)
@@ -109,39 +108,27 @@ def _evaluate_source_profile(
     return np.asarray(average) * np.asarray(shape, dtype=float)
 
 
-def source_profile_relation(variable: Variable, *, average_name: str | None) -> Relation:
-    """Build the ordinary relation that maps one immutable source profile.
-
-    For a movable supplied profile, ``average_name`` is the sole amplitude
-    degree of freedom and the dynamically reinterpolated source curve supplies
-    only the shape. For a fixed supplied profile, the absolute source values
-    are mapped directly and no amplitude variable is introduced.
-    """
-    name = variable.name
-    coordinate = variable.coordinate or "rho"
-    source = _source_grid(variable)
-    source_values = np.asarray(variable.input_value, dtype=float).copy()
-    fixed = bool(variable.fixed)
+def _source_profile_relation_from_data(
+    *,
+    name: str,
+    coordinate: str,
+    source: np.ndarray,
+    source_values: np.ndarray,
+    fixed: bool,
+    average_name: str | None,
+) -> Relation:
+    """Build a source-profile relation from its canonical immutable data."""
     if not fixed and average_name is None:
         raise ValueError(f"Movable source profile {name!r} has no registered volume-average variable.")
 
-    rebuild_spec = {
-        "kind": "source_profile",
-        "version": 1,
-        "variable": name,
-        "coordinate": coordinate,
-        "source_coordinate": source.copy(),
-        "source_values": source_values.copy(),
-        "fixed": fixed,
-        "average_name": average_name,
-    }
+    source = np.asarray(source, dtype=float).copy()
+    source_values = np.asarray(source_values, dtype=float).copy()
     func = partial(
         _evaluate_source_profile,
         source_values=source_values,
         source_coordinate=source,
-        fixed=fixed,
+        fixed=bool(fixed),
     )
-
     input_names: tuple[str, ...] = ()
     argument_names: tuple[str, ...] = ()
     if not fixed:
@@ -163,28 +150,50 @@ def source_profile_relation(variable: Variable, *, average_name: str | None) -> 
         argument_names=argument_names,
         source_kind="source_profile",
         source_name=name,
-        rebuild_spec=rebuild_spec,
+        rebuild_spec={
+            "kind": "source_profile",
+            "version": 1,
+            "variable": name,
+            "coordinate": coordinate,
+            "source_coordinate": source.copy(),
+            "source_values": source_values.copy(),
+            "fixed": bool(fixed),
+            "average_name": average_name,
+        },
+    )
+
+
+def source_profile_relation(variable: Variable, *, average_name: str | None) -> Relation:
+    """Build the ordinary relation that maps one immutable source profile.
+
+    For a movable supplied profile, ``average_name`` is the sole amplitude
+    degree of freedom and the dynamically reinterpolated source curve supplies
+    only the shape. For a fixed supplied profile, the absolute source values
+    are mapped directly and no amplitude variable is introduced.
+    """
+    return _source_profile_relation_from_data(
+        name=variable.name,
+        coordinate=variable.coordinate or "rho",
+        source=_source_grid(variable),
+        source_values=np.asarray(variable.input_value, dtype=float),
+        fixed=bool(variable.fixed),
+        average_name=average_name,
     )
 
 
 def source_profile_relation_from_spec(spec: Mapping[str, Any]) -> Relation:
-    """Rebuild a generated source-profile relation from a picklable worker recipe."""
+    """Rebuild a generated source-profile relation from its worker recipe."""
     if spec.get("kind") != "source_profile":
         raise ValueError(f"Unsupported generated relation kind {spec.get('kind')!r}.")
     if int(spec.get("version", 1)) != 1:
         raise ValueError(f"Unsupported source-profile rebuild spec version {spec.get('version')!r}.")
-    source_values = np.asarray(spec["source_values"], dtype=float)
-    source_coordinate = np.asarray(spec["source_coordinate"], dtype=float)
-    variable = Variable(
-        str(spec["variable"]),
-        value=source_values,
-        fixed=bool(spec.get("fixed", False)),
-        coordinate=str(spec.get("coordinate") or "rho"),
-        coordinate_values=source_coordinate,
-    )
     average_name = spec.get("average_name")
-    return source_profile_relation(
-        variable,
+    return _source_profile_relation_from_data(
+        name=str(spec["variable"]),
+        coordinate=str(spec.get("coordinate") or "rho"),
+        source=np.asarray(spec["source_coordinate"], dtype=float),
+        source_values=np.asarray(spec["source_values"], dtype=float),
+        fixed=bool(spec.get("fixed", False)),
         average_name=None if average_name is None else str(average_name),
     )
 
