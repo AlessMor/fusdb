@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Triggered after the workflow exists so GitHub Actions can certify this stage.
 relation = Path('src/fusdb/relation.py')
 r = relation.read_text()
 anchor = 'class RelationNotInvertibleError(RelationSolveError):\n'
