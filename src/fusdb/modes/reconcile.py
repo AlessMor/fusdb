@@ -638,7 +638,7 @@ def grouped_jacobian(
         x = np.asarray(x, dtype=float)
         values0 = system.unpack(x)
         blocks0: list[np.ndarray] = []
-        for rel, rdim in zip(system._enforced_residual_relations, dims):
+        for rel, rdim in zip(system.residual_relations, dims):
             rows, _error = system.enforced_residual_block(rel, values0)
             rows = np.asarray(rows, dtype=float).reshape(-1)
             blocks0.append(rows if rows.size == rdim else np.full(rdim, 1.0e12, dtype=float))
@@ -663,17 +663,14 @@ def grouped_jacobian(
                 ns = dict(values0)
                 for name in group["deleted"]:
                     ns.pop(name, None)
-                for name, start, stop, offs, scales, shape, transform in group["spans"]:
-                    local = x_new[start:stop]
-                    actual = offs * np.exp(local) if transform == "log" else offs + scales * local
-                    ns[name] = actual.copy() if shape == 1 else float(actual[0])
+                system.apply_packed_values(ns, x_new, group["spans"])
                 system.apply_profile_specs(ns)
-                system._apply_completion_providers(ns, plan=group["providers"])
+                system.apply_completion_providers(ns, plan=group["providers"])
                 if any(ns.get(name) is None for name in group["deleted"]):
                     raise ValueError("incremental completion left values missing")
                 df = np.zeros(m, dtype=float)
                 for index in group["relations"]:
-                    rows, _error = system.enforced_residual_block(system._enforced_residual_relations[index], ns)
+                    rows, _error = system.enforced_residual_block(system.residual_relations[index], ns)
                     rows = np.asarray(rows, dtype=float).reshape(-1)
                     start_row, stop_row = offsets[index]
                     if rows.size != stop_row - start_row:

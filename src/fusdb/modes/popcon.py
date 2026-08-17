@@ -236,7 +236,7 @@ def _certify(system: Any, ns: dict[str, Any], cone_rels: Sequence[Any], cone_var
 # The batched namespace machinery (coerce/slice/trust/replay) lives next to
 # the per-point completion loop it mirrors -- see the "Batched completion"
 # section of fusdb.relationsystem for the shape discipline and the deliberate
-# differences from RelationSystem._apply_completion_providers.
+# differences from RelationSystem.apply_completion_providers.
 
 def _batched_base(system: Any, n: int) -> dict[str, np.ndarray]:
     """Batched pure-input namespace: inputs broadcast, profiles and constants
@@ -252,7 +252,7 @@ def _batched_base(system: Any, n: int) -> dict[str, np.ndarray]:
         if arr is not None:
             ns[name] = arr
     # Profile stage: fixed profiles verbatim, shape-controlled from averages.
-    for name, avg_name, shape, fixed_value in system._profile_specs:
+    for name, avg_name, shape, fixed_value in system.profile_specs:
         if fixed_value is not None:
             ns[name] = np.broadcast_to(np.asarray(fixed_value, dtype=float), (n, profile_size)).copy()
             continue
@@ -260,7 +260,7 @@ def _batched_base(system: Any, n: int) -> dict[str, np.ndarray]:
             continue
         ns[name] = ns[avg_name] * np.asarray(shape, dtype=float)
     # Constant-default stage.
-    for name, value in system._constant_defaults_solver.items():
+    for name, value in system.constant_defaults_solver.items():
         if ns.get(name) is None:
             spec = system.variable_registry.get(name)
             arr = coerce_batched(value, spec.shape, n, profile_size)

@@ -116,7 +116,7 @@ def test_exact_reconcile_runs():
 def test_completion_provider_failure_is_recorded():
     """A raising provider is skipped, but its first cause survives (S10a)."""
     system = _demo_system()
-    plan = system._provider_plan
+    plan = system.provider_plan
     assert plan, "DEMO compile produced no completion providers"
     rel = plan[0][0]
     values = system.solver_values()

@@ -25,7 +25,7 @@ def test_static_tokamak_coordinate_defaults_add_no_solver_domain_rows():
     layout = system.residual_layout(values)
 
     assert system.packed_dim == 0
-    assert system._enforced_residual_relations == []
+    assert system.residual_relations == []
     assert layout["relation_dims"] == []
     assert layout["size"] == 0
     assert layout["domain_tail"] == []

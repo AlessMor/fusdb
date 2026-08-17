@@ -231,15 +231,10 @@ class RelationSystem:
       :meth:`build_jac_sparsity`, :meth:`movement_weights`,
       :meth:`refresh_scales` -- solve setup/initialization helpers.
 
-    Trust boundary: ``modes/`` also reads four *compiled-plan* members that are
-    underscore-prefixed but are part of the interface the modes depend on, not
-    private implementation -- ``_enforced_residual_relations``,
-    ``_profile_specs``, ``_constant_defaults_solver`` and
-    ``_apply_completion_providers``.  They are the frozen products of
-    :meth:`compile` (a Modelica-style compiled artifact lives here as method
-    state rather than a separate object -- see the deferred CompiledSystem
-    note in the refactor backlog), so a compile-internals change must keep
-    these four stable or update the modes with it.
+    Execution modes consume the compiled-plan attributes ``residual_relations``,
+    ``profile_specs``, ``constant_defaults_solver`` and ``provider_plan`` plus
+    :meth:`apply_completion_providers`; these are the explicit public boundary
+    between compilation and mode-owned algorithms.
 
     Args:
         variables: Scenario variables.
@@ -357,8 +352,8 @@ class RelationSystem:
         #     blocked_relation_reasons view properties;
         #   * seeding oracle -- initial_guesses, seed_provenance,
         #     _unevaluable_names (compile()),
-        #   * completion plan -- _profile_specs, _constant_defaults_solver,
-        #     _provider_plan, _completion_passes (every _run_compile_pass);
+        #   * completion plan -- profile_specs, constant_defaults_solver,
+        #     provider_plan, completion_passes (every _run_compile_pass);
         #   * packed layout -- packed_specs, packed_dim, _packed_base_values,
         #     uninitialized_free_variables (pack()).
         self.variable_roles: dict[str, str] = {}
@@ -397,7 +392,6 @@ class RelationSystem:
         self._provider_view: tuple[dict[str, Relation], dict[str, Relation]] | None = None
         # Caches derived from the compiled provider/active-relation plan;
         # reset to None by every _run_compile_pass.
-        self._completion_plan_cache: list[tuple[Relation, bool]] | None = None
         self._sparsity_graph_cache: nx.DiGraph | None = None
         self._compiler_report_cache: dict[str, Any] | None = None
         self._completion_acyclic = False
@@ -570,13 +564,14 @@ class RelationSystem:
         )
         if not force and fingerprint == self._compile_fingerprint:
             self.refresh_scales()
-            self._profile_specs = self._build_profile_specs()
+            self.profile_specs = self._build_profile_specs()
             self._refresh_seeds()
             # The full-compile fixpoint guarantees any uninitialized packed
             # variable is already recorded unevaluable; anything beyond that
             # set means the new values broke a seed the pack relies on.
-            self.pack()
-            if set(self.uninitialized_free_variables) <= self._unevaluable_names:
+            uninitialized, _under = self._packing_issues()
+            if set(uninitialized) <= self._unevaluable_names:
+                self.pack()
                 return
         # Cleared first so an exception mid-compile can never leave a stale
         # fingerprint claiming the partial products are valid.
@@ -620,7 +615,6 @@ class RelationSystem:
         # rewrites only the verdict annotations -- relation activation and
         # reason, provider edges, per-variable supplied/fixed flags.
         self._reset_graph_verdicts()
-        self._completion_plan_cache = None
         self._sparsity_graph_cache = None
         self._compiler_report_cache = None
 
@@ -642,39 +636,25 @@ class RelationSystem:
         # reconstruction specs, held-constant defaults in solver form, and the
         # provider evaluation order.  complete() reads exactly these, so the
         # solve loop and the certification path share one completion.
-        self._profile_specs = self._build_profile_specs()
+        self.profile_specs = self._build_profile_specs()
         constant_defaults_solver: dict[str, Any] = {}
         for name, value in self.constant_default_values.items():
             try:
                 constant_defaults_solver[name] = self.solver_value(name, value)
             except Exception:
                 pass
-        self._constant_defaults_solver = constant_defaults_solver
-        # Provider records with the per-call plumbing frozen: input names and
-        # the writable outputs resolved to their specs (registry-known, and
-        # either active or explicitly owned), so the completion loop does no
-        # name resolution or ownership checks per call.
-        self._provider_plan = [
-            (
-                rel,
-                only_missing,
-                rel.input_names,
-                tuple(
-                    (out_name, self.variable_registry.get(out_name))
-                    for out_name in rel.output_names
-                    if out_name in self.variable_registry
-                    and (self.variable_roles.get(out_name, "inactive") != "inactive" or out_name in self.derived_provider_by_output)
-                ),
-            )
-            for rel, only_missing in self._completion_plan()
-        ]
+        self.constant_defaults_solver = constant_defaults_solver
+        # Freeze the one executable provider schedule.  Ordering and
+        # writable-output plumbing are resolved together so completion,
+        # POPCON and sparsity consume the same representation.
+        self.provider_plan = self._build_provider_plan()
         # One completion pass is exact for an acyclic provider graph (the plan
         # is topologically ordered); only genuine provider cycles need iteration.
-        self._completion_passes = 1 if self._completion_acyclic else 6
+        self.completion_passes = 1 if self._completion_acyclic else 6
         # The enforced residual relations, in relation order.  The residual
         # vector is built once per least-squares evaluation, so membership is
         # decided here rather than per call.
-        self._enforced_residual_relations = [
+        self.residual_relations = [
             rel for rel in self.relations if rel.enforce and self._relation_is_residual_relation(rel)
         ]
         # Domain-violation plan: active registry variables with a physical
@@ -788,7 +768,14 @@ class RelationSystem:
         reconstruction path; the generator is only for missing profiles.
         """
         usable: list[Relation] = []
+        unevaluable = self._unevaluable_names - set(self.inputs)
         for rel in self.candidate_primary_relations:
+            blocked = sorted(set(rel.variables) & unevaluable)
+            if blocked:
+                self._mark_relation_inactive(
+                    rel, "inactive_unevaluable: requires unevaluable " + ", ".join(blocked), replace=True
+                )
+                continue
             if rel.dependency == "generated_profile" and rel.output_names and all(
                 self.inputs.get(out) is not None for out in rel.output_names
             ):
@@ -1015,21 +1002,14 @@ class RelationSystem:
         block_decidable = set(partition["determined_variables"])
         decidable = supplied | forward | block_decidable
         undecidable = set(partition["underdetermined_variables"]) - decidable
-        # Variables a previous prune round found unevaluable are treated as
-        # undecidable so the relations that need them are deactivated.  Supplied
-        # values are never unevaluable, so they are never pruned.
-        unevaluable = self._unevaluable_names - supplied
-        undecidable |= unevaluable
         self.structural_blocks = list(partition["blocks"])
         active: list[Relation] = []
         for rel in pool:
             undec = sorted(set(rel.variables) & undecidable)
             if undec:
-                unev = sorted(set(rel.variables) & unevaluable)
-                if unev:
-                    self._mark_relation_inactive(rel, "inactive_unevaluable: requires unevaluable " + ", ".join(unev), replace=True)
-                else:
-                    self._mark_relation_inactive(rel, "inactive_undecidable: cannot determine " + ", ".join(undec), replace=True)
+                self._mark_relation_inactive(
+                    rel, "inactive_undecidable: cannot determine " + ", ".join(undec), replace=True
+                )
             else:
                 active.append(rel)
                 self._mark_relation_active(rel)
@@ -1179,9 +1159,9 @@ class RelationSystem:
         the first compile pass.  Its output is invariant across prune rounds: a
         relation the oracle successfully used ends with every one of its
         variables valued, so no later round can deactivate it (verified
-        empirically across the reactor fixtures).  Each round then re-packs
-        against the current roles -- the pack is the evaluability oracle, and
-        it reports TWO ways a variable can fail:
+        empirically across the reactor fixtures).  Each round analyzes the packed layout
+        against the current roles without installing runtime state.  That pure
+        analysis reports TWO ways a variable can fail:
 
         * no seed exists (``uninitialized_free_variables``) -- active,
           non-fixed, unsupplied, not a forward-derived output, not a determined
@@ -1211,7 +1191,7 @@ class RelationSystem:
             self._run_compile_pass()
             if round_no == 0:
                 self._refresh_seeds()
-            self.pack()
+            uninitialized, underdetermined = self._packing_issues()
             # Two evaluability failures, not one.  A variable with NO SEED
             # cannot be evaluated; so can a profile that is seedable but has
             # nothing determining it -- no supplied data, no producer left, so
@@ -1222,7 +1202,7 @@ class RelationSystem:
             # verdict was never revisited -- so it stayed packed as a free
             # profile at its seed and its rho-average/peak consumers reported
             # statistics of a meaningless curve, while `success` stayed True.
-            newly = set(self.uninitialized_free_variables) | set(self.underdetermined_profiles)
+            newly = set(uninitialized) | set(underdetermined)
             if newly <= self._unevaluable_names:
                 break
             self._unevaluable_names |= newly
@@ -1234,6 +1214,7 @@ class RelationSystem:
         for name in self.underdetermined_profiles:
             if self.variable_roles.get(name) == "computed":
                 self.variable_roles[name] = "assumed"
+        self.pack()
 
     def _refresh_seeds(self) -> None:
         """Re-run the seeding oracle against the current input values.
@@ -1809,78 +1790,57 @@ class RelationSystem:
         upper = (ub - init) / scale if np.isfinite(ub) else np.inf
         return scale, init, lower, upper, "linear"
 
-    def pack(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Pack active non-fixed variables and prepare the per-solve runtime plan.
-
-        Builds the packed layout -- one record per free variable
-        ``(name, start, stop, offsets, scales, shape, transform)`` stored on
-        ``self.packed_specs`` -- plus the immutable base value map that
-        :meth:`unpack` layers each solver vector onto.  A reconcile/optimize
-        solve calls the residual function thousands of times, so neither may
-        be re-derived per call; completion itself reads the compile-cached
-        plan (see :meth:`complete`).
-
-        Returns:
-            ``(x0, lower, upper)``.  ``x0`` is all zeros: the per-element
-            ``offsets``/``scales`` (and the log transform for positive-bounded
-            scalars) absorb the actual start values.
-        """
-        lower: list[float] = []
-        upper: list[float] = []
-        specs: list[tuple[str, int, int, np.ndarray, np.ndarray, int, str | None]] = []
-        self.uninitialized_free_variables = []
-        self.underdetermined_profiles = []
+    def _packing_issues(self) -> tuple[list[str], list[str]]:
+        """Return compile-time packing failures without installing runtime state."""
+        uninitialized, underdetermined = [], []
         for name, role in sorted(self.variable_roles.items()):
             if role == "inactive" or name not in self.packed_variables:
                 if role == "fixed" and self.inputs.get(name) is None:
                     raise ValueError(f"Fixed variable {name!r} has no value.")
                 continue
             spec = self.variable_registry.get(name)
-            lb, ub = spec.solver_bounds
-            size = self.profile_size if spec.shape == 1 else 1
-            # A profile packed as raw free elements with no data anchor is
-            # under-determined pointwise: its shape is fixed by the seed, not by
-            # physics.  Record it so the certificate never claims it as solved.
-            if spec.shape == 1 and self.inputs.get(name) is None:
-                self.underdetermined_profiles.append(name)
-            start = len(lower)
-            offsets: list[float] = []
-            scales: list[float] = []
-            span_transform: str | None = None
+            if spec.shape == 1 and self.inputs.get(name) is None: underdetermined.append(name)
             try:
-                initial_elements = [
-                    float(self.initial_value(name, index=i if spec.shape == 1 else None))
-                    for i in range(size)
-                ]
+                for i in range(self.profile_size if spec.shape == 1 else 1):
+                    self.initial_value(name, index=i if spec.shape == 1 else None)
             except Exception:
-                self.uninitialized_free_variables.append(name)
+                uninitialized.append(name)
+        return uninitialized, underdetermined
+
+    def pack(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Install the numeric solver layout for the already-compiled system."""
+        lower, upper, specs = [], [], []
+        self.uninitialized_free_variables, self.underdetermined_profiles = self._packing_issues()
+        for name, role in sorted(self.variable_roles.items()):
+            if role == "inactive" or name not in self.packed_variables or name in self.uninitialized_free_variables:
                 continue
-            # Supplied-input elements (solver form) anchor movement scaling.
-            ref_elements: np.ndarray | None = None
-            if self.inputs.get(name) is not None:
-                try:
-                    ref_elements = np.asarray(spec.solver_value(self.inputs[name], self.profile_size), dtype=float).reshape(-1)
-                except Exception:
-                    ref_elements = None
-            for i, init in enumerate(initial_elements):
-                if ref_elements is not None and ref_elements.size:
-                    ref: Any = float(ref_elements[min(i if spec.shape == 1 else 0, ref_elements.size - 1)])
-                else:
-                    ref = init
-                scale, offset, lo, hi, transform = self.pack_scalar(name, init, lb, ub, scale_ref=ref)
-                lower.append(lo)
-                upper.append(hi)
-                offsets.append(offset)
-                scales.append(scale)
-                if transform == "log":
-                    span_transform = "log"
-            specs.append((name, start, len(lower), np.asarray(offsets, dtype=float), np.asarray(scales, dtype=float), spec.shape, span_transform))
+            spec = self.variable_registry.get(name)
+            initial = [
+                float(self.initial_value(name, index=i if spec.shape == 1 else None))
+                for i in range(self.profile_size if spec.shape == 1 else 1)
+            ]
+            try:
+                reference = np.asarray(spec.solver_value(self.inputs[name], self.profile_size), dtype=float).reshape(-1) if self.inputs.get(name) is not None else None
+            except Exception:
+                reference = None
+            start = len(lower)
+            packed = [
+                self.pack_scalar(
+                    name,
+                    init,
+                    *spec.solver_bounds,
+                    scale_ref=float(reference[min(i if spec.shape == 1 else 0, reference.size - 1)]) if reference is not None and reference.size else init,
+                )
+                for i, init in enumerate(initial)
+            ]
+            scales, offsets, lows, highs, transforms = zip(*packed)
+            lower.extend(lows)
+            upper.extend(highs)
+            specs.append((name, start, len(lower), np.asarray(offsets), np.asarray(scales), spec.shape, "log" if "log" in transforms else None))
         self.packed_specs = specs
         self.packed_dim = len(lower)
         self._classify_avg_to_profile()
         self._compiler_report_cache = None
-        # Immutable input values are the base every solver vector is layered
-        # onto; completion itself reads the compile-cached plan.
         self._packed_base_values = self.input_values()
         self._movement_plan = self._build_movement_plan()
         return np.zeros(self.packed_dim), np.asarray(lower), np.asarray(upper)
@@ -1898,6 +1858,20 @@ class RelationSystem:
                     break
         return required
 
+    def apply_packed_values(
+        self,
+        values: dict[str, Any],
+        x: np.ndarray,
+        specs: Sequence[tuple[str, int, int, np.ndarray, np.ndarray, int, str | None]] | None = None,
+    ) -> dict[str, Any]:
+        """Apply packed solver coordinates to ``values`` without completion."""
+        arr = np.asarray(x, dtype=float)
+        for name, start, stop, offsets, scales, shape, transform in (self.packed_specs if specs is None else specs):
+            local_x = arr[start:stop]
+            actual = offsets * np.exp(local_x) if transform == "log" else offsets + scales * local_x
+            values[name] = actual.copy() if shape == 1 else float(actual[0])
+        return values
+
     def unpack(self, x: np.ndarray) -> dict[str, Any]:
         """Rebuild a completed solver namespace from one packed solver vector.
 
@@ -1909,22 +1883,13 @@ class RelationSystem:
             A solver-unit namespace with packed variables unpacked and all
             derived/profile/default variables completed.
         """
-        # Start from the immutable inputs, then overwrite the packed free vars.
         values = dict(self._packed_base_values)
-        arr = np.asarray(x, dtype=float)
-        for name, start, stop, offsets, scales, shape, transform in self.packed_specs:
-            local_x = arr[start:stop]
-            # Positive-bounded scalars are packed logarithmically; the rest affine.
-            if transform == "log":
-                actual = offsets * np.exp(local_x)
-            else:
-                actual = offsets + scales * local_x
-            values[name] = actual.copy() if shape == 1 else float(actual[0])
+        self.apply_packed_values(values, x)
         return self.complete(values)
 
     # ── Completion: providers, profiles, value namespaces ─────────────────
 
-    def _apply_completion_providers(self, out: dict[str, Any], plan: list | None = None) -> None:
+    def apply_completion_providers(self, out: dict[str, Any], plan: list | None = None) -> None:
         """Evaluate completion providers in dependency order, in place.
 
         The provider stage of :meth:`complete`.  Each provider relation of the
@@ -1940,10 +1905,10 @@ class RelationSystem:
         only the providers downstream of a perturbed column group.
         """
         size = self.profile_size
-        check_changes = self._completion_passes > 1
-        for _pass in range(self._completion_passes):
+        check_changes = self.completion_passes > 1
+        for _pass in range(self.completion_passes):
             changed = False
-            for rel, only_missing, input_names, outs in (self._provider_plan if plan is None else plan):
+            for rel, only_missing, input_names, outs in (self.provider_plan if plan is None else plan):
                 # A provider can only fire once all of its inputs are known.
                 if any(out.get(inp) is None for inp in input_names):
                     continue
@@ -1993,7 +1958,7 @@ class RelationSystem:
         A fixed supplied profile carries its stored solver-form array as
         ``fixed_value``; a shape-controlled profile carries its scalar-average
         name and unit shape for ``average * shape`` reconstruction.  Built once
-        per compile pass and cached on ``self._profile_specs``.
+        per compile pass and cached on ``self.profile_specs``.
         """
         specs: list[tuple[str, str | None, np.ndarray | None, Any]] = []
         for name, (shape, fixed) in self.supplied_profiles.items():
@@ -2007,9 +1972,9 @@ class RelationSystem:
         """Reconstruct fixed/shape-controlled profiles in place.
 
         The profile stage of :meth:`complete`, reading the compile-cached
-        ``self._profile_specs``.
+        ``self.profile_specs``.
         """
-        for name, avg_name, shape, fixed_value in self._profile_specs:
+        for name, avg_name, shape, fixed_value in self.profile_specs:
             if fixed_value is not None:
                 values[name] = fixed_value
                 continue
@@ -2022,9 +1987,9 @@ class RelationSystem:
         """Fill still-missing held-constant defaults in place (solver form).
 
         The constant-default stage of :meth:`complete`, reading the
-        compile-cached ``self._constant_defaults_solver``.
+        compile-cached ``self.constant_defaults_solver``.
         """
-        for name, value in self._constant_defaults_solver.items():
+        for name, value in self.constant_defaults_solver.items():
             if values.get(name) is None:
                 values[name] = value
 
@@ -2072,70 +2037,65 @@ class RelationSystem:
         self.completion_errors = {}
         self.apply_profile_specs(values)
         self._apply_constant_defaults(values)
-        self._apply_completion_providers(values)
+        self.apply_completion_providers(values)
         return values
 
-    def _completion_plan(self) -> list[tuple[Relation, bool]]:
-        """Return derived/default providers in dependency order, computed once.
 
-        Completion runs each provider relation and writes *every* output the
-        relation returns (its declared outputs), not just the one variable it was
-        selected to provide.  The execution order must therefore be a topological
-        sort over relations where ``R`` follows ``S`` whenever any input of ``R``
-        is any output of ``S`` -- the per-variable provider graph alone misses
-        these side-output dependencies, which is why completion previously needed
-        a redundant second pass to settle (e.g. ``Charged fusion power`` reading
-        ``P_fus_DT_alpha`` produced as a secondary output of a later relation).
+    def _build_provider_plan(self) -> tuple[tuple[Relation, bool, tuple[str, ...], tuple[tuple[str, Any], ...]], ...]:
+        """Build the one executable completion-provider schedule.
 
-        With this fuller ordering one pass is exact for an acyclic dependency
-        graph; ``_completion_acyclic`` records that so completion skips the second
-        pass.  A genuine provider cycle (a quasineutrality ``n_e<->n_i`` pair)
-        becomes a multi-node component and still iterates to a fixpoint.  Explicit
-        providers recompute their output (``only_missing`` False); defaults only
-        fill a still-missing output.
+        Explicit ownership wins over defaults.  Relations are ordered by all
+        produced-output dependencies, including side outputs and produced
+        constants, then each record freezes its input names and writable output
+        specs.  Scalar and batched completion execute this same schedule.
         """
-        cached = self._completion_plan_cache
-        if cached is not None:
-            return cached
-        # One provider per variable; explicit ownership wins over a default.
-        # Unique provider relations owning at least one output after that
-        # resolution.  A relation is a fill-only default when no output of it
-        # is owned by an explicit derived provider.
         provider_of: dict[str, Relation] = dict(self.default_provider_by_output)
         provider_of.update(self.derived_provider_by_output)
-        explicit_providers = {rel.name for rel in self.derived_provider_by_output.values()}
+        explicit = {rel.name for rel in self.derived_provider_by_output.values()}
         rels: dict[str, Relation] = {}
         for rel in provider_of.values():
             rels.setdefault(rel.name, rel)
-        only_missing_by_name = {name: name not in explicit_providers for name in rels}
+        only_missing = {name: name not in explicit for name in rels}
 
-        # Relation dependency DAG: producer -> consumer over all declared outputs.
-        out_to_rels: dict[str, list[str]] = {}
+        producers: dict[str, list[str]] = {}
         for rel in rels.values():
             for out in rel.output_names:
-                out_to_rels.setdefault(out, []).append(rel.name)
+                producers.setdefault(out, []).append(rel.name)
         dag = nx.DiGraph()
         dag.add_nodes_from(rels)
         for rel in rels.values():
-            # Constants that are themselves produced variables (e.g. the per-
-            # channel ``P_fus_*`` powers read as constants by ``Charged fusion
-            # power``) are real ordering dependencies: the relation reads their
-            # current value, falling back to the registry default only when no
-            # producer ran.  They must order like inputs.
             for inp in (*rel.input_names, *rel.constant_names):
-                for producer in out_to_rels.get(inp, ()):
+                for producer in producers.get(inp, ()):
                     if producer != rel.name:
                         dag.add_edge(producer, rel.name)
         condensation = nx.condensation(dag)
         self._completion_acyclic = all(
             len(condensation.nodes[comp]["members"]) == 1 for comp in condensation
         )
-        ordered: list[tuple[Relation, bool]] = []
-        for comp in nx.lexicographical_topological_sort(condensation, key=lambda c: min(condensation.nodes[c]["members"])):
-            for rel_name in sorted(condensation.nodes[comp]["members"]):
-                ordered.append((rels[rel_name], only_missing_by_name[rel_name]))
-        self._completion_plan_cache = ordered
-        return ordered
+        ordered_names = [
+            rel_name
+            for comp in nx.lexicographical_topological_sort(
+                condensation, key=lambda c: min(condensation.nodes[c]["members"])
+            )
+            for rel_name in sorted(condensation.nodes[comp]["members"])
+        ]
+        return tuple(
+            (
+                rels[rel_name],
+                only_missing[rel_name],
+                rels[rel_name].input_names,
+                tuple(
+                    (out_name, self.variable_registry.get(out_name))
+                    for out_name in rels[rel_name].output_names
+                    if out_name in self.variable_registry
+                    and (
+                        self.variable_roles.get(out_name, "inactive") != "inactive"
+                        or out_name in self.derived_provider_by_output
+                    )
+                ),
+            )
+            for rel_name in ordered_names
+        )
 
     # ── Residual blocks: relations, domains, movement ─────────────────────
 
@@ -2156,72 +2116,50 @@ class RelationSystem:
         return self.relation_residual_vector(rel, values, safe=True), None
 
     def certify_relations(self, values: Mapping[str, Any]) -> tuple[dict[str, dict[str, Any]], np.ndarray, list[str], list[str]]:
-        """Evaluate every active relation for certification.
-
-        The certification path: builds a full ``verify_status`` dictionary per
-        relation (including structural providers, whose residuals stay out of
-        the certificate residual vector) plus the stacked enforced residual
-        rows.  Used by :func:`fusdb.modes.verify.verify_values` -- solver
-        termination is never a success condition; this is.
-
-        Returns:
-            ``(status_by_relation, residuals, errors, warnings)``.
-        """
+        """Evaluate every active relation for certification."""
         status: dict[str, dict[str, Any]] = {}
         blocks: list[np.ndarray] = []
         errors: list[str] = []
         warnings: list[str] = []
         for rel in self.relations:
+            structural = not self._relation_is_residual_relation(rel)
             missing = [name for name in rel.variables if name not in values or values[name] is None]
-            if not self._relation_is_residual_relation(rel):
-                # Structural provider: its outputs were recomputed by
-                # completion.  It contributes no residual row but is still
-                # checked as an enforced relation on the completed value map.
-                if missing:
-                    message = f"Relation {rel.name!r} missing variables {missing}."
-                    status[rel.name] = {
-                        "relation": rel.name,
-                        "verified": False,
-                        "missing": missing,
-                        "errors": [message],
-                        "warnings": [],
-                        "enforced": rel.enforce,
-                        "source": "derived_provider",
-                    }
-                    if rel.enforce:
-                        errors.append(message)
-                    continue
+            residual = np.empty(0, dtype=float)
+            if missing:
+                message = f"Relation {rel.name!r} missing variables {missing}."
+                rel_status = {
+                    "relation": rel.name,
+                    "verified": False,
+                    "missing": missing,
+                    "errors": [message],
+                    "warnings": [],
+                    "enforced": rel.enforce,
+                }
+            else:
                 try:
-                    rel_status = self.relation_status_and_residual(rel, values)[0]
-                    rel_status["source"] = "derived_provider"
-                    status[rel.name] = rel_status
-                    warnings.extend(rel_status.get("warnings", []))
-                    if rel.enforce and rel_status.get("errors"):
-                        errors.extend(f"{rel.name}: {err}" for err in rel_status["errors"])
+                    rel_status, residual = self.relation_status_and_residual(rel, values)
                 except Exception as exc:
-                    status[rel.name] = {
+                    if not structural:
+                        raise
+                    rel_status = {
                         "relation": rel.name,
                         "verified": False,
                         "errors": [str(exc)],
                         "warnings": [],
                         "enforced": rel.enforce,
-                        "source": "derived_provider",
                     }
-                    if rel.enforce:
-                        errors.append(f"{rel.name}: {exc}")
-                continue
-            if missing:
-                message = f"Relation {rel.name!r} missing variables {missing}."
-                status[rel.name] = {"relation": rel.name, "verified": False, "missing": missing, "errors": [message], "warnings": [], "enforced": rel.enforce}
-                continue
-            # Status and residual share one evaluation.
-            rel_status, residual = self.relation_status_and_residual(rel, values)
+            if structural:
+                rel_status["source"] = "derived_provider"
             status[rel.name] = rel_status
             warnings.extend(rel_status.get("warnings", []))
+            rel_errors = rel_status.get("errors") or ()
+            if rel.enforce and rel_errors:
+                prefix = "" if structural and missing else f"{rel.name}: "
+                errors.extend(prefix + err for err in rel_errors)
+            if structural or missing:
+                continue
             if rel.enforce:
                 blocks.append(residual)
-                if rel_status.get("errors"):
-                    errors.extend(f"{rel.name}: {err}" for err in rel_status["errors"])
             elif not rel_status["verified"]:
                 if is_default_relation(rel):
                     warnings.append(f"{rel.name}: weak default not satisfied after reconciliation")
@@ -2254,7 +2192,7 @@ class RelationSystem:
         if cached is not None:
             return cached
         graph = nx.DiGraph()
-        for rel, _only_missing in self._completion_plan():
+        for rel, _only_missing, _input_names, _outs in self.provider_plan:
             inputs = [*rel.input_names, *(c for c in rel.constant_names if c in self.variable_registry)]
             for out in rel.output_names:
                 for inp in inputs:
@@ -2297,7 +2235,7 @@ class RelationSystem:
             ``None`` when movement rows are excluded.
         """
         dims: list[int] = []
-        for rel in self._enforced_residual_relations:
+        for rel in self.residual_relations:
             if any(values.get(name) is None for name in rel.variables):
                 dims.append(1)
                 continue
@@ -2329,7 +2267,7 @@ class RelationSystem:
         failure, missing variables) fills that span with the large penalty.
         """
         blocks: list[np.ndarray] = []
-        for rel, rdim in zip(self._enforced_residual_relations, layout["relation_dims"]):
+        for rel, rdim in zip(self.residual_relations, layout["relation_dims"]):
             rows, _error = self.enforced_residual_block(rel, values)
             rows = np.asarray(rows, dtype=float).reshape(-1)
             blocks.append(rows if rows.size == rdim else np.full(rdim, 1.0e12, dtype=float))
@@ -2400,7 +2338,7 @@ class RelationSystem:
         span_by_name = {name: (start, stop) for name, start, stop, *_rest in self.packed_specs}
 
         row_specs: list[tuple[int, set[str]]] = []
-        for rel, rdim in zip(self._enforced_residual_relations, layout["relation_dims"]):
+        for rel, rdim in zip(self.residual_relations, layout["relation_dims"]):
             names: set[str] = set()
             # Constants that are themselves produced variables are read off the
             # namespace exactly like inputs, so the rows depend on them too.
@@ -2461,7 +2399,7 @@ class RelationSystem:
           recompute them too;
         * ``providers`` -- the provider-plan sublist that recomputes them, in
           plan order;
-        * ``relations`` -- indices into ``_enforced_residual_relations`` whose
+        * ``relations`` -- indices into ``residual_relations`` whose
           rows can move.
 
         Returns ``None`` when there is nothing to pack or no sparsity.
@@ -2505,12 +2443,12 @@ class RelationSystem:
                     "deleted": sorted(affected - packed_names),
                     "providers": [
                         record
-                        for record in self._provider_plan
+                        for record in self.provider_plan
                         if any(out_name in affected for out_name, _spec in record[3])
                     ],
                     "relations": [
                         index
-                        for index, rel in enumerate(self._enforced_residual_relations)
+                        for index, rel in enumerate(self.residual_relations)
                         if affected.intersection(rel.variables)
                         or any(c in affected for c in rel.constant_names if c in self.variable_registry)
                     ],
@@ -3003,7 +2941,7 @@ class RelationSystem:
 
 # ── Batched completion: popcon grid namespaces ────────────────────────────
 #
-# The batched counterpart of :meth:`RelationSystem._apply_completion_providers`
+# The batched counterpart of :meth:`RelationSystem.apply_completion_providers`
 # / :meth:`RelationSystem.complete`: one namespace holds every grid point at
 # once and the compiled provider plan is replayed on it.  Kept here, next to
 # the per-point completion loop it mirrors, so the two cannot drift apart
@@ -3195,7 +3133,7 @@ def apply_completion_providers_batched(
 ) -> set[str]:
     """Run the compiled completion plan on the batched namespace, in place.
 
-    Mirrors :meth:`RelationSystem._apply_completion_providers` -- providers in
+    Mirrors :meth:`RelationSystem.apply_completion_providers` -- providers in
     dependency order, explicit providers recompute, defaults fill only
     missing outputs, cyclic plans iterate to a fixed point -- with the four
     deliberate differences listed in the section comment above.  Solver-domain
@@ -3214,7 +3152,7 @@ def apply_completion_providers_batched(
     held = {name for name in system.inputs if system.inputs.get(name) is not None} | set(system.fixed)
     changed_names: set[str] = set()
     active: set[str] | None = None if dirty is None else set(dirty)
-    for _pass in range(system._completion_passes):
+    for _pass in range(system.completion_passes):
         changed = False
         pass_changed: set[str] = set()
         # Re-level shape-controlled profiles from their (possibly provider-
@@ -3223,7 +3161,7 @@ def apply_completion_providers_batched(
         # shape is fixed but its level tracks its average, which may itself be
         # a scan axis or be derived from one (e.g. T_i_avg = T_e_avg), so it
         # must be rebuilt each pass rather than frozen at the compile midpoint.
-        for name, avg_name, shape, fixed_value in system._profile_specs:
+        for name, avg_name, shape, fixed_value in system.profile_specs:
             if fixed_value is None and avg_name is not None and ns.get(avg_name) is not None:
                 if active is not None and avg_name not in active and ns.get(name) is not None:
                     continue
@@ -3234,7 +3172,7 @@ def apply_completion_providers_batched(
                     pass_changed.add(name)
                     if active is not None:
                         active.add(name)
-        for rel, only_missing, input_names, outs in system._provider_plan:
+        for rel, only_missing, input_names, outs in system.provider_plan:
             if any(ns.get(name) is None for name in input_names):
                 continue
             # Supplied inputs are the scenario and are held exactly: a
