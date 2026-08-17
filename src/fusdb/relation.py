@@ -78,6 +78,20 @@ class RelationVerificationError(RelationSolveError):
     """Raised when a solved value does not verify against the canonical relation."""
 
 
+def build_constraint_relations(constraints, *, name_prefix: str, source_kind: str, source_name: str) -> tuple["Relation", ...]:
+    """Normalize constraint specs into relation guards in one place."""
+    return tuple(
+        constraint_from_expression(
+            text,
+            name=f"{name_prefix}_{index}",
+            enforce=enforce,
+            source_kind=source_kind,
+            source_name=source_name,
+        )
+        for index, (text, enforce) in enumerate(parse_constraint_specs(constraints))
+    )
+
+
 class RelationNotInvertibleError(RelationSolveError):
     """Raised when a standalone inverse direction is not a well-posed request.
 
@@ -182,18 +196,12 @@ class Relation:
         self._coerce_names = (*self.input_names, *self.constant_names)
 
         # Local constraints are themselves relations. enforce=False means checked-only applicability.
-        built: list[Relation] = []
-        for index, (text, enforce) in enumerate(parse_constraint_specs(self.constraints)):
-            built.append(
-                constraint_from_expression(
-                    text,
-                    name=f"{self.name}_constraint_{index}",
-                    enforce=enforce,
-                    source_kind="relation",
-                    source_name=self.name,
-                )
-            )
-        self.constraint_relations = tuple(built)
+        self.constraint_relations = build_constraint_relations(
+            self.constraints,
+            name_prefix=f"{self.name}_constraint",
+            source_kind="relation",
+            source_name=self.name,
+        )
 
     @property
     def optional_variable_names(self) -> tuple[str, ...]:

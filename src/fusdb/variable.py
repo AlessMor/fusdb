@@ -8,9 +8,9 @@ from typing import Any
 
 import numpy as np
 
-from .relation import Relation, constraint_from_expression
+from .relation import Relation, build_constraint_relations
 from .registry import VARIABLES, VariableSpec, convert_value
-from .utils import coerce_numeric_value, coerce_to_shape, parse_constraint_specs, unique_preserve_order, value_in_domain
+from .utils import coerce_numeric_value, coerce_to_shape, unique_preserve_order, value_in_domain
 
 
 @dataclass(frozen=True)
@@ -149,18 +149,16 @@ class Variable:
 
         object.__setattr__(self, "input_value", self._copy_value(self.value))
 
-        built: list[Relation] = []
-        for index, (text, enforce) in enumerate(parse_constraint_specs(self.constraints)):
-            built.append(
-                constraint_from_expression(
-                    text,
-                    name=f"{self.name}_constraint_{index}",
-                    enforce=enforce,
-                    source_kind="variable",
-                    source_name=self.name,
-                )
-            )
-        object.__setattr__(self, "relations", tuple(built))
+        object.__setattr__(
+            self,
+            "relations",
+            build_constraint_relations(
+                self.constraints,
+                name_prefix=f"{self.name}_constraint",
+                source_kind="variable",
+                source_name=self.name,
+            ),
+        )
 
     def clone(self, **changes: Any) -> "Variable":
         return dataclasses.replace(self, **changes)
