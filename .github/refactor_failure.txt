@@ -27,20 +27,17 @@ Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; 
 /home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:396: ComplexWarning: Casting complex values to real discards the imaginary part
   right = np.asarray(rhs, dtype=float)
 Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
->>> python .github/refactor_relationsystem.py stage1
+>>> python .github/refactor_stage1_fix.py
 Traceback (most recent call last):
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 547, in <module>
-    main()
-    ~~~~^^
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 531, in main
-    stage1()
-    ~~~~~~^^
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_stage1_fix.py", line 27, in <module>
+    runner.stage1()
+    ~~~~~~~~~~~~~^^
   File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 181, in stage1
     reconcile = sub_once(
         reconcile,
     ...<3 lines>...
         "grouped jacobian uses packed helper",
     )
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 29, in sub_once
-    raise RuntimeError(f"{label}: expected one regex match, found {count}")
-RuntimeError: grouped jacobian uses packed helper: expected one regex match, found 0
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_stage1_fix.py", line 22, in sub_once
+    raise RuntimeError(f"{label}: expected one exact match, found {count}")
+RuntimeError: grouped jacobian uses packed helper: expected one exact match, found 0
