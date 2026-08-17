@@ -27,17 +27,8 @@ Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; 
 /home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:396: ComplexWarning: Casting complex values to real discards the imaginary part
   right = np.asarray(rhs, dtype=float)
 Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
->>> python .github/refactor_stage1_fix.py
+>>> python .github/refactor_stage1_fix2.py
 Traceback (most recent call last):
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_stage1_fix.py", line 27, in <module>
-    runner.stage1()
-    ~~~~~~~~~~~~~^^
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 181, in stage1
-    reconcile = sub_once(
-        reconcile,
-    ...<3 lines>...
-        "grouped jacobian uses packed helper",
-    )
-  File "/home/runner/work/fusdb/fusdb/.github/refactor_stage1_fix.py", line 22, in sub_once
-    raise RuntimeError(f"{label}: expected one exact match, found {count}")
-RuntimeError: grouped jacobian uses packed helper: expected one exact match, found 0
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_stage1_fix2.py", line 40, in <module>
+    raise RuntimeError(f"unexpected grouped Jacobian coordinate block: {actual!r}")
+RuntimeError: unexpected grouped Jacobian coordinate block: ['for name, start, stop, offs, scales, shape, transform in group["spans"]:', 'local = x_new[start:stop]', 'actual = offs * np.exp(local) if transform == "log" else offs + scales * local', 'ns[name] = actual.copy() if shape == 1 else float(actual[0])', 'system.applyprofile_specs(ns)']
