@@ -36,7 +36,7 @@ def test_reactor_yaml_reads_two_column_source_profile_without_forcing_grid_size(
 
     system = reactor.relation_system().compile()
     assert system.profile_size == 46
-    assert any(rel.source_kind == "source_profile" and "n_e" in rel.output_names for rel in system.candidate_primary_relations)
+    assert any(rel.source_kind == "source_profile" and "n_e" in rel.output_names for rel in system.model.candidate_primary_relations)
 
 
 def test_reactor_yaml_passes_variable_local_default_relation(tmp_path):

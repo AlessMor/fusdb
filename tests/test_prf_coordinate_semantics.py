@@ -11,7 +11,7 @@ WEIGHT = "Tokamak volume integration weight"
 
 
 def _prf_relation(system):
-    return next(rel for rel in system.candidate_primary_relations if rel.name == PRF)
+    return next(rel for rel in system.model.candidate_primary_relations if rel.name == PRF)
 
 
 def test_prf_uses_supplied_minor_radius_and_volume_measure_as_dependencies():

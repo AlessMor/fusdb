@@ -30,15 +30,13 @@ def test_movable_source_profile_promotes_available_volume_weight_to_graph_input(
     ).compile()
     source_relation = next(
         relation
-        for relation in system.candidate_primary_relations
+        for relation in system.model.candidate_primary_relations
         if relation.source_kind == "source_profile" and relation.source_name == "n_e"
     )
 
     assert "rho_tor" in source_relation.input_names
     assert "w_V" in source_relation.input_names
     assert "w_V" not in source_relation.constant_names
-
-    system.compile()
     values = system.complete(system.solver_values())
     average = float(np.asarray(values["n_e_avg"]).reshape(-1)[0])
     assert volume_average(values["n_e"], values["rho"], weight=values["w_V"]) == pytest.approx(average)
@@ -59,12 +57,12 @@ def test_reduced_stellarator_weight_stays_optional_for_profile_generators():
     ).compile()
     profile = next(
         relation
-        for relation in system.candidate_primary_relations
+        for relation in system.model.candidate_primary_relations
         if relation.name == "Parabolic electron temperature profile"
     )
 
     assert "Reduced stellarator volume integration weight" in {
-        relation.name for relation in system.candidate_primary_relations
+        relation.name for relation in system.model.candidate_primary_relations
     }
     assert "w_V" not in profile.input_names
     assert "w_V" in profile.constant_names

@@ -17,7 +17,6 @@ def test_public_builder_uses_canonical_grid_for_external_source_profile():
     ]
 
     system = build_relation_system(variables, (), profile_size=46, name="source_builder").compile()
-    system.compile()
     completed = system.complete(system.solver_values())
 
     assert system.profile_size == 46

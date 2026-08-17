@@ -89,7 +89,6 @@ def test_popcon_option_validation() -> None:
 
 def test_certification_cone_scales_with_targets() -> None:
     system = Reactor.from_yaml(POPCON_YAML).relation_system().compile()
-    system.compile()
     lean_rels, lean_vars = popcon_mode.certification_cone(system, ("P_fus",))
     wide_rels, wide_vars = popcon_mode.certification_cone(system, ("P_fus", "P_LH", "P_aux"))
     assert 0 < len(lean_rels) <= len(wide_rels) <= len(system.relations)

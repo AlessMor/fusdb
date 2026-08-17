@@ -18,6 +18,11 @@ from .utils import ZERO_TOL, parse_constraint_specs, signed_scalar_grid, value_i
 from .variable import Variable
 
 
+def _copy_value(value: Any) -> Any:
+    """Copy mutable numerical inputs when moving them between model/plan state."""
+    return value.copy() if isinstance(value, np.ndarray) else value
+
+
 # ── Pure structural helpers ────────────────────────────────────────────────
 # Module-level functions with explicit inputs: they read nothing off a
 # RelationSystem, so the compile pass's dataflow stays visible at call sites.
@@ -34,9 +39,8 @@ def relation_bipartite_graph(relations: Iterable[Relation]) -> nx.DiGraph:
     system adds ``shape`` plus the per-pass verdicts, the plotting views add
     display labels).
 
-    This is the single graph definition shared by the compiled system
-    (:meth:`RelationSystem._structural_graph`) and the registry-wide plotting
-    views (:mod:`fusdb.plotting.relation_graph`).
+    This is the single graph definition shared by prepared relation models and
+    the registry-wide plotting views (:mod:`fusdb.plotting.relation_graph`).
     """
     graph = nx.DiGraph()
     for rel in relations:
@@ -217,7 +221,6 @@ class CompilePlan:
     Execution modes (:mod:`fusdb.modes`) drive a compiled system through this
     public interface and own their own algorithm and result shape:
 
-    - :meth:`compile` -- build/prune the active system (``run`` calls this).
     - :meth:`pack` / :meth:`unpack` -- free variables <-> solver vector.
       ``pack`` stores the packed layout (``packed_specs``); the residual
       helpers read it.
@@ -237,24 +240,18 @@ class CompilePlan:
     :meth:`apply_completion_providers`; these are the explicit public boundary
     between compilation and mode-owned algorithms.
 
-    Args:
-        variables: Scenario variables.
-        relations: Post-filter relation candidates.
-        constraints: System-level constraints.
-        name: Diagnostic system name.
+    A plan is always created by :meth:`RelationSystem.compile`.  It receives a
+    prepared model and normalized scenario state; it never ingests raw
+    ``Variable`` records or relation/constraint specifications.
     """
 
     def __init__(
         self,
-        variables: Iterable[Variable],
-        relations: Iterable[Relation],
-        *,
-        constraints: Any = None,
-        name: str | None = None,
-        model: "RelationSystem | None" = None,
+        model: "RelationSystem",
+        scenario: Mapping[str, Any],
     ) -> None:
         self.model = model
-        self.name = str(name or "relation_system")
+        self.name = model.name
         # Result of the most recent run(); read by table rendering for header
         # colouring. None until a mode has been dispatched.
         self.last_result: dict[str, Any] | None = None
@@ -265,9 +262,8 @@ class CompilePlan:
         # survive into diagnostics instead of surfacing as a bare "value
         # missing" downstream.
         self.completion_errors: dict[str, str] = {}
-        # Single read point for registry metadata; Variable/Relation are bound
-        # to the same shared global registry.
-        self.variable_registry = VARIABLES
+        # The prepared model owns all invariant declaration metadata.
+        self.variable_registry = model.variable_registry
         # Variables found unevaluable by the prune pass (no value, no producer,
         # no anchored block); relations that need them are deactivated.
         self._unevaluable_names: set[str] = set()
@@ -286,49 +282,15 @@ class CompilePlan:
         # treats the default value as the movement reference.
         self.seeded_default_values: dict[str, float] = {}
 
-        # ── Per-scenario state: plain dicts keyed by canonical name.  The
-        # passed Variable records are ingested once; the system holds no
-        # Variable objects at runtime (specs own the numerics).
-        records = list(variables)
-        self.inputs: dict[str, Any] = {}      # immutable supplied values (canonical units)
-        self.values: dict[str, Any] = {}      # current/solved values (canonical units)
-        self.fixed: set[str] = set()
-        self.rel_tols: dict[str, float] = {}  # resolved per-name tolerances
-        self.abs_tols: dict[str, float] = {}
-        self.known: set[str] = set()          # every name the system tracks
-        # Record-local constraint guards (rare; registry guards live on specs).
-        self._record_guards: dict[str, tuple[Relation, ...]] = {}
-        explicit_sizes: set[int] = set()
-        for rec in records:
-            if rec.name in self.known:
-                raise ValueError(f"Duplicate variable {rec.name!r}.")
-            self.known.add(rec.name)
-            self.rel_tols[rec.name] = float(rec.rel_tol or VARIABLES.rel_tol_default)
-            self.abs_tols[rec.name] = float(rec.abs_tol or 0.0)
-            if rec.fixed:
-                self.fixed.add(rec.name)
-            if rec.input_value is not None:
-                self.inputs[rec.name] = rec.input_value
-                self.values[rec.name] = rec.value
-            if rec.relations:
-                self._record_guards[rec.name] = rec.relations
-            if rec.spec.shape == 1:
-                if rec.size is not None:
-                    explicit_sizes.add(int(rec.size))
-                elif isinstance(rec.input_value, np.ndarray) and rec.input_value.ndim == 1:
-                    explicit_sizes.add(int(rec.input_value.shape[0]))
-
-        # Construction phases: each reads the state left by earlier phases
-        # and writes its own attributes onto self.
-        # The raw constraint spec is kept so a picklable rebuild recipe can be
-        # derived from a live system (worker processes cannot receive the parsed
-        # constraint relations, whose functions do not pickle).
-        self.constraints_spec = constraints
-        self._canonicalize_candidates(relations, constraints)
-        if len(explicit_sizes) > 1:
-            raise ValueError(f"Profile sizes are incompatible: {sorted(explicit_sizes)}.")
-        self.profile_size = next(iter(explicit_sizes), VARIABLES.profile_size_default)
-        self._materialize_rho_grid()
+        # ── Per-scenario state. Values are copied so independent plans can
+        # execute and solve without mutating one another or the reusable model.
+        self.inputs = {name: _copy_value(value) for name, value in scenario["inputs"].items()}
+        self.values = {name: _copy_value(value) for name, value in scenario["inputs"].items()}
+        self.fixed = set(scenario["fixed"])
+        self.rel_tols = dict(model.rel_tols)
+        self.abs_tols = dict(model.abs_tols)
+        self.known = set(model.known_names)
+        self.profile_size = model.profile_size
         self._broadcast_profile_values()
         self._split_supplied_profiles()
 
@@ -345,14 +307,10 @@ class CompilePlan:
         #   * compile products -- written by every _run_compile_pass:
         #     variable_roles (the one solve role per variable, see
         #     _assign_roles), constant_default_values, structural_blocks,
-        #     primary_relations, relations, relations_by_name,
-        #     relations_by_function, variable_scales/tolerances,
+        #     primary_relations, relations, variable_scales/tolerances,
         #     _partition_diagnostics, plus the None-reset caches below.
-        #     Relation activation, inactivation reasons and provider
-        #     selection are graph verdicts: annotations on self._graph
-        #     (see _reset_graph_verdicts), read back through the
-        #     default_provider_by_output / derived_provider_by_output /
-        #     blocked_relation_reasons view properties;
+        #     Relation activation, inactivation reasons and provider selection
+        #     live in this plan's verdict maps (see _reset_verdicts).
         #   * seeding oracle -- initial_guesses, seed_provenance,
         #     _unevaluable_names (compile()),
         #   * completion plan -- profile_specs, constant_defaults_solver,
@@ -367,14 +325,6 @@ class CompilePlan:
         # Values expanded from a scalar average with an assumed shape --
         # orthogonal to the role, and true for inputs and computed alike.
         self.avg_to_profile: set[str] = set()
-        # Supplied-name/fixed-set fingerprint of the last full compile; while it
-        # matches, compile() refreshes only the value-dependent products.
-        self._compile_fingerprint: tuple[frozenset[str], frozenset[str]] | None = None
-        # Seeding tape: the ordered steps the oracle's discovery run took and
-        # the name set it seeded.  Recorded by the full compile, replayed on
-        # fingerprint hits, invalidated whenever the structure recompiles.
-        self._seed_tape: list | None = None
-        self._seed_tape_names: set[str] = set()
         self.initial_guesses: dict[str, Any] = {}
         # Per seeded name, the oracle source that produced its x0 value
         # ("held_constant", "relation:<name>", "block", "registry_default").
@@ -386,13 +336,14 @@ class CompilePlan:
         # but the level is *defaulted*, not measured.  Detected at pack and
         # surfaced (compiler report + verify warning); such a level is "assumed".
         self.underdetermined_profiles: list[str] = []
-        # The canonical bipartite structural graph over the (immutable)
-        # candidate relations; built once on first use.  Its *structure*
-        # never changes; compile passes rewrite only verdict annotations.
-        self._graph: nx.DiGraph | None = None
-        # Lazy view of the provider edge annotations ``(defaults, explicit)``;
-        # invalidated by _reset_graph_verdicts and _set_provider_edge.
-        self._provider_view: tuple[dict[str, Relation], dict[str, Relation]] | None = None
+        # Plan verdicts deliberately live outside ``model.graph``.  The model
+        # topology is shared and immutable; these maps are one scenario's
+        # activation/provider/decidability state.
+        self.active_relations: set[str] = set()
+        self.inactive_reasons: dict[str, str] = {}
+        self.default_providers: dict[str, Relation] = {}
+        self.derived_providers: dict[str, Relation] = {}
+        self.decidability: dict[str, str] = {}
         # Caches derived from the compiled provider/active-relation plan;
         # reset to None by every _run_compile_pass.
         self._dependency_closure_cache: tuple[
@@ -401,41 +352,6 @@ class CompilePlan:
         self._compiler_report_cache: dict[str, Any] | None = None
         self._completion_acyclic = False
 
-
-    def _canonicalize_candidates(self, relations: Iterable[Relation], constraints: Any) -> None:
-        """Canonicalize/validate the candidate relations and build the system
-        constraint relations.
-
-        ``canonicalize_relation`` rejects alias-degenerate relations (a declared
-        output that resolves to one of its own inputs); registry relations are
-        already validated at build time, but re-validating here keeps ad-hoc
-        relations equally safe.
-        """
-        self.candidate_primary_relations = [canonicalize_relation(rel, self.variable_registry) for rel in relations]
-        self.system_constraint_relations = [
-            self._resolve_relation_names(
-                constraint_from_expression(text, name=f"system_constraint_{index}", enforce=enforce, source_kind="system", source_name=self.name)
-            )
-            for index, (text, enforce) in enumerate(parse_constraint_specs(constraints))
-        ]
-
-    def _materialize_rho_grid(self) -> None:
-        """Materialize the canonical fixed ``rho`` grid whenever profiles or
-        rho-dependent relations are present."""
-        if "rho" in self.variable_registry:
-            # rho is a relation *constant* now (S3), not a solved variable, so it
-            # no longer appears in ``rel.variables``; detect its users through
-            # ``constant_names``.  It stays framework-materialized here so every
-            # evaluation namespace still carries the identical grid.
-            uses_rho = any("rho" in rel.constant_names for rel in self.candidate_primary_relations)
-            has_profile = any(self.variable_registry.get(name).shape == 1 for name in self.known)
-            if uses_rho or has_profile:
-                self.track("rho")
-                if self.inputs.get("rho") is None:
-                    rho_value = self.variable_registry.uniform_profile_grid(self.profile_size)
-                    self.inputs["rho"] = rho_value
-                    self.values["rho"] = rho_value.copy()
-                self.fixed.add("rho")
 
     def _broadcast_profile_values(self) -> None:
         """Broadcast scalar profile data onto the shared grid and validate
@@ -478,7 +394,6 @@ class CompilePlan:
             avg_name = self.variable_registry.average_of(name)
             if avg_name is None:
                 continue
-            self.track(avg_name)
             arr = np.asarray(self.inputs[name], dtype=float)
             if arr.ndim == 0:
                 arr = np.full(self.profile_size, float(arr))
@@ -533,55 +448,19 @@ class CompilePlan:
         index is the fallback.  Returns ``None`` when neither matches.
         """
         text = str(identifier)
-        rel = self.relations_by_name.get(text)
+        rel = self.model.relations_by_name.get(text)
         if rel is not None:
             return rel
-        return self.relations_by_function.get(text)
+        return self.model.relations_by_function.get(text)
 
-    def compile(self, *, force: bool = False) -> "CompilePlan":
-        """Compile the active system, pruning relations needing unevaluable variables.
+    def _initialize(self) -> "CompilePlan":
+        """Compile this newly-created scenario, pruning unevaluable relations.
 
-        Public entry to the compiled-execution interface; modes assume it has
-        run.  ``run`` calls it before dispatch, so modes reached through ``run``
-        need not call it; a caller invoking a mode function directly should call
-        ``compile`` first.
-
-        The structural verdicts depend only on *which* variables are supplied
-        and fixed, never on their numeric values, so when that fingerprint is
-        unchanged since the last full compile the structural passes are
-        skipped and only the value-dependent products are refreshed: residual
-        scales, the fixed-profile reconstruction specs and the seeding
-        oracle's x0 values (replayed from the recorded seeding tape when one
-        exists, see :func:`_replay_seed_tape`).  (Keeping the previous seeds
-        verbatim instead of re-deriving them was measured 2026-07 and
-        REJECTED: reviving stale/injected
-        guesses as x0 slowed the popcon point solves ~60% and shifted
-        certified values ~1-4%.)  If the new values leave a packed variable
-        the fresh oracle cannot seed -- something a full compile would have
-        pruned on -- the full prune-to-fixpoint loop runs as the fallback, so
-        this path can never produce a quietly different structure.
-        ``force=True`` always re-runs the full loop.
+        Plans are ephemeral and compiled exactly once. A changed value/fixed
+        scenario must be requested from ``self.model.compile(...)`` instead of
+        mutating this plan into another scenario.
         """
-        fingerprint = (
-            frozenset(name for name, value in self.inputs.items() if value is not None),
-            frozenset(self.fixed),
-        )
-        if not force and fingerprint == self._compile_fingerprint:
-            self.refresh_scales()
-            self.profile_specs = self._build_profile_specs()
-            self._refresh_seeds()
-            # The full-compile fixpoint guarantees any uninitialized packed
-            # variable is already recorded unevaluable; anything beyond that
-            # set means the new values broke a seed the pack relies on.
-            uninitialized, _under = self._packing_issues()
-            if set(uninitialized) <= self._unevaluable_names:
-                self.pack()
-                return self
-        # Cleared first so an exception mid-compile can never leave a stale
-        # fingerprint claiming the partial products are valid.
-        self._compile_fingerprint = None
         self._compile_with_pruning()
-        self._compile_fingerprint = fingerprint
         return self
 
     def run(self, mode: str = "verify", *, save: Any = None, **options: Any) -> dict[str, Any]:
@@ -613,12 +492,8 @@ class CompilePlan:
         generators, append guard relations, then refresh scales and freeze
         the completion plan.
         """
-        # ── Reset the graph verdicts and the caches derived from the previous
-        # provider/active-relation plan.  The graph's structure is immutable
-        # (one node per candidate relation/variable); each compile pass
-        # rewrites only the verdict annotations -- relation activation and
-        # reason, provider edges, per-variable supplied/fixed flags.
-        self._reset_graph_verdicts()
+        # ── Reset scenario verdicts and caches derived from the prior pass.
+        self._reset_verdicts()
         self._dependency_closure_cache = None
         self._compiler_report_cache = None
 
@@ -773,7 +648,7 @@ class CompilePlan:
         """
         usable: list[Relation] = []
         unevaluable = self._unevaluable_names - set(self.inputs)
-        for rel in self.candidate_primary_relations:
+        for rel in self.model.candidate_primary_relations:
             blocked = sorted(set(rel.variables) & unevaluable)
             if blocked:
                 self._mark_relation_inactive(
@@ -786,8 +661,6 @@ class CompilePlan:
                 self._mark_relation_inactive(rel, "inactive_profile_supplied")
                 continue
             usable.append(rel)
-            for rel_name in rel.variables:
-                self.track(rel_name)
         return usable
 
     def _activate_defaults(self, usable: list[Relation], supplied: set[str]) -> tuple[list[Relation], set[str], set[str]]:
@@ -961,26 +834,22 @@ class CompilePlan:
         # -- the named verdict of the two-sided activation gate above.  The
         # remaining classes ("block", "underdetermined") are filled in by
         # _select_active_relations once the DM partition has run.
-        graph = self._structural_graph()
-        for node, data in graph.nodes(data=True):
-            if data["kind"] != "variable":
-                continue
-            name = node[1]
+        for name in self.known:
             if name in supplied:
-                data["decidability"] = "supplied"
+                self.decidability[name] = "supplied"
             elif name in known_defaults:
-                data["decidability"] = "default"
+                self.decidability[name] = "default"
             elif name in strict_forward:
-                data["decidability"] = "forward"
+                self.decidability[name] = "forward"
             elif name in forward:
-                data["decidability"] = "acausal"
+                self.decidability[name] = "acausal"
         return pool, forward, seeded
 
     def _select_active_relations(self, pool: list[Relation], forward: set[str], supplied: set[str]) -> tuple[list[Relation], set[str], set[str]]:
         """Partition unknowns by structural determinacy and select active relations.
 
         Deactivates relations touching undecidable (or previously unevaluable)
-        variables (graph verdicts), writes the active relation set, the
+        variables (scenario verdicts), writes the active relation set, the
         structural blocks and the partition diagnostics.  Returns ``(active,
         decidable, active_vars)``.
         """
@@ -1020,19 +889,12 @@ class CompilePlan:
         self.primary_relations = active
         self.relations = list(active)
         active_vars = {name for rel in active for name in rel.variables}
-        for name in sorted(active_vars):
-            self.track(name)
         # Complete the decidability classification with the partition verdicts:
         # determined-block members and (forced-)underdetermined variables.
-        graph = self._structural_graph()
         for name in block_decidable:
-            node = ("variable", name)
-            if node in graph and graph.nodes[node].get("decidability") is None:
-                graph.nodes[node]["decidability"] = "block"
+            self.decidability.setdefault(name, "block")
         for name in undecidable:
-            node = ("variable", name)
-            if node in graph:
-                graph.nodes[node]["decidability"] = "underdetermined"
+            self.decidability[name] = "underdetermined"
         # Structural-partition locals captured for the lazy ``compiler_report``
         # property -- the only place these diagnostics are exposed.
         self._partition_diagnostics = {
@@ -1093,7 +955,6 @@ class CompilePlan:
             if fixed:
                 continue
             avg_name = self.profile_average_by_name[name]
-            self.track(avg_name)
             active_vars.add(name)
             active_vars.add(avg_name)
             derived.add(name)
@@ -1126,35 +987,94 @@ class CompilePlan:
                     continue
                 avg_name = self.variable_registry.average_of(out)
                 if avg_name is not None:
-                    self.track(avg_name)
                     self.profile_average_by_name.setdefault(out, avg_name)
                     active_vars.add(avg_name)
                 self._set_provider_edge(out, rel, "explicit")
                 derived.add(out)
 
     def _append_guard_relations(self, active_vars: set[str]) -> None:
-        """Append active relation/variable/system guards whose variables are
-        all active, and build the relation-name indexes."""
+        """Append active relation, variable, and system guards."""
         active_names = {rel.name for rel in self.relations}
         for rel in list(self.primary_relations):
-            for guard in rel.constraint_relations:
-                guard = self._resolve_relation_names(guard)
+            for guard in self.model.relation_guards.get(rel.name, ()):
                 if guard.name not in active_names and set(guard.variables) <= active_vars:
                     self.relations.append(guard)
                     active_names.add(guard.name)
         for name in sorted(active_vars):
-            for guard in (*self.variable_registry.get(name).constraint_relations, *self._record_guards.get(name, ())):
-                guard = self._resolve_relation_names(guard)
+            for guard in (*self.model.variable_guards.get(name, ()), *self.model.record_guards.get(name, ())):
                 if guard.name not in active_names and set(guard.variables) <= active_vars:
                     self.relations.append(guard)
                     active_names.add(guard.name)
-        for guard in self.system_constraint_relations:
+        for guard in self.model.system_constraint_relations:
             if guard.name not in active_names and set(guard.variables) <= active_vars:
                 self.relations.append(guard)
                 active_names.add(guard.name)
-        all_relations = [*self.candidate_primary_relations, *self.system_constraint_relations, *self.relations]
-        self.relations_by_name = {rel.name: rel for rel in all_relations}
-        self.relations_by_function = {rel.function_name: rel for rel in all_relations}
+
+    def _structure_signature(self) -> tuple[frozenset[str], frozenset[str]]:
+        """Scenario facts that may alter structural compilation."""
+        return frozenset(self.inputs), frozenset(self.fixed)
+
+    def _freeze_structure(self) -> dict[str, Any]:
+        """Capture the value-independent result of one structural pass."""
+        return {
+            "active_relations": frozenset(self.active_relations),
+            "inactive_reasons": tuple(sorted(self.inactive_reasons.items())),
+            "default_providers": tuple(sorted(self.default_providers.items())),
+            "derived_providers": tuple(sorted(self.derived_providers.items())),
+            "decidability": tuple(sorted(self.decidability.items())),
+            "constant_default_values": tuple(sorted(self.constant_default_values.items())),
+            "seeded_default_values": tuple(sorted(self.seeded_default_values.items())),
+            "structural_blocks": tuple(tuple(block) for block in self.structural_blocks),
+            "primary_relations": tuple(self.primary_relations),
+            "relations": tuple(self.relations),
+            "variable_roles": tuple(sorted(self.variable_roles.items())),
+            "packed_variables": frozenset(self.packed_variables),
+            "unseeded_variables": frozenset(self.unseeded_variables),
+            "partition_diagnostics": dict(self._partition_diagnostics),
+            "constant_defaults_solver": tuple(self.constant_defaults_solver.items()),
+            "provider_plan": tuple(self.provider_plan),
+            "completion_acyclic": self._completion_acyclic,
+            "completion_passes": self.completion_passes,
+            "residual_relations": tuple(self.residual_relations),
+            "domain_plan": tuple(self._domain_plan),
+            "domain_scalar_bounds": tuple(array.copy() for array in self._domain_scalar_bounds),
+            "domain_profile_index": tuple(sorted(self._domain_profile_index.items())),
+            "domain_profile_bounds": tuple(array.copy() for array in self._domain_profile_bounds),
+            "movement_candidate_names": tuple(self._movement_candidate_names),
+            "default_seed_plan": tuple(self._default_seed_plan),
+        }
+
+    def _restore_structure(self, structure: Mapping[str, Any]) -> None:
+        """Install cached topology verdicts, then refresh numerical products."""
+        self.active_relations = set(structure["active_relations"])
+        self.inactive_reasons = dict(structure["inactive_reasons"])
+        self.default_providers = dict(structure["default_providers"])
+        self.derived_providers = dict(structure["derived_providers"])
+        self.decidability = dict(structure["decidability"])
+        self.constant_default_values = dict(structure["constant_default_values"])
+        self.seeded_default_values = dict(structure["seeded_default_values"])
+        self.structural_blocks = [tuple(block) for block in structure["structural_blocks"]]
+        self.primary_relations = list(structure["primary_relations"])
+        self.relations = list(structure["relations"])
+        self.variable_roles = dict(structure["variable_roles"])
+        self.packed_variables = set(structure["packed_variables"])
+        self.unseeded_variables = set(structure["unseeded_variables"])
+        self._partition_diagnostics = dict(structure["partition_diagnostics"])
+        self.constant_defaults_solver = dict(structure["constant_defaults_solver"])
+        self.provider_plan = tuple(structure["provider_plan"])
+        self._completion_acyclic = bool(structure["completion_acyclic"])
+        self.completion_passes = int(structure["completion_passes"])
+        self.residual_relations = list(structure["residual_relations"])
+        self._domain_plan = list(structure["domain_plan"])
+        self._domain_scalar_bounds = tuple(array.copy() for array in structure["domain_scalar_bounds"])
+        self._domain_profile_index = dict(structure["domain_profile_index"])
+        self._domain_profile_bounds = tuple(array.copy() for array in structure["domain_profile_bounds"])
+        self._movement_candidate_names = list(structure["movement_candidate_names"])
+        self._default_seed_plan = list(structure["default_seed_plan"])
+        self.refresh_scales()
+        self.profile_specs = self._build_profile_specs()
+        self._dependency_closure_cache = None
+        self._compiler_report_cache = None
 
     def _compile_with_pruning(self, max_rounds: int = 20) -> None:
         """Compile the active system, pruning relations that need unevaluable variables.
@@ -1187,12 +1107,22 @@ class CompilePlan:
         self._unevaluable_names = set()
         self.initial_guesses = {}
         self.seed_provenance = {}
-        # The tape encodes the current structure's seeding steps; a structural
-        # recompile must re-record it rather than replay a stale one.
-        self._seed_tape = None
-        self._seed_tape_names = set()
+        signature = self._structure_signature()
+        cached = self.model._structure_cache.get(signature)
+        if cached is not None:
+            self._restore_structure(cached)
+            self._refresh_seeds()
+            uninitialized, underdetermined = self._packing_issues()
+            # A cached structure is only a candidate. Numerical seeding can
+            # still fail for this scenario, in which case the normal prune
+            # fixed point below rebuilds locally without poisoning the cache.
+            if not uninitialized and not underdetermined:
+                self.pack()
+                return
         for round_no in range(max_rounds):
             self._run_compile_pass()
+            if round_no == 0:
+                self.model._structure_cache.setdefault(signature, self._freeze_structure())
             if round_no == 0:
                 self._refresh_seeds()
             uninitialized, underdetermined = self._packing_issues()
@@ -1223,36 +1153,18 @@ class CompilePlan:
     def _refresh_seeds(self) -> None:
         """Re-run the seeding oracle against the current input values.
 
-        Shared by the first prune round and the fingerprint-hit path of
-        :meth:`compile`: the oracle's x0 values depend on the numeric inputs,
-        so they are recomputed even when the compiled structure is reused.
-        When a seeding tape from a previous run with this structure exists,
-        the steps are replayed directly (:func:`_replay_seed_tape`) instead of
-        re-discovered; a replay that fails or seeds a different name set falls
-        back to the full discovery run, which re-records the tape.  The
-        compiler report embeds ``seed_provenance``, so its cache is
-        invalidated here as well.
+        Shared by the first prune round and a restored structural-cache entry.
+        The numerical values are intentionally rediscovered for every plan:
+        structure can be reused, but a numerical seed must never leak from a
+        prior scenario. The compiler report embeds ``seed_provenance``, so its
+        cache is invalidated here as well.
         """
         self.initial_guesses = {}
         self.seed_provenance = {}
-        replayed = None
-        if self._seed_tape is not None:
-            try:
-                replayed = _replay_seed_tape(self)
-            except Exception:
-                replayed = None
-        if replayed is not None:
-            seeds, provenance = replayed
-        else:
-            tape: list = []
-            try:
-                seeds, provenance = initial_values_from_graph(self, tape)
-                self._seed_tape = tape
-                self._seed_tape_names = set(provenance)
-            except Exception:
-                seeds, provenance = {}, {}
-                self._seed_tape = None
-                self._seed_tape_names = set()
+        try:
+            seeds, provenance = initial_values_from_graph(self)
+        except Exception:
+            seeds, provenance = {}, {}
         self.initial_guesses = dict(seeds)
         self.seed_provenance = dict(provenance)
         self._compiler_report_cache = None
@@ -1317,86 +1229,15 @@ class CompilePlan:
         """Active variable names -- a derived view of :attr:`variable_roles`."""
         return {name for name, role in self.variable_roles.items() if role != "inactive"}
 
-    # ── Structural graph views and compiler report ───────────────────────
+    # ── Scenario verdicts over the immutable model topology ──────────────
 
-    def _structural_graph(self) -> nx.DiGraph:
-        """Return the one canonical annotated bipartite graph ``self._graph``.
-
-        This is the single structural source for the whole system.  It has a
-        node per variable and per candidate relation, with ``input -> relation``
-        and ``relation -> output`` edges carrying each relation's declared
-        direction.  Every other structural view is computed from it: the report
-        incidence (:meth:`compiler_report`) and the Dulmage-Mendelsohn partition
-        (:meth:`_structural_partition`). Completion dependencies and solver
-        sparsity are compiled products of this graph's provider verdicts.
-
-        Nodes are annotated so consumers read state off the graph instead of
-        re-deriving it:
-
-        * variable nodes: ``kind='variable'``, ``shape``, ``supplied`` (an input
-          value is present) and ``fixed``;
-        * relation nodes: ``kind='relation'``, the ``relation`` object, its
-          ordered ``variables`` tuple, ``enforce`` and ``is_default``.
-
-        On top of this immutable structure, every compile pass rewrites the
-        per-pass *verdict* annotations (relation activation, inactivation
-        reasons, provider edges) -- see the graph-verdict section below.
-
-        Returns:
-            The cached :class:`networkx.DiGraph` held on ``self._graph``.
-        """
-        cached = self._graph
-        if cached is not None:
-            return cached
-        # The shared builder supplies the structure and the relation-node
-        # annotations; the immutable per-variable ``shape`` is layered here.
-        # The mutable per-pass annotations (supplied/fixed/decidability and
-        # the relation/provider verdicts) are written only by
-        # :meth:`_reset_graph_verdicts` and the compile phases.
-        graph = (
-            self.model.graph.copy()
-            if self.model is not None
-            else relation_bipartite_graph(self.candidate_primary_relations)
-        )
-        for node, data in graph.nodes(data=True):
-            if data["kind"] == "variable":
-                name = node[1]
-                data["shape"] = self.variable_registry.get(name).shape if name in self.variable_registry else 0
-        self._graph = graph
-        return graph
-
-    # ── Graph verdicts: activation, inactivation reasons, providers ───────
-    #
-    # The structural graph is the single durable store of the per-compile
-    # verdicts.  Its structure (nodes/edges) is immutable -- built once from
-    # the candidate relations -- and every compile pass rewrites only these
-    # annotations:
-    #
-    # * relation nodes: ``active`` and ``inactive_reason``;
-    # * relation -> variable edges: ``provider`` (``"explicit"`` recomputes
-    #   its output in completion, ``"default"`` fills only a missing one);
-    # * variable nodes: ``supplied``/``fixed``, refreshed because inputs can
-    #   change between compiles of one system (popcon rewrites scan values).
-    #
-    # ``default_provider_by_output`` / ``derived_provider_by_output`` /
-    # ``blocked_relation_reasons`` are read-only views of these annotations,
-    # so the maps can never disagree with the graph.
-
-    def _reset_graph_verdicts(self) -> None:
-        """Reset all verdict annotations for a fresh compile pass."""
-        graph = self._structural_graph()
-        for node, data in graph.nodes(data=True):
-            if data["kind"] == "relation":
-                data["active"] = False
-                data["inactive_reason"] = None
-            else:
-                name = node[1]
-                data["supplied"] = self.inputs.get(name) is not None
-                data["fixed"] = name in self.fixed
-                data["decidability"] = None
-        for _u, _v, edata in graph.edges(data=True):
-            edata.pop("provider", None)
-        self._provider_view = None
+    def _reset_verdicts(self) -> None:
+        """Reset one plan's verdict maps for a fresh structural pass."""
+        self.active_relations.clear()
+        self.inactive_reasons.clear()
+        self.default_providers.clear()
+        self.derived_providers.clear()
+        self.decidability.clear()
 
     @staticmethod
     def _exclusive_unknowns(rel: Relation, pool: list[Relation], forward: set[str], supplied: set[str]) -> set[str]:
@@ -1445,16 +1286,14 @@ class CompilePlan:
             current = [rel for rel in current if rel not in batch]
 
     def _mark_relation_active(self, rel: Relation) -> None:
-        data = self._structural_graph().nodes[("relation", rel.name)]
-        data["active"] = True
-        data["inactive_reason"] = None
+        self.active_relations.add(rel.name)
+        self.inactive_reasons.pop(rel.name, None)
 
     def _mark_relation_inactive(self, rel: Relation, reason: str, *, replace: bool = False) -> None:
         """Record one relation's inactivation reason (first reason wins unless ``replace``)."""
-        data = self._structural_graph().nodes[("relation", rel.name)]
-        data["active"] = False
-        if replace or not data.get("inactive_reason"):
-            data["inactive_reason"] = reason
+        self.active_relations.discard(rel.name)
+        if replace or rel.name not in self.inactive_reasons:
+            self.inactive_reasons[rel.name] = reason
 
     def _set_provider_edge(self, name: str, rel: Relation, kind: str) -> None:
         """Select ``rel`` as the one ``kind`` provider of ``name``.
@@ -1464,51 +1303,23 @@ class CompilePlan:
         re-selection replaces the previous one; a default never displaces an
         explicit provider because the kinds are tracked separately).
         """
-        graph = self._structural_graph()
-        vnode = ("variable", name)
-        for unode in graph.predecessors(vnode):
-            edata = graph.edges[unode, vnode]
-            if edata.get("provider") == kind:
-                del edata["provider"]
-        graph.edges[("relation", rel.name), vnode]["provider"] = kind
-        self._provider_view = None
-
-    def _provider_views(self) -> tuple[dict[str, Relation], dict[str, Relation]]:
-        """Return the ``(default, explicit)`` provider maps from the edge verdicts."""
-        cached = self._provider_view
-        if cached is not None:
-            return cached
-        graph = self._structural_graph()
-        defaults: dict[str, Relation] = {}
-        explicit: dict[str, Relation] = {}
-        for unode, vnode, kind in graph.edges(data="provider"):
-            if kind is None:
-                continue
-            target = defaults if kind == "default" else explicit
-            target[vnode[1]] = graph.nodes[unode]["relation"]
-        view = (dict(sorted(defaults.items())), dict(sorted(explicit.items())))
-        self._provider_view = view
-        return view
+        target = self.default_providers if kind == "default" else self.derived_providers
+        target[name] = rel
 
     @property
     def default_provider_by_output(self) -> dict[str, Relation]:
-        """Activated-default completion fallbacks -- a view of the provider edges."""
-        return self._provider_views()[0]
+        """Activated-default completion fallbacks for this scenario."""
+        return dict(sorted(self.default_providers.items()))
 
     @property
     def derived_provider_by_output(self) -> dict[str, Relation]:
-        """Explicit derived-variable providers -- a view of the provider edges."""
-        return self._provider_views()[1]
+        """Explicit derived-variable providers for this scenario."""
+        return dict(sorted(self.derived_providers.items()))
 
     @property
     def blocked_relation_reasons(self) -> dict[str, str]:
-        """Inactive relation -> reason -- a view of the relation-node verdicts."""
-        graph = self._structural_graph()
-        return {
-            node[1]: data["inactive_reason"]
-            for node, data in graph.nodes(data=True)
-            if data.get("kind") == "relation" and data.get("inactive_reason")
-        }
+        """Inactive relation -> reason for this scenario."""
+        return dict(sorted(self.inactive_reasons.items()))
 
     def _classify_avg_to_profile(self) -> None:
         """Mark values expanded from a scalar average with an assumed shape.
@@ -1586,11 +1397,7 @@ class CompilePlan:
             },
             # Structural decidability class per candidate variable -- the named
             # verdict of the default-activation gate and the DM partition.
-            "decidability": dict(sorted(
-                (node[1], data["decidability"])
-                for node, data in self._structural_graph().nodes(data=True)
-                if data.get("kind") == "variable" and data.get("decidability")
-            )),
+            "decidability": dict(sorted(self.decidability.items())),
             # Per seeded variable, the oracle source of its x0 value.
             "seed_provenance": dict(sorted(self.seed_provenance.items())),
         }
@@ -1664,15 +1471,10 @@ class CompilePlan:
             Mapping with ``determined_variables``, ``underdetermined_variables``
             and per-group ``deficiencies`` diagnostics.
         """
-        graph = self._structural_graph()
-
         def rel_vars(rel: Relation) -> tuple[str, ...]:
-            rnode = ("relation", rel.name)
-            return graph.nodes[rnode]["variables"] if graph.has_node(rnode) else rel.variables
+            return rel.variables
 
         unknowns = sorted({name for rel in relations for name in rel_vars(rel) if name not in known})
-        for name in unknowns:
-            self.track(name)
         result: dict[str, Any] = {
             "determined_variables": set(unknowns),
             "underdetermined_variables": set(),
@@ -2931,26 +2733,6 @@ class CompilePlan:
         """Scalar-element count: 1 for scalars, the shared grid size for profiles."""
         return 1 if self.spec_of(name).shape != 1 else self.profile_size
 
-    def _resolve_relation_names(self, rel: Relation) -> Relation:
-        return canonicalize_relation_names(rel, self.variable_registry)
-
-    def track(self, raw_name: str) -> str:
-        """Track one registry-known variable name; returns the canonical name.
-
-        Tracking a name resolves its tolerances once (spec defaults unless a
-        record supplied overrides).  No object is created: specs own the
-        numerics and the value dicts start empty.
-        """
-        if str(raw_name) not in self.variable_registry:
-            raise ValueError(f"Relation requires unknown variable {str(raw_name)!r}.")
-        spec = self.variable_registry.get(raw_name)
-        name = spec.canonical_name
-        if name not in self.known:
-            self.known.add(name)
-            self.rel_tols[name] = float(spec.rel_tol or self.variable_registry.rel_tol_default)
-            self.abs_tols[name] = float(spec.abs_tol or 0.0)
-        return name
-
 class RelationSystem:
     """Reusable prepared relation model.
 
@@ -2974,16 +2756,125 @@ class RelationSystem:
         self.constraints_spec = constraints
         self.variables = tuple(variables)
         self.relations = tuple(relations)
+        self._structure_cache: dict[tuple[frozenset[str], frozenset[str]], Any] = {}
+
+        # Ingest declarations once.  A CompilePlan starts from these immutable
+        # model facts and only carries one scenario's values/fixedness.
+        self.base_inputs: dict[str, Any] = {}
+        self.base_fixed: frozenset[str]
+        self.rel_tols: dict[str, float] = {}
+        self.abs_tols: dict[str, float] = {}
+        self.record_guards: dict[str, tuple[Relation, ...]] = {}
+        known: set[str] = set()
+        fixed: set[str] = set()
+        explicit_sizes: set[int] = set()
+        for variable in self.variables:
+            if variable.name in known:
+                raise ValueError(f"Duplicate variable {variable.name!r}.")
+            known.add(variable.name)
+            self.rel_tols[variable.name] = float(variable.rel_tol or VARIABLES.rel_tol_default)
+            self.abs_tols[variable.name] = float(variable.abs_tol or 0.0)
+            if variable.fixed:
+                fixed.add(variable.name)
+            if variable.input_value is not None:
+                self.base_inputs[variable.name] = _copy_value(variable.input_value)
+            if variable.relations:
+                self.record_guards[variable.name] = tuple(
+                    canonicalize_relation_names(guard, self.variable_registry)
+                    for guard in variable.relations
+                )
+            if variable.spec.shape == 1:
+                if variable.size is not None:
+                    explicit_sizes.add(int(variable.size))
+                elif isinstance(variable.input_value, np.ndarray) and variable.input_value.ndim == 1:
+                    explicit_sizes.add(int(variable.input_value.shape[0]))
+        if len(explicit_sizes) > 1:
+            raise ValueError(f"Profile sizes are incompatible: {sorted(explicit_sizes)}.")
+        self.profile_size = next(iter(explicit_sizes), VARIABLES.profile_size_default)
+
         self.candidate_primary_relations = tuple(
             canonicalize_relation(rel, self.variable_registry) for rel in self.relations
         )
+        self.system_constraint_relations = tuple(
+            canonicalize_relation_names(
+                constraint_from_expression(
+                    text,
+                    name=f"system_constraint_{index}",
+                    enforce=enforce,
+                    source_kind="system",
+                    source_name=self.name,
+                ),
+                self.variable_registry,
+            )
+            for index, (text, enforce) in enumerate(parse_constraint_specs(constraints))
+        )
+
+        # The known universe is model metadata: declarations, candidate
+        # relations, guards, profile companions and framework rho.  Plans may
+        # still validate a registry-known input override, but never discover
+        # model structure from it.
+        self.relation_guards: dict[str, tuple[Relation, ...]] = {}
+        static_relations = [*self.candidate_primary_relations, *self.system_constraint_relations]
+        for guards in self.record_guards.values():
+            static_relations.extend(guards)
+        for rel in tuple(static_relations):
+            guards = tuple(
+                canonicalize_relation_names(guard, self.variable_registry)
+                for guard in rel.constraint_relations
+            )
+            self.relation_guards[rel.name] = guards
+            static_relations.extend(guards)
+        for rel in static_relations:
+            known.update(rel.variables)
+        for variable_name in tuple(known):
+            if variable_name not in self.variable_registry:
+                raise ValueError(f"Relation requires unknown variable {variable_name!r}.")
+            spec = self.variable_registry.get(variable_name)
+            self.rel_tols.setdefault(variable_name, float(spec.rel_tol or VARIABLES.rel_tol_default))
+            self.abs_tols.setdefault(variable_name, float(spec.abs_tol or 0.0))
+            if spec.shape == 1:
+                average = self.variable_registry.average_of(variable_name)
+                if average is not None:
+                    known.add(average)
+        self.variable_guards: dict[str, tuple[Relation, ...]] = {}
+        for variable_name in tuple(known):
+            self.variable_guards[variable_name] = tuple(
+                canonicalize_relation_names(guard, self.variable_registry)
+                for guard in self.variable_registry.get(variable_name).constraint_relations
+            )
+            static_relations.extend(self.variable_guards[variable_name])
+        for guard in static_relations:
+            known.update(guard.variables)
+        uses_rho = any("rho" in rel.constant_names for rel in self.candidate_primary_relations)
+        has_profile = any(self.variable_registry.get(variable_name).shape == 1 for variable_name in known)
+        self.rho_grid: np.ndarray | None = None
+        if "rho" in self.variable_registry and (uses_rho or has_profile):
+            known.add("rho")
+            self.rel_tols.setdefault("rho", float(VARIABLES.get("rho").rel_tol or VARIABLES.rel_tol_default))
+            self.abs_tols.setdefault("rho", float(VARIABLES.get("rho").abs_tol or 0.0))
+            self.rho_grid = self.variable_registry.uniform_profile_grid(self.profile_size)
+            self.base_inputs.setdefault("rho", self.rho_grid.copy())
+            fixed.add("rho")
+        for variable_name in known:
+            spec = self.variable_registry.get(variable_name)
+            self.rel_tols.setdefault(variable_name, float(spec.rel_tol or VARIABLES.rel_tol_default))
+            self.abs_tols.setdefault(variable_name, float(spec.abs_tol or 0.0))
+        self.base_fixed = frozenset(fixed)
+        self.known_names = frozenset(known)
+        self.candidate_relations = tuple(static_relations)
+        self.relations_by_name = {rel.name: rel for rel in self.candidate_relations}
+        self.relations_by_function = {rel.function_name: rel for rel in self.candidate_relations}
+        self.relations_by_variable: dict[str, tuple[Relation, ...]] = {
+            variable_name: tuple(rel for rel in self.candidate_relations if variable_name in rel.variables)
+            for variable_name in self.known_names
+        }
         self._graph: nx.DiGraph | None = None
 
     @property
     def graph(self) -> nx.DiGraph:
         """Canonical immutable relation/variable topology for this model."""
         if self._graph is None:
-            graph = relation_bipartite_graph(self.candidate_primary_relations)
+            graph = relation_bipartite_graph(self.candidate_relations)
             for node, data in graph.nodes(data=True):
                 if data["kind"] == "variable":
                     name = node[1]
@@ -3012,33 +2903,27 @@ class RelationSystem:
             self.variable_registry.resolve(str(name)): value
             for name, value in inputs.items()
         }
-        fixed_names = None if fixed is None else {
+        fixed_names = self.base_fixed if fixed is None else frozenset(
             self.variable_registry.resolve(str(name)) for name in fixed
-        }
-        records: list[Variable] = []
-        seen: set[str] = set()
-        for variable in self.variables:
-            name = variable.name
-            seen.add(name)
-            changes: dict[str, Any] = {}
-            if name in overrides:
-                changes["value"] = overrides[name]
-                if variable.has_source_grid:
-                    changes.update(coordinate=None, coordinate_values=None)
-            if fixed_names is not None:
-                changes["fixed"] = name in fixed_names
-            records.append(variable.clone(**changes) if changes else variable)
-        for name, value in overrides.items():
-            if name not in seen:
-                records.append(Variable(name, value=value, fixed=name in (fixed_names or set())))
-        plan = CompilePlan(
-            records,
-            self.relations,
-            constraints=self.constraints_spec,
-            name=self.name,
-            model=self,
         )
-        return plan.compile()
+        scenario_inputs = {name: _copy_value(value) for name, value in self.base_inputs.items()}
+        for name, value in overrides.items():
+            # A one-off Variable preserves the existing public conversion and
+            # domain-validation contract without cloning every declaration.
+            normalized = Variable(name, value=value).input_value if value is not None else None
+            if normalized is None:
+                scenario_inputs.pop(name, None)
+            else:
+                scenario_inputs[name] = _copy_value(normalized)
+        unknown = set(scenario_inputs) - self.known_names
+        if unknown:
+            raise ValueError(
+                "Scenario inputs are not part of this RelationSystem model: "
+                + ", ".join(sorted(unknown))
+            )
+        scenario = {"inputs": scenario_inputs, "fixed": fixed_names}
+        plan = CompilePlan(self, scenario)
+        return plan._initialize()
 
 
 # ── Batched completion: popcon grid namespaces ────────────────────────────
@@ -3326,7 +3211,7 @@ def apply_completion_providers_batched(
 # in to profile-valued cores via allow_profile_core).
 
 
-def initial_values_from_graph(system: "CompilePlan", tape: list | None = None) -> tuple[dict[str, Any], dict[str, str]]:
+def initial_values_from_graph(system: "CompilePlan") -> tuple[dict[str, Any], dict[str, str]]:
     """Fill solver start values by direct propagation from supplied values.
 
     Iteratively solves every relation that has exactly one missing variable
@@ -3335,12 +3220,6 @@ def initial_values_from_graph(system: "CompilePlan", tape: list | None = None) -
     of larger coupled blocks (block cores); they are packed directly and
     determined by the simultaneous reconcile against their block's supplied
     anchor, so no separate block solver is needed here.
-
-    ``tape``, when given, records every successful seeding step in execution
-    order -- ``("invert", rel, name)``, ``("forward", rel, names)``,
-    ``("default", name)``, ``("block", names)`` -- so a later run with the
-    same structure but new values can replay the steps directly
-    (:func:`_replay_seed_tape`) instead of re-discovering them.
 
     Returns:
         ``(seeds, provenance)``: ``{name: value}`` for every variable the
@@ -3375,16 +3254,16 @@ def initial_values_from_graph(system: "CompilePlan", tape: list | None = None) -
     # plants the whole downstream chain in the wrong basin (measured: the
     # peaking closure seeded density_peaking = 1 from the flat profile, then
     # Angioni inverted to beta_T ~ 0.15 -- 10x -- and reconcile stayed there).
-    _propagate_known(system, values, seeded, original, tape, strict=True, attempted=attempted)
+    _propagate_known(system, values, seeded, original, strict=True, attempted=attempted)
     # Seed registry defaults for variables that supplied-propagation left
     # missing, then re-propagate so downstream values (n_X = n_i * f_X, ...)
     # fill in.  Defaults are pure x0 seeds -- never enforced -- applied to a
     # fixpoint so variable-reference defaults (T_i = T_e) resolve once their
     # source has a value.
     for _ in range(50):
-        if not _seed_defaults(system, values, seeded, original, tape):
+        if not _seed_defaults(system, values, seeded, original):
             break
-        _propagate_known(system, values, seeded, original, tape, strict=True, attempted=attempted)
+        _propagate_known(system, values, seeded, original, strict=True, attempted=attempted)
     # Fallback for cycles: a coupled loop (peaking -> profile -> pressure ->
     # beta -> peaking) has no all-forward entry, so allow ONE deferred
     # inversion (e.g. a flat profile from its average), then resume the
@@ -3393,97 +3272,10 @@ def initial_values_from_graph(system: "CompilePlan", tape: list | None = None) -
     # produced variable, a producer inverted backwards) seeds the wrong basin.
     # Each step seeds at least one variable, so this terminates.
     while _compute_direct_outputs(
-        system, values, seeded, original, tape, strict=False, single=True, attempted=attempted
+        system, values, seeded, original, strict=False, single=True, attempted=attempted
     ):
-        _propagate_known(system, values, seeded, original, tape, strict=True, attempted=attempted)
+        _propagate_known(system, values, seeded, original, strict=True, attempted=attempted)
     return {name: values[name] for name in values if name in seeded}, seeded
-
-
-def _replay_seed_tape(system: "CompilePlan") -> tuple[dict[str, Any], dict[str, str]] | None:
-    """Replay the recorded seeding tape at the current input values.
-
-    The tape (recorded by :func:`initial_values_from_graph`) freezes *which*
-    relation seeds *which* variable by *which* method; only the numeric values
-    change between runs with the same compile fingerprint.  Replay therefore
-    skips the discovery passes -- crucially including every *failed* solve
-    attempt discovery retries pass after pass -- and executes exactly the
-    recorded steps with the same calls, so its seeds are bit-identical to a
-    fresh discovery at the same values.  (A local root-finder warm-started
-    from the previous point's seeds was measured 2026-07 and REJECTED: it
-    saved ~7% of replay while making seeds history-dependent -- a nearby but
-    different root shifts certified popcon values ~3%.)  Any step that fails
-    -- or a replay that seeds a different name set than the recording --
-    returns ``None`` so the caller falls back to the full oracle and
-    re-records.
-    """
-    tape = system._seed_tape
-    if tape is None:
-        return None
-    values = system.input_values()
-    system.apply_profile_specs(values)
-    original = set(values)
-    seeded: dict[str, str] = {}
-    for name, value in system.constant_default_values.items():
-        if values.get(name) is None:
-            try:
-                values[name] = system.solver_value(name, value)
-                seeded[name] = "held_constant"
-            except Exception:
-                pass
-    default_plan = {name: (source, requires) for name, source, requires in system._default_seed_plan}
-    size = system.profile_size
-    for step in tape:
-        kind = step[0]
-        try:
-            if kind == "default":
-                name = step[1]
-                if values.get(name) is not None:
-                    continue
-                source, requires = default_plan[name]
-                if requires is not None and values.get(requires) is None:
-                    return None
-                raw = values.get(source) if isinstance(source, str) else source
-                if raw is None:
-                    return None
-                value = system.solver_value(name, raw)
-                if not system.spec_of(name).candidate_valid(value, size):
-                    return None
-                values[name] = value
-                seeded[name] = "registry_default"
-            elif kind == "forward":
-                rel, names = step[1], step[2]
-                mapped = rel.output_map(rel.evaluate(system.relation_evaluation_values(rel, values)))
-                for name in names:
-                    value = system.solver_value(name, mapped[name])
-                    if not system.spec_of(name).candidate_valid(value, size):
-                        return None
-                    values[name] = value
-                    seeded[name] = f"relation:{rel.name}"
-            elif kind == "invert":
-                rel, name = step[1], step[2]
-                known = {vname: values[vname] for vname in rel.variables if vname != name}
-                if any(value is None for value in known.values()):
-                    return None
-                raw = None
-                # Fast canonical direction first, exactly like discovery.
-                if name in rel.output_names and all(known.get(inp) is not None for inp in rel.input_names):
-                    mapped = rel.output_map(rel.evaluate(system.relation_evaluation_values(rel, known)))
-                    raw = mapped.get(name)
-                if raw is None:
-                    raw = rel(**known)
-                value = system.solver_value(name, raw)
-                if not system.spec_of(name).candidate_valid(value, size):
-                    return None
-                values[name] = value
-                seeded[name] = f"relation:{rel.name}"
-            else:  # "block"
-                if not _compute_planned_block(system, step[1], values, seeded, original):
-                    return None
-        except Exception:
-            return None
-    if set(seeded) != system._seed_tape_names:
-        return None
-    return {name: values[name] for name in seeded}, seeded
 
 
 def _propagate_known(
@@ -3491,7 +3283,6 @@ def _propagate_known(
     values: dict[str, Any],
     seeded: dict[str, str],
     original: set[str],
-    tape: list | None = None,
     strict: bool = False,
     attempted: dict[tuple[str, bool], tuple[bool, ...]] | None = None,
 ) -> None:
@@ -3505,18 +3296,18 @@ def _propagate_known(
     """
     # Stage 1: direct 1x1/acausal propagation to a fixed point.
     for _direct_pass in range(50):
-        if not _compute_direct_outputs(system, values, seeded, original, tape, strict, attempted=attempted):
+        if not _compute_direct_outputs(system, values, seeded, original, strict, attempted=attempted):
             break
     # Stage 2: solve the determined blocks (2x2 ... N x N) for their cores.
     progress = True
     while progress:
         progress = False
         for block in system.structural_blocks:
-            if _compute_planned_block(system, block, values, seeded, original, tape):
+            if _compute_planned_block(system, block, values, seeded, original):
                 progress = True
                 for _direct_pass in range(50):
                     if not _compute_direct_outputs(
-                        system, values, seeded, original, tape, strict, attempted=attempted
+                        system, values, seeded, original, strict, attempted=attempted
                     ):
                         break
     merged = tuple(
@@ -3525,15 +3316,15 @@ def _propagate_known(
         for name in block
         if (name not in values or values[name] is None) and name not in original
     )
-    if merged and _compute_planned_block(system, merged, values, seeded, original, tape):
+    if merged and _compute_planned_block(system, merged, values, seeded, original):
         for _direct_pass in range(50):
             if not _compute_direct_outputs(
-                system, values, seeded, original, tape, strict, attempted=attempted
+                system, values, seeded, original, strict, attempted=attempted
             ):
                 break
 
 
-def _seed_defaults(system: "CompilePlan", values: dict[str, Any], seeded: dict[str, str], original: set[str], tape: list | None = None) -> bool:
+def _seed_defaults(system: "CompilePlan", values: dict[str, Any], seeded: dict[str, str], original: set[str]) -> bool:
     """Seed still-missing variables from the compiled default plan.
 
     Seeds are pure initial points: a variable a relation determines is moved
@@ -3564,8 +3355,6 @@ def _seed_defaults(system: "CompilePlan", values: dict[str, Any], seeded: dict[s
             continue
         values[name] = value
         seeded[name] = "registry_default"
-        if tape is not None:
-            tape.append(("default", name))
         progress = True
     return progress
 
@@ -3579,7 +3368,7 @@ def _direct_relation_pool(system: "CompilePlan") -> list[Relation]:
     without adding them as extra enforced residuals or movement references.
     """
     by_name = {rel.name: rel for rel in system.relations}
-    for rel in system.candidate_primary_relations:
+    for rel in system.model.candidate_primary_relations:
         if rel.name in by_name:
             continue
         if is_default_relation(rel):
@@ -3612,7 +3401,6 @@ def _compute_direct_outputs(
     values: dict[str, Any],
     seeded: dict[str, str],
     original: set[str],
-    tape: list | None = None,
     strict: bool = False,
     single: bool = False,
     attempted: dict[tuple[str, bool], tuple[bool, ...]] | None = None,
@@ -3676,8 +3464,6 @@ def _compute_direct_outputs(
                     if system.spec_of(name).candidate_valid(value, system.profile_size):
                         values[name] = value
                         seeded[name] = f"relation:{rel.name}"
-                        if tape is not None:
-                            tape.append(("invert", rel, name))
                         progress = True
                         if single:
                             return True
@@ -3706,8 +3492,6 @@ def _compute_direct_outputs(
                 seeded[name] = f"relation:{rel.name}"
                 written.append(name)
                 progress = True
-            if written and tape is not None:
-                tape.append(("forward", rel, tuple(written)))
             if written and single:
                 return True
     return progress
@@ -3719,7 +3503,6 @@ def _compute_planned_block(
     values: dict[str, Any],
     seeded: dict[str, str],
     original: set[str],
-    tape: list | None = None,
 ) -> bool:
     """Solve one structurally planned block as initial guesses.
 
@@ -3742,8 +3525,6 @@ def _compute_planned_block(
     for name, value in solved.items():
         values[name] = value
         seeded[name] = "block"
-    if tape is not None:
-        tape.append(("block", block))
     return True
 
 

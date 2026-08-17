@@ -19,7 +19,9 @@ def test_relation_system_is_lazy_reusable_model():
     plan = model.compile()
     assert isinstance(plan, CompilePlan)
     assert plan.model is model
-    assert model.graph is not plan._structural_graph()
+    assert not hasattr(plan, "_graph")
+    assert not hasattr(plan, "_structural_graph")
+    assert not hasattr(plan, "compile")
 
 
 def test_compile_plans_are_independent_and_do_not_mutate_model_graph():
@@ -34,7 +36,7 @@ def test_compile_plans_are_independent_and_do_not_mutate_model_graph():
 
     relation_node = ("relation", "Aspect ratio")
     assert model.graph.nodes[relation_node].get("active") is None
-    assert plan_a._structural_graph().nodes[relation_node].get("active") is not None
+    assert "Aspect ratio" in plan_a.active_relations
 
 
 def test_compile_plan_runs_without_recompiling_model():
@@ -43,3 +45,22 @@ def test_compile_plan_runs_without_recompiling_model():
     result = plan.run("verify")
     assert result["mode"] == "verify"
     assert result["success"]
+
+
+def test_matching_scenarios_reuse_model_structure_cache(monkeypatch):
+    model = _model()
+    model.compile()
+    calls = 0
+    original = CompilePlan._run_compile_pass
+
+    def counted(self):
+        nonlocal calls
+        calls += 1
+        return original(self)
+
+    monkeypatch.setattr(CompilePlan, "_run_compile_pass", counted)
+    second = model.compile(inputs={"R": 9.0, "a": 3.0})
+
+    assert calls == 0
+    assert len(model._structure_cache) == 1
+    assert second.values["R"] == 9.0

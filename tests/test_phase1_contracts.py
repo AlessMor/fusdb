@@ -25,7 +25,6 @@ def _demo_system():
     reactor = Reactor.from_yaml(DEMO_YAML)
     candidate = reactor._clone_for_regime("h_mode", include_guards=False)
     system = candidate.relation_system().compile()
-    system.compile()
     return system
 
 
@@ -146,8 +145,7 @@ def test_reported_roles_origins():
 
 def test_pack_does_not_mutate_compiled_roles():
     """Packing reports raw profile cores but never changes compile verdicts."""
-    system = RelationSystem([], []).compile()
-    system.track("T_e")
+    system = RelationSystem([Variable("T_e")], []).compile()
     system.variable_roles["T_e"] = "computed"
     system.packed_variables.add("T_e")
     system.initial_guesses["T_e"] = [1.0] * system.profile_size
@@ -171,7 +169,6 @@ def test_polomac_profiles_are_reconstructed_not_undetermined():
     uniform shape at the average value, so S9 reports nothing under-determined.
     """
     s = Reactor.from_yaml(POLOMAC_YAML).relation_system().compile()
-    s.compile()
     s.pack()
     rel = s.reported_roles()
     for prof in ("n_e", "T_e", "T_i"):

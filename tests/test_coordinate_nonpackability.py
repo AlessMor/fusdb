@@ -20,7 +20,6 @@ def test_supplied_physical_coordinate_mapping_is_held_not_packed():
         [relation],
         profile_size=46,
     ).compile()
-    system.compile()
     system.pack()
 
     assert "rho_tor" in system.fixed
@@ -47,7 +46,6 @@ def test_derived_tokamak_mapping_is_computed_not_packed():
         function_name="synthetic_minor_radius_consumer",
     )
     system = build_relation_system([], [rho_relation, consumer], profile_size=46).compile()
-    system.compile()
     system.pack()
 
     assert "rho_minor" not in system.packed_variables

@@ -28,6 +28,7 @@ it into vectorized chunks and rebuild the compiled system once per worker.
 
 from __future__ import annotations
 
+import pickle
 from collections.abc import Mapping, Sequence
 from functools import partial
 from typing import Any
@@ -43,6 +44,11 @@ from fusdb.relationsystem import (
 )
 
 from ._common import new_result, reject_unknown_options
+
+
+# Process-local reusable prepared models. Each worker reconstructs a model at
+# most once for an equivalent recipe, then creates ephemeral scenario plans.
+_WORKER_MODELS: dict[bytes, Any] = {}
 
 
 def parse_axis(spec: Any, registry: Any) -> tuple[str, np.ndarray]:
@@ -599,8 +605,8 @@ def _system_spec(system: Any) -> dict[str, Any]:
             for name in sorted(system.rel_tols)
             if name != "rho"
         ],
-        "relations": [_relation_rebuild_spec(rel) for rel in system.candidate_primary_relations],
-        "constraints": system.constraints_spec,
+        "relations": [_relation_rebuild_spec(rel) for rel in system.model.candidate_primary_relations],
+        "constraints": system.model.constraints_spec,
     }
 
 
@@ -610,7 +616,7 @@ def _rebuild_system(spec: Mapping[str, Any]) -> Any:
     from fusdb.relationsystem import RelationSystem
     from fusdb.variable import Variable
 
-    profile_size = int(spec.get("profile_size", VARIABLES.profile_size_default))
+    profile_size = int(spec["profile_size"])
     variables = [
         Variable(
             name,
@@ -624,11 +630,6 @@ def _rebuild_system(spec: Mapping[str, Any]) -> Any:
     ]
     relations = []
     for relation_spec in spec["relations"]:
-        # String support keeps older serialized recipes readable inside a
-        # long-lived parent process while the new format is rolled out.
-        if isinstance(relation_spec, str):
-            relations.append(RELATIONS.get(relation_spec))
-            continue
         if not isinstance(relation_spec, Mapping):
             raise TypeError(f"Invalid relation rebuild spec {relation_spec!r}.")
         kind = relation_spec.get("kind")
@@ -707,7 +708,12 @@ def _solve_batched_cases_from_spec(
     cases: tuple[tuple[int, float, float], ...],
 ) -> list[dict[str, Any]]:
     """Process worker entry point for a vectorized POPCON chunk."""
-    plan = _rebuild_system(spec).compile()
+    cache_key = pickle.dumps(spec, protocol=pickle.HIGHEST_PROTOCOL)
+    model = _WORKER_MODELS.get(cache_key)
+    if model is None:
+        model = _rebuild_system(spec)
+        _WORKER_MODELS[cache_key] = model
+    plan = model.compile()
     return _solve_batched_cases(
         plan,
         cases,
@@ -777,132 +783,116 @@ def run(
         result["termination"] = "invalid options"
         return result
 
-    # Full pre-scan state, restored verbatim when the scan finishes.
-    saved_inputs = dict(self.inputs)
-    saved_values = dict(self.values)
-    saved_fixed = set(self.fixed)
-
     nx, ny = int(x_values.size), int(y_values.size)
     n = nx * ny
     grid_x, grid_y = np.meshgrid(x_values, y_values)  # (ny, nx), rows = y
     flat_x, flat_y = grid_x.reshape(-1), grid_y.reshape(-1)
 
-    try:
-        # Pin the axes to the user-requested grid coordinates (the scan
-        # values are user-specified; nothing else is fixed beyond the
-        # reactor's own declarations) and compile once at the grid midpoint
-        # so the axes count as supplied/fixed and the seeding oracle leaves
-        # mid-grid core guesses.
-        for name, values in ((x_name, x_values), (y_name, y_values)):
-            midpoint = float(values[values.size // 2])
-            self.inputs[name] = midpoint
-            self.values[name] = midpoint
-            self.fixed.add(name)
-        self.compile()
+    # Pin the axes on a fresh scenario plan. Plans are immutable with
+    # respect to structural inputs, so POPCON never recompiles/mutates the
+    # caller's plan in place.
+    scan_inputs = dict(self.inputs)
+    scan_fixed = set(self.fixed)
+    for name, values in ((x_name, x_values), (y_name, y_values)):
+        midpoint = float(values[values.size // 2])
+        scan_inputs[name] = midpoint
+        scan_fixed.add(name)
+    self = self.model.compile(inputs=scan_inputs, fixed=scan_fixed)
 
-        if outputs is None:
-            output_names = sorted(
-                name
-                for name in self.active_variable_names
-                if self.variable_registry.get(name).shape == 0 and name not in (x_name, y_name)
-            )
-        else:
-            output_names = [self.variable_registry.resolve(str(name)) for name in outputs]
-            # A requested output the compiled system can neither read nor
-            # derive stays NaN at every point without failing certification
-            # (its cone is empty); surface that instead of a silent blank map.
-            underivable = [
-                name
-                for name in output_names
-                if name not in self.active_variable_names and self.inputs.get(name) is None
-            ]
-            if underivable:
-                result["warnings"].append(
-                    "Requested output(s) not derivable by the compiled system (left NaN): "
-                    + ", ".join(underivable)
-                    + ". They are inactive -- likely missing upstream inputs."
-                )
-
-        # Certification scope is decoupled from output selection (S6-full):
-        # by default every enforced relation must hold at a certified point, so
-        # which outputs you collect never changes whether a point is valid.
-        # ``certification_targets`` opts into the narrower cone of just those
-        # quantities (and everything connecting them to the inputs).
-        if certification_targets is None:
-            cert_rels = [rel for rel in self.relations if rel.enforce]
-            cert_vars = set(self.active_variable_names)
-            cert_scope = "full"
-        else:
-            targets = [self.variable_registry.resolve(str(name)) for name in certification_targets]
-            cert_rels, cert_vars = certification_cone(self, (*targets, x_name, y_name))
-            cert_scope = "cone"
-        cert_relation_names = tuple(rel.name for rel in cert_rels)
-        cases = tuple(
-            (index, float(flat_x[index]), float(flat_y[index]))
-            for index in range(n)
+    if outputs is None:
+        output_names = sorted(
+            name
+            for name in self.active_variable_names
+            if self.variable_registry.get(name).shape == 0 and name not in (x_name, y_name)
         )
-        effective_chunk_size = chunk_size
-        effective_workers: int | None = 1
-        if workers not in (None, 0, 1):
-            effective_workers = int(workers)
-            if effective_chunk_size is None:
-                effective_chunk_size = parallel_chunk_size(n, effective_workers)
-        elif effective_chunk_size is not None:
-            effective_workers = workers
+    else:
+        output_names = [self.variable_registry.resolve(str(name)) for name in outputs]
+        # A requested output the compiled system can neither read nor
+        # derive stays NaN at every point without failing certification
+        # (its cone is empty); surface that instead of a silent blank map.
+        underivable = [
+            name
+            for name in output_names
+            if name not in self.active_variable_names and self.inputs.get(name) is None
+        ]
+        if underivable:
+            result["warnings"].append(
+                "Requested output(s) not derivable by the compiled system (left NaN): "
+                + ", ".join(underivable)
+                + ". They are inactive -- likely missing upstream inputs."
+            )
 
-        if effective_workers == 1:
-            worker = partial(
-                _solve_batched_cases,
-                self,
-                x_name=x_name,
-                y_name=y_name,
-                output_names=tuple(output_names),
-                cert_relation_names=cert_relation_names,
-                cert_vars=set(cert_vars),
-            )
-        else:
-            worker = partial(
-                _solve_batched_cases_from_spec,
-                _system_spec(self),
-                x_name,
-                y_name,
-                tuple(output_names),
-                cert_relation_names,
-                set(cert_vars),
-            )
-        if verbose:
-            batches = (n + (effective_chunk_size or n) - 1) // (effective_chunk_size or n)
-            print(f"popcon: {n} points in {batches} vectorized chunk(s)")
-        records = map_chunks(
-            cases,
-            worker,
-            workers=effective_workers,
-            chunk_size=effective_chunk_size,
+    # Certification scope is decoupled from output selection (S6-full):
+    # by default every enforced relation must hold at a certified point, so
+    # which outputs you collect never changes whether a point is valid.
+    # ``certification_targets`` opts into the narrower cone of just those
+    # quantities (and everything connecting them to the inputs).
+    if certification_targets is None:
+        cert_rels = [rel for rel in self.relations if rel.enforce]
+        cert_vars = set(self.active_variable_names)
+        cert_scope = "full"
+    else:
+        targets = [self.variable_registry.resolve(str(name)) for name in certification_targets]
+        cert_rels, cert_vars = certification_cone(self, (*targets, x_name, y_name))
+        cert_scope = "cone"
+    cert_relation_names = tuple(rel.name for rel in cert_rels)
+    cases = tuple(
+        (index, float(flat_x[index]), float(flat_y[index]))
+        for index in range(n)
+    )
+    effective_chunk_size = chunk_size
+    effective_workers: int | None = 1
+    if workers not in (None, 0, 1):
+        effective_workers = int(workers)
+        if effective_chunk_size is None:
+            effective_chunk_size = parallel_chunk_size(n, effective_workers)
+    elif effective_chunk_size is not None:
+        effective_workers = workers
+
+    if effective_workers == 1:
+        worker = partial(
+            _solve_batched_cases,
+            self,
+            x_name=x_name,
+            y_name=y_name,
+            output_names=tuple(output_names),
+            cert_relation_names=cert_relation_names,
+            cert_vars=set(cert_vars),
         )
+    else:
+        worker = partial(
+            _solve_batched_cases_from_spec,
+            _system_spec(self),
+            x_name,
+            y_name,
+            tuple(output_names),
+            cert_relation_names,
+            set(cert_vars),
+        )
+    if verbose:
+        batches = (n + (effective_chunk_size or n) - 1) // (effective_chunk_size or n)
+        print(f"popcon: {n} points in {batches} vectorized chunk(s)")
+    records = map_chunks(
+        cases,
+        worker,
+        workers=effective_workers,
+        chunk_size=effective_chunk_size,
+    )
 
-        fields = {name: np.full((ny, nx), np.nan) for name in output_names}
-        success = np.zeros((ny, nx), dtype=bool)
-        failures: list[dict[str, Any]] = []
-        for record in records:
-            index = int(record["index"])
-            iy, ix = divmod(index, nx)
-            success[iy, ix] = bool(record["success"])
-            if record["success"]:
-                for name, value in record["fields"].items():
-                    fields[name][iy, ix] = value
-            else:
-                failures.append({"ix": int(ix), "iy": int(iy), "termination": record["termination"]})
-        if verbose:
-            print(f"popcon: {n - len(failures)}/{n} points certified")
-    finally:
-        # Leave the system exactly as found, whatever happened mid-scan.
-        self.inputs.clear()
-        self.inputs.update(saved_inputs)
-        self.values.clear()
-        self.values.update(saved_values)
-        self.fixed.clear()
-        self.fixed.update(saved_fixed)
-        self.compile()
+    fields = {name: np.full((ny, nx), np.nan) for name in output_names}
+    success = np.zeros((ny, nx), dtype=bool)
+    failures: list[dict[str, Any]] = []
+    for record in records:
+        index = int(record["index"])
+        iy, ix = divmod(index, nx)
+        success[iy, ix] = bool(record["success"])
+        if record["success"]:
+            for name, value in record["fields"].items():
+                fields[name][iy, ix] = value
+        else:
+            failures.append({"ix": int(ix), "iy": int(iy), "termination": record["termination"]})
+    if verbose:
+        print(f"popcon: {n - len(failures)}/{n} points certified")
 
     n_failed = len(failures)
     result.update(

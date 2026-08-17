@@ -18,7 +18,6 @@ def test_compiled_blocks_only_reference_final_active_system(reactor_dir):
         system = Reactor.from_yaml(reactor_dir).relation_system().compile()
     except Exception as exc:
         pytest.skip(f"fixture is not loadable as a reactor directory: {exc}")
-    system.compile()
     active = system.active_variable_names
     assert all(set(block) <= active for block in system.structural_blocks)
     assert all(not (set(rel.variables) & system._unevaluable_names) for rel in system.relations)
@@ -26,7 +25,6 @@ def test_compiled_blocks_only_reference_final_active_system(reactor_dir):
 
 def test_packability_analysis_does_not_install_runtime_layout():
     system = Reactor.from_yaml(REACTORS / "DEMO_2022").relation_system().compile()
-    system.compile()
     before_specs = list(system.packed_specs)
     before_dim = system.packed_dim
     before_movement = list(system._movement_plan)
@@ -40,7 +38,6 @@ def test_packability_analysis_does_not_install_runtime_layout():
 
 def test_completion_has_one_executableprovider_plan():
     system = Reactor.from_yaml(REACTORS / "DEMO_2022").relation_system().compile()
-    system.compile()
     assert isinstance(system.provider_plan, tuple)
     assert not hasattr(system, "_completion_plan_cache")
     assert not hasattr(system, "_completion_plan")

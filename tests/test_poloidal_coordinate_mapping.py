@@ -32,7 +32,6 @@ def test_supplied_poloidal_flux_mapping_can_coordinate_a_source_profile():
         (),
         profile_size=31,
     ).compile()
-    system.compile()
     system.pack()
     completed = system.complete(system.solver_values())
 

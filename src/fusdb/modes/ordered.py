@@ -120,7 +120,6 @@ def _solve_ordered_block(self: Any, rels: list[Relation], values: dict[str, Any]
     unknowns: list[str] = []
     for rel in rels:
         for name in rel.variables:
-            self.track(name)
             if name not in values or values[name] is None:
                 if name in self.fixed:
                     result["errors"].append(f"Fixed variable {name!r} in ordered block has no value.")

@@ -26,7 +26,7 @@ def test_fixed_source_profile_does_not_gain_volume_measure_dependency():
     ).compile()
     source_relation = next(
         relation
-        for relation in system.candidate_primary_relations
+        for relation in system.model.candidate_primary_relations
         if relation.source_kind == "source_profile" and relation.source_name == "n_e"
     )
 

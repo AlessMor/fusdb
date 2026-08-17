@@ -17,7 +17,7 @@ def test_static_tokamak_coordinate_defaults_are_materialized_not_providers():
     )
     system = build_relation_system([], relations, profile_size=46).compile()
 
-    candidate_names = {relation.name for relation in system.candidate_primary_relations}
+    candidate_names = {relation.name for relation in system.model.candidate_primary_relations}
     assert "Tokamak normalized minor-radius coordinate" not in candidate_names
     assert "Tokamak normalized toroidal-flux coordinate" not in candidate_names
     assert "Tokamak normalized enclosed volume" not in candidate_names
@@ -39,7 +39,7 @@ def test_static_mapping_is_constant_but_dynamic_mapping_stays_input():
         [static, avg],
         profile_size=46,
     ).compile()
-    migrated = next(rel for rel in static_system.candidate_primary_relations if rel.name == avg.name)
+    migrated = next(rel for rel in static_system.model.candidate_primary_relations if rel.name == avg.name)
     assert "w_V" not in migrated.input_names
     assert "w_V" in migrated.constant_names
 
@@ -54,7 +54,7 @@ def test_static_mapping_is_constant_but_dynamic_mapping_stays_input():
         [dynamic, avg],
         profile_size=46,
     ).compile()
-    migrated_dynamic = next(rel for rel in dynamic_system.candidate_primary_relations if rel.name == avg.name)
+    migrated_dynamic = next(rel for rel in dynamic_system.model.candidate_primary_relations if rel.name == avg.name)
     assert "w_V" in migrated_dynamic.input_names
 
 
@@ -66,7 +66,7 @@ def test_geometry_dependent_coordinate_provider_remains_a_relation():
         profile_size=46,
     ).compile()
 
-    candidate_names = {candidate.name for candidate in system.candidate_primary_relations}
+    candidate_names = {candidate.name for candidate in system.model.candidate_primary_relations}
     assert relation.name in candidate_names
     assert system.inputs.get("v_norm") is None
     assert system.inputs.get("w_V") is None

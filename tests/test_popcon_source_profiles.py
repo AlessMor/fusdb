@@ -31,7 +31,7 @@ def _source_system(profile_size: int = 31):
 
 
 def test_source_profile_worker_recipe_is_picklable_and_preserves_grid():
-    original = _source_system(profile_size=31).compile()
+    original = _source_system(profile_size=31)
     spec = popcon_mode._system_spec(original)
 
     pickle.dumps(spec)
@@ -53,14 +53,26 @@ def test_source_profile_worker_recipe_is_picklable_and_preserves_grid():
     assert np.asarray(rebuilt_values["n_e"]).shape == (31,)
 
 
+def test_worker_reuses_prepared_model_for_matching_recipe():
+    spec = popcon_mode._system_spec(_source_system(profile_size=31))
+    popcon_mode._WORKER_MODELS.clear()
+
+    for _ in range(2):
+        popcon_mode._solve_batched_cases_from_spec(
+            spec, "n_e_avg", "density_peaking", (), (), set(), ()
+        )
+
+    assert len(popcon_mode._WORKER_MODELS) == 1
+
+
 def test_parallel_popcon_with_source_profile_matches_serial():
     x = {"variable": "n_e_avg", "values": [2.0e19, 3.0e19]}
     y = {"variable": "density_peaking", "values": [1.2, 1.8]}
     outputs = ("n_e_rho_avg",)
 
-    serial = popcon_mode.run(_source_system().compile(), x=x, y=y, outputs=outputs)
+    serial = popcon_mode.run(_source_system(), x=x, y=y, outputs=outputs)
     parallel = popcon_mode.run(
-        _source_system().compile(),
+        _source_system(),
         x=x,
         y=y,
         outputs=outputs,

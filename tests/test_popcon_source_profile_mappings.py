@@ -34,7 +34,7 @@ def _mapped_source_system(*, fixed: bool = False, profile_size: int = 31):
 
 
 def test_worker_rebuild_preserves_foreign_coordinate_source_profile():
-    original = _mapped_source_system(profile_size=31).compile()
+    original = _mapped_source_system(profile_size=31)
     spec = popcon_mode._system_spec(original)
 
     assert any(
@@ -62,7 +62,7 @@ def test_worker_rebuild_preserves_foreign_coordinate_source_profile():
 
 
 def test_fixed_foreign_coordinate_source_remains_absolute_after_worker_rebuild():
-    original = _mapped_source_system(fixed=True, profile_size=31).compile()
+    original = _mapped_source_system(fixed=True, profile_size=31)
     rebuilt = popcon_mode._rebuild_system(popcon_mode._system_spec(original)).compile()
 
     original_values = original.complete(dict(original.input_values()))
@@ -77,9 +77,9 @@ def test_parallel_popcon_with_foreign_coordinate_source_matches_serial():
     y = {"variable": "density_peaking", "values": [1.2, 1.8]}
     outputs = ("n_e_rho_avg",)
 
-    serial = popcon_mode.run(_mapped_source_system().compile(), x=x, y=y, outputs=outputs)
+    serial = popcon_mode.run(_mapped_source_system(), x=x, y=y, outputs=outputs)
     parallel = popcon_mode.run(
-        _mapped_source_system().compile(),
+        _mapped_source_system(),
         x=x,
         y=y,
         outputs=outputs,
