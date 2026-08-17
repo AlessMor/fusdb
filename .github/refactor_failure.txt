@@ -28,7 +28,7 @@ Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; 
   right = np.asarray(rhs, dtype=float)
 Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
 >>> python .github/refactor_stage1_fix2.py
->>> python -m compileall -q src/fusdb
+>>> python -m compileall -q src/fusdb tests
 >>> python -m pytest tests/test_popcon_mode.py tests/test_phase1_contracts.py tests/test_seed_tape.py
 ============================= test session starts ==============================
 platform linux -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0
@@ -112,9 +112,9 @@ tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
     diff = lhs - rhs
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-================= 29 passed, 49 warnings in 164.87s (0:02:44) ==================
+================= 29 passed, 49 warnings in 140.90s (0:02:20) ==================
 >>> python .github/refactor_relationsystem.py stage2
->>> python -m compileall -q src/fusdb
+>>> python -m compileall -q src/fusdb tests
 >>> python -m pytest tests/test_relationsystem_lifecycle.py tests/test_popcon_mode.py tests/test_phase1_contracts.py tests/test_seed_tape.py tests/test_stellaris_regression.py
 ============================= test session starts ==============================
 platform linux -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0
@@ -213,7 +213,7 @@ tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
     diff = lhs - rhs
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-============ 41 passed, 3 skipped, 53 warnings in 222.83s (0:03:42) ============
+============ 41 passed, 3 skipped, 53 warnings in 181.08s (0:03:01) ============
 >>> python -m pytest
 ============================= test session starts ==============================
 platform linux -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0
@@ -232,7 +232,7 @@ tests/cfspopcon_SPARC/test_sparc_prd.py ................................ [ 27%]
 tests/test_atomic_physics_amjuel.py ...............                      [ 38%]
 tests/test_auxiliary_power_relations.py ..                               [ 39%]
 tests/test_bootstrap_coordinate_mapping.py ..                            [ 39%]
-tests/test_coordinate_domain_rows.py F.                                  [ 39%]
+tests/test_coordinate_domain_rows.py ..                                  [ 39%]
 tests/test_coordinate_nonpackability.py ..                               [ 40%]
 tests/test_coordinate_registry_identity.py .                             [ 40%]
 tests/test_dataset_registry.py ......                                    [ 42%]
@@ -279,37 +279,6 @@ tests/test_stellaris_regression.py .                                     [ 97%]
 tests/test_variable_default_relation.py ....                             [ 98%]
 tests/test_variable_source_coordinates.py ......                         [100%]
 
-=================================== FAILURES ===================================
-______ test_static_tokamak_coordinate_defaults_add_no_solver_domain_rows _______
-
-    def test_static_tokamak_coordinate_defaults_add_no_solver_domain_rows():
-        """Static fallback mappings are framework data, not solver constraints.
-    
-        The identity/self-similar tokamak defaults are evaluated once by the
-        source-aware builder and materialized as fixed coordinate data. They carry
-        no solver ancestry, so keeping their registry domains in the nonlinear
-        residual would add five identically satisfied rows and change finite-
-        difference grouping without constraining any unknown. Their values remain
-        validated when they are constructed; supplied or geometry-derived mappings
-        stay ordinary active variables and retain domain enforcement.
-        """
-        relations = [
-            RELATIONS.get("Tokamak normalized minor-radius coordinate"),
-            RELATIONS.get("Tokamak normalized enclosed volume"),
-            RELATIONS.get("Tokamak volume integration weight"),
-        ]
-        system = build_relation_system([], relations, profile_size=46)
-        system.compile()
-        system.pack()
-        values = system.complete(system.solver_values())
-        layout = system.residual_layout(values)
-    
-        assert system.packed_dim == 0
->       assert system._enforced_residual_relations == []
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E       AttributeError: 'RelationSystem' object has no attribute '_enforced_residual_relations'. Did you mean: 'enforced_residual_block'?
-
-tests/test_coordinate_domain_rows.py:28: AttributeError
 =============================== warnings summary ===============================
 tests/PROCESS_large_tokamak/test_PROCESS_large_tokamak_eval_point.py::test_reconcile_certifies
 tests/PROCESS_large_tokamak/test_PROCESS_large_tokamak_plasma_variants.py::test_all_points_solve
@@ -454,6 +423,290 @@ tests/test_relationsystem_lifecycle.py::test_compiled_blocks_only_reference_fina
     Gs = 0.93 * (1 + 0.85 * np.exp(-0.82 * R / a))
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-=========================== short test summary info ============================
-FAILED tests/test_coordinate_domain_rows.py::test_static_tokamak_coordinate_defaults_add_no_solver_domain_rows - AttributeError: 'RelationSystem' object has no attribute '_enforced_residual_relations'. Did you mean: 'enforced_residual_block'?
-= 1 failed, 431 passed, 5 skipped, 1 xpassed, 79 warnings in 528.70s (0:08:48) =
+====== 432 passed, 5 skipped, 1 xpassed, 79 warnings in 426.21s (0:07:06) ======
+>>> python .github/refactor_relationsystem.py snapshot /tmp/after.json
+Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF electron density profile' is not a preferred provider of 'n_e'; it overrides the effective default_relation set (n_e: ['Default electron density profile from average density', 'PROCESS pedestal electron density profile', 'Parabolic electron density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'cfspopcon_imodey2_confinement_time' is not a preferred provider of 'tau_E'; it overrides the effective default_relation set (tau_E: ['tau_E_iter_ipb98y2']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF electron density profile' is not a preferred provider of 'n_e'; it overrides the effective default_relation set (n_e: ['Default electron density profile from average density', 'PROCESS pedestal electron density profile', 'Parabolic electron density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF electron temperature profile' is not a preferred provider of 'T_e'; it overrides the effective default_relation set (T_e: ['Default electron temperature profile from average temperature', 'PROCESS pedestal electron temperature profile', 'Parabolic electron temperature profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'PRF ion density profile' is not a preferred provider of 'n_fuel'; it overrides the effective default_relation set (n_fuel: ['Ion density from electron density (quasineutrality)', 'Ion density from tracked species densities', 'PROCESS pedestal fuel-ion density profile', 'Parabolic ion density profile']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+/home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:311: ComplexWarning: Casting complex values to real discards the imaginary part
+  arr = np.asarray(value, dtype=float)
+/home/runner/work/fusdb/fusdb/src/fusdb/relations/radiation/synchrotron.py:71: RuntimeWarning: overflow encountered in exp
+  Gs = 0.93 * (1 + 0.85 * np.exp(-0.82 * R / a))
+/home/runner/work/fusdb/fusdb/src/fusdb/relation.py:449: ComplexWarning: Casting complex values to real discards the imaginary part
+  scale = np.maximum(np.maximum(np.abs(np.asarray(lhs, dtype=float)), np.abs(np.asarray(rhs, dtype=float))), base_scale)
+/home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:396: ComplexWarning: Casting complex values to real discards the imaginary part
+  right = np.asarray(rhs, dtype=float)
+Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
+>>> python .github/refactor_relationsystem.py compare /tmp/before.json /tmp/after.json
+structural block changes (allowed only when behavior is preserved):
+{
+  "INFINITY_TWO": {
+    "after": [
+      [
+        "P_fus_DD",
+        "P_fus_DDn",
+        "P_fus_DDn_He3",
+        "P_fus_DDn_n",
+        "P_fus_DDp",
+        "P_fus_DDp_T",
+        "P_fus_DDp_p",
+        "P_fus_DT",
+        "P_fus_DT_alpha",
+        "P_fus_DT_n",
+        "P_fus_TT",
+        "P_fus_TT_alpha",
+        "P_fus_TT_n",
+        "Rr_DDn",
+        "Rr_DDp",
+        "Rr_DT",
+        "Rr_TT",
+        "V_p"
+      ],
+      [
+        "P_brem"
+      ],
+      [
+        "P_brem_imp"
+      ],
+      [
+        "P_charged"
+      ],
+      [
+        "P_cool_imp"
+      ],
+      [
+        "P_line"
+      ],
+      [
+        "P_loss"
+      ],
+      [
+        "P_in"
+      ],
+      [
+        "P_external"
+      ],
+      [
+        "P_neutron"
+      ],
+      [
+        "P_rad_species"
+      ],
+      [
+        "R_max",
+        "R_min"
+      ],
+      [
+        "Rr_DHe3"
+      ],
+      [
+        "P_fus_DHe3_alpha"
+      ],
+      [
+        "P_fus_DHe3_p"
+      ],
+      [
+        "P_fus_DHe3"
+      ],
+      [
+        "Rr_He3He3"
+      ],
+      [
+        "P_fus_He3He3_alpha"
+      ],
+      [
+        "P_fus_He3He3_p"
+      ],
+      [
+        "P_fus_He3He3"
+      ],
+      [
+        "Rr_THe3_D"
+      ],
+      [
+        "P_fus_THe3_D_D"
+      ],
+      [
+        "P_fus_THe3_D_alpha"
+      ],
+      [
+        "P_fus_THe3_D"
+      ],
+      [
+        "Rr_THe3_np"
+      ],
+      [
+        "P_fus_THe3_np_alpha"
+      ],
+      [
+        "P_fus_THe3_np_n"
+      ],
+      [
+        "P_fus_THe3_np_p"
+      ],
+      [
+        "P_fus_THe3_np"
+      ],
+      [
+        "P_fus_THe3"
+      ],
+      [
+        "Rr_THe3"
+      ],
+      [
+        "W_th"
+      ],
+      [
+        "kappa_ipb"
+      ],
+      [
+        "neutron_rate"
+      ]
+    ],
+    "before": [
+      [
+        "P_charged",
+        "P_fus_DD",
+        "P_fus_DDn",
+        "P_fus_DDn_He3",
+        "P_fus_DDn_n",
+        "P_fus_DDp",
+        "P_fus_DDp_T",
+        "P_fus_DDp_p",
+        "P_fus_DT",
+        "P_fus_DT_alpha",
+        "P_fus_DT_n",
+        "P_fus_TT",
+        "P_fus_TT_alpha",
+        "P_fus_TT_n",
+        "P_loss",
+        "Rr_DDn",
+        "Rr_DDp",
+        "Rr_DT",
+        "Rr_TT",
+        "V_p",
+        "W_th"
+      ],
+      [
+        "P_brem"
+      ],
+      [
+        "P_brem_imp"
+      ],
+      [
+        "P_cool_imp"
+      ],
+      [
+        "P_in"
+      ],
+      [
+        "P_external"
+      ],
+      [
+        "P_line"
+      ],
+      [
+        "P_neutron"
+      ],
+      [
+        "P_rad_species"
+      ],
+      [
+        "R_max",
+        "R_min"
+      ],
+      [
+        "Rr_DHe3"
+      ],
+      [
+        "P_fus_DHe3_alpha"
+      ],
+      [
+        "P_fus_DHe3_p"
+      ],
+      [
+        "P_fus_DHe3"
+      ],
+      [
+        "Rr_He3He3"
+      ],
+      [
+        "P_fus_He3He3_alpha"
+      ],
+      [
+        "P_fus_He3He3_p"
+      ],
+      [
+        "P_fus_He3He3"
+      ],
+      [
+        "Rr_THe3_D"
+      ],
+      [
+        "P_fus_THe3_D_D"
+      ],
+      [
+        "P_fus_THe3_D_alpha"
+      ],
+      [
+        "P_fus_THe3_D"
+      ],
+      [
+        "Rr_THe3_np"
+      ],
+      [
+        "P_fus_THe3_np_alpha"
+      ],
+      [
+        "P_fus_THe3_np_n"
+      ],
+      [
+        "P_fus_THe3_np_p"
+      ],
+      [
+        "P_fus_THe3_np"
+      ],
+      [
+        "P_fus_THe3"
+      ],
+      [
+        "Rr_THe3"
+      ],
+      [
+        "kappa_ipb"
+      ],
+      [
+        "neutron_rate"
+      ]
+    ]
+  }
+}
+>>> python .github/refactor_relationsystem.py loc /tmp/loc-after.json
+{
+  "src/fusdb/modes/popcon.py": 665,
+  "src/fusdb/modes/reconcile.py": 450,
+  "src/fusdb/relationsystem.py": 2370,
+  "total": 3485
+}
+>>> python .github/refactor_relationsystem.py compare-loc /tmp/loc-before.json /tmp/loc-after.json
+implementation LOC before: {'src/fusdb/modes/popcon.py': 665, 'src/fusdb/modes/reconcile.py': 453, 'src/fusdb/relationsystem.py': 2336, 'total': 3454}
+implementation LOC after: {'src/fusdb/modes/popcon.py': 665, 'src/fusdb/modes/reconcile.py': 450, 'src/fusdb/relationsystem.py': 2370, 'total': 3485}
+Traceback (most recent call last):
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 547, in <module>
+    main()
+    ~~~~^^
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 541, in main
+    compare_loc(Path(sys.argv[2]), Path(sys.argv[3]))
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 525, in compare_loc
+    raise AssertionError(f"implementation LOC increased: {before['total']} -> {after['total']}")
+AssertionError: implementation LOC increased: 3454 -> 3485
