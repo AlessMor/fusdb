@@ -29,13 +29,100 @@ Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; 
 Included relation 'MAST elongation fit' is not a preferred provider of 'kappa'; it overrides the effective default_relation set (kappa: ['Elongation', 'ST elongation vs aspect ratio']). This is allowed, but the preferred provider(s) remain active alongside it unless excluded.
 >>> python .github/refactor_stage1_fix2.py
 >>> python -m compileall -q src/fusdb
->>> python -m pytest tests/test_popcon_mode.py tests/test_phase1_contracts.py tests/test_seed_tape.py tests/test_jacobian_structure.py
-ERROR: file or directory not found: tests/test_jacobian_structure.py
-
+>>> python -m pytest tests/test_popcon_mode.py tests/test_phase1_contracts.py tests/test_seed_tape.py
 ============================= test session starts ==============================
 platform linux -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0
 rootdir: /home/runner/work/fusdb/fusdb
 configfile: pyproject.toml
-collected 0 items
+collected 29 items
 
-============================ no tests ran in 0.00s =============================
+tests/test_popcon_mode.py ..........                                     [ 34%]
+tests/test_phase1_contracts.py ........F.......                          [ 89%]
+tests/test_seed_tape.py ...                                              [100%]
+
+=================================== FAILURES ===================================
+_________________ test_completion_provider_failure_is_recorded _________________
+
+    def test_completion_provider_failure_is_recorded():
+        """A raising provider is skipped, but its first cause survives (S10a)."""
+        system = _demo_system()
+>       plan = system._provider_plan
+               ^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'RelationSystem' object has no attribute '_provider_plan'. Did you mean: 'provider_plan'?
+
+tests/test_phase1_contracts.py:119: AttributeError
+=============================== warnings summary ===============================
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+  /home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:311: ComplexWarning: Casting complex values to real discards the imaginary part
+    arr = np.asarray(value, dtype=float)
+
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/separatrix_operational_space.py:53: RuntimeWarning: invalid value encountered in scalar power
+    return 1.2 * (1.0 + factor * alpha_t**1.9) * poloidal_sound_larmor_radius
+
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/separatrix_operational_space.py:57: RuntimeWarning: invalid value encountered in scalar power
+    return 17.3 * alpha_t**0.298 * _MM_TO_M  # cfspopcon returns mm
+
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/separatrix_operational_space.py:61: RuntimeWarning: invalid value encountered in scalar power
+    lambda_Te = 2.1 * (1.0 + 2.1 * alpha_t**1.7) * poloidal_sound_larmor_radius
+
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/scrape_off_layer/two_point_model.py:156: RuntimeWarning: divide by zero encountered in scalar divide
+    return (1.0 - SOL_momentum_loss_fraction) ** 3 / (1.0 - SOL_power_loss_fraction) ** 2
+
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/scrape_off_layer/two_point_model.py:170: RuntimeWarning: divide by zero encountered in scalar divide
+    return (1.0 - SOL_momentum_loss_fraction) ** 2 / (1.0 - SOL_power_loss_fraction)
+
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+  /home/runner/work/fusdb/fusdb/src/fusdb/relation.py:446: RuntimeWarning: invalid value encountered in scalar subtract
+    diff = lhs - rhs
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_phase1_contracts.py::test_completion_provider_failure_is_recorded - AttributeError: 'RelationSystem' object has no attribute '_provider_plan'. Did you mean: 'provider_plan'?
+============ 1 failed, 28 passed, 49 warnings in 180.19s (0:03:00) =============
