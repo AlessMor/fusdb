@@ -1,0 +1,41 @@
+name: RelationSystem isolate POPCON regression
+
+on:
+  push:
+    branches:
+      - agent/relationsystem-model-refactor-work
+    paths:
+      - .github/workflows/agent-relationsystem-isolate-popcon.yml
+
+jobs:
+  cache_without_popcon_rewrite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.12'}
+      - run: |
+          python .github/agent_relationsystem_model_refactor.py
+          python .github/agent_relationsystem_model_fix.py
+          python .github/agent_relationsystem_model_fix2.py
+          python .github/agent_relationsystem_graph_verdict_refactor.py
+          python .github/agent_relationsystem_compile_split.py
+          python .github/agent_relationsystem_structure_cache.py
+      - run: python -m pip install -e '.[test]' >/dev/null 2>&1
+      - run: python -m pytest 'tests/cfspopcon_SPARC/test_sparc_prd.py::test_match_field_within_tolerance[separatrix_electron_temp]' -q
+
+  popcon_rewrite_without_cache:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.12'}
+      - run: |
+          python .github/agent_relationsystem_model_refactor.py
+          python .github/agent_relationsystem_model_fix.py
+          python .github/agent_relationsystem_model_fix2.py
+          python .github/agent_relationsystem_graph_verdict_refactor.py
+          python .github/agent_relationsystem_compile_split.py
+          python .github/agent_relationsystem_popcon_model_reuse.py
+      - run: python -m pip install -e '.[test]' >/dev/null 2>&1
+      - run: python -m pytest 'tests/cfspopcon_SPARC/test_sparc_prd.py::test_match_field_within_tolerance[separatrix_electron_temp]' -q
