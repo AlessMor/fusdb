@@ -36,8 +36,6 @@ _EXPORTS = {
     "reactivity_curves": "reactivity",
     "bokeh_relation_graph": "relation_graph",
     "build_relation_graph": "relation_graph",
-    "build_relation_node_graph": "relation_graph",
-    "build_variable_relation_graph": "relation_graph",
     "plot_relation_graph": "relation_graph",
     "variable_table_data": "tables",
     "render_table": "tables",

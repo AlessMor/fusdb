@@ -1,11 +1,7 @@
-"""Relation graph visualizations from the registry.
-
-Reusable version of ``examples/relation_graph_generator.ipynb``.
-"""
+"""Canonical relation-graph presentation helpers."""
 
 from __future__ import annotations
 
-from itertools import combinations
 from typing import Any, Iterable
 
 import networkx as nx
@@ -57,57 +53,6 @@ def build_relation_graph(relations: Iterable[Any] | None = None) -> nx.DiGraph:
     return graph
 
 
-def build_variable_relation_graph(relations: Iterable[Any] | None = None) -> nx.Graph:
-    """Project the canonical incidence graph onto variables.
-
-    Each relation node becomes pairwise variable edges carrying that relation's
-    name and tags.  This is a visualization projection, never an independent
-    definition of relation/variable incidence.
-    """
-    canonical = build_relation_graph(relations)
-    graph = nx.Graph()
-    for node, data in canonical.nodes(data=True):
-        if data["kind"] != "variable":
-            continue
-        name = data["label"]
-        graph.add_node(
-            name,
-            kind="variable",
-            label=name,
-            aliases=data["aliases"],
-            unit=data["unit"],
-            description=data["description"],
-        )
-    for _node, data in canonical.nodes(data=True):
-        if data["kind"] != "relation":
-            continue
-        relation = data["relation"]
-        for source, target in combinations(data["variables"], 2):
-            if graph.has_edge(source, target):
-                edge = graph[source][target]
-                edge["relations"].append(relation.name)
-                edge["relation_tags"].extend(
-                    tag for tag in relation.tags if tag not in edge["relation_tags"]
-                )
-            else:
-                graph.add_edge(
-                    source,
-                    target,
-                    relations=[relation.name],
-                    relation_tags=list(relation.tags),
-                )
-    for _, _, data in graph.edges(data=True):
-        data["relation_count"] = len(data["relations"])
-        data["label"] = ", ".join(data["relations"])
-        data["tags"] = ", ".join(data["relation_tags"])
-    return graph
-
-
-def build_relation_node_graph(relations: Iterable[Any] | None = None) -> nx.Graph:
-    """Return an undirected presentation of the canonical incidence graph."""
-    return build_relation_graph(relations).to_undirected()
-
-
 def plot_relation_graph(
     graph: nx.DiGraph | None = None,
     *,
@@ -132,7 +77,7 @@ def plot_relation_graph(
         graph = build_relation_graph()
 
     ax = axes(ax, figsize=(16, 10))
-    positions = nx.spring_layout(graph, seed=seed, k=k)
+    positions = nx.spring_layout(graph.to_undirected(as_view=True), seed=seed, k=k)
     relation_nodes = [node for node, data in graph.nodes(data=True) if data["kind"] == "relation"]
     variable_nodes = [node for node, data in graph.nodes(data=True) if data["kind"] == "variable"]
 
@@ -169,7 +114,7 @@ def bokeh_relation_graph(
     label; hover exposes the full name and metadata.
     """
     if graph is None:
-        graph = build_relation_node_graph()
+        graph = build_relation_graph()
 
     from bokeh.layouts import column
     from bokeh.models import (
@@ -182,7 +127,7 @@ def bokeh_relation_graph(
     )
     from bokeh.plotting import figure
 
-    positions = nx.spring_layout(graph, seed=seed, k=k)
+    positions = nx.spring_layout(graph.to_undirected(as_view=True), seed=seed, k=k)
     if positions:
         x_values = [float(x) for x, _ in positions.values()]
         y_values = [float(y) for _, y in positions.values()]

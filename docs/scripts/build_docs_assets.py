@@ -8,8 +8,8 @@ docs build. The actual API extraction is left to ``mkdocstrings`` via the
 ``::: module`` stubs emitted here.
 
 The one exception is the embedded figure widgets, which import ``fusdb.plotting``
-to render live figures (the interactive reactivity plotter via Bokeh, the
-relation graph via matplotlib). That import is wrapped in a best-effort guard so
+to render the live Bokeh reactivity, atomic-physics, and relation-graph widgets.
+That import is wrapped in a best-effort guard so
 a plotting backend failure degrades to a placeholder instead of failing the
 build.
 
@@ -509,9 +509,8 @@ def _widget_placeholder(name: str, reason: object) -> str:
 def build_figure_widgets() -> None:
     """Render the embedded figure widgets from ``fusdb.plotting``.
 
-    Generates ``code_docs/reactivity_plotter.html`` and
-    ``code_docs/relations_variables_graph.html`` as standalone HTML documents
-    (the iframe sources used by the docs pages). Any import/render failure is
+    Generates the reactivity, atomic-physics, and relation-graph standalone
+    HTML documents used as iframe sources by the docs pages. Any import/render failure is
     caught and replaced by a placeholder so the docs build never aborts here.
     """
     import sys
