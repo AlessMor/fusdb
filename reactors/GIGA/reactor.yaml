@@ -19,9 +19,15 @@ variables:
   # k_S_FW: 5 # Effective outgassing FW surface multiplier factor
   # Gamma_puff_Ne: 1e22
   # Gamma_puff_DT: 1e23
+  # Hattab et al. Fig. 3 publishes these profiles against normalized minor
+  # radius. The *_rho01 files preserve the raw digitized samples but add the
+  # missing rho=0 and rho=1 endpoints with an explicit zero-order hold. This
+  # keeps source-profile interpolation strict: no hidden extrapolation occurs.
   T_e:
-    value: Hattab2026_GIGA_TekeV.csv
+    value: Hattab2026_GIGA_TekeV_rho01.csv
+    coordinate: rho_minor
     unit: keV
   n_e:
-    value: Hattab2026_GIGA_ne19.csv
+    value: Hattab2026_GIGA_ne19_rho01.csv
+    coordinate: rho_minor
     unit: 1e19 m^-3

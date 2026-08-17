@@ -236,7 +236,7 @@ def _certify(system: Any, ns: dict[str, Any], cone_rels: Sequence[Any], cone_var
 # The batched namespace machinery (coerce/slice/trust/replay) lives next to
 # the per-point completion loop it mirrors -- see the "Batched completion"
 # section of fusdb.relationsystem for the shape discipline and the deliberate
-# differences from RelationSystem._apply_completion_providers.
+# differences from RelationSystem.apply_completion_providers.
 
 def _batched_base(system: Any, n: int) -> dict[str, np.ndarray]:
     """Batched pure-input namespace: inputs broadcast, profiles and constants
@@ -252,7 +252,7 @@ def _batched_base(system: Any, n: int) -> dict[str, np.ndarray]:
         if arr is not None:
             ns[name] = arr
     # Profile stage: fixed profiles verbatim, shape-controlled from averages.
-    for name, avg_name, shape, fixed_value in system._profile_specs:
+    for name, avg_name, shape, fixed_value in system.profile_specs:
         if fixed_value is not None:
             ns[name] = np.broadcast_to(np.asarray(fixed_value, dtype=float), (n, profile_size)).copy()
             continue
@@ -260,7 +260,7 @@ def _batched_base(system: Any, n: int) -> dict[str, np.ndarray]:
             continue
         ns[name] = ns[avg_name] * np.asarray(shape, dtype=float)
     # Constant-default stage.
-    for name, value in system._constant_defaults_solver.items():
+    for name, value in system.constant_defaults_solver.items():
         if ns.get(name) is None:
             spec = system.variable_registry.get(name)
             arr = coerce_batched(value, spec.shape, n, profile_size)
@@ -570,16 +570,24 @@ def _solve_cores_batched(
         refresh()
 
 
+def _relation_rebuild_spec(rel: Any) -> dict[str, Any]:
+    """Return the picklable worker recipe for one candidate relation."""
+    if rel.rebuild_spec is not None:
+        return dict(rel.rebuild_spec)
+    return {"kind": "registry", "name": rel.name}
+
+
 def _system_spec(system: Any) -> dict[str, Any]:
     """Picklable recipe to rebuild an equivalent system in a worker process.
 
-    Live systems cannot cross a process boundary (relation functions and parsed
-    constraints do not pickle), so a worker receives the record-level state --
-    supplied canonical values, fixed flags, tolerances -- plus registry relation
-    *names* and the raw constraint spec, and rebuilds from the shared registry.
+    Registry relations are represented by name. Runtime-generated relations
+    provide an explicit ``rebuild_spec`` containing only picklable immutable
+    source data. The common profile-grid size is carried separately so a source
+    profile sampled on an arbitrary external grid cannot reset worker geometry.
     """
     return {
         "name": system.name,
+        "profile_size": int(system.profile_size),
         "variables": [
             (
                 name,
@@ -591,21 +599,45 @@ def _system_spec(system: Any) -> dict[str, Any]:
             for name in sorted(system.rel_tols)
             if name != "rho"
         ],
-        "relations": [rel.name for rel in system.candidate_primary_relations],
+        "relations": [_relation_rebuild_spec(rel) for rel in system.candidate_primary_relations],
         "constraints": system.constraints_spec,
     }
 
 
 def _rebuild_system(spec: Mapping[str, Any]) -> Any:
-    from fusdb.registry import RELATIONS
+    from fusdb.profile_sources import source_profile_relation_from_spec
+    from fusdb.registry import RELATIONS, VARIABLES
     from fusdb.relationsystem import RelationSystem
     from fusdb.variable import Variable
 
+    profile_size = int(spec.get("profile_size", VARIABLES.profile_size_default))
     variables = [
-        Variable(name, value=value, rel_tol=rel_tol, abs_tol=abs_tol, fixed=fixed)
+        Variable(
+            name,
+            value=value,
+            rel_tol=rel_tol,
+            abs_tol=abs_tol,
+            fixed=fixed,
+            size=profile_size if VARIABLES.get(name).shape == 1 else None,
+        )
         for name, value, fixed, rel_tol, abs_tol in spec["variables"]
     ]
-    relations = [RELATIONS.get(name) for name in spec["relations"]]
+    relations = []
+    for relation_spec in spec["relations"]:
+        # String support keeps older serialized recipes readable inside a
+        # long-lived parent process while the new format is rolled out.
+        if isinstance(relation_spec, str):
+            relations.append(RELATIONS.get(relation_spec))
+            continue
+        if not isinstance(relation_spec, Mapping):
+            raise TypeError(f"Invalid relation rebuild spec {relation_spec!r}.")
+        kind = relation_spec.get("kind")
+        if kind == "registry":
+            relations.append(RELATIONS.get(str(relation_spec["name"])))
+        elif kind == "source_profile":
+            relations.append(source_profile_relation_from_spec(relation_spec))
+        else:
+            raise ValueError(f"Unsupported relation rebuild kind {kind!r}.")
     return RelationSystem(variables, relations, constraints=spec["constraints"], name=spec["name"])
 
 

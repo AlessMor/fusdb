@@ -13,10 +13,11 @@ multi-output ``forward`` step and the registry ``default`` step.
 from __future__ import annotations
 
 import numpy as np
+from unittest.mock import patch
 
-from fusdb import RelationSystem, Variable, relation
+from fusdb import RelationSystem, Variable, aspect_ratio, relation
 from fusdb.registry import RELATIONS
-from fusdb.relationsystem import _replay_seed_tape, initial_values_from_graph
+from fusdb.relationsystem import _compute_direct_outputs, _replay_seed_tape, initial_values_from_graph
 
 
 def _assert_replay_matches_discovery(system: RelationSystem, perturb: dict[str, float]) -> None:
@@ -64,3 +65,27 @@ def test_registry_default_step_replays_bit_identically() -> None:
     assert system.seed_provenance.get("f_D") == "registry_default"
 
     _assert_replay_matches_discovery(system, {"n_i": 1.2e20})
+
+
+def test_unchanged_failed_seed_attempt_is_not_repeated() -> None:
+    """A no-progress relation is retried only after its availability changes."""
+    system = RelationSystem(
+        [Variable("R", 3.0), Variable("a", 1.0), Variable("A")],
+        [aspect_ratio],
+    )
+    rel = system.relation_by_identifier("aspect_ratio")
+    assert rel is not None
+    values = system.input_values()
+    original = set(values)
+    attempted: dict[tuple[str, bool], tuple[bool, ...]] = {}
+
+    with patch.object(rel, "evaluate", side_effect=RuntimeError("seed probe")) as evaluate:
+        assert not _compute_direct_outputs(
+            system, values, {}, original, strict=True, attempted=attempted
+        )
+        first_calls = evaluate.call_count
+        assert first_calls > 0
+        assert not _compute_direct_outputs(
+            system, values, {}, original, strict=True, attempted=attempted
+        )
+        assert evaluate.call_count == first_calls

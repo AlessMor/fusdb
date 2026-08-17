@@ -12,7 +12,9 @@ from fusdb.relation import relation
     tags=('power_balance',),
     outputs='P_brem',
 )
-def bremsstrahlung_radiation(n_e: float, T_e: float, Z_eff: float, V_p: float, rho: float) -> Any:
+def bremsstrahlung_radiation(
+    n_e: float, T_e: float, Z_eff: float, V_p: float, rho: float, w_V: Any = None
+) -> Any:
     """Return total bremsstrahlung radiated power from an explicit local profile law.
 
     Args:
@@ -20,7 +22,8 @@ def bremsstrahlung_radiation(n_e: float, T_e: float, Z_eff: float, V_p: float, r
         T_e: Electron temperature [keV].
         Z_eff: Effective charge [dimensionless].
         V_p: Plasma volume [m^3].
-        rho: Normalized minor-radius grid for profile integration.
+        rho: Common computational profile grid.
+        w_V: Optional physical volume-integration weight on ``rho``.
 
     Return:
         Total bremsstrahlung radiated power [W].
@@ -29,7 +32,7 @@ def bremsstrahlung_radiation(n_e: float, T_e: float, Z_eff: float, V_p: float, r
     Tm = 511.0  # keV, electron rest mass energy
     xrel = (1.0 + 2.0 * T_e / Tm) * (1.0 + (2.0 / Z_eff) * (1.0 - 1.0 / (1.0 + T_e / Tm)))
     p_brem = 5.35e-3 * Z_eff * (n_e20 ** 2) * (T_e ** 0.5) * xrel * 1e6  # [W/m^3]
-    return V_p * volume_average(p_brem, rho)
+    return V_p * volume_average(p_brem, rho, weight=w_V)
 
 
 @relation(
@@ -37,7 +40,9 @@ def bremsstrahlung_radiation(n_e: float, T_e: float, Z_eff: float, V_p: float, r
     tags=('power_balance',),
     outputs='P_brem',
 )
-def hydrogenic_bremsstrahlung_cfspopcon(n_e: float, T_e: float, V_p: float, rho: float) -> Any:
+def hydrogenic_bremsstrahlung_cfspopcon(
+    n_e: float, T_e: float, V_p: float, rho: float, w_V: Any = None
+) -> Any:
     """Bremsstrahlung from the hydrogenic (fuel) plasma only, i.e. at Z_eff = 1.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
@@ -55,7 +60,8 @@ def hydrogenic_bremsstrahlung_cfspopcon(n_e: float, T_e: float, V_p: float, rho:
         n_e: Electron density [1/m^3].
         T_e: Electron temperature [keV].
         V_p: Plasma volume [m^3].
-        rho: Normalized minor-radius grid for profile integration.
+        rho: Common computational profile grid.
+        w_V: Optional physical volume-integration weight on ``rho``.
 
     Return:
         Hydrogenic bremsstrahlung radiated power [W].
@@ -65,7 +71,7 @@ def hydrogenic_bremsstrahlung_cfspopcon(n_e: float, T_e: float, V_p: float, rho:
     Tm = 511.0  # keV, electron rest mass energy
     xrel = (1.0 + 2.0 * T_e / Tm) * (1.0 + 2.0 * (1.0 - 1.0 / (1.0 + T_e / Tm)))
     p_brem = 5.35e-3 * (n_e20 ** 2) * (T_e ** 0.5) * xrel * 1e6  # [W/m^3]
-    return V_p * volume_average(p_brem, rho)
+    return V_p * volume_average(p_brem, rho, weight=w_V)
 
 
 @relation(
@@ -77,7 +83,7 @@ def impurity_bremsstrahlung(
     n_e: Any, T_e: Any, T_e_avg: Any, V_p: Any, rho: Any,
     c_Xe: Any = 0.0, c_He: Any = 0.0, c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0,
     c_N: Any = 0.0, c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0,
-    c_W: Any = 0.0,
+    c_W: Any = 0.0, w_V: Any = None,
 ) -> Any:
     """Bremsstrahlung radiated by the impurities alone [W].
 
@@ -111,7 +117,7 @@ def impurity_bremsstrahlung(
     n_e20 = n_e / 1e20
     Tm = 511.0  # keV, electron rest mass energy
     p_brem_imp = 5.35e-3 * change_in_zeff * (n_e20 ** 2) * (T_e ** 0.5) * (1.0 + 2.0 * T_e / Tm) * 1e6
-    return V_p * volume_average(p_brem_imp, rho)
+    return V_p * volume_average(p_brem_imp, rho, weight=w_V)
 
 
 @relation(

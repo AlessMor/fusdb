@@ -21,7 +21,7 @@ def test_process_pedestal_profiles_preserve_average_and_edge_values() -> None:
             "radius_plasma_pedestal_temp_norm": 0.9,
             "alphat": 0.5,
             "tbeta": 2.0,
-            "rho": rho,
+            "rho_minor": rho,
         }
     )
     density = RELATIONS.get("PROCESS pedestal electron density profile").evaluate(
@@ -31,7 +31,7 @@ def test_process_pedestal_profiles_preserve_average_and_edge_values() -> None:
             "n_sep": 2.0e19,
             "radius_plasma_pedestal_density_norm": 0.9,
             "alphan": 0.25,
-            "rho": rho,
+            "rho_minor": rho,
         }
     )
 
@@ -79,7 +79,7 @@ def test_mode_profile_defaults_encode_h_l_i_boundary_conditions() -> None:
 
 
 def test_fuse_imas_hmode_profile_is_selectable_and_has_exact_endpoints() -> None:
-    rho = np.linspace(0.0, 1.0, 101)
+    rho_tor = np.linspace(0.0, 1.0, 101)
     relation = RELATIONS.get("FUSE IMAS H-mode electron temperature profile")
     profile = relation.evaluate(
         {
@@ -88,13 +88,45 @@ def test_fuse_imas_hmode_profile_is_selectable_and_has_exact_endpoints() -> None
             "T0": 18.0,
             "alphat": 1.2,
             "pedestal_width": 0.08,
-            "rho": rho,
+            "rho_tor": rho_tor,
         }
     )
     assert profile[0] == pytest.approx(18.0)
     assert profile[-1] == pytest.approx(0.08)
     assert {"h_mode", "i_mode"} <= set(relation.tags)
     assert "i_mode" not in RELATIONS.get("FUSE IMAS H-mode electron density profile").tags
+
+
+def test_fuse_imas_hmode_profile_uses_explicit_toroidal_flux_coordinate() -> None:
+    rho = np.linspace(0.0, 1.0, 101)
+    relation = RELATIONS.get("FUSE IMAS H-mode electron temperature profile")
+    values = {
+        "T_sep": 0.08,
+        "temp_plasma_pedestal_kev": 3.0,
+        "T0": 18.0,
+        "alphat": 1.2,
+        "pedestal_width": 0.08,
+    }
+
+    identity = relation.evaluate({**values, "rho_tor": rho})
+    mapped = relation.evaluate({**values, "rho_tor": rho**1.4})
+
+    assert "rho_tor" in relation.input_names
+    assert "rho" not in relation.input_names
+    assert identity.shape == mapped.shape
+    assert not np.allclose(identity[1:-1], mapped[1:-1])
+    assert mapped[0] == pytest.approx(18.0)
+    assert mapped[-1] == pytest.approx(0.08)
+
+
+def test_tokamak_toroidal_flux_coordinate_is_identity_fallback() -> None:
+    rho = np.linspace(0.0, 1.0, 31)
+    relation = RELATIONS.get("Tokamak normalized toroidal-flux coordinate")
+
+    mapped = relation.evaluate({"rho": rho})
+
+    assert np.array_equal(mapped, rho)
+    assert VARIABLES.get("rho_tor").default_relation[0] == relation.name
 
 
 def test_fuse_imas_hmode_accessibility_is_a_checked_only_guard() -> None:

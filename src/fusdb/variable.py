@@ -10,37 +10,30 @@ import numpy as np
 
 from .relation import Relation, constraint_from_expression
 from .registry import VARIABLES, VariableSpec, convert_value
-from .utils import coerce_numeric_value, coerce_to_shape, parse_constraint_specs, value_in_domain
+from .utils import coerce_numeric_value, coerce_to_shape, parse_constraint_specs, unique_preserve_order, value_in_domain
 
 
 @dataclass(frozen=True)
 class Variable:
     """One declared scalar or profile variable: an immutable ingestion record.
 
-    A ``Variable`` is its registry :class:`VariableSpec` (the immutable
-    definition: name, aliases, unit, shape, domain, tolerances) plus one
-    scenario's *declaration* about it (canonical value, ``fixed``, tolerance
-    overrides, profile size, local guards).  Definition metadata is read
-    through ``self.spec``; it is never copied onto the instance, so a
-    variable cannot drift out of sync with its registry.
+    A ``Variable`` is its registry :class:`VariableSpec` plus one scenario's
+    declaration about it. Constructing a ``Variable`` is the ingestion event:
+    unit conversion, shape coercion and domain validation happen exactly once.
+    A solve never writes back into a ``Variable``; solved state lives on the
+    RelationSystem.
 
-    Constructing a ``Variable`` *is* the ingestion event -- unit conversion,
-    shape coercion, domain validation -- and the instance is frozen
-    immediately afterward, so possessing one is proof that event happened
-    exactly once.  There are no setters: a changed declaration is a new
-    ``Variable`` (see :meth:`clone`), never a mutation of this one.  A solve
-    never writes back into a ``Variable``; solved state lives on the
-    ``RelationSystem`` that ran it (``reactor.last_system``), and
-    :class:`fusdb.reactor.SolvedVariable` is the read-through view over both.
+    ``default_relation`` has three states: ``None`` inherits the registry
+    preference, a string/list replaces it, and an empty list explicitly disables
+    the registry preference for this scenario variable.
 
-    Args:
-        name: Canonical variable name or alias.
-        value: Scalar, one-dimensional profile, or None.
-        unit: Unit of the supplied ``value``. If omitted, the registry default is assumed.
-        rel_tol: Relative tolerance override.
-        fixed: Whether solve modes may change this value.
-        size: Profile length for one-dimensional variables.
-        constraints: Additional local constraints or applicability guards.
+    Profile declarations may additionally retain their immutable source
+    coordinate. ``coordinate`` names the physical normalized coordinate on
+    which the supplied samples were tabulated (``rho`` means the common fusdb
+    grid). ``coordinate_values`` stores that source grid and may have a different
+    length from the RelationSystem grid. These are ingestion data, not solver
+    unknowns. The RelationSystem is responsible for reinterpolating them through
+    the current geometry mapping during completion.
     """
 
     name: str
@@ -51,35 +44,72 @@ class Variable:
     fixed: bool = False
     size: int | None = None
     constraints: Any = None
+    default_relation: tuple[str, ...] | str | list[str] | None = None
+    coordinate: str | None = None
+    coordinate_values: Any = None
     spec: VariableSpec = field(default=None, init=False)
     input_value: Any = field(default=None, init=False)
     relations: tuple[Relation, ...] = field(default_factory=tuple, init=False)
 
     @property
     def aliases(self) -> tuple[str, ...]:
-        """Registry aliases for this variable."""
         return self.spec.aliases
 
     @property
     def shape(self) -> int:
-        """Registry shape: 0 for scalars, 1 for profiles."""
         return self.spec.shape
 
+    @property
+    def effective_default_relation(self) -> tuple[str, ...]:
+        if self.default_relation is None:
+            return self.spec.default_relation
+        return tuple(self.default_relation)
+
+    @property
+    def has_source_grid(self) -> bool:
+        """Whether this declaration carries explicit source-coordinate samples."""
+        return self.coordinate_values is not None
+
     def __post_init__(self) -> None:
-        """Resolve registry metadata and normalize the value (the one ingestion pass)."""
         spec = VARIABLES.get(self.name)
         object.__setattr__(self, "spec", spec)
         object.__setattr__(self, "name", spec.name)
         object.__setattr__(self, "rel_tol", spec.rel_tol if self.rel_tol is None else float(self.rel_tol))
         object.__setattr__(self, "abs_tol", spec.abs_tol if self.abs_tol is None else float(self.abs_tol))
+
+        local_default = self.default_relation
+        if local_default is not None:
+            if isinstance(local_default, str):
+                local_default = (local_default,)
+            else:
+                local_default = unique_preserve_order(local_default)
+            object.__setattr__(self, "default_relation", tuple(str(name) for name in local_default))
+
+        coordinate = self.coordinate
+        coordinate_values = self.coordinate_values
+        if self.shape == 0 and (coordinate is not None or coordinate_values is not None):
+            raise ValueError(f"Scalar variable {spec.name!r} cannot define a profile coordinate.")
+        if coordinate_values is not None and coordinate is None:
+            coordinate = "rho"
+        if coordinate is not None:
+            coordinate = str(coordinate).strip()
+            if not coordinate:
+                raise ValueError(f"Variable {spec.name!r} coordinate cannot be empty.")
+            if coordinate != "rho":
+                try:
+                    coordinate = VARIABLES.resolve(coordinate)
+                except KeyError as exc:
+                    raise ValueError(
+                        f"Variable {spec.name!r} uses unknown source coordinate {coordinate!r}."
+                    ) from exc
+            object.__setattr__(self, "coordinate", coordinate)
+
         value = coerce_numeric_value(self.value)
         if value is not None:
             value = convert_value(value, from_unit=self.unit or spec.unit, to_unit=spec.unit)
         object.__setattr__(self, "value", value)
-        object.__setattr__(self, "unit", spec.unit)  # value is now in canonical units
-        object.__setattr__(self, "input_value", self._copy_value(self.value))
+        object.__setattr__(self, "unit", spec.unit)
 
-        # Validate profile shape and physical domain.
         if self.size is not None:
             size = int(self.size)
             if size <= 0:
@@ -90,16 +120,35 @@ class Variable:
         if self.value is not None and not value_in_domain(self.value, spec.domain):
             raise ValueError(f"Variable {self.name!r} value is outside domain {spec.domain!r}.")
         if self.shape == 1 and self.value is not None:
-            # ``input_value`` was already captured above, before this
-            # coercion -- matching the pre-freeze ordering exactly (a
-            # scalar supplied for a profile variable keeps a scalar
-            # ``input_value`` while ``value`` is the broadcast array).
-            coerced, size = coerce_to_shape(self.name, self.value, is_profile=True, size=self.size)
+            # An explicit source grid owns the supplied profile length. It must
+            # not be coerced to the reactor's common solver-grid size here.
+            source_size = None if coordinate_values is not None else self.size
+            coerced, inferred_size = coerce_to_shape(self.name, self.value, is_profile=True, size=source_size)
             object.__setattr__(self, "value", coerced)
-            object.__setattr__(self, "size", size)
+            object.__setattr__(self, "size", inferred_size)
 
-        # Record-local constraints are relation guards attached to this input;
-        # registry-level constraint guards live on the spec.
+        if coordinate_values is not None:
+            source = np.asarray(coordinate_values, dtype=float)
+            if source.ndim != 1 or source.size < 2:
+                raise ValueError(
+                    f"Variable {self.name!r} coordinate_values must be a one-dimensional grid with at least two points."
+                )
+            if not np.all(np.isfinite(source)) or np.any(np.diff(source) <= 0.0):
+                raise ValueError(
+                    f"Variable {self.name!r} coordinate_values must be finite and strictly increasing."
+                )
+            if self.value is not None:
+                arr = np.asarray(self.value)
+                if arr.ndim != 1 or arr.shape[0] != source.shape[0]:
+                    raise ValueError(
+                        f"Variable {self.name!r} profile length {arr.shape[0] if arr.ndim else 1} "
+                        f"does not match coordinate_values length {source.shape[0]}."
+                    )
+            object.__setattr__(self, "coordinate_values", source.copy())
+            object.__setattr__(self, "size", int(source.size))
+
+        object.__setattr__(self, "input_value", self._copy_value(self.value))
+
         built: list[Relation] = []
         for index, (text, enforce) in enumerate(parse_constraint_specs(self.constraints)):
             built.append(
@@ -114,25 +163,9 @@ class Variable:
         object.__setattr__(self, "relations", tuple(built))
 
     def clone(self, **changes: Any) -> "Variable":
-        """Return a new, independently-ingested ``Variable`` with fields overridden.
-
-        This is the only way to change a declaration: ``var.clone(value=3.3)``
-        or ``var.clone(fixed=True)``.  Every field not named in ``changes``
-        carries over from ``self``; the result goes through
-        :meth:`__post_init__` fresh (full unit conversion and validation),
-        exactly as if newly constructed.
-        """
         return dataclasses.replace(self, **changes)
 
     def _copy_value(self, value: Any) -> Any:
-        """Copy a scalar/array value.
-
-        Args:
-            value: Value to copy.
-
-        Returns:
-            Independent copy where appropriate.
-        """
         if isinstance(value, np.ndarray):
             return value.copy()
         return value

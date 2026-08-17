@@ -12,13 +12,17 @@ from fusdb.relation import relation
     tags=('fusion_power',),
     outputs='Rr_He3He3',
 )
-def reaction_rate_he3he3(n_He3: float, sigmav_He3He3: float, V_p: float, rho: float) -> Any:
+def reaction_rate_he3he3(
+    n_He3: float, sigmav_He3He3: float, V_p: float, rho: float, w_V: Any = None
+) -> Any:
     """Return the volume-integrated He3He3 reaction rate.
 
     Args:
         n_He3: Helium-3 density profile.
         sigmav_He3He3: He3He3 reactivity profile.
         V_p: Plasma volume.
+        rho: Common computational profile grid.
+        w_V: Optional physical volume-integration weight on ``rho``.
 
     Returns:
         The total He3He3 reaction rate in 1/s.
@@ -27,7 +31,7 @@ def reaction_rate_he3he3(n_He3: float, sigmav_He3He3: float, V_p: float, rho: fl
     integrand = 0.5 * (n_He3**2) * sigmav_He3He3
 
     # Integrate the profile over the plasma volume.
-    return V_p * volume_average(integrand, rho)
+    return V_p * volume_average(integrand, rho, weight=w_V)
 
 
 @relation(
@@ -35,7 +39,9 @@ def reaction_rate_he3he3(n_He3: float, sigmav_He3He3: float, V_p: float, rho: fl
     tags=('fusion_power',),
     outputs='Rr_THe3_D',
 )
-def reaction_rate_the3_d(n_T: float, n_He3: float, sigmav_THe3_D: float, V_p: float, rho: float) -> Any:
+def reaction_rate_the3_d(
+    n_T: float, n_He3: float, sigmav_THe3_D: float, V_p: float, rho: float, w_V: Any = None
+) -> Any:
     """Return the volume-integrated THe3-to-D reaction rate.
 
     Args:
@@ -43,6 +49,8 @@ def reaction_rate_the3_d(n_T: float, n_He3: float, sigmav_THe3_D: float, V_p: fl
         n_He3: Helium-3 density profile.
         sigmav_THe3_D: THe3_D reactivity profile.
         V_p: Plasma volume.
+        rho: Common computational profile grid.
+        w_V: Optional physical volume-integration weight on ``rho``.
 
     Returns:
         The total THe3_D reaction rate in 1/s.
@@ -51,7 +59,7 @@ def reaction_rate_the3_d(n_T: float, n_He3: float, sigmav_THe3_D: float, V_p: fl
     integrand = n_T * n_He3 * sigmav_THe3_D
 
     # Integrate the profile over the plasma volume.
-    return V_p * volume_average(integrand, rho)
+    return V_p * volume_average(integrand, rho, weight=w_V)
 
 
 @relation(
@@ -59,7 +67,9 @@ def reaction_rate_the3_d(n_T: float, n_He3: float, sigmav_THe3_D: float, V_p: fl
     tags=('fusion_power',),
     outputs='Rr_THe3_np',
 )
-def reaction_rate_the3_np(n_T: float, n_He3: float, sigmav_THe3_np: float, V_p: float, rho: float) -> Any:
+def reaction_rate_the3_np(
+    n_T: float, n_He3: float, sigmav_THe3_np: float, V_p: float, rho: float, w_V: Any = None
+) -> Any:
     """Return the volume-integrated THe3-to-np reaction rate.
 
     Args:
@@ -67,6 +77,8 @@ def reaction_rate_the3_np(n_T: float, n_He3: float, sigmav_THe3_np: float, V_p: 
         n_He3: Helium-3 density profile.
         sigmav_THe3_np: THe3_np reactivity profile.
         V_p: Plasma volume.
+        rho: Common computational profile grid.
+        w_V: Optional physical volume-integration weight on ``rho``.
 
     Returns:
         The total THe3_np reaction rate in 1/s.
@@ -75,7 +87,7 @@ def reaction_rate_the3_np(n_T: float, n_He3: float, sigmav_THe3_np: float, V_p: 
     integrand = n_T * n_He3 * sigmav_THe3_np
 
     # Integrate the profile over the plasma volume.
-    return V_p * volume_average(integrand, rho)
+    return V_p * volume_average(integrand, rho, weight=w_V)
 
 
 @relation(
@@ -102,13 +114,17 @@ def reaction_rate_the3(Rr_THe3_D: float, Rr_THe3_np: float) -> Any:
     tags=('fusion_power',),
     outputs='Rr_TT',
 )
-def reaction_rate_tt(n_T: float, sigmav_TT: float, V_p: float, rho: float) -> Any:
+def reaction_rate_tt(
+    n_T: float, sigmav_TT: float, V_p: float, rho: float, w_V: Any = None
+) -> Any:
     """Return the volume-integrated TT reaction rate.
 
     Args:
         n_T: Tritium density profile.
         sigmav_TT: TT reactivity profile.
         V_p: Plasma volume.
+        rho: Common computational profile grid.
+        w_V: Optional physical volume-integration weight on ``rho``.
 
     Returns:
         The total TT reaction rate in 1/s.
@@ -117,4 +133,4 @@ def reaction_rate_tt(n_T: float, sigmav_TT: float, V_p: float, rho: float) -> An
     integrand = 0.5 * (n_T**2) * sigmav_TT
 
     # Integrate the profile over the plasma volume.
-    return V_p * volume_average(integrand, rho)
+    return V_p * volume_average(integrand, rho, weight=w_V)

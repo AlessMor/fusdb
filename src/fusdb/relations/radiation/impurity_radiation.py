@@ -11,7 +11,9 @@ method uses.
 Each ``c_X`` is the impurity concentration n_X/n_e (default 0, absent species do
 not contribute). Radiated power density is q = n_e^2 * sum_s(c_s * Lz_s),
 integrated over the flux volume (V_p * volume_average, consistent with the
-fusion-rate and Bremsstrahlung/synchrotron relations).
+fusion-rate and Bremsstrahlung/synchrotron relations). The common ``rho`` grid
+is only the integration parameter; ``w_V`` supplies the physical volume measure
+when available and defaults to the historical self-similar weighting.
 
 Unit/correctness notes (all # CHECK):
 * Mavrin coronal: cfspopcon's body swaps the temp/density variable names; this uses
@@ -65,7 +67,8 @@ def _binned_log10_Lz(Te: np.ndarray, bins: Any, radc: Any) -> np.ndarray:
 def calc_impurity_line_radiation_mavrin_coronal(
     n_e: Any, T_e: Any, rho: Any, V_p: Any,
     c_He: Any = 0.0, c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0,
-    c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_Xe: Any = 0.0, c_W: Any = 0.0,
+    c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_Xe: Any = 0.0,
+    c_W: Any = 0.0, w_V: Any = None,
 ) -> Any:
     """Total impurity line-radiated power, Mavrin 2018 coronal cooling rates.
 
@@ -83,7 +86,7 @@ def calc_impurity_line_radiation_mavrin_coronal(
         Lz = 10.0 ** _binned_log10_Lz(Te, entry["temperature_bin_borders"], entry["radc"])  # [W*m^3]
         c_times_Lz = c_times_Lz + concentration * Lz
     q_rad = np.nan_to_num(np.asarray(n_e, dtype=float) ** 2 * c_times_Lz, nan=0.0)
-    return V_p * volume_average(q_rad, rho)
+    return V_p * volume_average(q_rad, rho, weight=w_V)
 
 
 @relation(
@@ -93,7 +96,8 @@ def calc_impurity_line_radiation_mavrin_coronal(
 )
 def calc_impurity_line_radiation_post_jensen(
     n_e: Any, T_e: Any, rho: Any, V_p: Any,
-    c_He: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_O: Any = 0.0, c_Ar: Any = 0.0, c_W: Any = 0.0,
+    c_He: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_O: Any = 0.0, c_Ar: Any = 0.0,
+    c_W: Any = 0.0, w_V: Any = None,
 ) -> Any:
     """Total impurity line-radiated power, Post & Jensen 1977 cooling rates.
 
@@ -113,7 +117,7 @@ def calc_impurity_line_radiation_post_jensen(
         Lz = 10.0 ** _binned_log10_Lz(Te, bins, entry["radc"]) * _ERG_CM3_TO_W_M3  # [W*m^3]
         c_times_Lz = c_times_Lz + concentration * Lz
     q_rad = np.nan_to_num(n_e_arr ** 2 * c_times_Lz, nan=0.0)
-    return V_p * volume_average(q_rad, rho)
+    return V_p * volume_average(q_rad, rho, weight=w_V)
 
 
 @relation(
@@ -125,6 +129,7 @@ def calc_impurity_line_radiation_mavrin_noncoronal(
     n_e: Any, T_e: Any, rho: Any, V_p: Any, impurity_residence_time: Any,
     c_He: Any = 0.0, c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0,
     c_N: Any = 0.0, c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0,
+    w_V: Any = None,
 ) -> Any:
     """Total impurity line-radiated power, Mavrin 2017 non-coronal (ne*tau) cooling rates.
 
@@ -160,7 +165,7 @@ def calc_impurity_line_radiation_mavrin_noncoronal(
                 )
         c_times_Lz = c_times_Lz + concentration * 10.0**log10_Lz  # [W*m^3]
     q_rad = np.nan_to_num(n_e_arr ** 2 * c_times_Lz, nan=0.0)
-    return V_p * volume_average(q_rad, rho)
+    return V_p * volume_average(q_rad, rho, weight=w_V)
 
 
 # ── PROCESS tabulated coronal Lz (impurity_radiation.py pimpden) ──────────────
@@ -201,7 +206,8 @@ def _process_coronal_Lz(symbol: str, Te_keV: np.ndarray) -> np.ndarray:
 def calc_impurity_line_radiation_process_coronal(
     n_e: Any, T_e: Any, rho: Any, V_p: Any,
     c_He: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0, c_O: Any = 0.0,
-    c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_Xe: Any = 0.0, c_W: Any = 0.0,
+    c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_Xe: Any = 0.0,
+    c_W: Any = 0.0, w_V: Any = None,
 ) -> Any:
     """Total impurity line-radiated power from PROCESS's tabulated coronal Lz
     cooling curves.
@@ -223,7 +229,7 @@ def calc_impurity_line_radiation_process_coronal(
         Lz = _process_coronal_Lz(symbol, Te)  # [W*m^3]
         c_times_Lz = c_times_Lz + concentration * Lz
     q_rad = np.nan_to_num(np.asarray(n_e, dtype=float) ** 2 * c_times_Lz, nan=0.0)
-    return V_p * volume_average(q_rad, rho)
+    return V_p * volume_average(q_rad, rho, weight=w_V)
 
 
 # ── uniform species sum (PROCESS bookkeeping) ────────────────────────────────
@@ -252,7 +258,7 @@ def calc_radiated_power_species_sum_process_coronal(
     n_e: Any, T_e: Any, rho: Any, V_p: Any,
     c_H: Any = 0.0, c_He: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0,
     c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Kr: Any = 0.0, c_Xe: Any = 0.0,
-    c_W: Any = 0.0,
+    c_W: Any = 0.0, w_V: Any = None,
 ) -> Any:
     """Total radiated power over ALL species -- fuel, ash and impurities --
     from PROCESS's tabulated coronal Lz curves.
@@ -277,7 +283,7 @@ def calc_radiated_power_species_sum_process_coronal(
         Lz = _process_coronal_Lz(symbol, Te)  # [W*m^3]
         c_times_Lz = c_times_Lz + concentration * Lz
     q_rad = np.nan_to_num(np.asarray(n_e, dtype=float) ** 2 * c_times_Lz, nan=0.0)
-    return V_p * volume_average(q_rad, rho)
+    return V_p * volume_average(q_rad, rho, weight=w_V)
 
 
 # ── radas coronal Lz (cfspopcon's Radas radiation method) ─────────────────────
@@ -441,7 +447,8 @@ for _sym in _RADAS_LZ_SPECIES:
 def calc_impurity_line_radiation_radas_coronal(
     n_e: Any, T_e: Any, rho: Any, V_p: Any,
     c_He: Any = 0.0, c_Li: Any = 0.0, c_Be: Any = 0.0, c_C: Any = 0.0, c_N: Any = 0.0,
-    c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Xe: Any = 0.0, c_W: Any = 0.0,
+    c_O: Any = 0.0, c_Ne: Any = 0.0, c_Ar: Any = 0.0, c_Xe: Any = 0.0,
+    c_W: Any = 0.0, w_V: Any = None,
 ) -> Any:
     """Total impurity line-radiated power from radas (OpenADAS) coronal Lz tables.
 
@@ -467,7 +474,7 @@ def calc_impurity_line_radiation_radas_coronal(
         Lz = _radas_coronal_Lz(symbol, Te, ne)  # [W*m^3]
         c_times_Lz = c_times_Lz + concentration * Lz
     q_rad = np.nan_to_num(ne ** 2 * c_times_Lz, nan=0.0)
-    return V_p * volume_average(q_rad, rho)
+    return V_p * volume_average(q_rad, rho, weight=w_V)
 
 
 # ── Edge impurity seeding (Lengyel model, cfspopcon impurities/edge_radiator_conc) ──

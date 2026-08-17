@@ -196,9 +196,12 @@ def dilution_from_impurity_concentrations(
     D-He3 machine, where He3 sits in the c_He term above at Zbar = 2 and is
     therefore EXCLUDED here).  The two coincide only when there is no protium
     and no He3 -- true of every D-T case in the test suite, which is why the
-    distinction is easy to miss.  **Nothing currently computes the fuel
-    dilution**; it needs the isotope split, so it cannot be recovered from the
-    element concentrations alone.
+    distinction is easy to miss.  It needs the isotope split, so it cannot be
+    recovered from the element concentrations alone: ``Fuel dilution from fuel
+    fractions`` computes it from the f-fractions and is the registry default,
+    which is why this relation must be selected AND that one excluded to run
+    the comparison on cfspopcon's definition.  Activating both is not a
+    harmless duplicate -- equating the two reduces to f_p = 2 f_He3.
 
     Adapted from cfspopcon; see README.md section "Third-party Notices".
     cfspopcon calls this ``dilution`` and glosses it as n_DT/n_e, which is
@@ -206,7 +209,6 @@ def dilution_from_impurity_concentrations(
     an impurity -- so its fuel and hydrogenic fractions are the same thing.
     Mean charge from the Mavrin 2018 coronal fits instead of radas.
     """
-    # CHECK
     concentrations = {"He": c_He, "Li": c_Li, "Be": c_Be, "C": c_C, "N": c_N, "O": c_O,
                       "Ne": c_Ne, "Ar": c_Ar, "Kr": c_Kr, "Xe": c_Xe, "W": c_W}
     charges = {"He": Zbar_He, "Li": Zbar_Li, "Be": Zbar_Be, "C": Zbar_C, "N": Zbar_N,

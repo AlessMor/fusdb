@@ -357,6 +357,26 @@ relations:
   # Superseded by "Ion density average from impurity concentrations (Mavrin)"
   # above: n_i_avg comes from the c_z mix directly, not the f-fraction zbar.
   - Ion density average from quasineutrality
+  # Superseded by "Fuel dilution from impurity concentrations (cfspopcon)"
+  # above.  `include` ADDS, so fusdb's default would stay active alongside it
+  # and over-determine `dilution` -- and the two compute DIFFERENT quantities
+  # (fuel dilution vs the hydrogenic concentration c_H), so the pair is not a
+  # harmless duplicate: equating them reduces to f_p = 2 f_He3, a constraint
+  # nothing in the physics asserts.  Both are zero here, so it is satisfiable --
+  # but NOT inert: it couples the composition through Zbar_i_avg and held
+  # `dilution` 2.8e-5 off cfspopcon's reference, which excluding it takes to
+  # 4.5e-11 (grid median, 770 cells).  On a D-He3 or protium-bearing device it
+  # would not be satisfiable at all.
+  #
+  # NOTE: with the pair separated, `dilution` (0.8551) and `c_H` (0.8517) sit
+  # 3.4 x abs_tol apart, though charge neutrality makes them algebraically
+  # identical.  That is a PRE-EXISTING fixture inconsistency this exclusion
+  # surfaced rather than caused: helium is supplied twice, as c_He 0.06 and as
+  # f_He4 0.065331, which disagree by ~1% (c_He = f_He4/Zbar_i_avg implies
+  # 0.06017).  The duplicate constraint had been masking it.  Left as-is: no
+  # compared field moves, and reconciling the two helium inputs is a separate
+  # change to the fixture's composition.
+  - Fuel dilution from fuel fractions
   # fusdb's default (PROCESS's aspect-corrected Martin on the total ion mass),
   # superseded here by the cfspopcon Martin+Ryter form selected above.
   - L-H threshold Martin-2008 aspect nominal (total ion mass)

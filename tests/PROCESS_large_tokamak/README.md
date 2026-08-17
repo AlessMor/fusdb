@@ -111,6 +111,11 @@ aliased to **both** PROCESS's `m_fuel_amu` (2.5145) and `m_ions_total_amu`
 ion mass in its L-H thresholds, where the `2/A_i` isotope factor enters linearly
 — a 7% difference. Split into `afuel_total` (see below).
 
+Both were also weighted by the **mass number** (D 2, T 3) rather than the
+isotopic mass, a flat −0.59% against PROCESS on every fuel mass. Fixed
+2026-08-12 by weighting on `isotopic_mass_u`: `afuel` 2.5 → 2.515 against
+PROCESS's 2.51453 (+0.019%), and the derived `afuel_total` −0.57% → −0.036%.
+
 **Composition denominators.** fusdb's `f_D`/`f_T`/`f_He4` are fractions of
 **total ion** density; PROCESS quotes helium against **electron** density and its
 50:50 split against **fuel** ions. Converted on the way in, and verified on the

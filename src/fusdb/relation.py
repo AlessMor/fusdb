@@ -106,6 +106,8 @@ class Relation:
         constant_names: Function parameters with defaults.
         dependency: Dependency hint used for graph reports.
         function_name: Decorated Python function name.
+        rebuild_spec: Optional picklable recipe for reconstructing runtime-generated
+            relations in worker processes. Registry relations leave this unset.
     """
 
     name: str
@@ -123,6 +125,7 @@ class Relation:
     dependency: str = "dense"
     function_name: str = ""
     argument_names: tuple[str, ...] = ()
+    rebuild_spec: Mapping[str, Any] | None = field(default=None, repr=False, compare=False)
     constraint_relations: tuple["Relation", ...] = field(default_factory=tuple, init=False)
     _signature: inspect.Signature = field(init=False, repr=False)
     _constant_defaults: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
@@ -158,6 +161,7 @@ class Relation:
         self.dependency = str(self.dependency or "dense")
         self.function_name = str(self.function_name or getattr(self.func, "__name__", self.name))
         self.argument_names = tuple(self.argument_names or self.input_names)
+        self.rebuild_spec = None if self.rebuild_spec is None else dict(self.rebuild_spec)
         if len(self.argument_names) != len(self.input_names):
             raise ValueError(f"Relation {self.name!r} argument_names and input_names must have the same length.")
         self._signature = inspect.signature(self.func)
@@ -190,6 +194,42 @@ class Relation:
                 )
             )
         self.constraint_relations = tuple(built)
+
+    @property
+    def optional_variable_names(self) -> tuple[str, ...]:
+        """Registry variables this relation reads as OPTIONAL contributors.
+
+        A signature default on a parameter that names a registry variable does
+        not mean "constant" -- it means *optional contributor*: :meth:`evaluate`
+        uses the namespace value when the scenario provides one and falls back
+        to the default otherwise, so ``def total(a=0.0, b=0.0)`` reads "whichever
+        of these you tell me about; the rest are zero".
+
+        The group is inherently RELATION-scoped, which is the point: the same
+        variable may be an optional contributor here and a required input
+        elsewhere, and nothing has to be declared on the variable itself.
+
+        Coordinates are excluded -- they are framework constants with a grid
+        default, and the coordinate providers (``rho_minor``, ``v_norm``,
+        ``w_V``) are precisely the relations with no required inputs at all.
+        """
+        registry = _variable_registry()
+        return tuple(
+            name for name in self.constant_names
+            if name in self._constant_defaults
+            and name not in COORDINATE_NAMES
+            and name in registry
+        )
+
+    @property
+    def all_contributors_optional(self) -> bool:
+        """Whether this relation has no required inputs but does have optional ones.
+
+        Such a relation says nothing until at least one contributor exists, so
+        the forward closure must not fire it on the vacuous truth of
+        ``all(inp in known for inp in ())``.
+        """
+        return bool(self.optional_variable_names) and not self.input_names
 
     @property
     def output_names(self) -> tuple[str, ...]:
@@ -955,6 +995,7 @@ def canonicalize_relation_names(rel: "Relation", variable_registry: Any) -> "Rel
         dependency=rel.dependency,
         function_name=rel.function_name,
         argument_names=rel.argument_names,
+        rebuild_spec=rel.rebuild_spec,
     )
 
 

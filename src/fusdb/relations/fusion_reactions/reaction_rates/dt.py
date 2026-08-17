@@ -12,7 +12,9 @@ from fusdb.relation import relation
     tags=('fusion_power',),
     outputs='Rr_DT',
 )
-def reaction_rate_dt(n_D: float, n_T: float, sigmav_DT: float, V_p: float, rho: float) -> Any:
+def reaction_rate_dt(
+    n_D: float, n_T: float, sigmav_DT: float, V_p: float, rho: float, w_V: Any = None
+) -> Any:
     """Return the volume-integrated DT reaction rate.
 
     Args:
@@ -20,6 +22,8 @@ def reaction_rate_dt(n_D: float, n_T: float, sigmav_DT: float, V_p: float, rho: 
         n_T: Tritium density profile.
         sigmav_DT: DT reactivity profile.
         V_p: Plasma volume.
+        rho: Common computational profile grid.
+        w_V: Optional physical volume-integration weight on ``rho``.
 
     Returns:
         The total DT reaction rate in 1/s.
@@ -28,4 +32,4 @@ def reaction_rate_dt(n_D: float, n_T: float, sigmav_DT: float, V_p: float, rho: 
     integrand = n_D * n_T * sigmav_DT
 
     # Integrate the profile over the plasma volume.
-    return V_p * volume_average(integrand, rho)
+    return V_p * volume_average(integrand, rho, weight=w_V)

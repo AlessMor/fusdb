@@ -22,6 +22,7 @@ def calc_synchrotron_radiation(
     B0: Any,
     separatrix_elongation: Any,
     V_p: Any,
+    w_V: Any = None,
 ) -> Any:
     """Calculate the synchrotron radiated power due to the main plasma.
 
@@ -36,7 +37,7 @@ def calc_synchrotron_radiation(
     matching the Bremsstrahlung, impurity-line and fusion-rate relations.
 
     Args:
-        rho: [~] :term:`glossary link<rho>`
+        rho: Common computational profile grid.
         n_e: [1/m^3] :term:`glossary link<electron_density_profile>`
         T_e: [keV] :term:`glossary link<electron_temp_profile>`
         R: [m] :term:`glossary link<major_radius>`
@@ -44,6 +45,7 @@ def calc_synchrotron_radiation(
         B0: [T] :term:`glossary link<magnetic_field_on_axis>`
         separatrix_elongation: [~] :term:`glossary link<separatrix_elongation>`
         V_p: [m^3] :term:`glossary link<plasma_volume>`
+        w_V: Optional physical volume-integration weight on ``rho``.
 
     Returns:
         Synchrotron radiated power [W]
@@ -83,7 +85,7 @@ def calc_synchrotron_radiation(
         )
         p_sync = 6.25e-3 * ne20 * T_e * B0**2 * Phi * 1e6  # [W/m^3]
     p_sync = np.where(np.isfinite(p_sync), p_sync, 0.0)
-    return V_p * volume_average(p_sync, rho)
+    return V_p * volume_average(p_sync, rho, weight=w_V)
 
 
 @relation(

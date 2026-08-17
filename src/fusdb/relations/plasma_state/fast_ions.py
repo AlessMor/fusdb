@@ -26,11 +26,15 @@ from fusdb.utils import volume_average
     tags=("plasma", "profile", "process"),
     outputs="temp_plasma_electron_density_weighted",
 )
-def density_weighted_electron_temperature(n_e: Any, T_e: Any, rho: Any) -> Any:
-    """Return ``<n_e T_e>/<n_e>`` on the fusdb volume-average convention."""
+def density_weighted_electron_temperature(
+    n_e: Any, T_e: Any, rho: Any, w_V: Any = None
+) -> Any:
+    """Return ``<n_e T_e>/<n_e>`` using the current volume measure."""
     density = np.asarray(n_e, dtype=float)
-    numerator = volume_average(density * np.asarray(T_e, dtype=float), rho)
-    denominator = volume_average(density, rho)
+    numerator = volume_average(
+        density * np.asarray(T_e, dtype=float), rho, weight=w_V
+    )
+    denominator = volume_average(density, rho, weight=w_V)
     return numerator / np.maximum(denominator, 1e-300)
 
 
@@ -39,11 +43,15 @@ def density_weighted_electron_temperature(n_e: Any, T_e: Any, rho: Any) -> Any:
     tags=("plasma", "profile", "process"),
     outputs="temp_plasma_ion_density_weighted",
 )
-def density_weighted_ion_temperature(n_i: Any, T_i: Any, rho: Any) -> Any:
+def density_weighted_ion_temperature(
+    n_i: Any, T_i: Any, rho: Any, w_V: Any = None
+) -> Any:
     """Return ``<n_i T_i>/<n_i>`` for the PROCESS fast-alpha fit."""
     density = np.asarray(n_i, dtype=float)
-    numerator = volume_average(density * np.asarray(T_i, dtype=float), rho)
-    denominator = volume_average(density, rho)
+    numerator = volume_average(
+        density * np.asarray(T_i, dtype=float), rho, weight=w_V
+    )
+    denominator = volume_average(density, rho, weight=w_V)
     return numerator / np.maximum(denominator, 1e-300)
 
 

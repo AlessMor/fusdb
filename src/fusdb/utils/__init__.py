@@ -8,11 +8,29 @@ import re
 
 import numpy as np
 
-# Width of the numerical band treated as "on a domain boundary": values within
-# ZERO_TOL of a physical bound are projected onto the corresponding solver
-# bound (and back).  Shared by Variable value conversion and RelationSystem
-# packing/domain residuals so both sides of the projection agree exactly.
+# Width of the numerical band treated as "on a domain boundary" for PROFILE
+# values: a profile element within ZERO_TOL of a physical bound is projected
+# onto the corresponding solver bound (and back), so an edge stored as T = 0
+# is evaluated just inside the domain instead of in a singular formula.
+#
+# It is an absolute magnitude, so it is deliberately NOT used where it would be
+# compared against a physical value of unknown scale: domain-violation rows use
+# the closed domain, exclusive bounds are checked as written, and scalar
+# boundary projection triggers on exact equality.  See TODO, "ZERO_TOL as an
+# absolute magnitude" -- a 1e-12 band is meaningless for a variable that lives
+# at 1e-30, and treating it as one froze a whole reconcile at its start point.
+# It still relaxes an INCLUSIVE bound in value_in_domain, which is genuine
+# floating-point-noise absorption rather than a scale comparison.
 ZERO_TOL = 1e-12
+
+# Relative width of the band treated as "on an inclusive domain bound" by
+# value_in_domain, applied to bounds away from zero (ZERO_TOL is the floor, and
+# the whole slack for a bound AT zero).  Dimensionless on purpose -- a ratio
+# carries no scale assumption, whereas one absolute band cannot serve both a
+# bound at 0 and a bound at 1.  Sized to the least-squares convergence
+# tolerance: a solved value sits within ~1e-8 relative of the point the solver
+# stopped at, so anything further outside a bound is a real violation.
+BOUNDARY_REL_SLACK = 1e-8
 
 
 def unique_preserve_order(items: Iterable[Any]) -> tuple[str, ...]:
@@ -193,10 +211,29 @@ def validate_solver_domain(
 def value_in_domain(value: Any, domain: tuple[float | None, float | None, bool, bool], *, zero_tol: float = 0.0) -> bool:
     """Return whether all numeric values are inside a domain.
 
+    ``zero_tol`` only ever RELAXES an inclusive bound, absorbing convergence
+    noise just outside it.  It is deliberately not applied to an exclusive
+    bound: there it would demand a positive MARGIN rather than absorb noise, and
+    since it is one global magnitude for every variable that margin is
+    meaningless for anything whose values are much smaller (L_int lives at
+    ~1e-30 and was reported as violating ``(0, inf)`` because it could not clear
+    1e-12).  An exclusive bound is checked as written -- ``x > lower`` -- which
+    is scale-free and still rejects the exact boundary value.
+
+    The inclusive slack is ``max(zero_tol, |bound| * BOUNDARY_REL_SLACK)``: an
+    absolute floor for a bound AT zero (where a relative slack would vanish, and
+    where hiding a sign error matters -- P_brem_imp must not sit at -0.5 MW
+    unnoticed), and a RELATIVE band for a bound away from zero, since a solved
+    value only ever lands within the solver's own convergence tolerance of it.
+    A single absolute band cannot serve both: ``Z_eff >= 1`` was unusable as a
+    domain because a pure-hydrogenic plasma converges to 1 - 4.5e-10 and the
+    1e-12 band called that a physics violation.  The ratio is dimensionless, so
+    it carries no scale assumption of its own.
+
     Args:
         value: Scalar or array.
         domain: Parsed domain tuple.
-        zero_tol: Boundary tolerance.
+        zero_tol: Absolute floor for the slack allowed outside an inclusive bound.
 
     Returns:
         True when every finite value is inside the domain.
@@ -209,11 +246,13 @@ def value_in_domain(value: Any, domain: tuple[float | None, float | None, bool, 
         return False
     lower, upper, lower_inc, upper_inc = domain
     if lower is not None:
-        ok = arr >= lower - zero_tol if lower_inc else arr > lower + zero_tol
+        slack = max(zero_tol, abs(float(lower)) * BOUNDARY_REL_SLACK)
+        ok = arr >= lower - slack if lower_inc else arr > lower
         if not bool(np.all(ok)):
             return False
     if upper is not None:
-        ok = arr <= upper + zero_tol if upper_inc else arr < upper - zero_tol
+        slack = max(zero_tol, abs(float(upper)) * BOUNDARY_REL_SLACK)
+        ok = arr <= upper + slack if upper_inc else arr < upper
         if not bool(np.all(ok)):
             return False
     return True

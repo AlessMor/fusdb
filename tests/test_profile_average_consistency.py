@@ -26,6 +26,7 @@ def _system(t_e_avg: float, profile: np.ndarray, *, avg_fixed: bool = False) -> 
     rel = RELATIONS.get(_CONSISTENCY)
     variables = [
         Variable("rho", value=rho, fixed=True),
+        Variable("w_V", value=rho, fixed=True),
         Variable("T_e", value=profile, fixed=True),
         Variable("T_e_avg", value=t_e_avg, fixed=avg_fixed),
     ]
@@ -33,8 +34,8 @@ def _system(t_e_avg: float, profile: np.ndarray, *, avg_fixed: bool = False) -> 
 
 
 def test_fixed_profile_conflicting_average_is_flagged_on_verify():
-    profile = np.full(21, 15.0)  # volume-average 15
-    system = _system(14.0, profile)  # supplied average disagrees
+    profile = np.full(21, 15.0)
+    system = _system(14.0, profile)
     result = system.run("verify")
     assert not result["success"]
     assert not result["relation_status"][_CONSISTENCY]["verified"]
@@ -49,7 +50,7 @@ def test_fixed_profile_consistent_average_passes_verify():
 
 def test_reconcile_moves_supplied_average_to_the_profile_value():
     profile = np.full(21, 15.0)
-    system = _system(14.0, profile)  # not fixed: reconcile is free to move it
+    system = _system(14.0, profile)
     result = system.run("reconcile")
     assert result["success"]
     assert system.values["T_e_avg"] == pytest.approx(15.0, abs=1e-3)
@@ -76,27 +77,26 @@ def test_explicit_rho_average_relation_uses_straight_line_average():
 
 
 def test_line_average_uses_normalized_minor_radius_definition():
-    rho = np.linspace(0.0, 1.0, 101)
-    profile = rho**2
-    assert line_average(profile, rho) == pytest.approx(1.0 / 3.0, rel=2e-4)
+    rho_minor = np.linspace(0.0, 1.0, 101)
+    profile = rho_minor**2
+    assert line_average(profile, rho_minor) == pytest.approx(1.0 / 3.0, rel=2e-4)
 
 
 def test_electron_density_profile_produces_conventional_line_average():
-    rho = np.linspace(0.0, 1.0, 101)
-    profile = 2.0 - rho
+    rho_minor = np.linspace(0.0, 1.0, 101)
+    profile = 2.0 - rho_minor
     rel = RELATIONS.get("Electron density line-average")
-    assert rel.evaluate({"n_e": profile, "rho": rho}) == pytest.approx(1.5)
+    assert rel.evaluate({"n_e": profile, "rho_minor": rho_minor}) == pytest.approx(1.5)
     assert VARIABLES.resolve("n_e_la") == "n_la"
 
 
 def test_profile_line_average_provides_n_la():
-    # The registry n_la default was removed: the line-average relation is the
-    # one producer, so a supplied profile must yield the conventional
-    # (1/a) integral n_e dr value with no default in the pool.
     rho = np.linspace(0.0, 1.0, 101)
     profile = 2.0 - rho
     variables = [
         Variable("rho", value=rho, fixed=True),
+        Variable("rho_minor", value=rho, fixed=True),
+        Variable("w_V", value=rho, fixed=True),
         Variable("n_e", value=profile, fixed=True),
     ]
     relations = [
@@ -134,9 +134,10 @@ def test_shape_locked_profile_residual_is_trivially_satisfied():
     """A level-free profile reconstructed as avg*shape never fights the residual."""
     rho = np.linspace(0.0, 1.0, 51)
     shape = (1.0 - rho**2) ** 1.5 + 0.1
-    profile = 8.0 * shape  # unfixed supplied profile: shape locked, level free
+    profile = 8.0 * shape
     variables = [
         Variable("rho", value=rho, fixed=True),
+        Variable("w_V", value=rho, fixed=True),
         Variable("T_e", value=profile, fixed=False),
     ]
     system = RelationSystem(variables, [RELATIONS.get(_CONSISTENCY)], name="level_free_test")
