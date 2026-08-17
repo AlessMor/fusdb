@@ -8,7 +8,8 @@ from typing import Any
 import networkx as nx
 import numpy as np
 from scipy.optimize import least_squares
-from scipy.sparse import lil_matrix
+from scipy.sparse import csr_matrix, lil_matrix
+from scipy.sparse.csgraph import maximum_bipartite_matching
 
 
 from .relation import COORDINATE_NAMES, Relation, canonicalize_relation, canonicalize_relation_names, constraint_from_expression, is_default_relation
@@ -392,7 +393,9 @@ class RelationSystem:
         self._provider_view: tuple[dict[str, Relation], dict[str, Relation]] | None = None
         # Caches derived from the compiled provider/active-relation plan;
         # reset to None by every _run_compile_pass.
-        self._sparsity_graph_cache: nx.DiGraph | None = None
+        self._dependency_closure_cache: tuple[
+            dict[str, frozenset[str]], dict[str, frozenset[str]]
+        ] | None = None
         self._compiler_report_cache: dict[str, Any] | None = None
         self._completion_acyclic = False
         self._run_compile_pass()
@@ -615,7 +618,7 @@ class RelationSystem:
         # rewrites only the verdict annotations -- relation activation and
         # reason, provider edges, per-variable supplied/fixed flags.
         self._reset_graph_verdicts()
-        self._sparsity_graph_cache = None
+        self._dependency_closure_cache = None
         self._compiler_report_cache = None
 
         supplied = set(self.inputs)
@@ -1322,9 +1325,9 @@ class RelationSystem:
         node per variable and per candidate relation, with ``input -> relation``
         and ``relation -> output`` edges carrying each relation's declared
         direction.  Every other structural view is computed from it: the report
-        incidence (:meth:`compiler_report`), the Dulmage-Mendelsohn partition
-        (:meth:`_structural_partition`) and the Jacobian sparsity
-        (:meth:`_sparsity_variable_names`).
+        incidence (:meth:`compiler_report`) and the Dulmage-Mendelsohn partition
+        (:meth:`_structural_partition`). Completion dependencies and solver
+        sparsity are compiled products of this graph's provider verdicts.
 
         Nodes are annotated so consumers read state off the graph instead of
         re-deriving it:
@@ -1697,40 +1700,46 @@ class RelationSystem:
                 row_adj.append(cols)
                 row_relation.append(rel.name)
 
-        # One scratch digraph carries the whole decomposition: ``c -> r``
-        # incidence edges between column nodes ``("c", j)`` and scalar-equation
-        # row nodes ``("r", i)``.  The maximum matching (Hopcroft-Karp) runs on
-        # its undirected view; the matched ``r -> c`` edges are then added so
-        # alternating reachability (columns via any row, rows only via their
-        # matched column) is plain descendant reachability, and the
-        # underdetermined subgraph's connected components are the deficiency
-        # groups.  The Dulmage-Mendelsohn coarse partition and fine blocks are
-        # invariant to *which* maximum matching is chosen.
+        # Matching consumes the scalar row/column incidence directly.  The
+        # canonical relation graph remains the only durable topology: this CSR
+        # matrix is a short-lived numerical adapter for SciPy's matching routine,
+        # and alternating reachability runs on the existing adjacency lists.
         match_row = np.full(n_cols, -1, dtype=int)
-        scratch = nx.DiGraph()
-        scratch.add_nodes_from(("c", c) for c in range(n_cols))
-        row_nodes = [("r", r) for r in range(len(row_adj))]
-        scratch.add_nodes_from(row_nodes)
+        col_adj: list[list[int]] = [[] for _ in range(n_cols)]
         for r, cols in enumerate(row_adj):
             for c in cols:
-                scratch.add_edge(("c", c), ("r", r))
+                col_adj[c].append(r)
         if row_adj:
-            # ``maximum_matching`` returns both directions; read the row side
-            # and mirror it into the per-column ``match_row``.
-            matching = nx.bipartite.maximum_matching(scratch.to_undirected(as_view=True), top_nodes=row_nodes)
-            for r in range(len(row_adj)):
-                partner = matching.get(("r", r))
-                if partner is not None:
-                    c = int(partner[1])
-                    match_row[c] = r
-                    scratch.add_edge(("r", r), ("c", c))
-        reached: set[tuple[str, int]] = set()
-        for c in range(n_cols):
-            if match_row[c] < 0:
-                reached.add(("c", c))
-                reached |= nx.descendants(scratch, ("c", c))
-        under_cols = {c for kind, c in reached if kind == "c"}
-        under_rows = {r for kind, r in reached if kind == "r"}
+            counts = np.fromiter((len(cols) for cols in row_adj), dtype=int)
+            indptr = np.concatenate(([0], np.cumsum(counts)))
+            indices = np.asarray([c for cols in row_adj for c in cols], dtype=int)
+            incidence = csr_matrix(
+                (np.ones(indices.size, dtype=np.int8), indices, indptr),
+                shape=(len(row_adj), n_cols),
+            )
+            match_row = np.asarray(
+                maximum_bipartite_matching(incidence, perm_type="row"), dtype=int
+            )
+
+        # Alternating reachability from unmatched columns.  Columns traverse
+        # every incident equation; an equation traverses only its matched column.
+        match_col = np.full(len(row_adj), -1, dtype=int)
+        for c, r in enumerate(match_row):
+            if r >= 0:
+                match_col[int(r)] = c
+        under_cols = {c for c, r in enumerate(match_row) if r < 0}
+        under_rows: set[int] = set()
+        frontier = list(under_cols)
+        while frontier:
+            c = frontier.pop()
+            for r in col_adj[c]:
+                if r in under_rows:
+                    continue
+                under_rows.add(r)
+                matched_col = int(match_col[r])
+                if matched_col >= 0 and matched_col not in under_cols:
+                    under_cols.add(matched_col)
+                    frontier.append(matched_col)
 
         # Free parameters are forced underdetermined so the constraints that
         # reference them deactivate, instead of the matching inventing a value
@@ -1745,13 +1754,18 @@ class RelationSystem:
         result["underdetermined_variables"] = under_names
         result["blocks"] = _structural_block_plan(row_adj, match_row, under_cols, name_of_col)
 
-        # Group the underdetermined part into connected deficiencies on the
-        # (column, row) incidence restricted to the underdetermined nodes;
-        # each group needs (cols - rows) more supplied values among its
-        # variables.
-        under_nodes = {("c", c) for c in under_cols} | {("r", r) for r in under_rows}
+        # Group only the underdetermined incidence.  NetworkX remains useful
+        # here because connected components express the diagnostic directly,
+        # but the full matching graph is no longer materialized.
+        under_graph = nx.Graph()
+        under_graph.add_nodes_from(("c", c) for c in under_cols)
+        under_graph.add_nodes_from(("r", r) for r in under_rows)
+        for r in under_rows:
+            under_graph.add_edges_from(
+                (("c", c), ("r", r)) for c in row_adj[r] if c in under_cols
+            )
         deficiencies: list[dict[str, Any]] = []
-        for comp in nx.connected_components(scratch.subgraph(under_nodes).to_undirected(as_view=True)):
+        for comp in nx.connected_components(under_graph):
             comp_cols = [c for kind, c in comp if kind == "c"]
             comp_rows = [r for kind, r in comp if kind == "r"]
             deficiencies.append(
@@ -2168,54 +2182,49 @@ class RelationSystem:
         residuals = np.concatenate([block.reshape(-1) for block in blocks if block.size]) if blocks else np.empty(0, dtype=float)
         return status, residuals, errors, warnings
 
-    def _sparsity_dependency_graph(self) -> nx.DiGraph:
-        """Directed completion-dependency graph used for Jacobian sparsity.
+    def _completion_dependency_closure(
+        self,
+    ) -> tuple[dict[str, frozenset[str]], dict[str, frozenset[str]]]:
+        """Return cached variable ancestors/descendants of completion.
 
-        A residual row reads its relation's variables off the *completed*
-        namespace, so changing a packed variable can move that row only through
-        completion.  This graph therefore has an edge ``input -> output`` for
-        every output of every completion provider relation (plus the
-        ``average -> profile`` edges completion uses), so a variable's ancestors
-        are every packed variable that can reach it through completion.
-
-        It is deliberately fuller than the completion plan's per-variable
-        provider selection, which keeps a single selected provider per
-        variable and so encodes only one ``input -> selected_output`` edge
-        per relation.  That single-provider view
-        misses dependencies that flow through a relation's *side* outputs (e.g.
-        ARC_V0's ``n_i``/fusion-power coupling to ``f_He``), which previously had
-        to be recovered by probing the residual once per packed variable.
-        Capturing every output here makes the structural pattern conservative on
-        its own, so no finite-difference probe is needed.
+        ``provider_plan`` is the authoritative executable completion schedule.
+        A transient variable dependency graph is built from that schedule only
+        to ask NetworkX for reachability; the cached product is plain immutable
+        dependency sets, not a second persistent graph model.  Every declared
+        provider output is included so side-output dependencies stay
+        conservative, and profile reconstruction contributes ``average ->
+        profile`` exactly as :meth:`complete` does.
         """
-        cached = self._sparsity_graph_cache
+        cached = self._dependency_closure_cache
         if cached is not None:
             return cached
         graph = nx.DiGraph()
         for rel, _only_missing, _input_names, _outs in self.provider_plan:
-            inputs = [*rel.input_names, *(c for c in rel.constant_names if c in self.variable_registry)]
+            inputs = [
+                *rel.input_names,
+                *(c for c in rel.constant_names if c in self.variable_registry),
+            ]
             for out in rel.output_names:
-                for inp in inputs:
-                    if inp != out:
-                        graph.add_edge(inp, out)
-        for profile, avg in self.profile_average_by_name.items():
-            if avg != profile:
-                graph.add_edge(avg, profile)
-        self._sparsity_graph_cache = graph
-        return graph
+                graph.add_edges_from((inp, out) for inp in inputs if inp != out)
+        graph.add_edges_from(
+            (avg, profile)
+            for profile, avg in self.profile_average_by_name.items()
+            if avg != profile
+        )
+        ancestors = {
+            name: frozenset({name} | nx.ancestors(graph, name)) for name in graph
+        }
+        descendants = {
+            name: frozenset({name} | nx.descendants(graph, name)) for name in graph
+        }
+        result = (ancestors, descendants)
+        self._dependency_closure_cache = result
+        return result
 
     def _sparsity_variable_names(self, name: str) -> set[str]:
-        """Return variables that can affect one variable through completion.
-
-        These are ``name`` plus its ancestors in
-        :meth:`_sparsity_dependency_graph`.  Conservative over-inclusion is
-        always safe for sparse differencing; a missed dependency is what would
-        corrupt the Jacobian.
-        """
-        graph = self._sparsity_dependency_graph()
-        if name not in graph:
-            return {name}
-        return {name} | nx.ancestors(graph, name)
+        """Variables that can affect ``name`` through compiled completion."""
+        ancestors, _descendants = self._completion_dependency_closure()
+        return set(ancestors.get(name, (name,)))
 
     def residual_layout(self, values: Mapping[str, Any], include_movement: bool = False) -> dict[str, Any]:
         """Freeze the residual-row layout on one probe namespace.
@@ -2427,15 +2436,13 @@ class RelationSystem:
                 name_of_col[j] = record[0]
         span_by_name = {record[0]: record for record in self.packed_specs}
         packed_names = set(span_by_name)
-        graph = self._sparsity_dependency_graph()
+        _ancestors, descendants = self._completion_dependency_closure()
         groups: list[dict[str, Any]] = []
         for cols in group_cols:
             span_names = {name_of_col[j] for j in cols}
             affected: set[str] = set()
             for name in span_names:
-                affected.add(name)
-                if name in graph:
-                    affected |= nx.descendants(graph, name)
+                affected.update(descendants.get(name, (name,)))
             groups.append(
                 {
                     "cols": np.asarray(cols, dtype=int),

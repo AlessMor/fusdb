@@ -24,64 +24,70 @@ def _short_label(label: str, *, limit: int = 6) -> str:
 
 
 def build_relation_graph(relations: Iterable[Any] | None = None) -> nx.DiGraph:
-    """Build a directed relation -> variable graph.
+    """Return the canonical directed incidence graph with display metadata.
 
-    Each relation becomes a ``kind="relation"`` node; its inputs point into it
-    and its outputs point out of it (both ``kind="variable"`` nodes).  The
-    structure comes from the shared
-    :func:`fusdb.relationsystem.relation_bipartite_graph` builder (the same
-    graph the compiled system analyses); this view relabels its tuple node ids
-    to the ``"kind::name"`` strings used by the plotters and adds display
-    labels.
-
-    Args:
-        relations: Relations to include. Defaults to the registry's filtered
-            relations (one producer per output where ``default_relation`` is set).
-
-    Returns:
-        A :class:`networkx.DiGraph` with ``kind`` and ``label`` node attributes.
+    The topology always comes from :func:`relation_bipartite_graph`; plotting
+    only relabels node ids and decorates those canonical nodes for presentation.
     """
     if relations is None:
         relations = RELATIONS.get_filtered_relations()
-
     graph = relation_bipartite_graph(relations)
-    graph = nx.relabel_nodes(graph, {node: f"{node[0]}::{node[1]}" for node in graph.nodes})
+    graph = nx.relabel_nodes(
+        graph, {node: f"{node[0]}::{node[1]}" for node in graph.nodes}
+    )
     for node, data in graph.nodes(data=True):
-        data["label"] = node.split("::", 1)[1]
+        name = node.split("::", 1)[1]
+        data["label"] = name
+        if data["kind"] == "variable":
+            spec = VARIABLES.get(name)
+            data.update(
+                aliases=", ".join(spec.aliases),
+                unit=spec.unit,
+                tags="",
+                description=spec.description,
+            )
+        else:
+            relation = data["relation"]
+            data.update(
+                aliases="",
+                unit="",
+                tags=", ".join(relation.tags),
+                description=relation.source_name,
+            )
     return graph
 
 
 def build_variable_relation_graph(relations: Iterable[Any] | None = None) -> nx.Graph:
-    """Build an undirected variable graph with relations stored on edges.
+    """Project the canonical incidence graph onto variables.
 
-    Relations in FusDB are acausal, so this projection treats every variable
-    touched by a relation as mutually connected. A relation touching more than
-    two variables becomes pairwise edges among those variables; multiple
-    relations on the same variable pair are aggregated on one edge.
+    Each relation node becomes pairwise variable edges carrying that relation's
+    name and tags.  This is a visualization projection, never an independent
+    definition of relation/variable incidence.
     """
-    if relations is None:
-        relations = RELATIONS.get_filtered_relations()
-
+    canonical = build_relation_graph(relations)
     graph = nx.Graph()
-    for relation in relations:
-        variable_names = tuple(relation.variables)
-        for name in variable_names:
-            spec = VARIABLES.get(name)
-            graph.add_node(
-                name,
-                kind="variable",
-                label=name,
-                aliases=", ".join(spec.aliases),
-                unit=spec.unit,
-                description=spec.description,
-            )
-
-        for source, target in combinations(variable_names, 2):
+    for node, data in canonical.nodes(data=True):
+        if data["kind"] != "variable":
+            continue
+        name = data["label"]
+        graph.add_node(
+            name,
+            kind="variable",
+            label=name,
+            aliases=data["aliases"],
+            unit=data["unit"],
+            description=data["description"],
+        )
+    for _node, data in canonical.nodes(data=True):
+        if data["kind"] != "relation":
+            continue
+        relation = data["relation"]
+        for source, target in combinations(data["variables"], 2):
             if graph.has_edge(source, target):
-                data = graph[source][target]
-                data["relations"].append(relation.name)
-                data["relation_tags"].extend(
-                    tag for tag in relation.tags if tag not in data["relation_tags"]
+                edge = graph[source][target]
+                edge["relations"].append(relation.name)
+                edge["relation_tags"].extend(
+                    tag for tag in relation.tags if tag not in edge["relation_tags"]
                 )
             else:
                 graph.add_edge(
@@ -90,47 +96,16 @@ def build_variable_relation_graph(relations: Iterable[Any] | None = None) -> nx.
                     relations=[relation.name],
                     relation_tags=list(relation.tags),
                 )
-
     for _, _, data in graph.edges(data=True):
         data["relation_count"] = len(data["relations"])
         data["label"] = ", ".join(data["relations"])
         data["tags"] = ", ".join(data["relation_tags"])
-
     return graph
 
 
 def build_relation_node_graph(relations: Iterable[Any] | None = None) -> nx.Graph:
-    """Build an undirected graph with both variables and relations as nodes."""
-    if relations is None:
-        relations = RELATIONS.get_filtered_relations()
-
-    graph = nx.Graph()
-    for relation in relations:
-        relation_node = f"relation::{relation.name}"
-        graph.add_node(
-            relation_node,
-            kind="relation",
-            label=relation.name,
-            aliases="",
-            unit="",
-            tags=", ".join(relation.tags),
-            description=relation.source_name,
-        )
-        for name in relation.variables:
-            spec = VARIABLES.get(name)
-            variable_node = f"variable::{name}"
-            graph.add_node(
-                variable_node,
-                kind="variable",
-                label=name,
-                aliases=", ".join(spec.aliases),
-                unit=spec.unit,
-                tags="",
-                description=spec.description,
-            )
-            graph.add_edge(relation_node, variable_node)
-
-    return graph
+    """Return an undirected presentation of the canonical incidence graph."""
+    return build_relation_graph(relations).to_undirected()
 
 
 def plot_relation_graph(
