@@ -1,0 +1,17 @@
+>>> python .github/refactor_relationsystem.py loc /tmp/loc-before.json
+Traceback (most recent call last):
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 547, in <module>
+    main()
+    ~~~~^^
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 539, in main
+    loc(Path(sys.argv[2]))
+    ~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 513, in loc
+    payload = {str(p.relative_to(ROOT)): implementation_loc(p) for p in files}
+                                         ~~~~~~~~~~~~~~~~~~^^^
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 499, in implementation_loc
+    docs = docstring_lines(source)
+  File "/home/runner/work/fusdb/fusdb/.github/refactor_relationsystem.py", line 492, in docstring_lines
+    if isinstance(first, ast.Expr) and isinstance(first.value, (ast.Str, ast.Constant)) and isinstance(getattr(first.value, "value", None), str):
+                                                                ^^^^^^^
+AttributeError: module 'ast' has no attribute 'Str'
