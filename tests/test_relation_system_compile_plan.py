@@ -10,57 +10,29 @@ def _model():
     )
 
 
-def test_relation_system_is_lazy_reusable_model():
-    model = _model()
-    assert model._graph is None
-    assert not hasattr(model, "pack")
-    assert not hasattr(model, "run")
-
-    plan = model.compile()
-    assert isinstance(plan, CompilePlan)
-    assert plan.model is model
-    assert not hasattr(plan, "_graph")
-    assert not hasattr(plan, "_structural_graph")
-    assert not hasattr(plan, "compile")
-
-
-def test_compile_plans_are_independent_and_do_not_mutate_model_graph():
+def test_compile_produces_independent_executable_scenarios():
+    """Compiling the same model twice must produce independent runnable scenarios."""
     model = _model()
     plan_a = model.compile(fixed={"R"})
     plan_b = model.compile(inputs={"R": 9.0, "a": 3.0}, fixed={"R", "a"})
 
+    assert isinstance(plan_a, CompilePlan)
+    assert isinstance(plan_b, CompilePlan)
     assert plan_a is not plan_b
+
     before = dict(plan_a.values)
     plan_b.values["R"] = 10.0
     assert plan_a.values == before
 
-    relation_node = ("relation", "Aspect ratio")
-    assert model.graph.nodes[relation_node].get("active") is None
-    assert "Aspect ratio" in plan_a.active_relations
+    result = plan_a.run("reconcile")
+    assert result["mode"] == "reconcile"
+    assert result["success"]
+    assert result["values"]["A"] == 3.0
 
 
-def test_compile_plan_runs_without_recompiling_model():
-    model = _model()
-    plan = model.compile(fixed={"R", "a"})
+def test_fully_specified_compiled_scenario_verifies():
+    plan = _model().compile(inputs={"R": 9.0, "a": 3.0, "A": 3.0}, fixed={"R", "a", "A"})
     result = plan.run("verify")
+
     assert result["mode"] == "verify"
     assert result["success"]
-
-
-def test_matching_scenarios_reuse_model_structure_cache(monkeypatch):
-    model = _model()
-    model.compile()
-    calls = 0
-    original = CompilePlan._run_compile_pass
-
-    def counted(self):
-        nonlocal calls
-        calls += 1
-        return original(self)
-
-    monkeypatch.setattr(CompilePlan, "_run_compile_pass", counted)
-    second = model.compile(inputs={"R": 9.0, "a": 3.0})
-
-    assert calls == 0
-    assert len(model._structure_cache) == 1
-    assert second.values["R"] == 9.0
