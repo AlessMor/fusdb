@@ -12,9 +12,9 @@ from scipy.sparse import csr_matrix, lil_matrix
 from scipy.sparse.csgraph import maximum_bipartite_matching
 
 
-from .relation import COORDINATE_NAMES, Relation, canonicalize_relation, canonicalize_relation_names, constraint_from_expression, is_default_relation
+from .relation import COORDINATE_NAMES, Relation, build_constraint_relations, canonicalize_relation, canonicalize_relation_names, is_default_relation
 from .registry import VARIABLES
-from .utils import ZERO_TOL, parse_constraint_specs, signed_scalar_grid, value_in_domain, volume_average
+from .utils import ZERO_TOL, signed_scalar_grid, value_in_domain, volume_average
 from .variable import Variable
 
 
@@ -2796,17 +2796,13 @@ class RelationSystem:
             canonicalize_relation(rel, self.variable_registry) for rel in self.relations
         )
         self.system_constraint_relations = tuple(
-            canonicalize_relation_names(
-                constraint_from_expression(
-                    text,
-                    name=f"system_constraint_{index}",
-                    enforce=enforce,
-                    source_kind="system",
-                    source_name=self.name,
-                ),
-                self.variable_registry,
+            canonicalize_relation_names(guard, self.variable_registry)
+            for guard in build_constraint_relations(
+                constraints,
+                name_prefix="system_constraint",
+                source_kind="system",
+                source_name=self.name,
             )
-            for index, (text, enforce) in enumerate(parse_constraint_specs(constraints))
         )
 
         # The known universe is model metadata: declarations, candidate
