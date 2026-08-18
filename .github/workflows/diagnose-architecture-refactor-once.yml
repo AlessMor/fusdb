@@ -1,0 +1,39 @@
+name: Diagnose architecture refactor once
+
+on:
+  push:
+    branches:
+      - refactor/architecture-simplification-20260817
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refactor/architecture-simplification-20260817
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Run tests and persist result
+        shell: bash
+        run: |
+          set +e
+          python -m pytest > .architecture-refactor-test.log 2>&1
+          code=$?
+          printf '\nEXIT_CODE=%s\n' "$code" >> .architecture-refactor-test.log
+          rm -f .github/workflows/diagnose-architecture-refactor-once.yml
+          rm -f .github/workflows/validate-architecture-refactor-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'test: record architecture refactor test result'
+          git push origin HEAD:refactor/architecture-simplification-20260817
+          exit "$code"
