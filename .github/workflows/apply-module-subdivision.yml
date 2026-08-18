@@ -28,6 +28,19 @@ jobs:
           cp .github/apply_module_subdivision_fixups.py /tmp/apply_module_subdivision_fixups.py
           python - <<'PY'
           from pathlib import Path
+
+          # Inline the only live use before the main script deletes the wrapper.
+          reactor = Path('src/fusdb/reactor.py')
+          source = reactor.read_text(encoding='utf-8')
+          source = source.replace(
+              'self.relation_include = _with_sustainment_guards(base_include, _confinement_regime(self.tags))',
+              'self.relation_include = _unique_extend(base_include, _regime_guard_names(_confinement_regime(self.tags)))',
+          )
+          reactor.write_text(source, encoding='utf-8')
+
+          # The main script originally guarded against a live caller before
+          # performing the inline; after the source replacement above the final
+          # stale-reference assertion is the stronger check.
           path = Path('.github/apply_module_subdivision.py')
           text = path.read_text(encoding='utf-8')
           text = text.replace(
