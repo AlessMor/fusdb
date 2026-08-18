@@ -22,22 +22,6 @@ from .relationsystem import RelationSystem
 from .variable import Variable
 
 
-def _copy_relation(
-    relation: Relation,
-    *,
-    input_names: tuple[str, ...] | None = None,
-    constant_names: tuple[str, ...] | None = None,
-    argument_names: tuple[str, ...] | None = None,
-) -> Relation:
-    """Return ``relation`` with only dependency metadata replaced."""
-    return replace(
-        relation,
-        input_names=relation.input_names if input_names is None else input_names,
-        constant_names=relation.constant_names if constant_names is None else constant_names,
-        argument_names=relation.argument_names if argument_names is None else argument_names,
-    )
-
-
 def _promote_volume_measure_dependencies(
     variables: list[Variable], relations: tuple[Relation, ...]
 ) -> tuple[Relation, ...]:
@@ -99,7 +83,7 @@ def _promote_volume_measure_dependencies(
             promoted.append(relation)
             continue
         promoted.append(
-            _copy_relation(
+            replace(
                 relation,
                 input_names=(*relation.input_names, measure),
                 constant_names=tuple(name for name in relation.constant_names if name != measure),
@@ -239,7 +223,7 @@ def _demote_static_coordinate_dependencies(
         kept_pairs = [(arg, name) for arg, name in pairs if name not in moved_names]
         constants = tuple(dict.fromkeys((*relation.constant_names, *moved_names)))
         out.append(
-            _copy_relation(
+            replace(
                 relation,
                 input_names=tuple(name for _arg, name in kept_pairs),
                 constant_names=constants,
