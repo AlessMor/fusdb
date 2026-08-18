@@ -12,6 +12,25 @@ def write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+# relations/utils.py moved into composition/_helpers.py.  The generic relative
+# utils->numerics rewrite is correct for core numerical utilities but not for
+# these composition-private helpers, so repair those local imports explicitly.
+for path in Path("src/fusdb/relations/composition").glob("*.py"):
+    text = read(path)
+    text = text.replace(
+        "from ..numerics import _positive_denominator, _species_fraction",
+        "from ._helpers import _positive_denominator, _species_fraction",
+    )
+    text = text.replace(
+        "from ..numerics import _positive_denominator",
+        "from ._helpers import _positive_denominator",
+    )
+    text = text.replace(
+        "from ..numerics import _species_fraction",
+        "from ._helpers import _species_fraction",
+    )
+    write(path, text)
+
 # Tables are now I/O/presentation data, not plotting data.  Keep the plotting
 # data module limited to Curve/CurveSet/FieldMap and update the one test that
 # intentionally imports the data classes directly.
