@@ -10,7 +10,7 @@ from matplotlib.axes import Axes
 from fusdb.registry import RELATIONS, VARIABLES
 from fusdb.relationsystem import relation_bipartite_graph
 
-from ._bokeh import move_legends_below
+from .bokeh import move_legends_below
 from .style import RELATION_COLOR, VARIABLE_COLOR, axes
 
 

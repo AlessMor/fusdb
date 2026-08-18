@@ -3,7 +3,7 @@
 from typing import Any
 
 import numpy as np
-from fusdb.utils import trapezoid
+from fusdb.numerics import trapezoid
 
 
 def _positive_denominator(value: Any, *, name: str) -> Any:

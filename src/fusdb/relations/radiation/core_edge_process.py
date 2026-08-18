@@ -21,7 +21,7 @@ from typing import Any
 import numpy as np
 
 from fusdb.relation import relation
-from fusdb.utils import volume_average
+from fusdb.numerics import volume_average
 
 from .impurity_radiation import _MAVRIN_T_MAX, _MAVRIN_T_MIN, _binned_log10_Lz, _load_radiation_dataset
 

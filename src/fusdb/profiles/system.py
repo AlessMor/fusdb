@@ -14,12 +14,12 @@ from typing import Any
 
 import numpy as np
 
-from .profile_sources import prepare_source_profiles
-from .relation import Relation
-from .registry import VARIABLES
-from .registry.coordinate_variables import PHYSICAL_COORDINATE_NAMES
-from .relationsystem import RelationSystem
-from .variable import Variable
+from .sources import prepare_source_profiles
+from ..relation import Relation
+from ..registry import VARIABLES
+from ..registry.coordinate_variables import PHYSICAL_COORDINATE_NAMES
+from ..relationsystem import RelationSystem
+from ..variable import Variable
 
 
 def _promote_volume_measure_dependencies(

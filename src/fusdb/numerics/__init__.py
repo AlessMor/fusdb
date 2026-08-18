@@ -1,4 +1,4 @@
-"""General utilities for FusDB numeric relation solving."""
+"""Low-level numerical primitives shared by FusDB core modules."""
 
 from __future__ import annotations
 
@@ -163,24 +163,6 @@ def domain_bounds_for_solver(
     if lb is not None and ub is not None and lb > ub:
         raise ValueError(f"Empty numerical domain after open-bound offset: {domain!r}.")
     return lb, ub
-
-
-def scipy_bounds(
-    domain: tuple[float | None, float | None, bool, bool],
-    *,
-    zero_tol: float,
-) -> tuple[float, float]:
-    """Return SciPy-compatible bounds for a parsed domain.
-
-    Args:
-        domain: Parsed domain tuple.
-        zero_tol: Offset used for open finite bounds.
-
-    Returns:
-        Bounds using infinities for unbounded sides.
-    """
-    lb, ub = domain_bounds_for_solver(domain, zero_tol=zero_tol)
-    return -np.inf if lb is None else float(lb), np.inf if ub is None else float(ub)
 
 
 def validate_solver_domain(
@@ -413,24 +395,4 @@ def compare_numeric(
     return ok, np.asarray(residual, dtype=float).reshape(-1), np.asarray(violation, dtype=float).reshape(-1)
 
 
-def safe_max_abs(value: Any, default: float = 0.0) -> float:
-    """Return max absolute finite magnitude or a default.
-
-    Args:
-        value: Scalar or array.
-        default: Fallback value.
-
-    Returns:
-        Non-negative finite magnitude.
-    """
-    try:
-        arr = np.asarray(value, dtype=float).reshape(-1)
-    except Exception:
-        return float(default)
-    finite = arr[np.isfinite(arr)]
-    if finite.size == 0:
-        return float(default)
-    return float(np.max(np.abs(finite)))
-
-
-from .profiles import line_average, trapezoid, volume_average
+from ..profiles.numerics import line_average, trapezoid, volume_average

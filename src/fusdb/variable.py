@@ -10,7 +10,7 @@ import numpy as np
 
 from .relation import Relation, build_constraint_relations
 from .registry import VARIABLES, VariableSpec, convert_value
-from .utils import coerce_numeric_value, coerce_to_shape, unique_preserve_order, value_in_domain
+from .numerics import coerce_numeric_value, coerce_to_shape, unique_preserve_order, value_in_domain
 
 
 @dataclass(frozen=True)
@@ -147,7 +147,7 @@ class Variable:
             object.__setattr__(self, "coordinate_values", source.copy())
             object.__setattr__(self, "size", int(source.size))
 
-        object.__setattr__(self, "input_value", self._copy_value(self.value))
+        object.__setattr__(self, "input_value", self.value.copy() if isinstance(self.value, np.ndarray) else self.value)
 
         object.__setattr__(
             self,
@@ -163,7 +163,3 @@ class Variable:
     def clone(self, **changes: Any) -> "Variable":
         return dataclasses.replace(self, **changes)
 
-    def _copy_value(self, value: Any) -> Any:
-        if isinstance(value, np.ndarray):
-            return value.copy()
-        return value

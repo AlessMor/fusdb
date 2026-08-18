@@ -35,7 +35,7 @@ from typing import Any
 
 import numpy as np
 
-from fusdb.batch import map_chunks, parallel_chunk_size
+from fusdb.modes._batch import map_chunks, parallel_chunk_size
 from fusdb.relationsystem import (
     apply_completion_providers_batched,
     coerce_batched,

@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 
 from fusdb.relation import relation
-from fusdb.utils import line_average, volume_average
+from fusdb.numerics import line_average, volume_average
 
 
 def _profile_average_residual(avg: Any, profile: Any, rho: Any, w_V: Any) -> Any:

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from fusdb.registry import RELATIONS
-from fusdb.utils.profiles import volume_average
+from fusdb.profiles.numerics import volume_average
 
 
 def test_process_core_radiation_declares_minor_radius_and_volume_weight():

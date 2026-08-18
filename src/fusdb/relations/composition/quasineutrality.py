@@ -3,7 +3,7 @@
 from typing import Any
 
 from fusdb.relation import relation
-from ..utils import _positive_denominator
+from ._helpers import _positive_denominator
 
 
 @relation(

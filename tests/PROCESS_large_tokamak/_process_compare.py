@@ -7,7 +7,7 @@ test modules and the three notebooks cannot drift apart.
 from __future__ import annotations
 
 import numpy as np
-from fusdb.utils import volume_average
+from fusdb.numerics import volume_average
 
 from _process_fixture import build_reactor
 from _process_mfile import read_mfile

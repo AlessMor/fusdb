@@ -24,7 +24,7 @@ import numpy as np
 
 from fusdb.registry import RELATIONS
 
-from ._bokeh import (
+from .bokeh import (
     explorer_layout,
     link_two_filter_visibility,
     log_grid,
@@ -32,7 +32,7 @@ from ._bokeh import (
     validate_axis_limits,
 )
 from .data import Curve, CurveSet
-from .renderers import bokeh_curve_set
+from .bokeh import bokeh_curve_set
 
 # Preferred parametrisation per reaction, best-first. The single ordering used by
 # both the static plot (which keeps one curve per reaction) and the interactive

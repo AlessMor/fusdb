@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from fusdb.profile_system import build_relation_system
+from fusdb.profiles.system import build_relation_system
 from fusdb.registry import RELATIONS
-from fusdb.utils import volume_average
+from fusdb.numerics import volume_average
 from fusdb.variable import Variable
 
 

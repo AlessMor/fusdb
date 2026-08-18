@@ -1,7 +1,7 @@
 import numpy as np
 
 from fusdb.registry import RELATIONS, TAGS, VARIABLES
-from fusdb.utils.profiles import volume_average
+from fusdb.profiles.numerics import volume_average
 
 
 def test_rho_is_computational_and_legacy_minor_radius_aliases_resolve_to_rho_minor():

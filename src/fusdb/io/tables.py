@@ -3,13 +3,44 @@
 from __future__ import annotations
 
 import html
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 import numpy as np
 
 from ..registry import VARIABLES
-from .data import TableCell, TableData
+
+
+@dataclass(frozen=True)
+class TableCell:
+    """A display-ready table cell, independent of HTML or text rendering."""
+
+    text: str
+    foreground: str = "#000000"
+    background: str = ""
+    tooltip: str = ""
+
+
+@dataclass(frozen=True)
+class TableData:
+    """A table with already-formatted cells for HTML and plain-text renderers."""
+
+    headers: Sequence[str]
+    rows: Sequence[tuple[str, Sequence[TableCell]]]
+    header_colors: Sequence[str] = ()
+
+    def __post_init__(self) -> None:
+        headers = tuple(self.headers)
+        rows = tuple((str(name), tuple(cells)) for name, cells in self.rows)
+        if any(len(cells) != len(headers) for _, cells in rows):
+            raise ValueError("Every TableData row must contain one cell per header.")
+        colors = tuple(self.header_colors) or tuple("#000000" for _ in headers)
+        if len(colors) != len(headers):
+            raise ValueError("TableData header_colors must match headers.")
+        object.__setattr__(self, "headers", headers)
+        object.__setattr__(self, "rows", rows)
+        object.__setattr__(self, "header_colors", colors)
 
 
 def _format_table_value(value: Any) -> str:

@@ -15,10 +15,10 @@ from typing import Any
 
 import numpy as np
 
-from .relation import Relation
-from .registry import VARIABLES
-from .utils.profiles import coordinate_average, normalized_shape, reinterpolate_profile, volume_average
-from .variable import Variable
+from ..relation import Relation
+from ..registry import VARIABLES
+from .numerics import coordinate_average, normalized_shape, reinterpolate_profile, volume_average
+from ..variable import Variable
 
 
 def _source_grid(variable: Variable) -> np.ndarray:
@@ -108,26 +108,25 @@ def _evaluate_source_profile(
     return np.asarray(average) * np.asarray(shape, dtype=float)
 
 
-def _source_profile_relation_from_data(
-    *,
-    name: str,
-    coordinate: str,
-    source: np.ndarray,
-    source_values: np.ndarray,
-    fixed: bool,
-    average_name: str | None,
-) -> Relation:
-    """Build a source-profile relation from its canonical immutable data."""
+def source_profile_relation(variable: Variable, *, average_name: str | None) -> Relation:
+    """Build the ordinary relation that maps one immutable source profile.
+
+    For a movable supplied profile, ``average_name`` is the sole amplitude
+    degree of freedom and the dynamically reinterpolated source curve supplies
+    only the shape. For a fixed supplied profile, the absolute source values
+    are mapped directly and no amplitude variable is introduced.
+    """
+    name = variable.name
+    coordinate = variable.coordinate or "rho"
+    fixed = bool(variable.fixed)
     if not fixed and average_name is None:
         raise ValueError(f"Movable source profile {name!r} has no registered volume-average variable.")
 
-    source = np.asarray(source, dtype=float).copy()
-    source_values = np.asarray(source_values, dtype=float).copy()
     func = partial(
         _evaluate_source_profile,
-        source_values=source_values,
-        source_coordinate=source,
-        fixed=bool(fixed),
+        source_values=np.asarray(variable.input_value, dtype=float).copy(),
+        source_coordinate=_source_grid(variable),
+        fixed=fixed,
     )
     input_names: tuple[str, ...] = ()
     argument_names: tuple[str, ...] = ()
@@ -150,24 +149,6 @@ def _source_profile_relation_from_data(
         argument_names=argument_names,
         source_kind="source_profile",
         source_name=name,
-    )
-
-
-def source_profile_relation(variable: Variable, *, average_name: str | None) -> Relation:
-    """Build the ordinary relation that maps one immutable source profile.
-
-    For a movable supplied profile, ``average_name`` is the sole amplitude
-    degree of freedom and the dynamically reinterpolated source curve supplies
-    only the shape. For a fixed supplied profile, the absolute source values
-    are mapped directly and no amplitude variable is introduced.
-    """
-    return _source_profile_relation_from_data(
-        name=variable.name,
-        coordinate=variable.coordinate or "rho",
-        source=_source_grid(variable),
-        source_values=np.asarray(variable.input_value, dtype=float),
-        fixed=bool(variable.fixed),
-        average_name=average_name,
     )
 
 

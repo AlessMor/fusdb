@@ -14,7 +14,7 @@ from scipy.sparse.csgraph import maximum_bipartite_matching
 
 from .relation import COORDINATE_NAMES, Relation, build_constraint_relations, canonicalize_relation, canonicalize_relation_names, is_default_relation
 from .registry import VARIABLES
-from .utils import ZERO_TOL, signed_scalar_grid, value_in_domain, volume_average
+from .numerics import ZERO_TOL, signed_scalar_grid, value_in_domain, volume_average
 from .variable import Variable
 
 

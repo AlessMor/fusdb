@@ -14,7 +14,7 @@ from typing import Any, Callable
 import numpy as np
 from scipy.optimize import least_squares, root_scalar
 
-from .utils import compare_numeric, domain_bounds_for_solver, normalize_tags, parse_constraint_specs, safe_max_abs, signed_scalar_grid, unique_preserve_order, value_in_domain
+from .numerics import compare_numeric, domain_bounds_for_solver, normalize_tags, parse_constraint_specs, signed_scalar_grid, unique_preserve_order, value_in_domain
 
 REGISTERED_RELATIONS: dict[str, "Relation"] = {}
 _ALLOWED_OPS = {"==", "<", "<=", ">", ">="}
@@ -421,7 +421,16 @@ class Relation:
         if out is not None and scales is not None:
             base_scale = scales.get(out, 1.0)
         else:
-            base_scale = max(safe_max_abs(lhs), safe_max_abs(rhs), 1.0)
+            magnitudes = [1.0]
+            for value in (lhs, rhs):
+                try:
+                    arr = np.asarray(value, dtype=float).reshape(-1)
+                except Exception:
+                    continue
+                finite = arr[np.isfinite(arr)]
+                if finite.size:
+                    magnitudes.append(float(np.max(np.abs(finite))))
+            base_scale = max(magnitudes)
         if out is not None and rel_tols and out in rel_tols:
             tol = float(rel_tols[out])
         else:

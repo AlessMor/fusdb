@@ -14,6 +14,8 @@ from typing import Any, Sequence
 
 import numpy as np
 
+from .data import CurveSet
+
 _LABEL_STYLE = "font-weight:600; min-width:90px; padding-top:6px;"
 
 
@@ -309,3 +311,54 @@ def explorer_layout(
         ),
         status,
     )
+
+
+def bokeh_curve_set(
+    data: CurveSet,
+    *,
+    plot: Any | None = None,
+    width: int = 960,
+    height: int = 620,
+    tools: str = "pan,wheel_zoom,box_zoom,reset,save",
+    legend: bool = True,
+) -> tuple[Any, list[Any], list[Any]]:
+    """Render ``data`` with Bokeh and return ``(figure, renderers, sources)``.
+
+    Passing an existing ``plot`` lets domain explorers add filters and widgets
+    without duplicating the conversion from :class:`Curve` to Bokeh sources.
+    """
+    from bokeh.models import ColumnDataSource
+    from bokeh.plotting import figure
+
+    if plot is None:
+        plot = figure(
+            width=width,
+            height=height,
+            x_axis_type=data.xscale,
+            y_axis_type=data.yscale,
+            title=data.title or "",
+            tools=tools,
+            active_scroll="wheel_zoom",
+            sizing_mode="stretch_width",
+        )
+    renderers, sources = [], []
+    for curve in data.curves:
+        source = ColumnDataSource(curve.source_data())
+        style = dict(curve.style)
+        marker_only = style.pop("marker_only", False)
+        line_width = style.pop("linewidth", style.pop("line_width", 2))
+        legend_kw = {"legend_label": curve.label} if legend else {}
+        if marker_only:
+            marker_size = style.pop("markersize", style.pop("size", 8))
+            renderer = plot.scatter("x", "y", source=source, size=marker_size, **legend_kw, **style)
+        else:
+            renderer = plot.line("x", "y", source=source, line_width=line_width, **legend_kw, **style)
+        renderers.append(renderer)
+        sources.append(source)
+    plot.xaxis.axis_label = data.xlabel or ""
+    plot.yaxis.axis_label = data.ylabel or ""
+    plot.grid.grid_line_alpha = 0.3
+    if legend and plot.legend:
+        move_legends_below(plot)
+        plot.legend.click_policy = "hide"
+    return plot, renderers, sources

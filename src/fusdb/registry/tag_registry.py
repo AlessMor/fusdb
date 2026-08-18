@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from ..utils import normalize_tag, normalize_tags
+from ..numerics import normalize_tag, normalize_tags
 
 
 #: Group whose tags are declared but carry no selection meaning.  They enter

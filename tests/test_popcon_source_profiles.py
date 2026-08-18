@@ -7,7 +7,7 @@ import pickle
 import numpy as np
 
 from fusdb.modes import popcon as popcon_mode
-from fusdb.profile_system import build_relation_system
+from fusdb.profiles.system import build_relation_system
 from fusdb.registry import RELATIONS
 from fusdb.variable import Variable
 

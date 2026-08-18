@@ -3,7 +3,7 @@
 from typing import Any
 
 from fusdb.relation import relation
-from fusdb.utils.datasets import evaluate_amjuel_h4_rate
+from fusdb.registry.dataset.evaluation import evaluate_amjuel_h4_rate
 
 @relation(
     name='AMJUEL H.4 2.2.9 H2 molecular ionization rate',

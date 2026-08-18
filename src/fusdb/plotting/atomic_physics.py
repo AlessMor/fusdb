@@ -22,7 +22,7 @@ import numpy as np
 
 from fusdb.registry import RELATIONS
 
-from ._bokeh import (
+from .bokeh import (
     explorer_layout,
     link_two_filter_visibility,
     log_grid,
@@ -30,7 +30,7 @@ from ._bokeh import (
     validate_axis_limits,
 )
 from .data import Curve, CurveSet
-from .renderers import bokeh_curve_set
+from .bokeh import bokeh_curve_set
 
 # Display order of the process categories (relation subpackage names) and the
 # species filter buttons (hydrogenic first, so the default selection is leading).

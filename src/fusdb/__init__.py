@@ -5,10 +5,10 @@ from __future__ import annotations
 from .io import load_result, save_result
 from .relation import Relation, RelationSolveError, RelationUnderdeterminedError, RelationVerificationError, constraint_from_expression, relation
 from .relationsystem import CompilePlan, RelationSystem
-from .profile_system import build_relation_system
+from .profiles.system import build_relation_system
 from .variable import Variable
 from .reactor import Reactor, run_many, solve_reactors
-from .plotting.tables import SolvedColumn, render_table, variable_table_data
+from .io.tables import SolvedColumn, render_table, variable_table_data
 from .registry import RELATIONS, SPECIES, TAGS, VARIABLES, RelationRegistry, SpeciesRegistry, TagRegistry, VariableRegistry
 
 

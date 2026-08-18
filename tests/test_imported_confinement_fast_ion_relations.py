@@ -7,7 +7,7 @@ import pytest
 
 from fusdb.reactor import Reactor
 from fusdb.registry import KEV_TO_J, MU0, RELATIONS, VARIABLES
-from fusdb.utils import volume_average
+from fusdb.numerics import volume_average
 from fusdb.variable import Variable
 
 

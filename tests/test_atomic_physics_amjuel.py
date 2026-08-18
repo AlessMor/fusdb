@@ -10,7 +10,7 @@ import yaml
 
 from fusdb.registry import RelationRegistry
 from fusdb.registry.dataset import load_dataset
-from fusdb.utils.datasets import evaluate_amjuel_h2_rate, evaluate_amjuel_h4_rate
+from fusdb.registry.dataset.evaluation import evaluate_amjuel_h2_rate, evaluate_amjuel_h4_rate
 
 
 AMJUEL_DIR = (

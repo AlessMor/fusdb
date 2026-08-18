@@ -10,7 +10,7 @@ from types import MappingProxyType
 from typing import Any
 
 from ..relation import REGISTERED_RELATIONS, Relation, canonicalize_relation
-from ..utils import normalize_tags
+from ..numerics import normalize_tags
 from . import VARIABLES
 from .tag_registry import TAGS, TagRegistry
 from .variable_registry import VariableRegistry

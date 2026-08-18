@@ -3,10 +3,10 @@ import pickle
 import numpy as np
 import pytest
 
-from fusdb.profile_sources import prepare_source_profiles
+from fusdb.profiles.sources import prepare_source_profiles
 from fusdb.relation import Relation
 from fusdb.relationsystem import RelationSystem
-from fusdb.utils.profiles import volume_average
+from fusdb.profiles.numerics import volume_average
 from fusdb.variable import Variable
 
 

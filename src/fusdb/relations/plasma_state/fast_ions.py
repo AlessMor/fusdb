@@ -18,7 +18,7 @@ import numpy as np
 
 from fusdb.relation import relation
 from fusdb.registry import KEV_TO_J, MU0
-from fusdb.utils import volume_average
+from fusdb.numerics import volume_average
 
 
 @relation(
