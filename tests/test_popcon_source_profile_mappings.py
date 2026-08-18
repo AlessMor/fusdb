@@ -37,9 +37,10 @@ def test_worker_rebuild_preserves_foreign_coordinate_source_profile():
     original = _mapped_source_system(profile_size=31)
     spec = popcon_mode._system_spec(original)
 
+    generated = [item for item in spec["relations"] if not isinstance(item, str)]
     assert any(
-        item.get("kind") == "source_profile" and item.get("coordinate") == "rho_minor"
-        for item in spec["relations"]
+        item.source_kind == "source_profile" and "rho_minor" in item.input_names
+        for item in generated
     )
 
     # Geometry-independent tokamak coordinate defaults are materialized by the
