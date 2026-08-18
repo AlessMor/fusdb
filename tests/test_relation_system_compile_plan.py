@@ -1,4 +1,5 @@
-from fusdb import CompilePlan, RelationSystem, Variable
+from fusdb import RelationSystem, Variable
+from fusdb.relationsystem import CompilePlan
 from fusdb.registry import RELATIONS
 
 
