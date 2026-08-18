@@ -1,4 +1,4 @@
-"""Generic Matplotlib and Bokeh renderers for backend-neutral plot data."""
+"""Generic Matplotlib renderers for backend-neutral plot data."""
 
 from __future__ import annotations
 

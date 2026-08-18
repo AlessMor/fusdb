@@ -1,8 +1,8 @@
-"""Backend-neutral data models used by fusdb plotters and table renderers.
+"""Backend-neutral data models used by FusDB plotters.
 
-These objects deliberately depend only on NumPy.  Scientific modules prepare
-them once, then the matplotlib, Bokeh, HTML, or text presentation layer can
-consume the same data without re-evaluating relations.
+These objects deliberately depend only on NumPy. Scientific modules prepare
+them once, then Matplotlib or Bokeh presentation layers can consume the same
+data without re-evaluating relations.
 """
 
 from __future__ import annotations
