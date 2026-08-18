@@ -14,11 +14,6 @@ from .bokeh import move_legends_below
 from .style import RELATION_COLOR, VARIABLE_COLOR, axes
 
 
-def _short_label(label: str, *, limit: int = 6) -> str:
-    """Return a compact node label for drawing inside a glyph."""
-    return label if len(label) <= limit else f"{label[:limit]}..."
-
-
 def build_relation_graph(relations: Iterable[Any] | None = None) -> nx.DiGraph:
     """Return the canonical directed incidence graph with display metadata.
 
@@ -149,7 +144,7 @@ def bokeh_relation_graph(
                 "x": float(x),
                 "y": float(y),
                 "label": data["label"],
-                "short_label": _short_label(data["label"]),
+                "short_label": data["label"] if len(data["label"]) <= 6 else f"{data['label'][:6]}...",
                 "kind": kind,
                 "node_id": node,
                 "aliases": data.get("aliases", ""),

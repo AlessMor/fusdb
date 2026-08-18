@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fusdb.registry import RELATIONS, RelationRegistry, VariableRegistry
+from fusdb.registry import RELATIONS, RelationRegistry, TagRegistry, VariableRegistry
 from fusdb.relation import Relation, canonicalize_relation
 from fusdb.relationsystem import RelationSystem
 from fusdb.variable import Variable
@@ -184,3 +184,13 @@ def test_ordered_mode_resolves_step_by_function_name():
     result = system.ordered(order=["parabolic_electron_temperature_profile"])
     assert not result["errors"]
     assert result["executed_relations"] == ["Parabolic electron temperature profile"]
+
+def test_empty_reactor_tags_select_only_unscoped_relations():
+    tags = TagRegistry({"device": ["tokamak"], "descriptive": ["profile"]})
+
+    assert tags.relation_matches((), ())
+    assert tags.relation_matches(("profile",), ())
+    assert not tags.relation_matches(("tokamak",), ())
+    assert not tags.relation_matches(("tokamak", "profile"), ())
+    assert tags.relation_matches(("tokamak",), ("tokamak",))
+

@@ -576,11 +576,6 @@ def _solve_cores_batched(
         refresh()
 
 
-def _relation_worker_item(rel: Any) -> Any:
-    """Return the minimal picklable worker representation for one relation."""
-    return rel if rel.source_kind == "source_profile" else rel.name
-
-
 def _system_spec(system: Any) -> dict[str, Any]:
     """Picklable recipe to rebuild an equivalent system in a worker process.
 
@@ -604,7 +599,7 @@ def _system_spec(system: Any) -> dict[str, Any]:
             for name in sorted(system.rel_tols)
             if name != "rho"
         ],
-        "relations": [_relation_worker_item(rel) for rel in system.model.candidate_primary_relations],
+        "relations": [rel if rel.source_kind == "source_profile" else rel.name for rel in system.model.candidate_primary_relations],
         "constraints": system.model.constraints_spec,
     }
 

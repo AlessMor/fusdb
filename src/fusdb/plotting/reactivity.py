@@ -70,12 +70,6 @@ _NAME_RE = re.compile(r"(?P<reaction>.+?) reactivity (?P<source>.+)")
 ReactivitySource = Callable[..., Any]
 
 
-def _is_reactivity_relation(relation: Any) -> bool:
-    """Return whether a relation maps ``T_i`` to a single ``sigmav_*`` output."""
-    outputs = relation.outputs
-    return relation.input_names == ("T_i",) and len(outputs) == 1 and outputs[0].startswith("sigmav_")
-
-
 def _source_rank(source: str) -> int:
     """Return the preference index of a parametrisation (lower is better)."""
     return SOURCE_PREFERENCE.index(source) if source in SOURCE_PREFERENCE else len(SOURCE_PREFERENCE)
@@ -99,7 +93,8 @@ def discover_reactivity_series() -> list[tuple[str, str, str, Any]]:
     """
     series: list[tuple[str, str, str, Any]] = []
     for relation in RELATIONS:
-        if not _is_reactivity_relation(relation):
+        outputs = relation.outputs
+        if not (relation.input_names == ("T_i",) and len(outputs) == 1 and outputs[0].startswith("sigmav_")):
             continue
         match = _NAME_RE.fullmatch(relation.name)
         if match is None:
