@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from fusdb.registry import DATASETS, REACTIONS, get_relations, load_dataset
+import fusdb
+from fusdb.registry import DATASETS, REACTIONS, RELATIONS, RelationRegistry, get_relations, load_dataset
+from fusdb.registry import dataset as dataset_module
+from fusdb.registry import reaction_registry, reactivity_config, relation_registry
 
 
 def test_reaction_metadata_is_a_read_only_mapping() -> None:
     assert isinstance(REACTIONS, Mapping)
     assert REACTIONS["DT"].stoichiometry("D") == -1
     assert REACTIONS["DT"].stoichiometry("He4") == 1
+    assert not hasattr(reaction_registry, "ReactionRegistry")
 
 
 def test_dataset_index_and_loader_share_stable_ids() -> None:
@@ -16,10 +20,23 @@ def test_dataset_index_and_loader_share_stable_ids() -> None:
     dataset_id = "reactivity_NRL_DT"
     assert dataset_id in DATASETS
     assert load_dataset(dataset_id).dataset_id == dataset_id
+    assert not hasattr(dataset_module, "DatasetRegistry")
 
 
-def test_relation_discovery_is_cached_and_functional() -> None:
+def test_relation_discovery_is_cached_without_a_proxy_class() -> None:
     registry = get_relations()
-    assert registry is get_relations()
+    assert registry is get_relations() is RELATIONS
+    assert isinstance(registry, RelationRegistry)
     assert len(registry) > 0
     assert registry.get("aspect_ratio").function_name == "aspect_ratio"
+    assert not hasattr(relation_registry, "LazyRelationRegistry")
+
+
+def test_reactivity_settings_no_longer_need_a_config_class() -> None:
+    assert reactivity_config.REACTIVITY_TABLES.energy_grid_num_points == 1000
+    assert not hasattr(reactivity_config, "ReactivityTableConfig")
+
+
+def test_implementation_classes_are_not_top_level_api() -> None:
+    for name in ("CompilePlan", "RelationRegistry", "SpeciesRegistry", "TagRegistry", "VariableRegistry"):
+        assert not hasattr(fusdb, name)
