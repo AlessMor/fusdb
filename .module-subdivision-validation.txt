@@ -2,6 +2,6 @@ MODULE_SUBDIVISION_EXIT_CODE=1
 
 --- LOG TAIL ---
 Traceback (most recent call last):
-  File "/home/runner/work/fusdb/fusdb/.github/apply_module_subdivision.py", line 320, in <module>
-    raise RuntimeError("_with_sustainment_guards unexpectedly has live callers")
-RuntimeError: _with_sustainment_guards unexpectedly has live callers
+  File "/home/runner/work/fusdb/fusdb/.github/apply_module_subdivision.py", line 441, in <module>
+    raise RuntimeError(f"Deleted helper {token!r} still referenced in {matches}")
+RuntimeError: Deleted helper '_with_sustainment_guards' still referenced in ['src/fusdb/reactor.py']
