@@ -39,9 +39,10 @@ def test_static_mapping_is_constant_but_dynamic_mapping_stays_input():
         [static, avg],
         profile_size=46,
     ).compile()
-    migrated = next(rel for rel in static_system.model.candidate_primary_relations if rel.name == avg.name)
-    assert "w_V" not in migrated.input_names
-    assert "w_V" in migrated.constant_names
+    static_relation = next(rel for rel in static_system.model.candidate_primary_relations if rel.name == avg.name)
+    assert "w_V" in static_relation.input_names
+    assert "w_V" not in static_system.unresolved_dependencies(static_relation)
+    assert static_system.variable_roles["w_V"] == "inactive"
 
     dynamic = RELATIONS.get("Sauter self-similar profile volume mapping")
     dynamic_system = build_relation_system(
@@ -54,8 +55,10 @@ def test_static_mapping_is_constant_but_dynamic_mapping_stays_input():
         [dynamic, avg],
         profile_size=46,
     ).compile()
-    migrated_dynamic = next(rel for rel in dynamic_system.model.candidate_primary_relations if rel.name == avg.name)
-    assert "w_V" in migrated_dynamic.input_names
+    dynamic_relation = next(rel for rel in dynamic_system.model.candidate_primary_relations if rel.name == avg.name)
+    assert dynamic_relation.input_names == static_relation.input_names
+    assert "w_V" in dynamic_system.unresolved_dependencies(dynamic_relation)
+    assert dynamic_system.variable_roles["w_V"] == "computed"
 
 
 def test_geometry_dependent_coordinate_provider_remains_a_relation():

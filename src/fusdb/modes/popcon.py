@@ -601,6 +601,11 @@ def _system_spec(system: Any) -> dict[str, Any]:
         ],
         "relations": [rel if rel.source_kind == "source_profile" else rel.name for rel in system.model.candidate_primary_relations],
         "constraints": system.model.constraints_spec,
+        # Relations travel by NAME, so a worker re-fetches the registry original
+        # rather than this model's copy.  Any dependency fact the parent derived
+        # must therefore travel separately or the worker compiles a different
+        # graph than the single-process path.
+        "resolved_constants": tuple(sorted(system.model.resolved_constants)),
     }
 
 
@@ -625,7 +630,13 @@ def _rebuild_system(spec: Mapping[str, Any]) -> Any:
         RELATIONS.get(item) if isinstance(item, str) else item
         for item in spec["relations"]
     ]
-    return RelationSystem(variables, relations, constraints=spec["constraints"], name=spec["name"])
+    return RelationSystem(
+        variables,
+        relations,
+        constraints=spec["constraints"],
+        name=spec["name"],
+        resolved_constants=spec.get("resolved_constants", ()),
+    )
 
 
 def _solve_batched_cases(

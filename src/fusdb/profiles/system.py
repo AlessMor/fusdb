@@ -9,7 +9,6 @@ to the existing RelationSystem.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -20,77 +19,6 @@ from ..registry import VARIABLES
 from ..registry.coordinate_variables import PHYSICAL_COORDINATE_NAMES
 from ..relationsystem import RelationSystem
 from ..variable import Variable
-
-
-def _promote_volume_measure_dependencies(
-    variables: list[Variable], relations: tuple[Relation, ...]
-) -> tuple[Relation, ...]:
-    """Expose a genuinely dynamic volume measure in every relation that uses it.
-
-    Volume-integrating relations keep ``w_V``/``v_norm`` optional so standalone
-    calls and reduced geometry defaults retain historical behavior. At the
-    system boundary an explicitly supplied measure, or one produced by a
-    geometry-dependent relation, is promoted from an optional constant to a real
-    relation input so completion ordering and Jacobian sparsity see that geometry
-    dependency.
-
-    Geometry-independent fallback mappings such as ``w_V=rho`` are deliberately
-    *not* promoted. They carry no reactor-state ancestry and making them graph
-    inputs can perturb nonlinear provider ordering even though their numerical
-    value is identical to the legacy measure. This keeps reduced
-    tokamak/stellarator/mirror models behavior-neutral while allowing imported or
-    equilibrium-derived measures to participate structurally in profiles,
-    pressure, reaction-rate, radiation, and other volume-integrated physics.
-
-    Fixed absolute source profiles are excluded: they are merely reinterpolated
-    and their amplitude must not be renormalized by the volume measure.
-
-    ``w_V`` has precedence over ``v_norm`` because it reproduces the historical
-    discrete tokamak volume average exactly and avoids differentiating an
-    enclosed-volume coordinate numerically.
-    """
-    supplied = {
-        variable.name for variable in variables if variable.input_value is not None
-    }
-    produced = {output for relation in relations for output in relation.output_names}
-    available = supplied | produced
-    measure = "w_V" if "w_V" in available else ("v_norm" if "v_norm" in available else None)
-    if measure is None:
-        return relations
-
-    def is_static_fallback(relation: Relation) -> bool:
-        return (
-            "default" in relation.tags
-            and measure in relation.output_names
-            and not relation.input_names
-            and set(relation.constant_names) <= {"rho"}
-        )
-
-    dynamic = measure in supplied or any(
-        measure in relation.output_names and not is_static_fallback(relation)
-        for relation in relations
-    )
-    if not dynamic:
-        return relations
-
-    promoted: list[Relation] = []
-    for relation in relations:
-        if measure not in relation.constant_names:
-            promoted.append(relation)
-            continue
-        fixed_source = relation.source_kind == "source_profile" and "average" not in relation.argument_names
-        if fixed_source:
-            promoted.append(relation)
-            continue
-        promoted.append(
-            replace(
-                relation,
-                input_names=(*relation.input_names, measure),
-                constant_names=tuple(name for name in relation.constant_names if name != measure),
-                argument_names=(*relation.argument_names, measure),
-            )
-        )
-    return tuple(promoted)
 
 
 def _drop_defaults_for_supplied_coordinates(
@@ -198,41 +126,6 @@ def _materialize_static_coordinate_defaults(
     return prepared, tuple(kept), frozenset(materialized)
 
 
-def _demote_static_coordinate_dependencies(
-    relations: tuple[Relation, ...], static_names: frozenset[str]
-) -> tuple[Relation, ...]:
-    """Treat materialized tokamak fallback mappings as constants in this graph.
-
-    Their values remain ordinary registered variables in the namespace, but a
-    static fallback has no solver ancestry. Removing it from a relation's
-    structural input list avoids adding zero domain/Jacobian rows and restores
-    the pre-migration graph for the behavior-neutral tokamak default case. A
-    supplied or geometry-derived mapping, and every reduced non-tokamak default,
-    is never demoted and therefore remains a genuine dependency/provider.
-    """
-    if not static_names:
-        return relations
-    out: list[Relation] = []
-    for relation in relations:
-        pairs = list(zip(relation.argument_names, relation.input_names))
-        moved = [(arg, name) for arg, name in pairs if name in static_names and arg == name]
-        if not moved:
-            out.append(relation)
-            continue
-        moved_names = tuple(name for _arg, name in moved)
-        kept_pairs = [(arg, name) for arg, name in pairs if name not in moved_names]
-        constants = tuple(dict.fromkeys((*relation.constant_names, *moved_names)))
-        out.append(
-            replace(
-                relation,
-                input_names=tuple(name for _arg, name in kept_pairs),
-                constant_names=constants,
-                argument_names=tuple(arg for arg, _name in kept_pairs),
-            )
-        )
-    return tuple(out)
-
-
 def build_relation_system(
     variables: Iterable[Variable],
     relations: Iterable[Relation],
@@ -260,10 +153,10 @@ def build_relation_system(
     inventing an arbitrary pointwise coordinate transformation while keeping
     real geometry dependencies inside the relation graph.
 
-    When any relation exposes ``w_V``/``v_norm`` as an optional argument, a
-    supplied or geometry-dependent measure is promoted into a structural
-    dependency. Geometry-independent fallback measures stay optional constants,
-    preserving the behavior-neutral reduced-device path.
+    Relations are never rewritten to record any of this. A materialized
+    mapping is declared to the RelationSystem as a resolved constant, so the
+    same equation keeps one dependency declaration in every reactor and it is
+    compilation that knows the name needs no provider here.
     """
     prepared, prepared_relations, common_size = prepare_source_profiles(
         variables,
@@ -271,10 +164,6 @@ def build_relation_system(
         profile_size=profile_size,
     )
     prepared_relations = _drop_defaults_for_supplied_coordinates(prepared, prepared_relations)
-    # Promote while fallback providers are still visible: this lets us
-    # distinguish true geometry-dependent measures from deterministic
-    # ``f(rho)`` compatibility relations before tokamak ones are materialized.
-    prepared_relations = _promote_volume_measure_dependencies(prepared, prepared_relations)
     prepared, prepared_relations, static_coordinates = _materialize_static_coordinate_defaults(
         prepared,
         prepared_relations,
@@ -286,10 +175,10 @@ def build_relation_system(
         else variable
         for variable in prepared
     ]
-    prepared_relations = _demote_static_coordinate_dependencies(prepared_relations, static_coordinates)
     return RelationSystem(
         prepared,
         prepared_relations,
         constraints=constraints,
         name=name,
+        resolved_constants=static_coordinates,
     )
