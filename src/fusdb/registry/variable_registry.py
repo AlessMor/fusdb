@@ -128,17 +128,13 @@ class VariableSpec:
         """
         cached = _SPEC_GUARDS.get(self.name)
         if cached is None:
-            from ..relation import constraint_from_expression
+            from ..relation import build_constraint_relations
 
-            cached = tuple(
-                constraint_from_expression(
-                    text,
-                    name=f"{self.name}_registry_constraint_{index}",
-                    enforce=enforce,
-                    source_kind="variable",
-                    source_name=self.name,
-                )
-                for index, (text, enforce) in enumerate(self.constraints)
+            cached = build_constraint_relations(
+                self.constraints,
+                name_prefix=f"{self.name}_registry_constraint",
+                source_kind="variable",
+                source_name=self.name,
             )
             _SPEC_GUARDS[self.name] = cached
         return cached

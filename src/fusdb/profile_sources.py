@@ -150,16 +150,6 @@ def _source_profile_relation_from_data(
         argument_names=argument_names,
         source_kind="source_profile",
         source_name=name,
-        rebuild_spec={
-            "kind": "source_profile",
-            "version": 1,
-            "variable": name,
-            "coordinate": coordinate,
-            "source_coordinate": source.copy(),
-            "source_values": source_values.copy(),
-            "fixed": bool(fixed),
-            "average_name": average_name,
-        },
     )
 
 
@@ -180,22 +170,6 @@ def source_profile_relation(variable: Variable, *, average_name: str | None) -> 
         average_name=average_name,
     )
 
-
-def source_profile_relation_from_spec(spec: Mapping[str, Any]) -> Relation:
-    """Rebuild a generated source-profile relation from its worker recipe."""
-    if spec.get("kind") != "source_profile":
-        raise ValueError(f"Unsupported generated relation kind {spec.get('kind')!r}.")
-    if int(spec.get("version", 1)) != 1:
-        raise ValueError(f"Unsupported source-profile rebuild spec version {spec.get('version')!r}.")
-    average_name = spec.get("average_name")
-    return _source_profile_relation_from_data(
-        name=str(spec["variable"]),
-        coordinate=str(spec.get("coordinate") or "rho"),
-        source=np.asarray(spec["source_coordinate"], dtype=float),
-        source_values=np.asarray(spec["source_values"], dtype=float),
-        fixed=bool(spec.get("fixed", False)),
-        average_name=None if average_name is None else str(average_name),
-    )
 
 
 def prepare_source_profiles(

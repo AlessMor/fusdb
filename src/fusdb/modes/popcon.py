@@ -576,20 +576,19 @@ def _solve_cores_batched(
         refresh()
 
 
-def _relation_rebuild_spec(rel: Any) -> dict[str, Any]:
-    """Return the picklable worker recipe for one candidate relation."""
-    if rel.rebuild_spec is not None:
-        return dict(rel.rebuild_spec)
-    return {"kind": "registry", "name": rel.name}
+def _relation_worker_item(rel: Any) -> Any:
+    """Return the minimal picklable worker representation for one relation."""
+    return rel if rel.source_kind == "source_profile" else rel.name
 
 
 def _system_spec(system: Any) -> dict[str, Any]:
     """Picklable recipe to rebuild an equivalent system in a worker process.
 
-    Registry relations are represented by name. Runtime-generated relations
-    provide an explicit ``rebuild_spec`` containing only picklable immutable
-    source data. The common profile-grid size is carried separately so a source
-    profile sampled on an arbitrary external grid cannot reset worker geometry.
+    Registry relations are represented by name. Runtime-generated source-profile
+    relations are already picklable and are carried directly, so there is no
+    second reconstruction schema to keep in sync. The common profile-grid size
+    is carried separately so an arbitrary source sampling cannot reset worker
+    geometry.
     """
     return {
         "name": system.name,
@@ -605,13 +604,12 @@ def _system_spec(system: Any) -> dict[str, Any]:
             for name in sorted(system.rel_tols)
             if name != "rho"
         ],
-        "relations": [_relation_rebuild_spec(rel) for rel in system.model.candidate_primary_relations],
+        "relations": [_relation_worker_item(rel) for rel in system.model.candidate_primary_relations],
         "constraints": system.model.constraints_spec,
     }
 
 
 def _rebuild_system(spec: Mapping[str, Any]) -> Any:
-    from fusdb.profile_sources import source_profile_relation_from_spec
     from fusdb.registry import RELATIONS, VARIABLES
     from fusdb.relationsystem import RelationSystem
     from fusdb.variable import Variable
@@ -628,17 +626,10 @@ def _rebuild_system(spec: Mapping[str, Any]) -> Any:
         )
         for name, value, fixed, rel_tol, abs_tol in spec["variables"]
     ]
-    relations = []
-    for relation_spec in spec["relations"]:
-        if not isinstance(relation_spec, Mapping):
-            raise TypeError(f"Invalid relation rebuild spec {relation_spec!r}.")
-        kind = relation_spec.get("kind")
-        if kind == "registry":
-            relations.append(RELATIONS.get(str(relation_spec["name"])))
-        elif kind == "source_profile":
-            relations.append(source_profile_relation_from_spec(relation_spec))
-        else:
-            raise ValueError(f"Unsupported relation rebuild kind {kind!r}.")
+    relations = [
+        RELATIONS.get(item) if isinstance(item, str) else item
+        for item in spec["relations"]
+    ]
     return RelationSystem(variables, relations, constraints=spec["constraints"], name=spec["name"])
 
 

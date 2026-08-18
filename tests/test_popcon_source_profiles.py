@@ -35,14 +35,11 @@ def test_source_profile_worker_recipe_is_picklable_and_preserves_grid():
     spec = popcon_mode._system_spec(original)
 
     pickle.dumps(spec)
-    generated = [item for item in spec["relations"] if item.get("kind") == "source_profile"]
+    generated = [item for item in spec["relations"] if not isinstance(item, str)]
     assert len(generated) == 1
-    assert generated[0]["variable"] == "n_e"
-    assert np.asarray(generated[0]["source_values"]).shape == (101,)
-    assert any(
-        item.get("kind") == "registry" and item.get("name") == "Electron density rho-average"
-        for item in spec["relations"]
-    )
+    assert generated[0].source_kind == "source_profile"
+    assert generated[0].source_name == "n_e"
+    assert any(item == "Electron density rho-average" for item in spec["relations"])
 
     rebuilt = popcon_mode._rebuild_system(spec).compile()
     assert rebuilt.profile_size == 31
