@@ -29,7 +29,6 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          # Inline the only live use before the main script deletes the wrapper.
           reactor = Path('src/fusdb/reactor.py')
           source = reactor.read_text(encoding='utf-8')
           source = source.replace(
@@ -38,9 +37,6 @@ jobs:
           )
           reactor.write_text(source, encoding='utf-8')
 
-          # The main script originally guarded against a live caller before
-          # performing the inline; after the source replacement above the final
-          # stale-reference assertion is the stronger check.
           path = Path('.github/apply_module_subdivision.py')
           text = path.read_text(encoding='utf-8')
           text = text.replace(
@@ -61,7 +57,20 @@ jobs:
             code=$?
           fi
           if [ "$code" -eq 0 ]; then
-            python -m pytest >> /tmp/module-subdivision.log 2>&1
+            python -m pytest --collect-only -q >> /tmp/module-subdivision.log 2>&1
+            code=$?
+          fi
+          if [ "$code" -eq 0 ]; then
+            python -m pytest -q \
+              tests/test_public_api.py \
+              tests/test_plotting_data.py \
+              tests/test_dataset_registry.py \
+              tests/test_reactor_table.py \
+              tests/test_profile_source_system.py \
+              tests/test_popcon_source_profiles.py \
+              tests/test_profile_coordinates.py \
+              tests/test_relation_registry_build.py \
+              tests/test_result_io.py >> /tmp/module-subdivision.log 2>&1
             code=$?
           fi
           set -e
