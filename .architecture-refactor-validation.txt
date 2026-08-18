@@ -1,0 +1,168 @@
+BASELINE_SHA=5c972650777afe97d344c7097c8a5215df599af5
+BASELINE_IMPLEMENTATION_LOC=19172
+BRANCH_IMPLEMENTATION_LOC=19074
+IMPLEMENTATION_LOC_DELTA=-98
+
+PYTEST_EXIT_CODE=1
+
+--- PYTEST TAIL ---
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <list_iterator object at 0x7f95ad1469e0>
+
+    assert any(
+>       item.get("kind") == "source_profile" and item.get("coordinate") == "rho_minor"
+        ^^^^^^^^
+        for item in spec["relations"]
+    )
+E   AttributeError: 'str' object has no attribute 'get'
+
+tests/test_popcon_source_profile_mappings.py:41: AttributeError
+=============================== warnings summary ===============================
+tests/PROCESS_large_tokamak/test_PROCESS_large_tokamak_eval_point.py::test_reconcile_certifies
+tests/PROCESS_large_tokamak/test_PROCESS_large_tokamak_plasma_variants.py::test_all_points_solve
+tests/PROCESS_large_tokamak/test_PROCESS_large_tokamak_tungsten.py::test_all_points_solve
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/confinement/scalings/ITER.py:904: RuntimeWarning: invalid value encountered in scalar power
+    * p_plasma_loss_mw ** (-0.69e0)
+
+tests/PROCESS_large_tokamak/test_PROCESS_large_tokamak_plasma_variants.py::test_all_points_solve
+tests/PROCESS_large_tokamak/test_PROCESS_large_tokamak_tungsten.py::test_all_points_solve
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/confinement/scalings/ITER.py:74: RuntimeWarning: invalid value encountered in sqrt
+    / np.sqrt(p_plasma_loss_mw)
+
+tests/cfspopcon_SPARC/test_sparc_prd.py: 1 warning
+tests/test_phase1_contracts.py: 1 warning
+tests/test_popcon_mode.py: 7 warnings
+tests/test_relationsystem_lifecycle.py: 1 warning
+  /home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:311: ComplexWarning: Casting complex values to real discards the imaginary part
+    arr = np.asarray(value, dtype=float)
+
+tests/cfspopcon_SPARC/test_sparc_prd.py::test_scan_certifies_operating_region
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+tests/test_popcon_mode.py::test_popcon_option_validation
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/separatrix_operational_space.py:53: RuntimeWarning: invalid value encountered in scalar power
+    return 1.2 * (1.0 + factor * alpha_t**1.9) * poloidal_sound_larmor_radius
+
+tests/cfspopcon_SPARC/test_sparc_prd.py::test_scan_certifies_operating_region
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+tests/test_popcon_mode.py::test_popcon_option_validation
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/separatrix_operational_space.py:57: RuntimeWarning: invalid value encountered in scalar power
+    return 17.3 * alpha_t**0.298 * _MM_TO_M  # cfspopcon returns mm
+
+tests/cfspopcon_SPARC/test_sparc_prd.py::test_scan_certifies_operating_region
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+tests/test_popcon_mode.py::test_popcon_option_validation
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/separatrix_operational_space.py:61: RuntimeWarning: invalid value encountered in scalar power
+    lambda_Te = 2.1 * (1.0 + 2.1 * alpha_t**1.7) * poloidal_sound_larmor_radius
+
+tests/cfspopcon_SPARC/test_sparc_prd.py::test_scan_certifies_operating_region
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+tests/test_popcon_mode.py::test_popcon_option_validation
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/scrape_off_layer/two_point_model.py:156: RuntimeWarning: divide by zero encountered in scalar divide
+    return (1.0 - SOL_momentum_loss_fraction) ** 3 / (1.0 - SOL_power_loss_fraction) ** 2
+
+tests/cfspopcon_SPARC/test_sparc_prd.py::test_scan_certifies_operating_region
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+tests/test_popcon_mode.py::test_popcon_option_validation
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/edge/scrape_off_layer/two_point_model.py:170: RuntimeWarning: divide by zero encountered in scalar divide
+    return (1.0 - SOL_momentum_loss_fraction) ** 2 / (1.0 - SOL_power_loss_fraction)
+
+tests/cfspopcon_SPARC/test_sparc_prd.py::test_scan_certifies_operating_region
+tests/test_phase1_contracts.py::test_run_many_carries_every_mode_result
+tests/test_popcon_mode.py::test_popcon_option_validation
+tests/test_popcon_mode.py::test_certification_cone_scales_with_targets
+tests/test_popcon_mode.py::test_popcon_scan_certifies_grid
+tests/test_popcon_mode.py::test_popcon_parallel_chunks_match_one_batch
+tests/test_popcon_mode.py::test_popcon_points_reconcile_to_same_values
+tests/test_popcon_mode.py::test_popcon_survives_undetermined_free_core
+tests/test_popcon_mode.py::test_popcon_warns_on_underivable_output
+  /home/runner/work/fusdb/fusdb/src/fusdb/relation.py:436: RuntimeWarning: invalid value encountered in scalar subtract
+    diff = lhs - rhs
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/radiation/bremsstrahlung.py:34: RuntimeWarning: overflow encountered in multiply
+    p_brem = 5.35e-3 * Z_eff * (n_e20 ** 2) * (T_e ** 0.5) * xrel * 1e6  # [W/m^3]
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+  /home/runner/work/fusdb/fusdb/src/fusdb/utils/profiles.py:136: RuntimeWarning: invalid value encountered in multiply
+    return trapezoid(arr * r, x=r) / denom
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/radiation/bremsstrahlung.py:73: RuntimeWarning: overflow encountered in multiply
+    p_brem = 5.35e-3 * (n_e20 ** 2) * (T_e ** 0.5) * xrel * 1e6  # [W/m^3]
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+  /home/runner/work/fusdb/fusdb/src/fusdb/relation.py:438: RuntimeWarning: invalid value encountered in scalar divide
+    return violation <= tol_width, np.asarray([diff / tol_width]), np.asarray([violation])
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+tests/test_relation_contract.py::test_no_hidden_batch_mismatch
+  /opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/lib/_function_base_impl.py:1324: RuntimeWarning: invalid value encountered in divide
+    out[tuple(slice1)] = (f[tuple(slice4)] - f[tuple(slice2)]) / (2. * ax_dx)
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+tests/test_relation_contract.py::test_no_hidden_batch_mismatch
+  /opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/lib/_function_base_impl.py:1349: RuntimeWarning: invalid value encountered in scalar divide
+    out[tuple(slice1)] = (f[tuple(slice2)] - f[tuple(slice3)]) / dx_0
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+tests/test_relation_contract.py::test_no_hidden_batch_mismatch
+  /opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/lib/_function_base_impl.py:1356: RuntimeWarning: invalid value encountered in scalar divide
+    out[tuple(slice1)] = (f[tuple(slice2)] - f[tuple(slice3)]) / dx_n
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+  /home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:427: ComplexWarning: Casting complex values to real discards the imaginary part
+    arr = np.asarray(value, dtype=float).reshape(-1)
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+tests/test_relationsystem_lifecycle.py::test_compiled_blocks_only_reference_final_active_system[STEP_2024]
+  /home/runner/work/fusdb/fusdb/src/fusdb/relation.py:439: ComplexWarning: Casting complex values to real discards the imaginary part
+    scale = np.maximum(np.maximum(np.abs(np.asarray(lhs, dtype=float)), np.abs(np.asarray(rhs, dtype=float))), base_scale)
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+tests/test_relationsystem_lifecycle.py::test_compiled_blocks_only_reference_final_active_system[STEP_2024]
+  /home/runner/work/fusdb/fusdb/src/fusdb/utils/__init__.py:396: ComplexWarning: Casting complex values to real discards the imaginary part
+    right = np.asarray(rhs, dtype=float)
+
+tests/test_relation_contract.py::test_setup_reaches_most_relations
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/profiles/confinement_mode_profiles.py:63: RuntimeWarning: invalid value encountered in scalar divide
+    tbeta
+
+tests/test_relationsystem_lifecycle.py::test_compiled_blocks_only_reference_final_active_system[STEP_2024]
+  /home/runner/work/fusdb/fusdb/src/fusdb/relations/radiation/synchrotron.py:71: RuntimeWarning: overflow encountered in exp
+    Gs = 0.93 * (1 + 0.85 * np.exp(-0.82 * R / a))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_popcon_source_profile_mappings.py::test_worker_rebuild_preserves_foreign_coordinate_source_profile - AttributeError: 'str' object has no attribute 'get'
+= 1 failed, 437 passed, 5 skipped, 1 xpassed, 86 warnings in 538.60s (0:08:58) =
