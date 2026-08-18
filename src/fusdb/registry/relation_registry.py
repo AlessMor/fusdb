@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import logging
 from collections.abc import Iterable, Mapping
+from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -19,12 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 class RelationRegistry:
-    """Registry of decorated relations.
+    """Validated collection of decorated relations.
 
-    Relations are validated against ``variable_registry`` at build time, so
-    alias-degenerate relations (declared outputs that resolve to one of their own
-    inputs) are rejected here rather than silently dropped when a RelationSystem
-    is later compiled.
+    The process-wide instance may be lazy, but laziness is an implementation
+    state of the registry itself rather than a second proxy class.
     """
 
     def __init__(
@@ -33,16 +32,18 @@ class RelationRegistry:
         *,
         variable_registry: VariableRegistry = VARIABLES,
         tag_registry: TagRegistry = TAGS,
+        _lazy: bool = False,
     ) -> None:
+        self._variable_registry = variable_registry
+        self._tag_registry = tag_registry
+        self.__relations: Mapping[str, Relation] | None = None
+        self.__by_function: Mapping[str, Relation] | None = None
+        if not _lazy:
+            self._build(relations)
+
+    def _build(self, relations: Iterable[Relation]) -> None:
         by_name: dict[str, Relation] = {}
         by_function: dict[str, Relation] = {}
-        # A relation is addressable by either its user-facing ``name`` or its
-        # decorated ``function_name``. For that dual addressing to be
-        # unambiguous, every identifier must resolve to exactly one relation:
-        # names unique, function names unique, and no name colliding with a
-        # different relation's function name. (A relation decorated without an
-        # explicit name has ``name == function_name``; that is the same owner
-        # registering both identifiers, not a collision.)
         owners: dict[str, Relation] = {}
         for rel in relations:
             for identifier, kind in ((rel.name, "name"), (rel.function_name, "function name")):
@@ -53,34 +54,28 @@ class RelationRegistry:
                         f"relation {owner.name!r}; relation names and function names must be unique."
                     )
                 owners[identifier] = rel
-            # Every relation tag must be declared in allowed_tags.yaml. An
-            # undeclared tag is silently ignored by ``relation_matches``, so a
-            # typo (``profile_shapes`` for ``profile_shape``) does not fail --
-            # it makes the relation globally active, and the damage shows up
-            # later as physics drift on an unrelated reactor. Declared-but-
-            # non-filtering tags belong in the ``descriptive`` group.
-            unknown = tuple(tag for tag in normalize_tags(rel.tags) if tag not in tag_registry.allowed)
+            unknown = tuple(
+                tag for tag in normalize_tags(rel.tags) if tag not in self._tag_registry.allowed
+            )
             if unknown:
                 raise ValueError(
                     f"Relation {rel.name!r} declares tag(s) "
                     f"{', '.join(repr(tag) for tag in unknown)} that are not in allowed_tags.yaml. "
-                    "Add each to a group there: a selection group (device, confinement_mode, "
-                    "internal) if it should filter which reactors see the relation, or "
-                    "'descriptive' if it is documentation or a code-read role marker."
+                    "Add each to a selection group or to 'descriptive'."
                 )
-            # Validate against the variable registry (rejects alias-degenerate
-            # relations) and store the canonicalized relation, so every relation
-            # leaving the registry already uses canonical variable names.
-            # Name-based filtering is unaffected: canonicalization changes
-            # variable names, never ``rel.name``.
-            canonical = canonicalize_relation(rel, variable_registry)
+            canonical = canonicalize_relation(rel, self._variable_registry)
             by_name[rel.name] = canonical
             by_function[rel.function_name] = canonical
-        self._relations = MappingProxyType(by_name)
-        self._by_function = MappingProxyType(by_function)
+        self.__relations = MappingProxyType(by_name)
+        self.__by_function = MappingProxyType(by_function)
 
     @classmethod
-    def discover(cls, *, variable_registry: VariableRegistry = VARIABLES) -> "RelationRegistry":
+    def discover(
+        cls,
+        *,
+        variable_registry: VariableRegistry = VARIABLES,
+        tag_registry: TagRegistry = TAGS,
+    ) -> "RelationRegistry":
         """Import all modules under ``fusdb.relations`` and collect decorators."""
         package_root = Path(__file__).resolve().parents[1]
         relations_root = package_root / "relations"
@@ -89,14 +84,52 @@ class RelationRegistry:
                 continue
             rel = path.relative_to(package_root).with_suffix("")
             importlib.import_module(f"fusdb.{'.'.join(rel.parts)}")
-        return cls(REGISTERED_RELATIONS.values(), variable_registry=variable_registry)
+        return cls(
+            REGISTERED_RELATIONS.values(),
+            variable_registry=variable_registry,
+            tag_registry=tag_registry,
+        )
+
+    @classmethod
+    def lazy(
+        cls,
+        *,
+        variable_registry: VariableRegistry = VARIABLES,
+        tag_registry: TagRegistry = TAGS,
+    ) -> "RelationRegistry":
+        """Create a registry that discovers relations on first real access."""
+        return cls(
+            variable_registry=variable_registry,
+            tag_registry=tag_registry,
+            _lazy=True,
+        )
+
+    def _ensure_loaded(self) -> None:
+        if self.__relations is not None:
+            return
+        discovered = type(self).discover(
+            variable_registry=self._variable_registry,
+            tag_registry=self._tag_registry,
+        )
+        self.__relations = discovered.__relations
+        self.__by_function = discovered.__by_function
+
+    @property
+    def _relations(self) -> Mapping[str, Relation]:
+        self._ensure_loaded()
+        assert self.__relations is not None
+        return self.__relations
+
+    @property
+    def _by_function(self) -> Mapping[str, Relation]:
+        self._ensure_loaded()
+        assert self.__by_function is not None
+        return self.__by_function
 
     def get(self, name: str) -> Relation:
-        """Return one relation by name or decorated function name."""
         return self._resolve(name)
 
     def _resolve(self, name: str) -> Relation:
-        """Resolve a relation by user-facing name or decorated function name."""
         text = str(name)
         if text in self._relations:
             return self._relations[text]
@@ -105,12 +138,6 @@ class RelationRegistry:
         raise KeyError(f"Unknown relation {name!r}.")
 
     def _canonical_name(self, name: Any) -> str:
-        """Return the user-facing name for an identifier (name or function name).
-
-        Unknown identifiers are returned unchanged so callers keep their own
-        not-found handling (``exclude`` warns and ignores misses; ``order``
-        raises an inactive-relation error).
-        """
         try:
             return self._resolve(name).name
         except KeyError:
@@ -121,15 +148,6 @@ class RelationRegistry:
         variable_registry: VariableRegistry,
         overrides: Mapping[str, Iterable[str]] | None,
     ) -> tuple[dict[str, set[str]], dict[str, tuple[str, ...]]]:
-        """Return effective provider gates and canonical scenario overrides.
-
-        A scenario override replaces the registry preference for that variable.
-        Selecting a multi-output relation is atomic: unless another output has
-        its own explicit override, that relation also replaces the registry
-        default gate for every side output it produces. Explicit empty overrides
-        deliberately remove the gate and therefore opt that side output out of
-        atomic propagation.
-        """
         allowed: dict[str, set[str]] = {
             spec.name: {self._canonical_name(name) for name in spec.default_relation}
             for spec in variable_registry
@@ -145,12 +163,6 @@ class RelationRegistry:
             else:
                 allowed.pop(name, None)
 
-        # A multi-output relation is one physical model, not a bag of unrelated
-        # assignments. Selecting it for one output must therefore propagate to
-        # its side outputs unless the scenario explicitly says otherwise. The
-        # explicit-side conflict check is intentionally here, before filtering:
-        # silently choosing one side's preference would create a hybrid model
-        # whose equations no longer correspond to either provider convention.
         for name, relation_names in explicit.items():
             for relation_name in relation_names:
                 rel = self._resolve(relation_name)
@@ -186,27 +198,26 @@ class RelationRegistry:
         variable_registry: VariableRegistry = VARIABLES,
         tag_registry: TagRegistry = TAGS,
     ) -> tuple[Relation, ...]:
-        """Return selected relations.
-
-        Selection order is deterministic: tag/default filtering, explicit
-        includes, explicit excludes, then explicit ordering. Exclusion always
-        wins. ``default_relations`` is the scenario-local overlay: a non-empty
-        list replaces the registry provider gate for that variable; an empty
-        list removes the gate. Multiple names mean simultaneously active
-        providers, not fallback priority.
-        """
         exclude_set = {self._canonical_name(item) for item in (exclude or ())}
         include_names = [str(item) for item in (names or ())]
         reactor_tags = normalize_tags(tags)
 
-        selected = [rel for rel in self._relations.values() if tag_registry.relation_matches(rel.tags, reactor_tags)]
+        selected = [
+            rel
+            for rel in self._relations.values()
+            if tag_registry.relation_matches(rel.tags, reactor_tags)
+        ]
         allowed_by_output, _explicit_overrides = self._effective_default_relations(
             variable_registry, default_relations
         )
         if allowed_by_output:
             filtered: list[Relation] = []
             for rel in selected:
-                defaults = [allowed_by_output[out] for out in rel.output_names if out in allowed_by_output]
+                defaults = [
+                    allowed_by_output[out]
+                    for out in rel.output_names
+                    if out in allowed_by_output
+                ]
                 if defaults and rel.name not in set().union(*defaults):
                     continue
                 filtered.append(rel)
@@ -215,14 +226,10 @@ class RelationRegistry:
         selected_by_name = {rel.name: rel for rel in selected}
         for name in include_names:
             rel = self._resolve(name)
-            # An include that is absent from an effective ``default_relation``
-            # set for one of its own outputs is overriding the preferred
-            # provider convention. That is legitimate -- it is how a fixture or
-            # reactor selects another convention -- but it is a modelling
-            # decision, so it must not be silent.
             if rel.name not in selected_by_name:
                 overridden = [
-                    out for out in rel.output_names
+                    out
+                    for out in rel.output_names
                     if out in allowed_by_output and rel.name not in allowed_by_output[out]
                 ]
                 if overridden:
@@ -232,14 +239,12 @@ class RelationRegistry:
                         "preferred provider(s) remain active alongside it unless excluded.",
                         rel.name,
                         ", ".join(repr(out) for out in overridden),
-                        "; ".join(f"{out}: {sorted(allowed_by_output[out])}" for out in overridden),
+                        "; ".join(
+                            f"{out}: {sorted(allowed_by_output[out])}" for out in overridden
+                        ),
                     )
             selected_by_name.setdefault(rel.name, rel)
 
-        # Exclusion that matches nothing used to be silent. That hides both a
-        # misspelled identifier and a relation already dropped by an earlier
-        # tag/default gate -- in either case the author believes they removed
-        # something and did not. Warn, but keep the existing non-fatal behavior.
         for item in (exclude or ()):
             try:
                 canonical = self._resolve(item).name
@@ -280,8 +285,12 @@ class RelationRegistry:
             selected = ordered
         return tuple(selected)
 
-    def producers(self, variable: str, *, variable_registry: VariableRegistry = VARIABLES) -> tuple[Relation, ...]:
-        """Return relations that declare ``variable`` as an output."""
+    def producers(
+        self,
+        variable: str,
+        *,
+        variable_registry: VariableRegistry = VARIABLES,
+    ) -> tuple[Relation, ...]:
         name = variable_registry.resolve(variable)
         return tuple(rel for rel in self._relations.values() if name in rel.output_names)
 
@@ -296,28 +305,12 @@ class RelationRegistry:
         return len(self._relations)
 
 
-class LazyRelationRegistry:
-    """Tiny lazy proxy so relation modules are imported only when needed."""
-
-    def __init__(self) -> None:
-        self._registry: RelationRegistry | None = None
-
-    def _get(self) -> RelationRegistry:
-        if self._registry is None:
-            self._registry = RelationRegistry.discover()
-        return self._registry
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._get(), name)
-
-    def __iter__(self):
-        return iter(self._get())
-
-    def __len__(self) -> int:
-        return len(self._get())
-
-    def __contains__(self, name: object) -> bool:
-        return name in self._get()
+@lru_cache(maxsize=1)
+def get_relations() -> RelationRegistry:
+    """Return the process-wide lazy relation registry."""
+    return RelationRegistry.lazy()
 
 
-RELATIONS = LazyRelationRegistry()
+# Compatibility name for existing internal callers. This is now the actual
+# RelationRegistry, not a second proxy class.
+RELATIONS = get_relations()
