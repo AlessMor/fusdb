@@ -6,8 +6,8 @@ import pytest
 import fusdb
 import fusdb.plotting as plotting
 from fusdb.plotting.data import Curve, CurveSet, FieldMap
-from fusdb.io.tables import TableCell, TableData
-from fusdb.io.tables import render_table
+from fusdb.plotting.tables import TableCell, TableData
+from fusdb.plotting.tables import render_table
 from fusdb.registry.dataset.evaluation import PreparedTable
 
 

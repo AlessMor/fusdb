@@ -8,7 +8,7 @@ from .relationsystem import CompilePlan, RelationSystem
 from .profiles.system import build_relation_system
 from .variable import Variable
 from .reactor import Reactor, run_many, solve_reactors
-from .io.tables import SolvedColumn, render_table, variable_table_data
+from .plotting.tables import SolvedColumn, render_table, variable_table_data
 from .registry import RELATIONS, SPECIES, TAGS, VARIABLES, RelationRegistry, SpeciesRegistry, TagRegistry, VariableRegistry
 
 

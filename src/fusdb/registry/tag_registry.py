@@ -78,7 +78,7 @@ class TagRegistry:
     def relation_matches(self, relation_tags: Any, reactor_tags: Any) -> bool:
         rel_tags = set(normalize_tags(relation_tags))
         active = set(self.expand(reactor_tags))
-        if not rel_tags or not active:
+        if not rel_tags:
             return True
 
         required_by_group: dict[str, set[str]] = {}
@@ -88,6 +88,8 @@ class TagRegistry:
                 continue
             required_by_group.setdefault(group, set()).add(tag)
 
+        if not active:
+            return not required_by_group
         return all(bool(group_tags & active) for group_tags in required_by_group.values())
 
 

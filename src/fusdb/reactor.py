@@ -17,7 +17,7 @@ from .modes import MODE_NAMES
 from .profiles.system import build_relation_system
 from .registry import RELATIONS, TAGS, VARIABLES
 from .relationsystem import CompilePlan, RelationSystem
-from .io.tables import SolvedColumn, _table_column
+from .plotting.tables import SolvedColumn, _table_column
 from .variable import Variable
 
 logger = logging.getLogger("fusdb")

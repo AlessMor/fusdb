@@ -101,20 +101,6 @@ def _table_cell_display(input_value: Any, value: Any, rel_tol: float, abs_tol: f
     return background, color, text
 
 
-def _sort_table_variable_names(names: Iterable[str]) -> tuple[str, ...]:
-    """Sort variable names by registry order, then alphabetically."""
-    registry_order = {
-        spec.name: index
-        for index, spec in enumerate(VARIABLES)
-    }
-    return tuple(
-        sorted(
-            names,
-            key=lambda name: (registry_order.get(name, len(registry_order)), name),
-        )
-    )
-
-
 class SolvedColumn(NamedTuple):
     """One table column's display data, extracted from a reactor or system.
 
@@ -177,17 +163,6 @@ def _table_column(source: Any) -> SolvedColumn:
     )
 
 
-def _displayed_variable_names(columns: Iterable[SolvedColumn], variable_names: Iterable[str] | None) -> tuple[str, ...]:
-    """Resolve the row order/subset: the explicit list, or active + supplied."""
-    if variable_names is not None:
-        return tuple(variable_names)
-    names: set[str] = set()
-    for column in columns:
-        names.update(column.active_variable_names)
-        names.update(column.inputs)
-    return _sort_table_variable_names(names)
-
-
 def variable_table_data(*sources: Any, variable_names: Iterable[str] | None = None) -> TableData:
     """Prepare current variable values for HTML or plain-text presentation.
 
@@ -203,7 +178,17 @@ def variable_table_data(*sources: Any, variable_names: Iterable[str] | None = No
     information without committing to a renderer.
     """
     columns = [_table_column(source) for source in sources]
-    ordered_names = _displayed_variable_names(columns, variable_names)
+    if variable_names is not None:
+        ordered_names = tuple(variable_names)
+    else:
+        names: set[str] = set()
+        for column in columns:
+            names.update(column.active_variable_names)
+            names.update(column.inputs)
+        registry_order = {spec.name: index for index, spec in enumerate(VARIABLES)}
+        ordered_names = tuple(
+            sorted(names, key=lambda name: (registry_order.get(name, len(registry_order)), name))
+        )
     rows = []
     for name in ordered_names:
         cells = []
