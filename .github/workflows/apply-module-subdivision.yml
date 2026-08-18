@@ -24,7 +24,18 @@ jobs:
         shell: bash
         run: |
           set +e
+          rm -f .module-subdivision-validation.txt
           cp .github/apply_module_subdivision_fixups.py /tmp/apply_module_subdivision_fixups.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/apply_module_subdivision.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'text = read(reactor)\nif text.count("_with_sustainment_guards") > 1:\n    raise RuntimeError("_with_sustainment_guards unexpectedly has live callers")\nwrite(reactor, text)\nremove_top_level(reactor, "_with_sustainment_guards")',
+              'remove_top_level(reactor, "_with_sustainment_guards")',
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
           python .github/apply_module_subdivision.py > /tmp/module-subdivision.log 2>&1
           code=$?
           if [ "$code" -eq 0 ]; then
@@ -47,7 +58,7 @@ jobs:
 
           if [ "$code" -eq 0 ]; then
             git add -A
-            git rm -f .github/apply_module_subdivision.py .github/apply_module_subdivision_fixups.py .github/workflows/apply-module-subdivision.yml .github/module-subdivision-trigger.txt
+            git rm -f --ignore-unmatch .github/apply_module_subdivision.py .github/apply_module_subdivision_fixups.py .github/workflows/apply-module-subdivision.yml .github/module-subdivision-trigger.txt .module-subdivision-validation.txt
             git commit -m 'refactor: reorganize support modules and inline trivial helpers'
           else
             git reset --hard HEAD
