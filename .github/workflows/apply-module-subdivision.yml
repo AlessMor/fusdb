@@ -22,8 +22,9 @@ jobs:
           python-version: '3.12'
       - name: Apply refactor
         run: |
+          cp .github/apply_module_subdivision_fixups.py /tmp/apply_module_subdivision_fixups.py
           python .github/apply_module_subdivision.py
-          python .github/apply_module_subdivision_fixups.py
+          python /tmp/apply_module_subdivision_fixups.py
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
