@@ -1,0 +1,52 @@
+metadata:
+  id: VSC_FRC_REFERENCE
+  name: VSC FRC reduced-model reference
+  organization: VeloAlpha model family
+  year: 2026
+  doi: 10.48550/arXiv.2607.11208
+  notes: >-
+    Illustrative FusDB scenario for exercising the FRC branch described by
+    Wang et al. (2026). The paper publishes the model equations but not a
+    complete numerical preset table; these values are therefore explicit
+    example inputs, not a claimed published reactor design point.
+tags:
+- frc
+variables:
+  r_s:
+    value: 0.5
+    unit: m
+    fixed: true
+  r_w:
+    value: 0.7
+    unit: m
+    fixed: true
+  L_s:
+    value: 3.0
+    unit: m
+    fixed: true
+  B_e:
+    value: 3.0
+    unit: T
+    fixed: true
+  T_i_peak:
+    value: 10.0
+    unit: keV
+  T0:
+    value: 10.0
+    unit: keV
+  zeta_ne_ni:
+    value: 1.0
+    fixed: true
+  p_shape_frc:
+    value: 2.0
+    fixed: true
+  eta_plasma:
+    value: 1.0e-7
+    unit: ohm*m
+  rho_ie:
+    value: 0.02
+    unit: m
+relations:
+  include:
+  - FRC superellipse plasma volume
+  - FRC LSX confinement time

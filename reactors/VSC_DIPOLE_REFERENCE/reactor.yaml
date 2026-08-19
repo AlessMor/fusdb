@@ -1,0 +1,53 @@
+metadata:
+  id: VSC_DIPOLE_REFERENCE
+  name: VSC dipole reduced-model reference
+  organization: VeloAlpha model family
+  year: 2026
+  doi: 10.48550/arXiv.2607.11208
+  notes: >-
+    Illustrative FusDB scenario for exercising the point-dipole branch described
+    by Wang et al. (2026). The paper publishes the model equations but not a
+    complete numerical preset table; these values are explicit example inputs,
+    not a claimed published reactor design point.
+tags:
+- dipole
+variables:
+  L_in:
+    value: 1.0
+    unit: m
+    fixed: true
+  L_out:
+    value: 2.0
+    unit: m
+    fixed: true
+  r_ring:
+    value: 0.5
+    unit: m
+    fixed: true
+  B_ring:
+    value: 5.0
+    unit: T
+    fixed: true
+  R_wall_proxy:
+    value: 2.5
+    unit: m
+    fixed: true
+  n0:
+    value: 1.0e20
+    unit: m^-3
+  n_i_peak:
+    value: 1.0e20
+    unit: m^-3
+  T0:
+    value: 10.0
+    unit: keV
+  T_i_peak:
+    value: 10.0
+    unit: keV
+  tau_E:
+    value: 1.0
+    unit: s
+relations:
+  include:
+  - Point-dipole plasma volume
+  - Dipole spherical wall proxy
