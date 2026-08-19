@@ -1,0 +1,159 @@
+metadata:
+  id: Helios_2026
+  name: Helios 2026 - Ignited Reference Point
+  organization: Thea Energy
+  country: USA
+  year: 2026
+  doi: 10.48550/arXiv.2512.08027
+  notes: >-
+    Preconceptual planar-coil stellarator fusion power plant. Active values
+    represent the steady-state ignited reference point from the overview paper;
+    startup-only values and engineering limits are retained as comments where
+    they are not equivalent to operating-state FusDB variables.
+
+tags:
+- stellarator
+
+variables:
+  # --- Geometry and magnetic configuration ----------------------------------
+  R:
+    value: 8.0
+    unit: m
+    fixed: true
+
+  a:
+    value: 1.8
+    unit: m
+    fixed: true
+
+  A:
+    value: 4.5
+    fixed: true
+
+  B0:
+    value: 6.0
+    unit: T
+    fixed: true
+
+  V_p:
+    value: 500
+    unit: m^3
+
+  iotabar:
+    value: 0.46
+    fixed: true
+  # Table 1 reports rotational transform at the 2/3 surface, the transform
+  # entering the ISS04 stellarator confinement scaling.
+
+  B_max:
+    value: 20
+    unit: T
+    fixed: true
+  # Maximum field on-coil is an enforced design value/constraint.
+
+  # Two-field-period quasi-axisymmetric stellarator.
+  # number_of_field_periods: 2
+  # minimum_plasma_coil_distance: 1.2 m
+  # number_of_encircling_coils: 12
+  # number_of_field_shaping_coils: 324
+  # magnet_operating_temperature: 20 K
+  # coil_minimum_lifetime: 40 years
+
+  # --- Plasma state and confinement -----------------------------------------
+  beta_T: 0.027
+  # Volume-averaged beta = 2.7%.
+
+  H_iss04_stellarator:
+    value: 1.4
+    fixed: true
+
+  tau_E:
+    value: 1.8
+    unit: s
+
+  n0:
+    value: 2.1e20
+    unit: m^-3
+  # Peak electron density.
+
+  T_i_peak:
+    value: 20
+    unit: keV
+  # Peak ion temperature.
+
+  f_SUDO: 1.1
+  # Ignited-state Sudo-limit multiplier. Startup transient reaches 1.25.
+
+  # The overview states that reduced 0D/1D scoping uses parabolic power-law
+  # density and temperature profiles, but it does not provide a unique pair of
+  # exponents for the final reference point in the summary table, so alphan and
+  # alphat are not invented here.
+
+  # --- Fusion and auxiliary heating -----------------------------------------
+  P_fus:
+    value: 958
+    unit: MW
+
+  P_aux:
+    value: 1
+    unit: MW
+  # Nominal ECRH in the ignited state for plasma control / impurity expulsion.
+  # Startup requires 10 MW ECRH at 170 GHz, high-field-side X1 launch.
+
+  Q_sci: 958
+  # With the nominal 1 MW ignited-state auxiliary heating budget. The paper
+  # describes the plasma as essentially ignited and quotes <1 MW in Table 1;
+  # this finite value is therefore only a convenient representation of the
+  # stated nominal 1 MW operating ECRH, not a claimed exact gain measurement.
+
+  # Energetic alpha losses: 6.6% of fusion-product energy reaches the wall;
+  # localized modeled peaks reach ~4 MW/m^2. These are not mapped onto q_wall,
+  # which is specifically neutron wall loading in FusDB.
+
+  # --- Blanket and tritium ---------------------------------------------------
+  TBR: 1.3
+  # Idealized, homogenized blanket value. Fuel-cycle modeling indicates a
+  # final TBR around 1.1 is sufficient for self-sufficiency.
+  # breeder: Pb-17Li, 65% Li-6 enrichment
+  # blanket_thickness: 0.50 m
+  # tritium_startup_inventory: 1-2 kg (summary table); detailed fuel-cycle
+  # modeling later in the paper indicates <1 kg can be sufficient.
+
+  # --- Whole-plant power -----------------------------------------------------
+  P_th_tot:
+    value: 1094
+    unit: MW
+    fixed: true
+  # Detailed Sankey value: 1094 MW generated thermal power. Table 1 rounds to
+  # 1.1 GW. This includes 958 MW fusion plus ~135 MW Li-6 reaction heating.
+
+  eta_th:
+    value: 0.402
+    fixed: true
+  # Rankine-cycle efficiency based on 438 MWe gross after coolant pumping.
+  # If computed before coolant-pumping power, the paper quotes ~42.2%.
+
+  P_elec_tot:
+    value: 390
+    unit: MW
+    fixed: true
+  # Net electric power delivered to the grid.
+
+  # Detailed facility power flow from the Sankey diagram / section 4.4:
+  # thermal_cycle_generated_electric_power: 460 MW
+  # coolant_pumping_electric_power: 22 MW
+  # gross_electric_power_after_pumping: 438 MW
+  # steady_state_facility_internal_power: 48 MW
+  # nominal_ECRH_electric_power: 2.5 MW for 1 MW coupled plasma heating
+  # cryogenic_electric_power: ~10 MW
+  # waste_heat: 681 MW
+
+  # --- Maintenance / engineering values not directly represented ------------
+  # planned_maintenance_outage: 84 days every 2 years
+  # capacity_factor: 0.88
+  # first_wall_material: V-4Cr-4Ti with thin tungsten armor
+  # first_wall_lifetime: 15 full-power years
+  # divertor_target_heat_flux_design_limit: 10 MW/m^2
+  # first_wall_thickness: 0.02 m
+  # cryogenic_heat_load_20K: ~40 kW
+  # cryogenic_heat_load_77K: ~750 kW

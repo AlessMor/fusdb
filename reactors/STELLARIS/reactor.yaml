@@ -1,34 +1,181 @@
 metadata:
-  id: Stellaris2025
+  id: Stellaris_2025
   name: Stellaris 2025 - Point A
-  organization: Proxima
+  organization: Proxima Fusion
+  country: DEU
   year: 2025
   doi: 10.1016/j.fusengdes.2025.114868
+  notes: >-
+    Point A of the Stellaris prototypical fusion power plant study. Active
+    plasma values follow the Point-A table; engineering values use the same
+    paper's integrated reactor design. Alternative Point-B and high-level
+    rounded values are retained as comments rather than silently reconciled.
+
 tags:
 - stellarator
+
 variables:
+  # --- Machine geometry and magnetic configuration --------------------------
   R:
     value: 12.74
+    unit: m
     fixed: true
+  # Table 2 rounds the major radius to 12.7 m.
+
   a:
     value: 1.3
+    unit: m
     fixed: true
+
   A:
     value: 9.8
-  V_p: 425
-  S_p: 327
-  B0: 9.0
-  beta_N: 0.0276
-  T_avg:
-    value: 12
+    fixed: true
+
+  V_p:
+    value: 425
+    unit: m^3
+  # Point A, table 5. Table 2 gives 428 m^3 as the high-level design value.
+
+  A_p:
+    value: 327
+    unit: m^2
+  # Point A, table 5. The high-level table 2 separately reports 940 m^2;
+  # both numbers are retained here because the paper itself reports both.
+
+  B0:
+    value: 9.0
+    unit: T
+    fixed: true
+
+  B_max:
+    value: 24.9
+    unit: T
+    fixed: true
+  # Peak conductor field, table 2. This is an achieved design value, not a
+  # generic registry limit.
+
+  # Stellaris is a four-field-period quasi-isodynamic configuration.
+  # The paper reports rotational transform iota = 0.86 on axis and 0.98 at
+  # the edge. These are not collapsed into FusDB's scalar `iotabar`, because
+  # `iotabar` is the transform used by stellarator confinement scalings and
+  # the paper does not identify either endpoint as that quantity.
+  # number_of_field_periods: 4
+  # iota_axis: 0.86
+  # iota_edge: 0.98
+  # minimum_coil_plasma_distance: 1.37 m
+  # minimum_coil_coil_separation: 0.67 m
+  # number_of_toroidal_field_coils: 48
+  # peak_single_coil_current: 15.4 MA
+  # stored_magnetic_energy: 111 GJ
+
+  # --- Plasma state and confinement: Point A -------------------------------
+  beta_T: 0.0276
+  # Volume-averaged beta = 2.76% at Point A. The configuration optimization
+  # target is 3% and Point B gives 2.81%.
+
+  n_e_avg:
+    value: 3.17e20
+    unit: m^-3
+
+  n0:
+    value: 5.06e20
+    unit: m^-3
+
+  T0:
+    value: 15.40
     unit: keV
-  n_avg: 3.17e20
-  n0: 5.06e20
-  Z_eff: 1.2
-  tau_E: 1.46
-  tau_p: 11
+
+  T_i_peak:
+    value: 14.63
+    unit: keV
+
+  ion_to_electron_peak_temp_ratio:
+    value: 0.95
+    fixed: true
+
+  Z_eff: 1.20
+
+  H_iss04_stellarator:
+    value: 1.0
+    fixed: true
+  # The paper calls this ISS04 renormalization factor f_ren = 1.0.
+
+  tau_E:
+    value: 1.46
+    unit: s
+
+  # Point-B alternatives, not mixed into the active Point-A scenario:
+  # n_e_avg: 4.21e20 m^-3
+  # n0: 6.89e20 m^-3
+  # T0: 12.25 keV
+  # T_i_peak: 11.64 keV
+  # Z_eff: 1.21
+  # beta_T: 0.0281
+  # tau_E: 1.99 s
+  # P_aux: 14.77 MW
+  # Q_sci: 182
+
+  # --- Fusion power and wall loading ----------------------------------------
   P_fus:
     value: 2700
     unit: MW
-  P_aux: 50e6
-  P_wall: 4.05e6
+  # The paper describes this as the maximum/peak fusion design point.
+
+  P_aux:
+    value: 0
+    unit: MW
+  # Point A is ignited in the 0D model (reported Q = infinity). The plant is
+  # nevertheless designed with 50 MW of plasma-coupled ECRH capability to
+  # access the operating point; capability is not the operating P_aux value.
+  # required_plasma_coupled_ECRH_capability: 50 MW
+  # ECRH scheme: ~240 GHz, high-field-side X1 launch.
+
+  q_wall:
+    value: 2.87
+    unit: MW/m^2
+  # Point-A average neutron wall load, table 5. Table 2 reports a peak neutron
+  # wall load of 4.05 MW/m^2, a different statistic.
+
+  # Point-A wall/radiation quantities without a one-to-one FusDB scalar:
+  # average_photon_wall_power: 0.70 MW/m^2
+  # P_over_S_LCFS_without_edge_radiation: 1.18 MW/m^2
+  # total_plasma_energy: 504.65 MJ
+  # tritium_burn_rate: 416.57 g/day
+  # alpha_energy_loss_fraction: ~0.8%
+
+  # --- Blanket and tritium ---------------------------------------------------
+  TBR: 1.074
+  # OpenMC gives 1.1070 +/- 0.0002 including the maintenance/divertor geometry;
+  # the paper applies a further 3% reduction for heating ports, yielding 1.074.
+  # The conclusion rounds this to ~1.07.
+  # breeder: liquid PbLi; the blanket is also used for neutron shielding.
+
+  # --- Whole-plant power -----------------------------------------------------
+  P_th_tot:
+    value: 3150
+    unit: MW
+    fixed: true
+  # High-level value after blanket multiplication. The conclusion rounds this
+  # to ~3.1 GW. Neutronics gives 2611 MW extractable from blanket/shield after
+  # multiplying the 2160 MW neutron power by ~1.2; total plant thermal power
+  # also includes the non-neutron fusion-energy channels.
+
+  P_elec_tot:
+    value: 1000
+    unit: MW
+    fixed: true
+  # Approximate peak electric output from the high-level plant model.
+
+  eta_th:
+    value: 0.3333333333
+    fixed: true
+  # The high-level estimate assumes a simple conversion efficiency of 1/3.
+
+  # --- Engineering / maintenance values not currently represented directly --
+  # target_plant_availability: 0.90
+  # operating_interval_between_major_maintenance: 4 years
+  # target_remote_maintenance_window: 5 months
+  # provisional_maintenance_duration_estimate: 7 months
+  # regular_maintenance_interval_estimate: 4-6 years
+  # first_wall_peak_photon_load_range: 0.18-0.77 MW/m^2
+  # first_wall_temperature_limit_result: <500 degC with pressurized helium
