@@ -5,7 +5,6 @@ from __future__ import annotations
 import numpy as np
 
 from .constants import *
-from .reactivity_config import *
 from .reaction_registry import *
 from .reaction_registry import REACTIONS, ReactionSpec
 from .species_registry import SPECIES, SpeciesRegistry, SpeciesSpec

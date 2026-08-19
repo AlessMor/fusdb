@@ -19,10 +19,15 @@ from fusdb.registry.dataset import (
     load_dataset,
     load_table,
 )
-from fusdb.registry.reactivity_config import REACTIVITY_TABLES
 from fusdb.registry.species_registry import SPECIES
 
 _ALLOWED_REFERENCE_FRAMES = ("lab", "cm")
+_ALLOWED_INTERPOLATION_KINDS = frozenset(
+    {"pchip", "linear", "nearest", "zero", "slinear", "quadratic", "cubic"}
+)
+_ENERGY_GRID_START_LOG10_KEV = 0.0
+_ENERGY_GRID_STOP_LOG10_KEV = 5.0
+_ENERGY_GRID_NUM_POINTS = 1000
 _KEV_TO_EV = 1.0e3
 _CM3_S_TO_M3_S = 1.0e-6
 _CM3_PER_M3 = 1.0e6
@@ -285,9 +290,9 @@ def _xsection_maxwellian_arrays(
     else:
         energy_cm_keV = incident_energy_keV
     energy_grid_kev = np.logspace(
-        REACTIVITY_TABLES.energy_grid_start_log10_kev,
-        REACTIVITY_TABLES.energy_grid_stop_log10_kev,
-        REACTIVITY_TABLES.energy_grid_num_points,
+        _ENERGY_GRID_START_LOG10_KEV,
+        _ENERGY_GRID_STOP_LOG10_KEV,
+        _ENERGY_GRID_NUM_POINTS,
         dtype=float,
     )
     cross_section_grid_m2 = np.interp(
@@ -411,9 +416,8 @@ def reactivity_from_reactivity_table(
 ) -> "float64 | NDArray[np.float64] | sp.Expr":
     """Return reactivity from one direct table file or absolute path."""
     interpolation_kind = interpolation_kind.strip().lower()
-    allowed_interpolation_kinds = REACTIVITY_TABLES.allowed_interpolation_kinds
-    if interpolation_kind not in allowed_interpolation_kinds:
-        allowed = ", ".join(allowed_interpolation_kinds)
+    if interpolation_kind not in _ALLOWED_INTERPOLATION_KINDS:
+        allowed = ", ".join(_ALLOWED_INTERPOLATION_KINDS)
         raise ValueError(
             f"Unsupported interpolation_kind '{interpolation_kind}'. "
             f"Choose one of: {allowed}."

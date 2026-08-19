@@ -5,7 +5,7 @@ from collections.abc import Mapping
 import fusdb
 from fusdb.registry import DATASETS, REACTIONS, RELATIONS, RelationRegistry, get_relations, load_dataset
 from fusdb.registry import dataset as dataset_module
-from fusdb.registry import reaction_registry, reactivity_config, relation_registry
+from fusdb.registry import reaction_registry, relation_registry
 
 
 def test_reaction_metadata_is_a_read_only_mapping() -> None:
@@ -30,11 +30,6 @@ def test_relation_discovery_is_cached_without_a_proxy_class() -> None:
     assert len(registry) > 0
     assert registry.get("aspect_ratio").function_name == "aspect_ratio"
     assert not hasattr(relation_registry, "LazyRelationRegistry")
-
-
-def test_reactivity_settings_no_longer_need_a_config_class() -> None:
-    assert reactivity_config.REACTIVITY_TABLES.energy_grid_num_points == 1000
-    assert not hasattr(reactivity_config, "ReactivityTableConfig")
 
 
 def test_implementation_classes_are_not_top_level_api() -> None:
