@@ -23,12 +23,14 @@ variables:
   # --- Machine and pulse design ---------------------------------------------
   R: {value: 4.62, unit: m, fixed: true}
   a: {value: 1.18, unit: m, fixed: true}
-  A: 3.9152542373
-  eps: 0.2554112554
+  eps: {value: 0.26, fixed: true}
   V_p: {value: 189, unit: m^3, fixed: true}
   A_p: {value: 257, unit: m^2, fixed: true}
   kappa_separatrix: {value: 1.8, fixed: true}
-  delta: {value: 0.65, fixed: true}
+  # The source reports separatrix triangularity delta_sep=0.65. FusDB currently
+  # has no distinct separatrix-triangularity scalar, so it is not silently
+  # identified with the core/shape variable `delta`.
+  # delta_separatrix: 0.65
   B0: {value: 11.4, unit: T, fixed: true}
   I_p: {value: 12.0, unit: MA, fixed: true}
   total_flux_available_from_CS: {value: 215, unit: Wb, fixed: true}
