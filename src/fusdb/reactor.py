@@ -12,9 +12,9 @@ from typing import Any
 import numpy as np
 import yaml
 
-from .batch import map_chunks, parallel_chunk_size
+from .modes._batch import map_chunks, parallel_chunk_size
 from .modes import MODE_NAMES
-from .profile_system import build_relation_system
+from .profiles.system import build_relation_system
 from .registry import RELATIONS, TAGS, VARIABLES
 from .relationsystem import CompilePlan, RelationSystem
 from .plotting.tables import SolvedColumn, _table_column
@@ -108,11 +108,6 @@ def _unique_extend(base: Iterable[str], extra: Iterable[str]) -> tuple[str, ...]
     return tuple(out)
 
 
-def _with_sustainment_guards(includes: tuple[str, ...], regime: str | None) -> tuple[str, ...]:
-    """Append checked-only sustainment guards for ``regime``."""
-    return _unique_extend(includes, _regime_guard_names(regime))
-
-
 def _with_confinement_regime(tags: tuple[str, ...], regime: str) -> tuple[str, ...]:
     """Replace any confinement-mode tags with exactly ``regime``."""
     order = _regime_order()
@@ -128,14 +123,6 @@ def _with_confinement_regime(tags: tuple[str, ...], regime: str) -> tuple[str, .
     if not inserted:
         out.append(regime)
     return tuple(out)
-
-
-def _regime_warning(old: str, new: str, mode: str) -> str:
-    """User-facing warning for automatic regime correction."""
-    return (
-        f"Declared {old} operating condition is inconsistent with confinement-mode thresholds; "
-        f"switched to {new} for {mode}."
-    )
 
 
 def _candidate_regimes(declared: str | None) -> tuple[str, ...]:
@@ -275,13 +262,6 @@ def _regime_guard_holds(regime: str, fields: Mapping[str, Any], shape: tuple[int
         residual = np.asarray(rel.func(**args), dtype=float)
         mask &= np.isfinite(residual) & (residual <= 1.0e-9)
     return mask
-
-
-def _copy_value(value: Any) -> Any:
-    """Copy scalar/profile values used to clone reactor variables."""
-    if isinstance(value, np.ndarray):
-        return value.copy()
-    return value
 
 
 def _resolve_reactor_yaml(path_like: str | Path) -> Path:
@@ -560,7 +540,7 @@ class Reactor:
     def clone(self) -> "Reactor":
         """Return an isolated copy of this reactor's declarations."""
         variables = {
-            name: var.clone(value=_copy_value(var.input_value))
+            name: var.clone(value=var.input_value.copy() if isinstance(var.input_value, np.ndarray) else var.input_value)
             for name, var in self.variables.items()
         }
         clone = Reactor(
@@ -856,7 +836,7 @@ class Reactor:
     def _run_guarded_once(self, mode: str, **options: Any) -> dict[str, Any]:
         """Run one mode with the current regime sustainment guard included."""
         base_include = self.relation_include
-        self.relation_include = _with_sustainment_guards(base_include, _confinement_regime(self.tags))
+        self.relation_include = _unique_extend(base_include, _regime_guard_names(_confinement_regime(self.tags)))
         try:
             return self._run_once(mode, **options)
         finally:
@@ -1017,7 +997,10 @@ class Reactor:
         result["regime_path"] = list(path)
         if declared and selected != declared:
             result["warnings"] = [
-                _regime_warning(declared, selected, mode),
+                (
+                    f"Declared {declared} operating condition is inconsistent with confinement-mode thresholds; "
+                    f"switched to {selected} for {mode}."
+                ),
                 *(result.get("warnings") or []),
             ]
 

@@ -7,14 +7,14 @@ import functools
 import inspect
 import operator
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from numbers import Real
 from typing import Any, Callable
 
 import numpy as np
 from scipy.optimize import least_squares, root_scalar
 
-from .utils import compare_numeric, domain_bounds_for_solver, normalize_tags, parse_constraint_specs, safe_max_abs, signed_scalar_grid, unique_preserve_order, value_in_domain
+from .numerics import compare_numeric, domain_bounds_for_solver, normalize_tags, parse_constraint_specs, signed_scalar_grid, unique_preserve_order, value_in_domain
 
 REGISTERED_RELATIONS: dict[str, "Relation"] = {}
 _ALLOWED_OPS = {"==", "<", "<=", ">", ">="}
@@ -106,8 +106,6 @@ class Relation:
         constant_names: Function parameters with defaults.
         dependency: Dependency hint used for graph reports.
         function_name: Decorated Python function name.
-        rebuild_spec: Optional picklable recipe for reconstructing runtime-generated
-            relations in worker processes. Registry relations leave this unset.
     """
 
     name: str
@@ -125,7 +123,6 @@ class Relation:
     dependency: str = "dense"
     function_name: str = ""
     argument_names: tuple[str, ...] = ()
-    rebuild_spec: Mapping[str, Any] | None = field(default=None, repr=False, compare=False)
     constraint_relations: tuple["Relation", ...] = field(default_factory=tuple, init=False)
     _signature: inspect.Signature = field(init=False, repr=False)
     _constant_defaults: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
@@ -161,7 +158,6 @@ class Relation:
         self.dependency = str(self.dependency or "dense")
         self.function_name = str(self.function_name or getattr(self.func, "__name__", self.name))
         self.argument_names = tuple(self.argument_names or self.input_names)
-        self.rebuild_spec = None if self.rebuild_spec is None else dict(self.rebuild_spec)
         if len(self.argument_names) != len(self.input_names):
             raise ValueError(f"Relation {self.name!r} argument_names and input_names must have the same length.")
         self._signature = inspect.signature(self.func)
@@ -182,18 +178,12 @@ class Relation:
         self._coerce_names = (*self.input_names, *self.constant_names)
 
         # Local constraints are themselves relations. enforce=False means checked-only applicability.
-        built: list[Relation] = []
-        for index, (text, enforce) in enumerate(parse_constraint_specs(self.constraints)):
-            built.append(
-                constraint_from_expression(
-                    text,
-                    name=f"{self.name}_constraint_{index}",
-                    enforce=enforce,
-                    source_kind="relation",
-                    source_name=self.name,
-                )
-            )
-        self.constraint_relations = tuple(built)
+        self.constraint_relations = build_constraint_relations(
+            self.constraints,
+            name_prefix=f"{self.name}_constraint",
+            source_kind="relation",
+            source_name=self.name,
+        )
 
     @property
     def optional_variable_names(self) -> tuple[str, ...]:
@@ -431,7 +421,16 @@ class Relation:
         if out is not None and scales is not None:
             base_scale = scales.get(out, 1.0)
         else:
-            base_scale = max(safe_max_abs(lhs), safe_max_abs(rhs), 1.0)
+            magnitudes = [1.0]
+            for value in (lhs, rhs):
+                try:
+                    arr = np.asarray(value, dtype=float).reshape(-1)
+                except Exception:
+                    continue
+                finite = arr[np.isfinite(arr)]
+                if finite.size:
+                    magnitudes.append(float(np.max(np.abs(finite))))
+            base_scale = max(magnitudes)
         if out is not None and rel_tols and out in rel_tols:
             tol = float(rel_tols[out])
         else:
@@ -979,24 +978,7 @@ def canonicalize_relation_names(rel: "Relation", variable_registry: Any) -> "Rel
     outputs = tuple(variable_registry.get(name).canonical_name for name in rel.outputs)
     if inputs == rel.input_names and outputs == rel.outputs:
         return rel
-    return Relation(
-        name=rel.name,
-        func=rel.func,
-        input_names=inputs,
-        outputs=outputs,
-        op=rel.op,
-        rhs=rel.rhs,
-        tags=rel.tags,
-        enforce=rel.enforce,
-        constraints=rel.constraints,
-        source_kind=rel.source_kind,
-        source_name=rel.source_name,
-        constant_names=rel.constant_names,
-        dependency=rel.dependency,
-        function_name=rel.function_name,
-        argument_names=rel.argument_names,
-        rebuild_spec=rel.rebuild_spec,
-    )
+    return replace(rel, input_names=inputs, outputs=outputs)
 
 
 def canonicalize_relation(rel: "Relation", variable_registry: Any) -> "Relation":
@@ -1101,4 +1083,24 @@ def constraint_from_expression(
         source_name=str(source_name or name or text),
         function_name=str(name or f"constraint_{safe}"),
         argument_names=inputs,
+    )
+
+
+def build_constraint_relations(
+    constraints: Any,
+    *,
+    name_prefix: str,
+    source_kind: str,
+    source_name: str,
+) -> tuple[Relation, ...]:
+    """Normalize a constraint declaration into ordinary Relation objects."""
+    return tuple(
+        constraint_from_expression(
+            text,
+            name=f"{name_prefix}_{index}",
+            enforce=enforce,
+            source_kind=source_kind,
+            source_name=source_name,
+        )
+        for index, (text, enforce) in enumerate(parse_constraint_specs(constraints))
     )

@@ -5,9 +5,10 @@ import pytest
 
 import fusdb
 import fusdb.plotting as plotting
-from fusdb.plotting.data import Curve, CurveSet, FieldMap, TableCell, TableData
+from fusdb.plotting.data import Curve, CurveSet, FieldMap
+from fusdb.plotting.tables import TableCell, TableData
 from fusdb.plotting.tables import render_table
-from fusdb.utils.datasets import PreparedTable
+from fusdb.registry.dataset.evaluation import PreparedTable
 
 
 def test_curve_set_keeps_one_source_of_xy_data_for_both_backends() -> None:
@@ -41,7 +42,7 @@ def test_standard_bokeh_explorer_orders_plot_options_then_limits() -> None:
     from bokeh.models import CheckboxButtonGroup, LegendItem
     from bokeh.plotting import figure
 
-    from fusdb.plotting._bokeh import explorer_layout
+    from fusdb.plotting.bokeh import explorer_layout
 
     plot = figure(width=600, height=400)
     renderer = plot.line([1, 2], [3, 4])
@@ -62,7 +63,7 @@ def test_standard_bokeh_explorer_orders_plot_options_then_limits() -> None:
 
 
 def test_legend_columns_reflow_for_smaller_widths() -> None:
-    from fusdb.plotting._bokeh import _columns_for_width
+    from fusdb.plotting.bokeh import _columns_for_width
 
     item_widths = [100] * 6
     assert _columns_for_width(item_widths, 650, spacing=3) == 6

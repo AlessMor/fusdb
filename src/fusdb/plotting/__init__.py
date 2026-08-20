@@ -1,19 +1,7 @@
-"""Backend-neutral plotting data and explicit Matplotlib/Bokeh renderers.
+"""Backend-neutral plotting and display data with lazy renderers.
 
-Each module owns one representation used across the example notebooks:
-
-* :mod:`fusdb.plotting.data`       -- ``CurveSet``, ``FieldMap``, and ``TableData``
-* :mod:`fusdb.plotting.renderers`  -- explicit Matplotlib/Bokeh renderers
-* :mod:`fusdb.plotting.reactivity` -- fusion reactivity curve-data discovery
-* :mod:`fusdb.plotting.atomic_physics` -- interactive atomic-rate explorer
-* :mod:`fusdb.plotting.profiles`   -- radial profile curve-data builder
-* :mod:`fusdb.plotting.popcon`     -- POPCON field-map builder
-* :mod:`fusdb.plotting.tables`     -- variable-table preparation/rendering
-
-Submodules are imported lazily (PEP 562): the matplotlib/bokeh plotters need
-the ``plotting`` extra, while :mod:`fusdb.plotting.tables` is dependency-free
-and is imported by the core package -- accessing a plotter name here must not
-drag matplotlib into every ``import fusdb``.
+Table preparation is dependency-light. Matplotlib and Bokeh backends are
+loaded only when their exported names are accessed.
 """
 
 from __future__ import annotations
@@ -21,25 +9,24 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
-# Public name -> owning submodule; resolved on first attribute access.
 _EXPORTS = {
     "Curve": "data",
     "CurveSet": "data",
     "FieldMap": "data",
-    "TableCell": "data",
-    "TableData": "data",
-    "bokeh_curve_set": "renderers",
-    "plot_curve_set": "renderers",
-    "plot_field_map": "renderers",
+    "TableCell": "tables",
+    "TableData": "tables",
+    "SolvedColumn": "tables",
+    "render_table": "tables",
+    "variable_table_data": "tables",
+    "bokeh_curve_set": "bokeh",
+    "plot_curve_set": "matplotlib",
+    "plot_field_map": "matplotlib",
     "popcon_field_map": "popcon",
     "profile_curves": "profiles",
     "reactivity_curves": "reactivity",
     "bokeh_relation_graph": "relation_graph",
     "build_relation_graph": "relation_graph",
     "plot_relation_graph": "relation_graph",
-    "variable_table_data": "tables",
-    "render_table": "tables",
-    "SolvedColumn": "tables",
 }
 
 __all__ = sorted(_EXPORTS)

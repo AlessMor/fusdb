@@ -1,0 +1,131 @@
+metadata:
+  id: Eos_2025
+  name: Eos 2025 - 1 MeV NBI Design Point
+  organization: Thea Energy
+  country: USA
+  year: 2025
+  doi: 10.1088/1741-4326/ada56a
+  notes: >-
+    Sub-breakeven D-D beam-target stellarator neutron-source design. Active
+    values use the table-1 minimum-facility-power point constrained to the
+    1 MeV ITER-derived neutral beam energy. The unconstrained-energy optimum
+    and the 500 kW shine-through point are retained as comments.
+
+tags:
+- stellarator
+
+variables:
+  # --- Geometry and equilibrium ---------------------------------------------
+  R:
+    value: 3.24
+    unit: m
+    fixed: true
+
+  a:
+    value: 0.54
+    unit: m
+    fixed: true
+
+  A:
+    value: 6.0
+    fixed: true
+
+  B0:
+    value: 5.0
+    unit: T
+    fixed: true
+
+  iotabar:
+    value: 0.66
+    fixed: true
+  # Rotational transform at the 2/3 surface, used in the ISS04 scaling.
+
+  # Two-field-period quasi-axisymmetric candidate equilibrium.
+  # radius_of_curvature_min_axis: 5.84 m
+  # blanket_and_structure_between_plasma_and_coils: ~0.50 m
+
+  # --- Target-plasma profiles and confinement -------------------------------
+  n0:
+    value: 6.5e19
+    unit: m^-3
+
+  T0:
+    value: 24
+    unit: keV
+
+  T_i_peak:
+    value: 0
+    unit: keV
+  # Hot-electron-mode approximation; the paper states self-consistent studies
+  # suggest Ti,0 < 3 keV for the reference regime.
+
+  alphan:
+    value: 1.0
+    fixed: true
+  # ne(rho) = ne0 * (1-rho^2)^alphan.
+
+  alphat:
+    value: 2.0
+    fixed: true
+  # Te and Ti use the same parabolic profile index in the scoping model.
+
+  H_iss04_stellarator:
+    value: 1.5
+    fixed: true
+
+  beta_T: 0.0063
+  # Volume-averaged target-plasma beta = 0.63%. This excludes the strongly
+  # anisotropic beam population, whose effective energy-density beta is 3.9%.
+
+  # --- Beam heating and neutron production ----------------------------------
+  P_NBI:
+    value: 10
+    unit: MW
+  # 1 MeV injected deuterium beam power. No ECRH is required at this optimum.
+
+  neutron_rate:
+    value: 2.5e17
+    unit: 1/s
+  # Target D-D neutron production rate; corresponds to ~0.2 g/day tritium
+  # production in the paper's TBR=1 scoping assumption.
+
+  TBR: 1.0
+  # Scoping-model assumption, one triton per D-D source neutron. Section 4.3
+  # notes that a more realistic thin-blanket value around 0.9 appears
+  # achievable; that lowers total tritium production by only ~5% because the
+  # other D-D branch produces tritium directly in the plasma.
+
+  P_aux_el:
+    value: 33.3
+    unit: MW
+  # Electrical input to the 10 MW NBI channel at assumed eta_NBI = 0.30.
+  # Total required facility electric power is 39 MW after adding the paper's
+  # 5 MW balance-of-plant allowance; this facility consumes rather than
+  # generates electricity, so it is not mapped to P_elec_tot.
+
+  # Other values for the selected 1 MeV design point (table 1):
+  # beam_tangency_radius_inward_shift: 0.14 m
+  # beam_shine_through_fraction: 0.15
+  # ion_electron_thermalization_power: 1.7 MW
+  # ISS04_transport_power: 8.6 MW
+  # beam_ion_heating: 3.9 MW
+  # beam_electron_heating: 4.7 MW
+  # ECRH_heating: ~0 MW
+  # beam_effective_beta: 0.039
+  # neutral_beam_electrical_efficiency: 0.30
+  # gyrotron_electrical_efficiency: 0.45
+  # other_facility_electric_power: 5 MW
+  # required_facility_electric_power: 39 MW
+  # tritium_production_rate: 0.2 g/day (~73 g/year)
+
+  # Alternative table-1 optimization points, not mixed with the active case:
+  # Eb-free optimum:
+  #   T0 = 22 keV; n0 = 7.6e19 m^-3; Eb = 1.3 MeV; P_NBI = 10 MW;
+  #   required facility power = 38 MW; shine-through = 17%; beta_beam = 3.4%.
+  # 500-kW-shine-through point:
+  #   T0 = 21 keV; n0 = 1.0e20 m^-3; Eb = 1.0 MeV; P_NBI = 11 MW;
+  #   required facility power = 41 MW; shine-through = 4.8%; beta_beam = 2.5%.
+
+  # The paper does not report a single reactor-style total fusion-power value
+  # for this D-D beam-target source, so P_fus is deliberately not reconstructed
+  # from neutron rate and branching assumptions.

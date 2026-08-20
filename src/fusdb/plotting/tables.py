@@ -3,13 +3,44 @@
 from __future__ import annotations
 
 import html
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 import numpy as np
 
 from ..registry import VARIABLES
-from .data import TableCell, TableData
+
+
+@dataclass(frozen=True)
+class TableCell:
+    """A display-ready table cell, independent of HTML or text rendering."""
+
+    text: str
+    foreground: str = "#000000"
+    background: str = ""
+    tooltip: str = ""
+
+
+@dataclass(frozen=True)
+class TableData:
+    """A table with already-formatted cells for HTML and plain-text renderers."""
+
+    headers: Sequence[str]
+    rows: Sequence[tuple[str, Sequence[TableCell]]]
+    header_colors: Sequence[str] = ()
+
+    def __post_init__(self) -> None:
+        headers = tuple(self.headers)
+        rows = tuple((str(name), tuple(cells)) for name, cells in self.rows)
+        if any(len(cells) != len(headers) for _, cells in rows):
+            raise ValueError("Every TableData row must contain one cell per header.")
+        colors = tuple(self.header_colors) or tuple("#000000" for _ in headers)
+        if len(colors) != len(headers):
+            raise ValueError("TableData header_colors must match headers.")
+        object.__setattr__(self, "headers", headers)
+        object.__setattr__(self, "rows", rows)
+        object.__setattr__(self, "header_colors", colors)
 
 
 def _format_table_value(value: Any) -> str:
@@ -68,20 +99,6 @@ def _table_cell_display(input_value: Any, value: Any, rel_tol: float, abs_tol: f
     elif has_input and used and value is None:
         color, text = "#606060", _format_table_value(input_value)
     return background, color, text
-
-
-def _sort_table_variable_names(names: Iterable[str]) -> tuple[str, ...]:
-    """Sort variable names by registry order, then alphabetically."""
-    registry_order = {
-        spec.name: index
-        for index, spec in enumerate(VARIABLES)
-    }
-    return tuple(
-        sorted(
-            names,
-            key=lambda name: (registry_order.get(name, len(registry_order)), name),
-        )
-    )
 
 
 class SolvedColumn(NamedTuple):
@@ -146,17 +163,6 @@ def _table_column(source: Any) -> SolvedColumn:
     )
 
 
-def _displayed_variable_names(columns: Iterable[SolvedColumn], variable_names: Iterable[str] | None) -> tuple[str, ...]:
-    """Resolve the row order/subset: the explicit list, or active + supplied."""
-    if variable_names is not None:
-        return tuple(variable_names)
-    names: set[str] = set()
-    for column in columns:
-        names.update(column.active_variable_names)
-        names.update(column.inputs)
-    return _sort_table_variable_names(names)
-
-
 def variable_table_data(*sources: Any, variable_names: Iterable[str] | None = None) -> TableData:
     """Prepare current variable values for HTML or plain-text presentation.
 
@@ -172,7 +178,17 @@ def variable_table_data(*sources: Any, variable_names: Iterable[str] | None = No
     information without committing to a renderer.
     """
     columns = [_table_column(source) for source in sources]
-    ordered_names = _displayed_variable_names(columns, variable_names)
+    if variable_names is not None:
+        ordered_names = tuple(variable_names)
+    else:
+        names: set[str] = set()
+        for column in columns:
+            names.update(column.active_variable_names)
+            names.update(column.inputs)
+        registry_order = {spec.name: index for index, spec in enumerate(VARIABLES)}
+        ordered_names = tuple(
+            sorted(names, key=lambda name: (registry_order.get(name, len(registry_order)), name))
+        )
     rows = []
     for name in ordered_names:
         cells = []

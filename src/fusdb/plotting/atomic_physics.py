@@ -22,7 +22,7 @@ import numpy as np
 
 from fusdb.registry import RELATIONS
 
-from ._bokeh import (
+from .bokeh import (
     explorer_layout,
     link_two_filter_visibility,
     log_grid,
@@ -30,7 +30,7 @@ from ._bokeh import (
     validate_axis_limits,
 )
 from .data import Curve, CurveSet
-from .renderers import bokeh_curve_set
+from .bokeh import bokeh_curve_set
 
 # Display order of the process categories (relation subpackage names) and the
 # species filter buttons (hydrogenic first, so the default selection is leading).
@@ -115,22 +115,6 @@ class RateSeries(NamedTuple):
     relation: Any
 
 
-def _is_rate_relation(relation: Any) -> bool:
-    """Return whether a relation maps ``T_edge`` (+ optional ``n_e_edge``) to one ``*_rate``."""
-    outputs = relation.outputs
-    return (
-        "atomic_physics" in relation.tags
-        and set(relation.input_names) in ({"T_edge"}, {"T_edge", "n_e_edge"})
-        and len(outputs) == 1
-        and outputs[0].endswith("_rate")
-    )
-
-
-def _species_label(module_stem: str) -> str:
-    """Return the display species for a relation module stem (``H2_plus`` -> ``H2+``)."""
-    return module_stem.replace("_plus", "+").replace("_minus", "-")
-
-
 def _doc_line(relation: Any, prefix: str) -> str:
     """Return the content after ``prefix`` on the matching docstring line, if any."""
     for line in (relation.func.__doc__ or "").splitlines():
@@ -144,11 +128,6 @@ def _order(sequence: tuple[str, ...], value: str) -> int:
     return sequence.index(value) if value in sequence else len(sequence)
 
 
-def _category_from_module_parts(module_parts: list[str]) -> str:
-    """Return the plotting category for a relation module path."""
-    return "mar" if "mar" in module_parts else (module_parts[-2] if len(module_parts) >= 2 else "other")
-
-
 def discover_rate_series() -> list[RateSeries]:
     """Return every atomic-physics rate curve discovered from the registry.
 
@@ -159,11 +138,17 @@ def discover_rate_series() -> list[RateSeries]:
     """
     series: list[RateSeries] = []
     for relation in RELATIONS:
-        if not _is_rate_relation(relation):
+        outputs = relation.outputs
+        if not (
+            "atomic_physics" in relation.tags
+            and set(relation.input_names) in ({"T_edge"}, {"T_edge", "n_e_edge"})
+            and len(outputs) == 1
+            and outputs[0].endswith("_rate")
+        ):
             continue
         module_parts = relation.func.__module__.split(".")
-        category = _category_from_module_parts(module_parts)
-        species = _species_label(module_parts[-1])
+        category = "mar" if "mar" in module_parts else (module_parts[-2] if len(module_parts) >= 2 else "other")
+        species = module_parts[-1].replace("_plus", "+").replace("_minus", "-")
         label = re.sub(r"^AMJUEL H\.\d+ ", "", relation.name).removesuffix(" rate")
         series.append(
             RateSeries(

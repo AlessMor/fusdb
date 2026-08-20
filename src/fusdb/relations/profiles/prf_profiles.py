@@ -36,7 +36,7 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline
 
 from fusdb.relation import relation
-from fusdb.utils import volume_average
+from fusdb.numerics import volume_average
 
 # CHECK
 _PRF_DATA = Path(__file__).parent / "prf_data"

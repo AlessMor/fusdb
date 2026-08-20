@@ -7,8 +7,8 @@ from numpy import float64
 from numpy.typing import NDArray
 
 from fusdb.relation import relation
-from fusdb.utils.datasets import reactivity_from_reactivity_table
-from fusdb.utils.datasets import reactivity_from_xsection_table
+from fusdb.registry.dataset.evaluation import reactivity_from_reactivity_table
+from fusdb.registry.dataset.evaluation import reactivity_from_xsection_table
 
 
 @relation(

@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from fusdb.profile_system import build_relation_system
+from fusdb.profiles.system import build_relation_system
 from fusdb.registry import RELATIONS
-from fusdb.utils import volume_average
+from fusdb.numerics import volume_average
 from fusdb.variable import Variable
 
 
@@ -50,21 +50,36 @@ def test_dt_reaction_rate_uses_supplied_volume_measure():
     assert "w_V" in relation.constant_names
 
 
-def test_dynamic_volume_measure_is_graph_dependency_for_nonprofile_physics():
+def test_dynamic_volume_measure_reaches_nonprofile_physics():
+    """A supplied measure must weight the integral, not fall back to its default.
+
+    ``w_V`` stays an optional constant of the declaration; what matters is that
+    compilation feeds the supplied value to the relation rather than letting
+    ``evaluate`` use the signature default.
+    """
     rho = np.linspace(0.0, 1.0, 9)
     weight = 0.2 + rho**3
+    n_D = 1.0 + rho
+    n_T = 2.0 - 0.5 * rho
+    sigmav = 3.0 + rho**2
     relation = RELATIONS.get("DT reaction rate")
     system = build_relation_system(
-        [Variable("w_V", value=weight)],
+        [
+            Variable("w_V", value=weight),
+            Variable("n_D", value=n_D, fixed=True),
+            Variable("n_T", value=n_T, fixed=True),
+            Variable("sigmav_DT", value=sigmav, fixed=True),
+            Variable("V_p", value=5.0, fixed=True),
+        ],
         [relation],
         profile_size=rho.size,
     ).compile()
-    migrated = next(
-        item for item in system.model.candidate_primary_relations if item.name == relation.name
-    )
+    values = system.complete(system.solver_values())
 
-    assert "w_V" in migrated.input_names
-    assert "w_V" not in migrated.constant_names
+    assert values["Rr_DT"] == pytest.approx(
+        5.0 * volume_average(n_D * n_T * sigmav, rho, weight=weight)
+    )
+    assert values["Rr_DT"] != pytest.approx(5.0 * volume_average(n_D * n_T * sigmav, rho))
 
 
 def test_reduced_static_volume_measure_stays_off_physics_graph():

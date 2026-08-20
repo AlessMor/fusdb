@@ -31,7 +31,7 @@ from typing import Any
 
 import numpy as np
 from numpy.polynomial.polynomial import polyval
-from fusdb.utils import trapezoid, volume_average
+from fusdb.numerics import trapezoid, volume_average
 
 from fusdb.relation import relation
 from fusdb.registry import SPECIES

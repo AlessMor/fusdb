@@ -11,13 +11,12 @@ from typing import Any
 import numpy as np
 import yaml
 
-from ..utils import (
+from ..numerics import (
     ZERO_TOL,
     coerce_to_shape,
     domain_bounds_for_solver,
     parse_constraint_specs,
     parse_domain,
-    scipy_bounds,
     unique_preserve_order,
     validate_solver_domain,
     value_in_domain,
@@ -96,7 +95,9 @@ class VariableSpec:
     public_proj_high: tuple[float, float, float] | None = field(init=False, repr=False, compare=False, default=None)
 
     def __post_init__(self) -> None:
-        s_lo, s_hi = scipy_bounds(self.solver_domain, zero_tol=ZERO_TOL)
+        s_lo_raw, s_hi_raw = domain_bounds_for_solver(self.solver_domain, zero_tol=ZERO_TOL)
+        s_lo = -np.inf if s_lo_raw is None else float(s_lo_raw)
+        s_hi = np.inf if s_hi_raw is None else float(s_hi_raw)
         object.__setattr__(self, "solver_bounds", (s_lo, s_hi))
         d_lo, d_hi, d_lo_inc, d_hi_inc = self.domain
         # Solver projection: physical-boundary values map onto the solver bound
@@ -128,17 +129,13 @@ class VariableSpec:
         """
         cached = _SPEC_GUARDS.get(self.name)
         if cached is None:
-            from ..relation import constraint_from_expression
+            from ..relation import build_constraint_relations
 
-            cached = tuple(
-                constraint_from_expression(
-                    text,
-                    name=f"{self.name}_registry_constraint_{index}",
-                    enforce=enforce,
-                    source_kind="variable",
-                    source_name=self.name,
-                )
-                for index, (text, enforce) in enumerate(self.constraints)
+            cached = build_constraint_relations(
+                self.constraints,
+                name_prefix=f"{self.name}_registry_constraint",
+                source_kind="variable",
+                source_name=self.name,
             )
             _SPEC_GUARDS[self.name] = cached
         return cached

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fusdb.utils import volume_average
+from fusdb.numerics import volume_average
 
 from fusdb.relation import relation
 

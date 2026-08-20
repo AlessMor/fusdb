@@ -12,9 +12,9 @@ from scipy.sparse import csr_matrix, lil_matrix
 from scipy.sparse.csgraph import maximum_bipartite_matching
 
 
-from .relation import COORDINATE_NAMES, Relation, canonicalize_relation, canonicalize_relation_names, constraint_from_expression, is_default_relation
+from .relation import COORDINATE_NAMES, Relation, build_constraint_relations, canonicalize_relation, canonicalize_relation_names, is_default_relation
 from .registry import VARIABLES
-from .utils import ZERO_TOL, parse_constraint_specs, signed_scalar_grid, value_in_domain, volume_average
+from .numerics import ZERO_TOL, signed_scalar_grid, value_in_domain, volume_average
 from .variable import Variable
 
 
@@ -888,7 +888,10 @@ class CompilePlan:
                 self._mark_relation_active(rel)
         self.primary_relations = active
         self.relations = list(active)
-        active_vars = {name for rel in active for name in rel.variables}
+        active_vars = {
+            name for rel in active for name in rel.variables
+            if name not in self.model.resolved_constants
+        }
         # Complete the decidability classification with the partition verdicts:
         # determined-block members and (forced-)underdetermined variables.
         for name in block_decidable:
@@ -962,6 +965,16 @@ class CompilePlan:
             cores.discard(name)
         return derived, cores
 
+    def unresolved_dependencies(self, rel: Relation) -> tuple[str, ...]:
+        """The relation inputs this system must actually resolve.
+
+        A relation declares the arguments its equation takes; this drops the
+        ones already resolved (see :attr:`RelationSystem.resolved_constants`),
+        which is the distinction structural reasoning needs and the relation
+        object deliberately does not carry.
+        """
+        return tuple(name for name in rel.input_names if name not in self.model.resolved_constants)
+
     def _register_profile_generators(self, active_vars: set[str], derived: set[str]) -> None:
         """Register explicit lower-dimensional profile generators as providers,
         activating their scalar-average controls.  Mutates ``active_vars`` and
@@ -974,7 +987,10 @@ class CompilePlan:
             if not profile_outputs or rel.implicit:
                 continue
             lower_dimensional = True
-            for inp in rel.input_names:
+            # A resolved coordinate is profile-shaped but is not what makes this
+            # relation higher-dimensional: it carries no solver ancestry, so it
+            # must not disqualify the generator.
+            for inp in self.unresolved_dependencies(rel):
                 if inp not in self.variable_registry or self.variable_registry.get(inp).shape == 1:
                     lower_dimensional = False
                     break
@@ -2750,12 +2766,22 @@ class RelationSystem:
         *,
         constraints: Any = None,
         name: str | None = None,
+        resolved_constants: Iterable[str] = (),
     ) -> None:
         self.name = str(name or "relation_system")
         self.variable_registry = VARIABLES
         self.constraints_spec = constraints
         self.variables = tuple(variables)
         self.relations = tuple(relations)
+        # Names a relation may name as an argument but this system never has to
+        # resolve: their value is framework-supplied and fixed before
+        # compilation, with no reactor-state ancestry.  Declaring the fact here
+        # is what lets a Relation stay a stable description of its equation --
+        # the alternative is copying the Relation per scenario to move the name
+        # between ``input_names`` and ``constant_names``, which made the same
+        # equation carry different dependency metadata in different reactors.
+        # Read through :meth:`CompilePlan.unresolved_dependencies`.
+        self.resolved_constants = frozenset(str(entry) for entry in resolved_constants)
         self._structure_cache: dict[tuple[frozenset[str], frozenset[str]], Any] = {}
 
         # Ingest declarations once.  A CompilePlan starts from these immutable
@@ -2796,17 +2822,13 @@ class RelationSystem:
             canonicalize_relation(rel, self.variable_registry) for rel in self.relations
         )
         self.system_constraint_relations = tuple(
-            canonicalize_relation_names(
-                constraint_from_expression(
-                    text,
-                    name=f"system_constraint_{index}",
-                    enforce=enforce,
-                    source_kind="system",
-                    source_name=self.name,
-                ),
-                self.variable_registry,
+            canonicalize_relation_names(guard, self.variable_registry)
+            for guard in build_constraint_relations(
+                constraints,
+                name_prefix="system_constraint",
+                source_kind="system",
+                source_name=self.name,
             )
-            for index, (text, enforce) in enumerate(parse_constraint_specs(constraints))
         )
 
         # The known universe is model metadata: declarations, candidate

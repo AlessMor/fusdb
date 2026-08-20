@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from fusdb.utils.profiles import (
+from fusdb.profiles.numerics import (
     coordinate_average,
     normalized_shape,
     reinterpolate_profile,

@@ -9,7 +9,7 @@ from fusdb.relations.radiation.impurity_radiation import (
     _mavrin_coronal_Lz,
     _process_coronal_Lz,
 )
-from fusdb.utils.datasets import (
+from fusdb.registry.dataset.evaluation import (
     evaluate_amjuel_h2_rate,
     reactivity_from_reactivity_table,
     reactivity_from_xsection_table,

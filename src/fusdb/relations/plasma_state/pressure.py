@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 
 from fusdb.relation import relation
-from fusdb.utils import line_average, volume_average
+from fusdb.numerics import line_average, volume_average
 from fusdb.registry import KEV_TO_J
 
 

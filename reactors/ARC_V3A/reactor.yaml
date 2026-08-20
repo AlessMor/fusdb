@@ -1,0 +1,135 @@
+metadata:
+  id: ARC_V3A_2026_POPCON
+  name: ARC V3A 2026 - nominal POPCON target
+  organization: Commonwealth Fusion Systems
+  country: USA
+  year: 2026
+  doi: 10.1017/S0022377826101706
+  notes: >-
+    Nominal ARC V3A fusion-power flattop target from Hillesheim et al. (2026).
+    Active values use the empirical cfsPOPCON projection. Higher-fidelity
+    predictions of the same operating point are retained as comments rather than
+    treated as independent reactor scenarios.
+
+# Companion papers: Howard et al. 2026 (transport), Eich et al. 2026 (exhaust),
+# Leuthold et al. 2026 (MHD), Sweeney et al. 2026 (disruptions), Muraca et al.
+# 2026 (core-edge impurity/detachment modelling).
+
+tags:
+- tokamak
+- h_mode
+
+variables:
+  # --- Machine and pulse design ---------------------------------------------
+  R: {value: 4.62, unit: m, fixed: true}
+  a: {value: 1.18, unit: m, fixed: true}
+  eps: {value: 0.26, fixed: true}
+  V_p: {value: 189, unit: m^3, fixed: true}
+  A_p: {value: 257, unit: m^2, fixed: true}
+  kappa_separatrix: {value: 1.8, fixed: true}
+  # The source reports separatrix triangularity delta_sep=0.65. FusDB currently
+  # has no distinct separatrix-triangularity scalar, so it is not silently
+  # identified with the core/shape variable `delta`.
+  # delta_separatrix: 0.65
+  B0: {value: 11.4, unit: T, fixed: true}
+  I_p: {value: 12.0, unit: MA, fixed: true}
+  total_flux_available_from_CS: {value: 215, unit: Wb, fixed: true}
+  max_flattop_duration: {value: 900, unit: s, fixed: true}
+  afuel: {value: 2.5, fixed: true}
+
+  # q* is the Uckan edge-safety-factor proxy used in the POPCON input table.
+  qstar: 3.23
+  # Hillesheim reports q95 ~3.4-3.6 for this empirical point depending on edge
+  # assumptions. It is intentionally not replaced by a midpoint. The kinetic
+  # equilibrium used by Leuthold et al. instead has q95 = 3.77.
+  # q95: 3.4-3.6
+
+  # --- Empirical POPCON plasma point ----------------------------------------
+  H98_y2: {value: 0.9, fixed: true}
+  ion_to_electron_temp_ratio: {value: 0.9, fixed: true}
+  Z_eff: {value: 1.52, fixed: true}
+  dilution: {value: 0.85, fixed: true}
+  density_peaking: {value: 1.52, fixed: true}
+  ion_density_peaking: {value: 1.42, fixed: true}
+
+  T_e_avg: {value: 11.4, unit: keV}
+  T_i_avg: {value: 10.3, unit: keV}
+  n_e_avg: {value: 2.44e20, unit: m^-3}
+  f_GW: {value: 0.9, fixed: true}
+  beta_N: 0.018
+  tau_E: {value: 0.93, unit: s}
+  W_th: {value: 231, unit: MJ}
+
+  # The source gives an electron inverse-temperature-gradient scale a/LTe=1.8.
+  # FusDB has no scalar with exactly that definition.
+  # a_over_LTe: 1.8
+
+  # --- Heating and fusion ----------------------------------------------------
+  P_ICRF: {value: 21.5, unit: MW}
+  # All external heating is ICRH; the source reports Prf,abs = 21.5 MW. P_aux is
+  # therefore left to FusDB's Total auxiliary power relation rather than
+  # duplicating the same value under two names.
+  P_ohmic: {value: 0.8, unit: MW}
+  P_fus: {value: 1133, unit: MW}
+  P_alpha: {value: 227, unit: MW}
+  Q_sci: 51
+  neutron_rate: {value: 4.0e20, unit: 1/s}
+  ratio_of_P_SOL_to_P_LH: 1.2
+
+  # ARC exhaust scoping takes P_sep = 120 MW as a reference value at fG=0.9.
+  # It is not an independently tabulated output of the empirical POPCON point,
+  # so it remains a source-qualified comment here and is active in the Eich
+  # exhaust scenario files.
+  # P_sep: 120 MW
+
+  # --- Plant power -----------------------------------------------------------
+  P_elec_tot: {value: 400, unit: MW, fixed: true}
+  # During flattop: ~1260 MW thermal; time-averaged over 900 s + 60 s cycle:
+  # ~1180 MW thermal; Rankine efficiency ~42%; gross electric ~500 MW;
+  # recirculating plant power ~100 MW; net grid power 400 MW.
+  # P_th_flattop: ~1260 MW
+  # P_th_time_average: ~1180 MW
+  # P_elec_gross: ~500 MW
+  # P_plant_internal: ~100 MW
+  # eta_rankine: 0.42
+
+  # --- Engineering facts without direct FusDB variables --------------------
+  # number_of_TF_coils: 18
+  # divertor_configuration: up-down-symmetric double-null X-point target
+  # first_wall_armour: tungsten
+  # vacuum_vessel_structure: vanadium-based alloy
+  # first_wall_tungsten_thickness: 5 mm
+  # vacuum_vessel_inner_wall_thickness: 1 cm
+  # FLiBe_cooling_channel_space: 4.5 cm
+  # vacuum_vessel_outer_wall_thickness: 3 cm
+  # nominal_vessel_temperature: ~600 degC
+  # vacuum_vessel_replacement_interval: 1-2 full-power years
+  # plant_design_lifetime: 20 years
+
+  # --- Same machine, alternative modelling results (not separate scenarios) --
+  # Howard et al.: medium-fidelity integrated models span roughly 0.9-1.3 GW;
+  # high-fidelity CGYRO+PORTALS nominal prediction gives Pfus = 677 MW.
+  # These are model predictions of the same design point, not different declared
+  # reactor scenarios, so they are retained as comments rather than active values.
+  # Leuthold et al. kinetic-equilibrium reference: q95=3.77, beta_N=1.65
+  # (FusDB fractional convention 0.0165); low/mid/high rotation sensitivity
+  # multipliers are 0.5/1/2 with intrinsic torque 5/10/20 N m.
+  # Sweeney et al. defines Hot VDE, major-disruption fast cold VDE, and mitigated
+  # major-disruption cold VDE as transient design-disruption cases. They are not
+  # steady operating scenarios and are not converted into reactor YAMLs.
+  # Muraca et al. scans pedestal density, separatrix density, enrichment and Ar/Ne
+  # seeding around an ARC-V3A-like point; those are sensitivity studies rather
+  # than uniquely defined design points.
+
+relations:
+  include:
+  # Hillesheim explicitly states that the empirical projection uses IPB98(y,2)
+  # through cfsPOPCON, with H98,y2=0.9. Select FusDB's cfsPOPCON-convention form.
+  - Energy confinement time ITER98y2 (cfspopcon)
+  # H-mode access is evaluated with the Martin et al. 2008 / ITPA08 threshold.
+  - L-H threshold Martin-2008 aspect nominal
+  # Electron density peaking is explicitly taken from the Angioni empirical fit.
+  - Effective collisionality (Angioni)
+  - Electron density peaking (Angioni)
+  # Ion peaking is set as nu_ni = nu_ne - 0.1 in the paper; FusDB has no exact
+  # selectable relation for that offset prescription, so the value is explicit.

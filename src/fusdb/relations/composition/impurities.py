@@ -7,7 +7,7 @@ import numpy as np
 from fusdb.relation import relation
 
 
-from ..utils import _positive_denominator
+from ._helpers import _positive_denominator
 
 # ── Impurity-concentration composition (cfspopcon structure, Mavrin charge states) ──
 # cfspopcon's calc_zeff_and_dilution_due_to_impurities builds Z_eff and the ion

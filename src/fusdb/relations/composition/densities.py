@@ -3,10 +3,10 @@
 from typing import Any
 
 import numpy as np
-from fusdb.utils import trapezoid
+from fusdb.numerics import trapezoid
 
 from fusdb.relation import relation
-from ..utils import _positive_denominator
+from ._helpers import _positive_denominator
 
 
 @relation(

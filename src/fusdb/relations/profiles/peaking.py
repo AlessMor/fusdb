@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 
 from fusdb.relation import relation
-from fusdb.utils import volume_average
+from fusdb.numerics import volume_average
 
 
 # Small pedestal so a generated profile never reaches exactly zero at rho=1.

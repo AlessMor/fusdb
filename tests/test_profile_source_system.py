@@ -1,10 +1,12 @@
+import pickle
+
 import numpy as np
 import pytest
 
-from fusdb.profile_sources import prepare_source_profiles
+from fusdb.profiles.sources import prepare_source_profiles
 from fusdb.relation import Relation
 from fusdb.relationsystem import RelationSystem
-from fusdb.utils.profiles import volume_average
+from fusdb.profiles.numerics import volume_average
 from fusdb.variable import Variable
 
 
@@ -115,6 +117,18 @@ def test_fixed_source_profile_keeps_absolute_source_values_while_remapping():
     expected = np.interp(mapping, source_coordinate, source_profile)
     assert not np.allclose(profile_1, profile_2)
     assert np.allclose(profile_2, expected)
+
+
+def test_generated_source_relation_is_picklable():
+    system, _source_profile, _source_coordinate, _size = _source_system()
+    relation = next(rel for rel in system.model.candidate_primary_relations if rel.source_kind == "source_profile")
+
+    restored = pickle.loads(pickle.dumps(relation, protocol=pickle.HIGHEST_PROTOCOL))
+    values = system.complete(system.solver_values())
+
+    expected = relation.output_map(relation.evaluate(values))["n_e"]
+    actual = restored.output_map(restored.evaluate(values))["n_e"]
+    assert np.allclose(actual, expected)
 
 
 def test_source_profile_conversion_fails_cleanly_when_mapping_exceeds_coverage():

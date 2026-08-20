@@ -7,7 +7,7 @@ from fusdb.registry import (
     SPECIES,
 )
 
-from ..utils import _positive_denominator, _species_fraction
+from ._helpers import _positive_denominator, _species_fraction
 
 @relation(
     name="Integrated D fraction from density profiles",
