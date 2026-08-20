@@ -63,7 +63,7 @@ class SolvedVariable:
 #     allowed_tags.yaml in threshold-escalation order;
 #   * a regime's sustainment guards are the relations tagged
 #     ``("confinement_mode_threshold", <regime>)``;
-#   * a regime's fallback confinement-time scaling is the tau_E producer
+#   * a regime's fallback confinement-time scaling is the tau_E_scaling producer
 #     tagged ``("confinement_mode_default", <regime>)``.
 _REGIME_SOLVE_MODES = {"reconcile", "optimize", "popcon"}
 
@@ -88,7 +88,7 @@ def _all_regime_guard_names() -> tuple[str, ...]:
 def _regime_tau_default_name(regime: str) -> str | None:
     """Name of the regime's fallback tau_E scaling, or None when undeclared."""
     for rel in RELATIONS:
-        if "confinement_mode_default" in rel.tags and regime in rel.tags and "tau_E" in rel.output_names:
+        if "confinement_mode_default" in rel.tags and regime in rel.tags and "tau_E_scaling" in rel.output_names:
             return rel.name
     return None
 

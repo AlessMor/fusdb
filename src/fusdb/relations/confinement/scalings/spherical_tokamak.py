@@ -6,8 +6,7 @@ from fusdb.relation import relation
 @relation(
     name="petty08_confinement_time",
     tags=("confinement", "spherical_tokamak", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_petty08",
+    outputs="tau_E_scaling",
 )
 def petty08_confinement_time(
     I_p: float,
@@ -78,8 +77,7 @@ def petty08_confinement_time(
 @relation(
     name="menard_nstx_confinement_time",
     tags=("confinement", "spherical_tokamak", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_menard_nstx",
+    outputs="tau_E_scaling",
 )
 def menard_nstx_confinement_time(
     I_p: float,
@@ -157,8 +155,7 @@ def menard_nstx_confinement_time(
 @relation(
     name="menard_nstx_petty08_hybrid_confinement_time",
     tags=("confinement", "spherical_tokamak", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_menard_nstx_petty08_hybrid",
+    outputs="tau_E_scaling",
 )
 def menard_nstx_petty08_hybrid_confinement_time(
     I_p: float,
@@ -260,8 +257,7 @@ def menard_nstx_petty08_hybrid_confinement_time(
 @relation(
     name="nstx_gyro_bohm_confinement_time",
     tags=("confinement", "spherical_tokamak", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_nstx_gyro_bohm",
+    outputs="tau_E_scaling",
 )
 def nstx_gyro_bohm_confinement_time(
     I_p: float,

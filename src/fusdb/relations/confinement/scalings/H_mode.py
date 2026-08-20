@@ -8,8 +8,7 @@ from fusdb.relation import relation
 @relation(
     name="mirnov_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_mirnov",
+    outputs="tau_E_scaling",
 )
 def mirnov_confinement_time(rminor: float, kappa95: float, I_p: float) -> float:
     """Calculate the Mirnov scaling (H-mode) confinement time
@@ -43,8 +42,7 @@ def mirnov_confinement_time(rminor: float, kappa95: float, I_p: float) -> float:
 @relation(
     name="murari_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_murari",
+    outputs="tau_E_scaling",
 )
 def murari_confinement_time(
     I_p: float,
@@ -115,8 +113,7 @@ def murari_confinement_time(
 @relation(
     name="shimomura_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_shimomura",
+    outputs="tau_E_scaling",
 )
 def shimomura_confinement_time(
     rmajor: float,
@@ -164,8 +161,7 @@ def shimomura_confinement_time(
 @relation(
     name="riedel_h_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_riedel_h",
+    outputs="tau_E_scaling",
 )
 def riedel_h_confinement_time(
     I_p: float,
@@ -229,8 +225,7 @@ def riedel_h_confinement_time(
 @relation(
     name="valovic_elmy_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_valovic_elmy",
+    outputs="tau_E_scaling",
 )
 def valovic_elmy_confinement_time(
     I_p: float,
@@ -290,8 +285,7 @@ def valovic_elmy_confinement_time(
 @relation(
     name="lang_high_density_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_lang_high_density",
+    outputs="tau_E_scaling",
 )
 def lang_high_density_confinement_time(
     I_p: float,
@@ -372,10 +366,9 @@ def lang_high_density_confinement_time(
 @relation(
     name="cfspopcon_h_ds03_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_h_ds03_confinement_time(
-    H98_y2: float,
     I_p: float,
     B0: float,
     n_avg: float,
@@ -409,8 +402,7 @@ def cfspopcon_h_ds03_confinement_time(
           ``kappa`` and is scheduled to be merged into it.
     """
     return (
-        H98_y2
-        * 0.028
+        0.028
         * (I_p / 1.0e6) ** 0.83
         * B0**0.07
         * (n_avg / 1.0e19) ** 0.49
