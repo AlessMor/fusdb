@@ -1,0 +1,57 @@
+metadata:
+  id: ARC_V3A_2026_EICH_12MA
+  name: ARC V3A 2026 - Eich exhaust case 12 MA
+  organization: Commonwealth Fusion Systems
+  country: USA
+  year: 2026
+  doi: 10.1017/S002237782610155X
+  notes: >-
+    Highest-current detachment-compatible power-exhaust case from Eich et al.
+    (2026), at fGW=0.9 and Psep=120 MW. This is a core-edge/exhaust scenario,
+    distinct from the nominal 1.13 GW empirical cfsPOPCON target.
+
+tags:
+- tokamak
+- h_mode
+
+variables:
+  R: {value: 4.62, unit: m, fixed: true}
+  a: {value: 1.18, unit: m, fixed: true}
+  B0: {value: 11.4, unit: T, fixed: true}
+  I_p: {value: 12.0, unit: MA, fixed: true}
+  f_GW: {value: 0.9, fixed: true}
+  afuel: {value: 2.5, fixed: true}
+  qstar: 3.2
+  q_cyl: 2.7
+  Z_eff: {value: 1.5, fixed: true}
+  dilution: {value: 0.85, fixed: true}
+
+  n_e_edge: {value: 1.0e20, unit: m^-3}
+  T_edge: {value: 0.275, unit: keV}
+  P_sep: {value: 120, unit: MW, fixed: true}
+  P_fus: {value: 890, unit: MW}
+  edge_impurity_concentration: 0.009
+  target_neutral_pressure: {value: 21, unit: Pa}
+  lambda_q: {value: 0.72, unit: mm}
+  alpha_t: 0.21
+
+  # Table 2 reports a SOL radiation fraction of 93%. This is NOT FusDB f_rad,
+  # which denotes the core-radiated-power fraction.
+  # SOL_radiation_fraction: 0.93
+  # tungsten_concentration: 1.5e-5
+  # divertor_impurity: Ar
+  # divertor_broadening_factor: 4
+  # detached_target_temperature: ~2 eV
+  # outer_divertor_power_fraction: 0.5
+  # divertor_configuration: up-down-symmetric double-null X-point target
+
+relations:
+  include:
+  - L-H threshold Martin-2008 aspect nominal
+  # The table-2 detachment solution explicitly uses the extended Lengyel model
+  # of Body, Kallenbach & Eich (2025), including recycled-neutral and divertor
+  # cross-field-transport corrections, and lambda_q from Eich et al. (2020)
+  # equation (4.2). FusDB does not currently expose those exact relations as
+  # selectable equivalents, so no near-match is silently selected.
+  # Earlier section-2 scoping uses Eich-2013 regression 9; that is not the model
+  # used for the active table-2 lambda_q value above.

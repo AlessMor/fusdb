@@ -1,0 +1,50 @@
+metadata:
+  id: ARC_V3A_2026_EICH_10MA
+  name: ARC V3A 2026 - Eich exhaust case 10 MA
+  organization: Commonwealth Fusion Systems
+  country: USA
+  year: 2026
+  doi: 10.1017/S002237782610155X
+  notes: >-
+    Reduced-current detachment-compatible power-exhaust case from Eich et al.
+    (2026), at fGW=0.9 and Psep=120 MW. This case trades lower fusion performance
+    for more favourable detachment and particle-exhaust conditions.
+
+tags:
+- tokamak
+- h_mode
+
+variables:
+  R: {value: 4.62, unit: m, fixed: true}
+  a: {value: 1.18, unit: m, fixed: true}
+  B0: {value: 11.4, unit: T, fixed: true}
+  I_p: {value: 10.0, unit: MA, fixed: true}
+  f_GW: {value: 0.9, fixed: true}
+  afuel: {value: 2.5, fixed: true}
+  qstar: 3.8
+  q_cyl: 3.2
+  Z_eff: {value: 1.5, fixed: true}
+  dilution: {value: 0.85, fixed: true}
+
+  n_e_edge: {value: 1.4e20, unit: m^-3}
+  T_edge: {value: 0.270, unit: keV}
+  P_sep: {value: 120, unit: MW, fixed: true}
+  P_fus: {value: 700, unit: MW}
+  edge_impurity_concentration: 0.0032
+  target_neutral_pressure: {value: 28, unit: Pa}
+  lambda_q: {value: 0.97, unit: mm}
+  alpha_t: 0.32
+
+  # SOL_radiation_fraction: 0.89
+  # tungsten_concentration: 1.5e-5
+  # divertor_impurity: Ar
+  # divertor_broadening_factor: 4
+  # detached_target_temperature: ~2 eV
+
+relations:
+  include:
+  - L-H threshold Martin-2008 aspect nominal
+  # Detachment: extended Lengyel (Body, Kallenbach & Eich 2025).
+  # lambda_q: turbulence-broadened Eich et al. 2020 equation (4.2).
+  # FusDB does not currently expose exact selectable equivalents for these two
+  # table-2 models, so no approximate relation is substituted.
