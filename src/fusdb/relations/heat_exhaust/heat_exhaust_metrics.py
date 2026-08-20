@@ -1,5 +1,9 @@
 """Simple metrics for the heat-exhaust challenge."""
 
+from typing import Any
+
+import numpy as np
+
 from fusdb.relation import relation
 
 
@@ -29,3 +33,21 @@ def calc_PBpRnSq(P_sep, B0, qstar, R, n_e_avg):
     """
     # CHECK
     return (P_sep * (B0 / qstar) / R) / (n_e_avg**2.0)
+
+
+@relation(name="Mirror throat power flux", tags=("mirror", "power_exhaust"), outputs="q_throat")
+def mirror_throat_power_flux(P_loss: Any, A_th: Any) -> Any:
+    """Symmetric two-ended reduced end-load diagnostic.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return np.asarray(P_loss) / (2.0 * np.asarray(A_th))
+
+
+@relation(name="Mirror collector power flux", tags=("mirror", "power_exhaust"), outputs="q_collector")
+def mirror_collector_power_flux(q_throat: Any, collector_area_ratio: Any) -> Any:
+    """Mirror end-loss flux diluted over an expanded collector area.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return np.asarray(q_throat) / np.asarray(collector_area_ratio)

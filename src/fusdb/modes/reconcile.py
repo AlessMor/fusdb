@@ -95,10 +95,15 @@ def run(
       better outcome than ``success=False`` with few at implausible ones.  The
       first names the contradictions; the second hides them.
 
-    The ``Operating point is non-trivial (f_GW >= 1%)`` certifier
-    (``relations/operational_limits/density_limits.py``) denies certification to
-    the collapsed branch wherever ``f_GW`` is derivable.  It is checked-only, so
-    it never enters the residual and cannot pull a solve toward it.
+    There is deliberately NO guard against this branch.  An ``f_GW >= 1%``
+    certifier was tried and removed: it was tagged tokamak-only, and ``f_GW`` is
+    undefined for a currentless stellarator, so it never fired for STELLARIS or
+    Helios.  An ENFORCED ``P_fus >= 1 MW`` floor was tried and removed too --
+    MEASURED 2026-08-19: it does not detect the collapse, it merely parks it,
+    with ARC_V3A, SPARC and Eos all landing on EXACTLY 1.000 MW and reporting
+    zero failed relations, and reactors that declare no fusion power acquiring a
+    1 MW one.  Judge a solve by ``P_fus`` and ``inputs_beyond_tolerance``
+    together; no single scalar guard has been found that does it for you.
 
     That verdict is an optimiser *outcome*, not a ranking, and two independent
     choices decide it.  Both are exposed, and both default to the behaviour

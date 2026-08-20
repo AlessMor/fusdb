@@ -1,5 +1,9 @@
 """Stellarator confinement scaling relations."""
 
+from typing import Any
+
+import numpy as np
+
 from fusdb.relation import relation
 
 
@@ -346,3 +350,12 @@ def ds03_confinement_time(
         * aspect ** (-0.3e0)
         * afuel**0.14e0
     )
+
+
+@relation(name="Stellarator effective rotational transform at two-thirds radius", tags=("stellarator", "confinement"), outputs="iotabar")
+def stellarator_effective_iota(iota_2_3: Any) -> Any:
+    """Map VSC's explicitly sampled iota_2/3 onto FusDB's ISS04 iotabar input.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return np.asarray(iota_2_3)

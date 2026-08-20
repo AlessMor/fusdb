@@ -2,8 +2,10 @@
 
 from typing import Any
 
+import numpy as np
+
 from fusdb.relation import relation
-from fusdb.registry import MU0
+from fusdb.registry import KEV_TO_J, MU0
 
 
 @relation(
@@ -102,3 +104,32 @@ def normalized_beta_cfspopcon(beta: float, a: float, B0: float, I_p: float) -> A
     # CHECK
     I_p_MA = I_p / 1e6
     return beta * a * B0 / I_p_MA
+
+
+@relation(name="Dipole inner beta", tags=("dipole", "plasma"), outputs="beta_in")
+def dipole_inner_beta(n_e: Any, T_e: Any, n_i: Any, T_i: Any, B: Any) -> Any:
+    """Levitated-dipole beta evaluated on the inner shell.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    p = (np.asarray(n_e)[..., 0] * np.asarray(T_e)[..., 0] + np.asarray(n_i)[..., 0] * np.asarray(T_i)[..., 0]) * KEV_TO_J
+    return 2.0 * MU0 * p / np.asarray(B)[..., 0] ** 2
+
+
+@relation(name="Dipole outer beta", tags=("dipole", "plasma"), outputs="beta_out")
+def dipole_outer_beta(n_e: Any, T_e: Any, n_i: Any, T_i: Any, B: Any) -> Any:
+    """Levitated-dipole beta evaluated on the outer shell.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    p = (np.asarray(n_e)[..., -1] * np.asarray(T_e)[..., -1] + np.asarray(n_i)[..., -1] * np.asarray(T_i)[..., -1]) * KEV_TO_J
+    return 2.0 * MU0 * p / np.asarray(B)[..., -1] ** 2
+
+
+@relation(name="Mirror peak beta (VSC)", tags=("mirror", "plasma"), outputs="beta")
+def mirror_peak_beta_vsc(pres_plasma_on_axis: Any, B_vac: Any) -> Any:
+    """Mirror peak beta referenced to the central-cell vacuum field.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return 2.0 * MU0 * np.asarray(pres_plasma_on_axis) / np.asarray(B_vac) ** 2

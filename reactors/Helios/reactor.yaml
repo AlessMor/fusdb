@@ -19,21 +19,17 @@ variables:
   R:
     value: 8.0
     unit: m
-    fixed: true
 
   a:
     value: 1.8
     unit: m
-    fixed: true
 
   A:
     value: 4.5
-    fixed: true
 
   B0:
     value: 6.0
     unit: T
-    fixed: true
 
   V_p:
     value: 500
@@ -41,14 +37,12 @@ variables:
 
   iotabar:
     value: 0.46
-    fixed: true
   # Table 1 reports rotational transform at the 2/3 surface, the transform
   # entering the ISS04 stellarator confinement scaling.
 
   B_max:
     value: 20
     unit: T
-    fixed: true
   # Maximum field on-coil is an enforced design value/constraint.
 
   # Two-field-period quasi-axisymmetric stellarator.
@@ -65,7 +59,6 @@ variables:
 
   H_iss04_stellarator:
     value: 1.4
-    fixed: true
 
   tau_E:
     value: 1.8
@@ -123,20 +116,17 @@ variables:
   P_th_tot:
     value: 1094
     unit: MW
-    fixed: true
   # Detailed Sankey value: 1094 MW generated thermal power. Table 1 rounds to
   # 1.1 GW. This includes 958 MW fusion plus ~135 MW Li-6 reaction heating.
 
   eta_th:
     value: 0.402
-    fixed: true
   # Rankine-cycle efficiency based on 438 MWe gross after coolant pumping.
   # If computed before coolant-pumping power, the paper quotes ~42.2%.
 
   P_elec_tot:
     value: 390
     unit: MW
-    fixed: true
   # Net electric power delivered to the grid.
 
   # Detailed facility power flow from the Sankey diagram / section 4.4:

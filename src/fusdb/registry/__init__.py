@@ -11,8 +11,9 @@ from .species_registry import SPECIES, SpeciesRegistry, SpeciesSpec
 from .tag_registry import TAGS, TagRegistry
 from .variable_registry import VARIABLES as _BASE_VARIABLES, VariableRegistry, VariableSpec
 from .coordinate_variables import with_coordinate_variables
+from .vsc_variables import with_vsc_variables
 
-VARIABLES = with_coordinate_variables(_BASE_VARIABLES)
+VARIABLES = with_vsc_variables(with_coordinate_variables(_BASE_VARIABLES))
 
 from .. import relation as _relation_module
 _relation_module._VARIABLE_REGISTRY = VARIABLES

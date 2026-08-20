@@ -4,6 +4,7 @@ from typing import Any
 
 import numpy as np
 
+from fusdb.numerics import volume_average
 from fusdb.relation import relation
 from fusdb.registry import KEV_TO_J
 
@@ -97,3 +98,40 @@ def thermal_stored_energy(p_th: float, V_p: float) -> float:
         Thermal stored energy.
     """
     return 1.5 * p_th * V_p
+
+
+@relation(name="Thermal stored energy (VSC profile model)", tags=("plasma", "confinement"), outputs="W_th")
+def thermal_stored_energy_vsc_profile(n_i_peak: Any, T_i_peak: Any, n0: Any, T0: Any, alphan: Any, alphat: Any, V_p: Any) -> Any:
+    """Alternative W_th producer for VSC Eq. (13); FusDB's existing producer remains default.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    f_nT = 1.0 / (1.0 + np.asarray(alphan) + np.asarray(alphat))
+    return 1.5 * KEV_TO_J * np.asarray(V_p) * (np.asarray(n_i_peak) * np.asarray(T_i_peak) + np.asarray(n0) * np.asarray(T0)) * f_nT
+
+
+@relation(name="Electron thermal stored energy", tags=("plasma", "confinement"), outputs="W_e")
+def electron_thermal_stored_energy(n_e: Any, T_e: Any, V_p: Any, rho: Any, w_V: Any = None) -> Any:
+    """Electron thermal stored energy from the volume-averaged n_e T_e product.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return 1.5 * KEV_TO_J * np.asarray(V_p) * volume_average(np.asarray(n_e) * np.asarray(T_e), rho, weight=w_V)
+
+
+@relation(name="Ion thermal stored energy", tags=("plasma", "confinement"), outputs="W_i")
+def ion_thermal_stored_energy(n_i: Any, T_i: Any, V_p: Any, rho: Any, w_V: Any = None) -> Any:
+    """Ion thermal stored energy from the volume-averaged n_i T_i product.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return 1.5 * KEV_TO_J * np.asarray(V_p) * volume_average(np.asarray(n_i) * np.asarray(T_i), rho, weight=w_V)
+
+
+@relation(name="Dipole density-confinement product", tags=("dipole", "confinement"), outputs="n0_tau_E")
+def dipole_density_confinement_product(n0: Any, tau_E: Any) -> Any:
+    """Levitated-dipole central density-confinement product n0 tau_E.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return np.asarray(n0) * np.asarray(tau_E)

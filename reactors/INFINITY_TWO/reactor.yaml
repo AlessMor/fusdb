@@ -9,10 +9,8 @@ tags:
 variables:
   R:
     value: 12.5
-    fixed: true
   a:
     value: 1.25
-    fixed: true
   T_avg:
     value: 6.8
     unit: keV

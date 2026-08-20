@@ -35,7 +35,6 @@ variables:
   R:
     value: 5.0
     unit: m
-    fixed: true
   # The selected permanent power core keeps R = 5.0 m in the commercial phase
   # (Willis et al., overview table 1; Wilson et al., table 5).
 
@@ -56,7 +55,6 @@ variables:
   B0:
     value: 5.25
     unit: T
-    fixed: true
   # Equivalent commercial designs span 3.25-5.25 T (Wilson et al., table 4).
 
   I_p:
@@ -69,7 +67,6 @@ variables:
   total_flux_available_from_CS:
     value: 30
     unit: Wb
-    fixed: true
   # Overview RDP: 30 Vs solenoid flux-swing. Time-dependent studies use a
   # 30-40 Vs capability and reach the target using <40 Vs (Zhang et al.).
 
@@ -238,7 +235,6 @@ variables:
   P_th_tot:
     value: 1755
     unit: MW
-    fixed: true
   # PyTok pilot gross thermal power (Wilson et al., table 5).
   # Commercial PyTok point: 2770 MW. Detailed thermal model gives 1673 MW
   # (HP-PFU cases) or 1611 MW (HEMJ cases) during flat-top (Mohamed et al.).
@@ -246,7 +242,6 @@ variables:
   P_elec_tot:
     value: 478
     unit: MW
-    fixed: true
   # Net electrical output in the PyTok pilot RDP (Wilson et al., table 5).
   # Mission target: 300-500 MWe. Commercial PyTok point: 1020 MWe;
   # overview target: ~800-1000 MWe.

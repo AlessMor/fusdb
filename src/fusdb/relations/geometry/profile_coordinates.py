@@ -209,3 +209,12 @@ def reduced_mirror_normalized_enclosed_volume(*, rho: Any) -> np.ndarray:
 def reduced_mirror_volume_integration_weight(*, rho: Any) -> np.ndarray:
     """Return ``w_V=rho`` as the behavior-neutral reduced mirror fallback."""
     return np.asarray(rho, dtype=float).copy()
+
+
+@relation(name="Normalized volume radius (VSC)", tags=("geometry", "profile"), outputs="rho_vol")
+def normalized_volume_radius_vsc(v_norm: Any) -> Any:
+    """Normalized volume radius sqrt(V(<rho)/V_p).
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return np.sqrt(np.clip(np.asarray(v_norm, dtype=float), 0.0, 1.0))

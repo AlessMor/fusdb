@@ -6,8 +6,11 @@ branch; the Peng/STAR spherical-tokamak branch depends on ``plascar_bpol``
 (PROCESS ``plasma_current.py``) and is ported with that module instead.
 """
 
+from typing import Any
+
 import numpy as np
 
+from fusdb.numerics import volume_average
 from fusdb.relation import relation
 from fusdb.registry import MU0
 
@@ -100,3 +103,12 @@ def calculate_total_magnetic_field(b_plasma_toroidal_on_axis: float, B_p: float)
     """
     # CHECK
     return np.sqrt(b_plasma_toroidal_on_axis**2 + B_p**2)
+
+
+@relation(name="Tokamak magnetic field B2.5 moment", tags=("tokamak", "geometry", "power_balance"), outputs="G_B25")
+def tokamak_magnetic_field_b25_moment(B: Any, B0: Any, rho: Any, w_V: Any = None) -> Any:
+    """Normalized volume moment <|B/B0|^2.5> used by cyclotron-loss models.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return volume_average(np.abs(np.asarray(B, dtype=float) / np.asarray(B0, dtype=float)) ** 2.5, rho, weight=w_V)

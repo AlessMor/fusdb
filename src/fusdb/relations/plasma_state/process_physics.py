@@ -6,6 +6,8 @@ composition/ohmic plumbing, I/O, and the generic (mass/charge-parameterised)
 plasma-diagnostic utilities are not.
 """
 
+from typing import Any
+
 import numpy as np
 
 from fusdb.relation import relation

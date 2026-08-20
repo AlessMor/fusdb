@@ -19,25 +19,20 @@ variables:
   R:
     value: 3.24
     unit: m
-    fixed: true
 
   a:
     value: 0.54
     unit: m
-    fixed: true
 
   A:
     value: 6.0
-    fixed: true
 
   B0:
     value: 5.0
     unit: T
-    fixed: true
 
   iotabar:
     value: 0.66
-    fixed: true
   # Rotational transform at the 2/3 surface, used in the ISS04 scaling.
 
   # Two-field-period quasi-axisymmetric candidate equilibrium.
@@ -61,17 +56,14 @@ variables:
 
   alphan:
     value: 1.0
-    fixed: true
   # ne(rho) = ne0 * (1-rho^2)^alphan.
 
   alphat:
     value: 2.0
-    fixed: true
   # Te and Ti use the same parabolic profile index in the scoping model.
 
   H_iss04_stellarator:
     value: 1.5
-    fixed: true
 
   beta_T: 0.0063
   # Volume-averaged target-plasma beta = 0.63%. This excludes the strongly
