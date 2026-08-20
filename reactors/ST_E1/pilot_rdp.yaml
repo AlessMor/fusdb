@@ -1,0 +1,335 @@
+metadata:
+  id: ST_E1_2026
+  name: ST-E1 Pilot RDP
+  organization: Tokamak Energy
+  country: GBR
+  year: 2026
+  doi: 10.1088/1741-4326/ae5545
+  notes: >-
+    Pilot-phase pre-concept reference design point (RDP). The active values
+    prioritize the whole-plant PyTok RDP and the companion 2026 ST-E1 focus
+    collection. Alternative flat-top, commercial-phase, and higher-fidelity
+    values are retained as comments rather than silently reconciled.
+  reactor_family: ST-E1
+
+# Primary source: Willis et al. (2026), overview, doi:10.1088/1741-4326/ae5545.
+# Companion sources used for the extraction:
+# - Wilson et al. (2026), systems/PyTok, doi:10.1088/1741-4326/ae5d55
+# - Chandrasekhar et al. (2026), neutronics, doi:10.1088/1741-4326/ae63e2
+# - Mohamed et al. (2026), thermal/net power, doi:10.1088/1741-4326/ae5546
+# - Yildirim et al. (2026), tritium, doi:10.1088/1741-4326/ae773a
+# - Maartensson et al. (2026), magnets, doi:10.1088/1741-4326/ae773b
+# - McNamara et al. (2026), flat-top physics, doi:10.1088/1741-4326/ae5f33
+# - Zhang et al. (2026), time-dependent scenario, doi:10.1088/1741-4326/ae69f7
+# - Lopez et al. (2026), H&CD, doi:10.1088/1741-4326/ae6289
+# - Robinson et al. (2026), exhaust, doi:10.1088/1741-4326/ae70a0
+# - Willis et al. (2026), maintenance, doi:10.1088/1741-4326/ae7c15
+
+tags:
+- tokamak
+- spherical_tokamak
+- h_mode
+
+variables:
+  # --- Machine geometry and magnetics ---------------------------------------
+  R:
+    value: 5.0
+    unit: m
+  # The selected permanent power core keeps R = 5.0 m in the commercial phase
+  # (Willis et al., overview table 1; Wilson et al., table 5).
+
+  a:
+    value: 2.17
+    unit: m
+  # Reported directly in Chandrasekhar et al., table 1 and Robinson et al., table 1.
+
+  A: 2.3
+  # Equivalent commercial design points span A = 1.9-2.3, with B0 = 3.25-5.25 T
+  # (Wilson et al., table 4; McNamara et al., section 1).
+
+  kappa: 2.42
+  # Overview rounds the RDP to kappa = 2.4 (Willis et al., table 1).
+
+  delta: 0.5
+
+  B0:
+    value: 5.25
+    unit: T
+  # Equivalent commercial designs span 3.25-5.25 T (Wilson et al., table 4).
+
+  I_p:
+    value: 14.8
+    unit: MA
+  # Overview: ~15 MA. Commercial PyTok point: 15.4 MA (Wilson et al., table 5).
+  # Detailed flat-top references: 12.9-14.0 MA (McNamara et al., table 9).
+  # Lopez et al. use an H&CD study point with ~13 MA total current.
+
+  total_flux_available_from_CS:
+    value: 30
+    unit: Wb
+  # Overview RDP: 30 Vs solenoid flux-swing. Time-dependent studies use a
+  # 30-40 Vs capability and reach the target using <40 Vs (Zhang et al.).
+
+  q95: 7.32
+  # Robinson et al., table 1, latest exhaust-relevant pilot RDP.
+  # Detailed flat-top references: 9.85-10.79 (McNamara et al., table 9).
+
+  B_pol_out_mid:
+    value: 0.74
+    unit: T
+  # Robinson et al., table 1.
+
+  beta_N: 0.0338
+  # Paper value beta_N = 3.38; fusdb stores normalized beta as a fraction.
+  # Overview rounds to 3.4. Commercial PyTok value: 3.85 -> 0.0385.
+  # Detailed flat-top references: 3.27-3.67 -> 0.0327-0.0367.
+
+  beta_p: 2.2
+  # Approximate target flat-top value in Zhang et al.; the simplified magnet
+  # reference case uses beta_p = 2.0 (Maartensson et al., table 2), while the
+  # McNamara flat-top references span 2.07-2.34.
+
+  internal_inductivity: 0.5
+  # Approximate target flat-top li in Zhang et al.; McNamara et al. table 9
+  # gives 0.42-0.47 across the detailed reference points.
+
+  # B_max is deliberately not declared: 20 T in Maartensson et al., table 1 is
+  # an engineering LIMIT on peak on-coil field, not the RDP operating value.
+  # B_max:
+  #   value: 20
+  #   unit: T
+
+  # --- Plasma state and confinement -----------------------------------------
+  n_e_avg:
+    value: 1.16e20
+    unit: m^-3
+  # Commercial PyTok point: 1.31e20 m^-3 (Wilson et al., table 5).
+  # McNamara flat-top references: 8.33e19-1.014e20 m^-3 (table 9).
+
+  T_e_avg:
+    value: 5.9
+    unit: keV
+  # Commercial PyTok point: 7.3 keV (Wilson et al., table 5).
+
+  Z_eff: 2.19
+  # Commercial PyTok point: 2.76 (Wilson et al., table 5).
+  # Detailed flat-top references: 2.58-3.49 (McNamara et al., table 9).
+
+  f_GW: 1.0
+  # McNamara et al. distinguish volume/line-averaged and pedestal Greenwald
+  # fractions; their detailed references use line-average f_GW = 1.0 or 1.25.
+
+  f_BS: 0.88
+  # Commercial PyTok point: 0.88. Detailed flat-top references: 0.77-0.86.
+  # Lopez et al. use a dedicated H&CD case with bootstrap fraction 0.90.
+
+  H98_y2: 1.4
+  # McNamara detailed reference points require H98* = 1.32-1.59 (table 9).
+
+  # Detailed flat-top quantities reported by McNamara et al. but not selected
+  # as the whole-plant RDP value:
+  # q_min: 2.2
+  # q0: 2.48-2.57
+  # T_i0: 24.81-38.94 keV
+  # T_e0: 22.49-30.28 keV
+  # T_i0_over_T_e0: 1.10-1.29
+  # beta_T: 4.04-4.69 %
+  # H_Petty08_star: 0.72-0.88
+
+  # Robinson et al. report the exhaust-reference central density separately.
+  # n_e0:
+  #   value: 1.66e20
+  #   unit: m^-3
+
+  # --- Plasma power balance and exhaust -------------------------------------
+  P_fus:
+    value: 1573
+    unit: MW
+  # Overview mission value: ~1500 MW. McNamara flat-top references: 1500 MW.
+  # Commercial PyTok point: 2400 MW; commercial design space ~2000-2500 MW.
+
+  P_aux:
+    value: 73
+    unit: MW
+  # PyTok pilot PECCD = 73 MW; overview rounds Paux,nom to ~75 MW.
+  # McNamara references use PEC = 75, 100, or 150 MW depending on case.
+  # Commercial PyTok point: 66 MW; overview commercial range ~25-50 MW.
+  # P_ECRH is not also declared here: EC is the flat-top H&CD channel, but
+  # duplicating the same 73 MW as P_ECRH and P_aux changes the solver graph.
+  # Lopez et al. use 46.6 MW EC in a dedicated ~13 MA / ~1.4 GW H&CD case.
+
+  Q_sci: 21.5
+  # Overview rounds Q to ~20. McNamara references span Q = 10-20.
+  # Commercial PyTok point: 36.5; overview target ~50-70.
+
+  P_sep:
+    value: 125
+    unit: MW
+  # Robinson et al. table 1 and Wilson et al. table 5.
+  # McNamara reference cases use 125 MW for the reduced-exhaust case and
+  # 200 MW for the other four reference flat-top cases.
+
+  P_LH:
+    value: 83
+    unit: MW
+  # PyTok pilot nominal threshold (Wilson et al., table 5).
+  # Robinson et al. table 1 reports 108 MW for its exhaust-reference point;
+  # McNamara reference cases span 91.8-122.5 MW.
+
+  f_rad: 0.68
+  # PyTok core-radiation fraction Prad,core/Pcore = 68% (Wilson et al., table 5).
+  # McNamara detailed references span 0.47-0.69.
+
+  neutron_rate:
+    value: 5.58e20
+    unit: 1/s
+  # Chandrasekhar et al., table 1, for Pfus = 1573 MW.
+
+  q_wall:
+    value: 1.6
+    unit: MW/m^2
+  # PyTok pilot neutron wall loading PNWL = 1.6 MW/m^2 (Wilson et al., table 5).
+  # Overview states <1.6 MW/m^2. Commercial PyTok point: 2.4 MW/m^2;
+  # overview commercial range: ~2.1-2.6 MW/m^2.
+
+  # Reported exhaust/first-wall quantities currently not represented by a
+  # matching fusdb scalar variable (or not equivalent to an existing one):
+  # P_sep_over_R:
+  #   value: 25
+  #   unit: MW/m
+  # radiation_wall_loading:
+  #   value: 0.45
+  #   unit: MW/m^2
+  # target_peak_deposited_heat_flux_max:
+  #   value: 15
+  #   unit: MW/m^2
+  # divertor_configuration: lower-biased disconnected double-null
+  # exhaust_design_baseline: single-null for conservative divertor sizing
+  # first_wall_material: potassium-doped tungsten
+  # divertor_seed_impurity: argon
+  # core_radiator: xenon
+
+  # --- Tritium breeding ------------------------------------------------------
+  TBR: 1.113
+  # Baseline reference-case value used in the integrated tritium inventory
+  # model (Yildirim et al., section 4). Higher-fidelity range: 1.085-1.14.
+  # Full-coverage blanket before penetrations: 1.146 (Yildirim et al., table 2).
+  # Initial natural-Li scoping result: 1.26 (Yildirim et al., table 1).
+  # G4Tokamak/MCNP comparison: 1.194 / 1.169 (Chandrasekhar et al.).
+  # Overview pilot requirement: >1.14; maintained design target: 1.10.
+
+  # Tritium quantities not presently mapped to fusdb variables:
+  # tritium_startup_inventory:
+  #   value: 1.6
+  #   unit: kg
+  # tritium_inventory_total_excluding_storage_TBE_2pct:
+  #   value: 1.39
+  #   unit: kg
+  # tritium_inventory_blanket:
+  #   value: 0.31
+  #   unit: kg
+  # breeder_material: natural liquid lithium
+  # blanket_structure_material: V-4Cr-4Ti
+
+  # --- Plant power balance ---------------------------------------------------
+  P_th_tot:
+    value: 1755
+    unit: MW
+  # PyTok pilot gross thermal power (Wilson et al., table 5).
+  # Commercial PyTok point: 2770 MW. Detailed thermal model gives 1673 MW
+  # (HP-PFU cases) or 1611 MW (HEMJ cases) during flat-top (Mohamed et al.).
+
+  P_elec_tot:
+    value: 478
+    unit: MW
+  # Net electrical output in the PyTok pilot RDP (Wilson et al., table 5).
+  # Mission target: 300-500 MWe. Commercial PyTok point: 1020 MWe;
+  # overview target: ~800-1000 MWe.
+  # Detailed thermal-management steady-state results are lower: 278/335 MWe
+  # for cases 1/2 and 100/157 MWe for cases 3/4 (Mohamed et al., table 8).
+  # PyTok gross electric output is 824 MWe (commercial: 1300 MWe), a distinct
+  # quantity retained below as a commented variable.
+
+  P_aux_el:
+    value: 145
+    unit: MW
+  # PyTok electrical H&CD demand Pe,H&CD; commercial point 142 MW.
+
+  eta_th: 0.472
+  # Detailed power-cycle efficiency (Mohamed et al., table 8).
+
+  Q_eng: 2.4
+  # PyTok pilot engineering gain; commercial point: 4.6.
+
+  # Plant quantities reported in the papers but not represented by distinct
+  # fusdb variables (or intentionally kept distinct from P_elec_tot):
+  # P_elec_gross:
+  #   value: 824
+  #   unit: MW
+  # P_e_pumping:
+  #   value: 161
+  #   unit: MW
+  # P_e_cryo:
+  #   value: 9
+  #   unit: MW
+  # P_e_plant:
+  #   value: 30
+  #   unit: MW
+  # overnight_capital_cost:
+  #   value: 10.8
+  #   unit: USD_billion_2025
+  # availability_target: ">80%"
+  # pilot_net_electric_target: "300-500 MWe"
+  # commercial_net_electric_target: "800-1000 MWe"
+  # commercial_normalized_capex_target: "12000-14000 USD/kWe"
+
+  # Thermal extraction breakdown (Mohamed et al., table 5):
+  # breeder_blanket_thermal_power: 1252 MW
+  # centre_column_shield_thermal_power: 200 MW
+  # divertor_thermal_power_HP_PFU: 242 MW
+  # divertor_thermal_power_HEMJ: 158 MW
+  # breeder_blanket_helium_mass_flow: 962 kg/s
+  # breeder_blanket_lithium_mass_flow: 292 kg/s
+  # centre_column_shield_helium_mass_flow: 338 kg/s
+  # divertor_helium_mass_flow_HP_PFU: 212 kg/s
+  # divertor_helium_mass_flow_HEMJ: 565 kg/s
+
+  # --- Engineering / magnets / maintenance: commented non-registry values ---
+  # number_of_toroidal_sections: 18
+  # plasma_wall_gap: 0.175 m
+  # superconducting_core_outer_radius: 1.686 m
+  # centre_column_outer_radius: 2.651 m
+  # tf_full_power_life_target: ">30 FPY"
+  # plant_full_power_life_target: ">30 FPY"
+  # major_maintenance_interval_pilot: "~1 FPY cumulative operation"
+  # cryogenic_nuclear_heat_at_20K: 18.5 kW
+  # cryogenic_wall_plug_power_reference: 5.5 MW
+  # peak_on_coil_field_limit: 20 T
+  # max_unsupported_hoop_stress: 300 MPa
+  # max_supported_hoop_stress: 600 MPa
+  # max_hts_tape_strain: 0.3 %
+  # max_coil_energy_extraction_voltage: 10 kV
+  # reference_peak_quench_hotspot_temperature: 400 K
+  # tf_current_per_limb: 7.3 MA-turn
+  # demonstrated_tf_quench_hotspot_temperature: 350 K
+
+  # --- H&CD / scenario details: commented non-registry values ---------------
+  # eccd_net_current_drive_efficiency: 52 kA/MW
+  # eccd_frequency_range: 160-200 GHz
+  # eccd_mode: fundamental O-mode
+  # icrh_frequency_range: 42-48 MHz
+  # icrh_toroidal_mode_number: ~10
+  # icrh_TWA_coupled_fraction: ~0.60
+  # ramp_up_duration: 150 s
+  # ramp_up_solenoid_flux_used: "<40 Wb"
+  # ramp_up_vertical_field_flux: "~90 Wb"
+  # flat_top_vertical_field: 0.96 T
+  # flat_top_plasma_inductive_flux: 74 Wb
+  # flat_top_vertical_field_flux: 93 Wb
+
+relations:
+  # ST-E1 publishes its RDP elongation and triangularity directly. Do not let
+  # aspect-ratio-only ST empirical fits compete with those declared values.
+  exclude:
+  - ST elongation vs aspect ratio
+  - ST triangularity vs aspect ratio

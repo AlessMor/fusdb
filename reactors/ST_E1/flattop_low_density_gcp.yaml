@@ -1,0 +1,56 @@
+metadata:
+  id: ST_E1_2026_FLATTOP_LOW_DENSITY_GCP
+  name: ST-E1 flat-top - low density GCP
+  organization: Tokamak Energy
+  country: GBR
+  year: 2026
+  doi: 10.1088/1741-4326/ae5f33
+  notes: >-
+    Low-density gyrokinetic-constrained-pedestal (GCP) reference flat-top from
+    McNamara et al. (2026), table 9. It has similar global performance to the
+    low-density BCP point but is substantially more controllable in double-null.
+  reactor_family: ST-E1
+
+tags:
+- tokamak
+- spherical_tokamak
+- h_mode
+
+variables:
+  R: {value: 5.0, unit: m}
+  A: 2.3
+  kappa: 2.42
+  delta: 0.5
+  B0: {value: 5.25, unit: T}
+
+  I_p: {value: 13.8, unit: MA}
+  P_fus: {value: 1500, unit: MW}
+  P_aux: {value: 75, unit: MW}
+  Q_sci: 20.0
+  f_BS: 0.83
+  beta_N: 0.0367
+  beta_p: 2.29
+  Z_eff: 3.00
+  f_rad: 0.47
+  q95: 10.16
+  internal_inductivity: 0.43
+  P_LH: {value: 95.7, unit: MW}
+  P_sep: {value: 200, unit: MW}
+  ratio_of_P_SOL_to_P_LH: 2.09
+  P_elec_tot: {value: 500, unit: MW}
+
+  # H98_star: 1.59
+  # H_Petty08_star: 0.88
+  # beta_N_no_wall: 3.32
+  # beta_T_percent: 4.59
+  # f_GW_line_average: 1.00
+  # f_GW_pedestal: 0.78
+  # c_Ar_core_percent: 0.3
+  # c_Xe_core_percent: 0.043
+  # T_i0: 35.39 keV
+  # T_e0: 28.11 keV
+  # T_i0_over_T_e0: 1.26
+  # q_min: 2.2
+  # q0: 2.56
+  # n_e_line_average: 8.33e19 m^-3
+  # P_sep_over_R: 40 MW/m
