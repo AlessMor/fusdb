@@ -15,19 +15,15 @@ variables:
   r_s:
     value: 0.5
     unit: m
-    fixed: true
   r_w:
     value: 0.7
     unit: m
-    fixed: true
   L_s:
     value: 3.0
     unit: m
-    fixed: true
   B_e:
     value: 3.0
     unit: T
-    fixed: true
   T_i_peak:
     value: 10.0
     unit: keV
@@ -36,10 +32,8 @@ variables:
     unit: keV
   zeta_ne_ni:
     value: 1.0
-    fixed: true
   p_shape_frc:
     value: 2.0
-    fixed: true
   eta_plasma:
     value: 1.0e-7
     unit: ohm*m

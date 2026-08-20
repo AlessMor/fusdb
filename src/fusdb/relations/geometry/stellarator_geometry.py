@@ -1,7 +1,9 @@
-"""VSC-compatible reduced stellarator geometry relations.
+"""Reduced stellarator geometry relations.
 
+Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
 ISS04 confinement and the Sudo density limit already exist elsewhere in FusDB;
-this module supplies only the geometry quantities VSC uses around those models.
+this module supplies only the geometry quantities the reduced model uses around
+those models.
 """
 
 from __future__ import annotations
@@ -18,12 +20,6 @@ from fusdb.relation import relation
 def stellarator_volume_equivalent_minor_radius(V_p: Any, R: Any) -> Any:
     """Equivalent circular-torus minor radius from V=2*pi^2 R a_vol^2."""
     return np.sqrt(np.asarray(V_p) / (2.0 * np.pi**2 * np.asarray(R)))
-
-
-@relation(name="Stellarator effective rotational transform at two-thirds radius", tags=("stellarator", "confinement"), outputs="iotabar")
-def stellarator_effective_iota(iota_2_3: Any) -> Any:
-    """Map VSC's explicitly sampled iota_2/3 onto FusDB's ISS04 iotabar input."""
-    return np.asarray(iota_2_3)
 
 
 @relation(name="Near-axis stellarator B2.5 moment", tags=("stellarator", "geometry"), outputs="G_B25")

@@ -15,25 +15,20 @@ variables:
   R:
     value: 4.62
     unit: m
-    fixed: true  # anchor: machine geometry is not a solver unknown
   # R scan: 4.08–4.62 m (Muraca et al. (2026), p. 6).
   a:
     value: 1.18
     unit: m
-    fixed: true  # anchor
   # a scan: 1.05–1.27 m (Muraca et al. (2026), p. 6).
   eps:
     value: 0.26
-    fixed: true
   B0:
     value: 11.4
     unit: T
-    fixed: true  # anchor
   # Other reported ARC-class BT values: 9.8–11.7 T (Muraca et al. (2026), p. 6).
   I_p:
     value: 12.0
     unit: MA
-    fixed: true  # anchor
   # ARC-class Ip scan: 10.0–13.8 MA; exhaust cases also use 11 and 10 MA
   # (Muraca et al. (2026), p. 6; Eich et al. (2026), pp. 18, 23).
   kappa_separatrix:
@@ -41,18 +36,15 @@ variables:
   # ARC-class elongation scan: 1.69–1.9 (Muraca et al. (2026), p. 6).
   kappa:
     value: 1.8
-    fixed: true  # Geometric elongation; Leuthold et al. (2026), p. 2.
   delta:
     value: 0.65
   # ARC-class triangularity scan: 0.48–0.65 (Muraca et al. (2026), p. 6).
   V_p:
     value: 189
     unit: m^3
-    fixed: true
   A_p:
     value: 257
     unit: m^2
-    fixed: true
   # --- Pulse, stored energy, and plant performance --------------------------
   # P_ICRF is deliberately NOT declared. The paper reports P_RF,max (coupled) = 50 MW, a
   # machine CAPABILITY, whereas fusdb's P_ICRF is the coupled power actually absorbed --
@@ -69,15 +61,12 @@ variables:
   max_flattop_duration:
     value: 900
     unit: s
-    fixed: true
   tau_pulse:
     value: 900
     unit: s
-    fixed: true
   total_flux_available_from_CS:
     value: 215
     unit: Wb
-    fixed: true
   W_th:
     value: 231
     unit: MJ
@@ -94,7 +83,6 @@ variables:
   P_elec_tot:
     value: 400
     unit: MW
-    fixed: true
   # This is the reported net electrical output; fusdb's canonical registry name
   # is P_elec_tot and its legacy alias is P_e_net. Gross output is ~500 MW
   # (Hillesheim et al. (2026), p. 13).
@@ -104,11 +92,9 @@ variables:
   P_th_tot:
     value: 1260
     unit: MW
-    fixed: true
   # Cycle-averaged thermal power: 1180 MW (Hillesheim et al. (2026), p. 13).
   eta_th:
     value: 0.42
-    fixed: true
   P_aux_el:
     value: 100
     unit: MW
@@ -142,71 +128,56 @@ variables:
   # Other model values: 0.80, 0.87, 0.93, 0.94, and 0.98 (Howard et al. (2026), pp. 13–14).
   ion_to_electron_temp_ratio:
     value: 0.9
-    fixed: true
   qstar: 3.23
   # Other reported cylindrical-safety-factor values: 3.0, 3.2, 3.5, and 3.8
   # (Howard et al. (2026), p. 4; Eich et al. (2026), p. 23).
   q95: 3.7  # Howard et al. (2026), p. 4; Hillesheim et al. (2026) gives ~3.4–3.6 implied by q* (p. 12).
   q_cyl:
     value: 3.2
-    fixed: true  # Eich et al. (2026), p. 23, Ip=12 MA.
   q0:
     value: 0.75
-    fixed: true  # Muraca et al. (2026), p. 3; alternative kinetic-equilibrium value is <1 (Leuthold et al. (2026), p. 3).
   Z_eff: 1.52
   # Other reported values: 1.5 (Howard et al. (2026), p. 5; Leuthold et al. (2026), p. 3).
   dilution:
     value: 0.85
-    fixed: true
   density_peaking: 1.52
   # Seeded scan means: 1.34 ± 0.04 (Ar) and 1.29 ± 0.01 (Ne) (Muraca et al. (2026), p. 16).
   ion_density_peaking:
     value: 1.42
-    fixed: true
   beta_N: 0.018  # Reported βN=1.8; fusdb stores normalized beta as a fraction.
   # Other reported βN values: 1.29, 1.51, 1.58, 1.80, 1.95, and 1.65
   # (Howard et al. (2026), p. 13; Leuthold et al. (2026), p. 9).
   rho_star:
     value: 0.0017
-    fixed: true
   # On-axis alternative: ~0.0016 (Leuthold et al. (2026), p. 13).
   nu_star:
     value: 0.031
-    fixed: true
   # --- Power balance and exhaust --------------------------------------------
   P_aux:
     value: 21.5
     unit: MW
-    fixed: true
   P_ohmic:
     value: 0.8
     unit: MW
-    fixed: true
   P_fus_DT_alpha:
     value: 227
     unit: MW
-    fixed: true
   neutron_rate:
     value: 4e20
     unit: 1/s
-    fixed: true
   ratio_of_P_SOL_to_P_LH:
     value: 1.2
-    fixed: true
   P_heating:
     value: 250
     unit: MW
-    fixed: true
   # Eich et al. (2026), p. 2.
   P_sep:
     value: 120
     unit: MW
-    fixed: true
   # Eich et al. (2026), pp. 7, 23.
   P_LH:
     value: 100
     unit: MW
-    fixed: true
   # Eich et al. (2026), p. 2.
   P_rad:
     value: 80
@@ -220,91 +191,72 @@ variables:
   lambda_q:
     value: 0.72
     unit: mm
-    fixed: true
   # Eich et al. (2026), p. 23, Ip=12 MA.
   # Other upstream values: 0.56, 0.81, and 0.97 mm (Eich et al. (2026),
   # pp. 7, 23; the baseline 12 MA point is 0.72 mm).
   q_parallel:
     value: 8.5
     unit: GW/m^2
-    fixed: true
   # Eich et al. (2026), p. 7.
   SOL_power_loss_fraction:
     value: 0.97
-    fixed: true
   # Reported as a required near-SOL dissipation of ≥97% (Eich et al. (2026), p. 7).
   SOL_momentum_loss_fraction:
     value: 0.5
-    fixed: true  # Muraca et al. (2026), p. 4.
   fraction_of_P_SOL_to_divertor:
     value: 0.5
-    fixed: true  # Eich et al. (2026), p. 7.
   parallel_connection_length:
     value: 120
     unit: m
-    fixed: true
   # Eich et al. (2026), pp. 11, 16.
   # Geometric alternatives: 170 m OMP-to-target and 123 m full divertor-leg
   # length (Eich et al. (2026), p. 16).
   B_pol_out_mid:
     value: 2
     unit: T
-    fixed: true
   # Eich et al. (2026), p. 10.
   B_p:
     value: 1.5
-    fixed: true  # Separatrix poloidal field; Eich et al. (2026), p. 27.
   target_electron_temp:
     value: 0.002
     unit: keV
-    fixed: true
   # Muraca et al. (2026), p. 4; detached-divertor condition.
   # Alternative erosion-example target temperature: ~10 eV = ~0.010 keV
   # (Eich et al. (2026), p. 8).
   target_neutral_pressure:
     value: 21
     unit: Pa
-    fixed: true
   # Eich et al. (2026), p. 23, Ip=12 MA.
   # Other divertor-pressure values: ~20, 23, and 28 Pa (Eich et al. (2026),
   # pp. 1, 23).
   alpha_t:
     value: 0.21
-    fixed: true  # Eich et al. (2026), p. 27, baseline 12 MA exhaust point.
   # Other detachment-point values: 0.25 and 0.32 (Eich et al. (2026), p. 23).
   # --- Composition, impurity, and pedestal inputs ---------------------------
   f_D:
     value: 0.5
-    fixed: true
   f_T:
     value: 0.5
-    fixed: true
   afuel:
     value: 2.515
-    fixed: true
   # The papers report a 50:50 D:T mass number of 2.5 (Muraca et al. (2026), p. 5;
   # Eich et al. (2026), p. 7).  2.515 is the corresponding real isotope-weighted
   # mass required by fusdb's afuel definition.
   c_H:
     value: 0.05
-    fixed: true  # Muraca et al. (2026), p. 5; near-axis value is ~0.05 (p. 8).
   # ICRF minority reference concentration: 3% (Hillesheim et al. (2026), p. 18).
   c_W: 1.5e-5  # Howard et al. (2026), p. 15; fW,axis scan is 1.5–2.5e-5 (Muraca et al. (2026), p. 8).
   c_Ar:
     value: 0.005
-    fixed: true  # Eich et al. (2026), p. 8; sputtering-example concentration.
   # Other Ar concentrations: 0.003 core-profile maximum (Muraca et al. (2026),
   # p. 8), 0.009 divertor and ≤0.0016 core (Eich et al. (2026), pp. 1, 24).
   edge_impurity_concentration:
     value: 0.009
-    fixed: true  # cAr,div; Eich et al. (2026), p. 1.
   edge_impurity_concentration_in_core: 0.0016  # upper bound cAr,core; Eich et al. (2026), p. 24.
   edge_impurity_enrichment:
     value: 6
-    fixed: true  # cAr,div/cAr,core; Eich et al. (2026), pp. 1, 24.
   pedestal_width:
     value: 0.074
-    fixed: true  # Howard et al. (2026), p. 11.
   nd_plasma_pedestal_electron:
     value: 2.1e20
     unit: m^-3
@@ -313,7 +265,6 @@ variables:
   temp_plasma_pedestal_kev:
     value: 4.2
     unit: keV
-    fixed: true
   # Eich et al. (2026), p. 11.
   ion_temperature_peaking: 2.05  # Muraca et al. (2026), p. 16, Ar-seeded scan mean.
   # Seeded scan alternative: 2.11 ± 0.04 (Muraca et al. (2026), p. 16).
@@ -325,26 +276,23 @@ variables:
   n_e_edge:
     value: 1.0e20
     unit: m^-3
-    fixed: true
   # Eich et al. (2026), pp. 18, 23, Ip=12 MA.
   # Other exhaust-point values: 1.1 and 1.4 × 10^20 m^-3 for Ip=11 and 10 MA
   # (Eich et al. (2026), pp. 18, 23).
   T_edge:
     value: 0.275
     unit: keV
-    fixed: true
   # Eich et al. (2026), p. 23, Ip=12 MA.
   # Other exhaust-point value: 0.270 keV (Eich et al. (2026), p. 23).
   kappa_areal: 1.6  # Eich et al. (2026), p. 7; alternative κa=1.55 (Sweeney et al. (2026), pp. 2–3).
+  squareness:
+    value: 0.0
   kappa_95:
     value: 1.5
-    fixed: true  # Eich et al. (2026), p. 10.
   delta_95:
     value: 0.36
-    fixed: true  # Eich et al. (2026), p. 7.
   beta_norm_max:
     value: 0.032
-    fixed: true  # Reported βN,limit≈3.2; fusdb stores the fraction (Leuthold et al. (2026), p. 9).
   li: 0.97  # Leuthold et al. (2026), p. 12; scan range is 0.93–1.16 (p. 11).
   wall_temperature:
     value: 900
@@ -1520,3 +1468,75 @@ variables:
   #   unit: cm
   #   source: Sweeney et al. (2026), p. 43
   #   context: Wall-time estimate
+
+relations:
+  # Three tag-selected providers are replaced by better-suited members of their
+  # own families.  In each case the swap is a MODEL choice among alternatives
+  # fusdb already ships -- no relation is added, none is rewritten, and the
+  # block is reactor-local, so no other reactor is affected.
+  #
+  # None of these resolves ARC V3A's root contradictions (`A_p` = 257 m^2 is
+  # unreachable at any triangularity; `q_cyl`, `kappa_95` and `eps` are pinned
+  # against values fusdb's own closures disagree with).  They reduce the SIZE
+  # of the disagreement, not its existence: the failed-relation count is
+  # unchanged at 38.
+  #
+  # Percentages below are each formula evaluated at ARC V3A's own DECLARED
+  # inputs, against the declared value of the variable it produces, so they can
+  # be re-derived from this file alone.
+  include:
+
+  # --- SOL_momentum_loss_fraction, declared 0.5 (Eich et al. (2026)) --------
+  # All six providers in this family take the IDENTICAL argument
+  # (target_electron_temp = 2 eV here), so nothing structural distinguishes
+  # them -- the choice is purely which detachment correlation describes this
+  # machine, exactly the situation STEP_2024 handles by name for elongation.
+  #   PerezH        0.5386   +7.7%   <- selected, the only one near the declared value
+  #   PerezL        0.4248  -15.0%
+  #   Sang          0.3137  -37.3%
+  #   Moulton       0.1960  -60.8%
+  #   KotovReiter   0.1646  -67.1%   <- was active; the declared 0.5 is 335 tolerances away
+  #   Jarvinen      0.0844  -83.1%
+  - SOL momentum loss fraction PerezH
+
+  # --- beta_norm_max, declared 0.032 (Muraca et al. (2026)) ----------------
+  # Wesson reads `internal_inductivity`, whose only producer reads `q_cyl` --
+  # and ARC V3A's declared q_cyl (3.2) disagrees with what fusdb computes from
+  # the same declaration (2.654).  Wesson therefore INHERITS that disagreement
+  # before it starts.  Menard reads `eps` directly and is not downstream of it.
+  #   Menard        0.03474  +8.6%   <- selected
+  #   original      0.02821 -11.8%
+  #   Stambaugh     0.009316 -70.9%
+  #   Wesson        0.06067  +89.6%  <- was active, the worst of the four
+  - Normalised beta limit (Menard)
+
+  # --- lambda_q, declared 0.72 mm (Eich et al. (2026)) ---------------------
+  # Eich 15 reads `B_pol_out_mid`, which carries the SAME kind of disagreement
+  # (2.0 T declared against 2.034 T from mu0*I_p/(2*pi*a)).  Eich 9 reads
+  # (B0, qstar, P_sep) instead.  This is a trade rather than a clean escape --
+  # `qstar` is itself contradicted -- but Eich 9 lands far closer both at the
+  # declared point and at the solved one (its residual there is 2.6 tolerances
+  # against Eich 15's 32.9).
+  #   Eich regression 9    0.5663 mm  -21.3%   <- selected
+  #   Eich regression 15   0.3915 mm  -45.6%   <- was active
+  #   Brunner              0.3647 mm  -49.4%
+  #   Eich regression 14   0.2761 mm  -61.7%
+  - SOL lambda_q Eich regression 9
+
+  exclude:
+  # Each is the whitelisted default its replacement above supersedes; without
+  # the exclusion both would stay active and contradict each other.
+  - SOL momentum loss fraction KotovReiter
+  - Normalised beta limit (Wesson)
+  - SOL lambda_q Eich regression 15
+
+  # HISTORICAL MEASUREMENT, no longer reproducible from this file.  When these
+  # swaps landed, ARC V3A still carried 55 `fixed: true` anchors and the three
+  # of them cut the whole-solve sum of squared tolerance-normalised residuals
+  # 282762 -> 150341 (-46.8%) with failed relations 38, inputs beyond tolerance
+  # 20, P_fus 1125.1 MW and delta 0.5512 all unchanged; PerezH alone moved the
+  # max residual 335.4 -> 200.5.  Those anchors have since been removed, so the
+  # figures above describe a configuration this file no longer has -- they are
+  # kept as the rationale for the choice, not as a current claim.  The reasoning
+  # itself still holds: it rests on which INPUTS each provider reads, not on
+  # whether those inputs happen to be pinned.

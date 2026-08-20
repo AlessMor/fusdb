@@ -1,4 +1,8 @@
-"""Reduced levitated-dipole relations following VSC section 3.4."""
+"""Reduced levitated-dipole geometry relations.
+
+Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+VSC section 3.4.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +10,9 @@ from typing import Any
 
 import numpy as np
 
+from fusdb.numerics import volume_average
 from fusdb.relation import relation
-from fusdb.registry import KEV_TO_J, MU0
+from fusdb.registry import MU0
 
 
 @relation(name="Point-dipole shell coordinate", tags=("dipole", "geometry", "default"), outputs="L_shell", dependency="generated_profile")
@@ -91,57 +96,6 @@ def point_dipole_specific_volume(B_ring: Any, r_ring: Any, L_shell: Any) -> Any:
     if b.ndim and b.shape[-1] != np.asarray(L_shell).shape[-1]:
         b, r = b[..., None], r[..., None]
     return np.asarray(L_shell) ** 4 / (b * r**3)
-
-
-@relation(name="Dipole marginal electron density profile", tags=("dipole", "profile"), outputs="n_e")
-def dipole_marginal_electron_density(n0: Any, U: Any) -> Any:
-    """VSC Eq. (84): n proportional to U^-1."""
-    u = np.asarray(U, dtype=float)
-    ratio = u / u[..., :1]
-    n = np.asarray(n0, dtype=float)
-    return n[..., None] / ratio if n.ndim and n.shape[-1] != ratio.shape[-1] else n / ratio
-
-
-@relation(name="Dipole marginal ion density profile", tags=("dipole", "profile"), outputs="n_i")
-def dipole_marginal_ion_density(n_i_peak: Any, U: Any) -> Any:
-    u = np.asarray(U, dtype=float)
-    ratio = u / u[..., :1]
-    n = np.asarray(n_i_peak, dtype=float)
-    return n[..., None] / ratio if n.ndim and n.shape[-1] != ratio.shape[-1] else n / ratio
-
-
-@relation(name="Dipole marginal electron temperature profile", tags=("dipole", "profile"), outputs="T_e")
-def dipole_marginal_electron_temperature(T0: Any, U: Any) -> Any:
-    """VSC Eq. (84): T proportional to U^-2/3."""
-    u = np.asarray(U, dtype=float)
-    ratio = (u / u[..., :1]) ** (-2.0 / 3.0)
-    t = np.asarray(T0, dtype=float)
-    return t[..., None] * ratio if t.ndim and t.shape[-1] != ratio.shape[-1] else t * ratio
-
-
-@relation(name="Dipole marginal ion temperature profile", tags=("dipole", "profile"), outputs="T_i")
-def dipole_marginal_ion_temperature(T_i_peak: Any, U: Any) -> Any:
-    u = np.asarray(U, dtype=float)
-    ratio = (u / u[..., :1]) ** (-2.0 / 3.0)
-    t = np.asarray(T_i_peak, dtype=float)
-    return t[..., None] * ratio if t.ndim and t.shape[-1] != ratio.shape[-1] else t * ratio
-
-
-@relation(name="Dipole inner beta", tags=("dipole", "plasma"), outputs="beta_in")
-def dipole_inner_beta(n_e: Any, T_e: Any, n_i: Any, T_i: Any, B: Any) -> Any:
-    p = (np.asarray(n_e)[..., 0] * np.asarray(T_e)[..., 0] + np.asarray(n_i)[..., 0] * np.asarray(T_i)[..., 0]) * KEV_TO_J
-    return 2.0 * MU0 * p / np.asarray(B)[..., 0] ** 2
-
-
-@relation(name="Dipole outer beta", tags=("dipole", "plasma"), outputs="beta_out")
-def dipole_outer_beta(n_e: Any, T_e: Any, n_i: Any, T_i: Any, B: Any) -> Any:
-    p = (np.asarray(n_e)[..., -1] * np.asarray(T_e)[..., -1] + np.asarray(n_i)[..., -1] * np.asarray(T_i)[..., -1]) * KEV_TO_J
-    return 2.0 * MU0 * p / np.asarray(B)[..., -1] ** 2
-
-
-@relation(name="Dipole density-confinement product", tags=("dipole", "confinement"), outputs="n0_tau_E")
-def dipole_density_confinement_product(n0: Any, tau_E: Any) -> Any:
-    return np.asarray(n0) * np.asarray(tau_E)
 
 
 @relation(name="Dipole spherical wall proxy", tags=("dipole", "geometry"), outputs="S_wall")

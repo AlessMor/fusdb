@@ -50,18 +50,8 @@ def with_vsc_variables(base: VariableRegistry) -> VariableRegistry:
               default_relation=("Point-dipole normalized U coordinate",)),
         _spec("G_B25", domain=_NONNEG, description="Normalized volume moment <|B/B_ref|^2.5>."),
         _spec("M_B25", "T^2.5*m^3", domain=_NONNEG, description="Dimensional integral of B^2.5 over plasma volume."),
-        _spec("tau_C", "s", domain=_POS, description="Prescribed cyclotron/synchrotron loss time."),
-        _spec("E_fast_crit", "keV", domain=_NONNEG, description="Stix critical fast-particle energy."),
-        _spec("E_fast_product", "keV", domain=_NONNEG, description="Representative birth energy of the fast charged fusion product."),
-        _spec("f_fast_ion", domain=_UNIT, description="Fraction of fast-product energy deposited to ions."),
-        _spec("f_charged_dep", domain=_UNIT, description="Fraction of charged fusion-product power deposited in the plasma.", default=1.0),
-        _spec("f_aux_e", domain=_UNIT, description="Fraction of auxiliary heating deposited in the electron channel.", default=1.0),
-        _spec("P_charged_dep", "W", domain=_NONNEG, description="Locally deposited charged fusion-product power."),
-        _spec("tau_ei", "s", domain=_POS, description="Electron-ion thermal equilibration time."),
-        _spec("P_ei", "W", domain=_ANY, description="Signed ion-to-electron collisional exchange power."),
         _spec("W_e", "J", domain=_NONNEG, description="Electron thermal stored energy."),
         _spec("W_i", "J", domain=_NONNEG, description="Ion thermal stored energy."),
-        _spec("P_aux_required_raw", "W", domain=_ANY, description="Signed external heating required by the VSC power account."),
 
         # Mirror.
         _spec("a_c", "m", domain=_POS, description="Mirror central-cell plasma radius."),

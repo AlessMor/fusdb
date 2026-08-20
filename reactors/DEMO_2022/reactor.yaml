@@ -12,17 +12,13 @@ tags:
 variables:
   R:
     value: 9.0
-    fixed: true
   a:
     value: 2.9
-    fixed: true
   A: 3.1
   kappa_95: 
     value: 1.65
-    fixed: true
   delta_95: 
     value: 0.33
-    fixed: true
   squareness: 0.0
   B0: 5.86
   I_p: 17.75e6
@@ -33,12 +29,8 @@ variables:
   T_avg:
     value: 12.49
     unit: keV
-    fixed: true
   f_GW:
     value: 1.2
-    fixed: true  # design point: anchors n_e (= f_GW * n_GW) hard, so the density
-                 # cannot collapse to a spurious low-n_e branch under the 2-D
-                 # radas Zbar(T_e, n_e) coupling.
   Z_eff: 2.12
   afuel:
     value: 2.5

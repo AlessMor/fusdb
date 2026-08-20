@@ -244,3 +244,43 @@ def calc_rho_star(rho_L: Any, a: Any) -> Any:
          rho_star [~]
     """
     return rho_L / a
+
+
+@relation(name="Mirror ion thermal speed", tags=("mirror", "collisionality"), outputs="v_th_i")
+def mirror_ion_thermal_speed(T_i_peak: Any, afuel: Any) -> Any:
+    """Mirror ion thermal speed from the peak ion temperature.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    mass = np.asarray(afuel) * ATOMIC_MASS_UNIT_KG
+    return np.sqrt(2.0 * np.asarray(T_i_peak) * KEV_TO_J / mass)
+
+
+@relation(name="Mirror ion gyroradius", tags=("mirror", "collisionality"), outputs="rho_i")
+def mirror_ion_gyroradius(v_th_i: Any, afuel: Any, B_c: Any, Z_i: Any = 1.0) -> Any:
+    """Mirror ion gyroradius in the diamagnetically corrected central field.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    mass = np.asarray(afuel) * ATOMIC_MASS_UNIT_KG
+    return mass * np.asarray(v_th_i) / (
+        np.asarray(Z_i) * ELECTRON_CHARGE_C * np.asarray(B_c)
+    )
+
+
+@relation(name="Mirror ion mean free path", tags=("mirror", "collisionality"), outputs="lambda_ii")
+def mirror_ion_mean_free_path(v_th_i: Any, tau_ii: Any) -> Any:
+    """Ion-ion collisional mean free path.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return np.asarray(v_th_i) * np.asarray(tau_ii)
+
+
+@relation(name="Mirror collisionality regime ratio", tags=("mirror", "collisionality"), outputs="mirror_regime_ratio")
+def mirror_collisionality_ratio(lambda_ii: Any, R_mc: Any, L_c: Any) -> Any:
+    """VSC Eq. (60).
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    return np.asarray(lambda_ii) / (np.asarray(R_mc) * np.asarray(L_c))

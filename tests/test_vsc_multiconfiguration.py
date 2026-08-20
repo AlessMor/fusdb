@@ -2,22 +2,22 @@ import numpy as np
 
 from fusdb.registry import RELATIONS, TAGS, VARIABLES, MU0
 from fusdb.registry.coordinate_variables import PHYSICAL_COORDINATE_NAMES
-from fusdb.relations.vsc.frc import (
+from fusdb.relations.confinement.balance import thermal_stored_energy_vsc_profile
+from fusdb.relations.confinement.scalings.frc import (
     frc_lsx_confinement_time,
     frc_resistive_diffusion_time,
-    frc_rigid_rotor_parameter,
-    frc_superellipse_plasma_volume,
 )
-from fusdb.relations.vsc.mirror import (
-    mirror_diamagnetic_central_field,
-    mirror_sin2_volume,
-)
-from fusdb.relations.vsc.dipole import (
+from fusdb.relations.geometry.dipole_geometry import (
     finite_dipole_ring_current,
     point_dipole_normalized_u_coordinate,
     point_dipole_plasma_volume,
 )
-from fusdb.relations.vsc.common import thermal_stored_energy_vsc_profile
+from fusdb.relations.geometry.frc_geometry import frc_superellipse_plasma_volume
+from fusdb.relations.geometry.mirror_geometry import (
+    mirror_diamagnetic_central_field,
+    mirror_sin2_volume,
+)
+from fusdb.relations.plasma_state.frc_equilibrium import frc_rigid_rotor_parameter
 
 
 def test_vsc_device_tags_and_variables_are_registered():
@@ -34,6 +34,19 @@ def test_original_stored_energy_is_default_and_vsc_form_is_alternative():
     assert "Thermal stored energy (VSC profile model)" not in active
     value = thermal_stored_energy_vsc_profile.func(2e20, 10.0, 2e20, 10.0, 1.0, 1.0, 10.0)
     assert value > 0.0
+
+
+def test_alternative_w_th_provider_is_gated_by_default_relation_not_by_a_tag():
+    """The VSC W_th form is held back by the producer whitelist, not an opt-in tag.
+
+    It is an ordinary secondary provider: a variable's ``default_relation``
+    already filters every producer that is not on it.
+    """
+    blocked = "Thermal stored energy (VSC profile model)"
+    active = {rel.name for rel in RELATIONS.get_filtered_relations(tags=TAGS.expand(("tokamak",)))}
+    assert blocked in {rel.name for rel in RELATIONS.producers("W_th")}
+    assert blocked not in VARIABLES.get("W_th").default_relation
+    assert blocked not in active
 
 
 def test_mirror_geometry_equations_match_published_forms():

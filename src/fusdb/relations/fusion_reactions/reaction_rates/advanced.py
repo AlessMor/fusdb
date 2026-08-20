@@ -2,6 +2,8 @@
 
 from typing import Any
 
+import numpy as np
+
 from fusdb.numerics import volume_average
 
 from fusdb.relation import relation
@@ -134,3 +136,20 @@ def reaction_rate_tt(
 
     # Integrate the profile over the plasma volume.
     return V_p * volume_average(integrand, rho, weight=w_V)
+
+
+@relation(name="p-B11 reaction rate", tags=("fusion_power",), outputs="Rr_pB11")
+def reaction_rate_pb11(
+    n_p: Any,
+    n_B11: Any,
+    sigmav_pB11: Any,
+    V_p: Any,
+    rho: Any,
+    w_V: Any = None,
+) -> Any:
+    """Volume-integrated p + B11 reaction rate.
+
+    Adapted from Wang et al. (2026), arXiv:2607.11208 ("VSC" reduced multi-configuration model).
+    """
+    local = np.asarray(n_p) * np.asarray(n_B11) * np.asarray(sigmav_pB11)
+    return np.asarray(V_p) * volume_average(local, rho, weight=w_V)

@@ -13,10 +13,8 @@ tags:
 variables:
   R:
     value: 3.3
-    fixed: true
   a:
     value: 1.13
-    fixed: true
   A: 2.92
   P_fus:
     value: 525
@@ -44,7 +42,6 @@ variables:
   n0: 1.8e20
   f_GW: 
     value: 0.67
-    fixed: true
   T_e:
     value: ARC2015_Te.csv
     unit: keV

@@ -5,5 +5,6 @@ from .dd import *
 from .dhe3 import *
 from .dt import *
 from .he3he3 import *
+from .pb11 import *
 from .the3 import *
 from .tt import *

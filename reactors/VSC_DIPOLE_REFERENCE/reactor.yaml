@@ -15,23 +15,18 @@ variables:
   L_in:
     value: 1.0
     unit: m
-    fixed: true
   L_out:
     value: 2.0
     unit: m
-    fixed: true
   r_ring:
     value: 0.5
     unit: m
-    fixed: true
   B_ring:
     value: 5.0
     unit: T
-    fixed: true
   R_wall_proxy:
     value: 2.5
     unit: m
-    fixed: true
   n0:
     value: 1.0e20
     unit: m^-3
