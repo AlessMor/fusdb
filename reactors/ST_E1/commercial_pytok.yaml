@@ -1,0 +1,63 @@
+metadata:
+  id: ST_E1_2026_COMMERCIAL_PYTOK
+  name: ST-E1 Commercial PyTok design point
+  organization: Tokamak Energy
+  country: GBR
+  year: 2026
+  doi: 10.1088/1741-4326/ae5d55
+  notes: >-
+    Commercial-phase evolution of the ST-E1 Pilot RDP from Wilson et al. (2026),
+    table 5. It keeps the same permanent 5 m, A=2.3, 5.25 T power core while
+    uprating the plasma and plant after the in-vessel upgrade phase.
+  reactor_family: ST-E1
+
+tags:
+- tokamak
+- spherical_tokamak
+- h_mode
+
+variables:
+  R: {value: 5.0, unit: m}
+  a: {value: 2.17, unit: m}
+  A: 2.3
+  kappa: 2.42
+  delta: 0.5
+  B0: {value: 5.25, unit: T}
+
+  I_p: {value: 15.4, unit: MA}
+  n_e_avg: {value: 1.31e20, unit: m^-3}
+  T_e_avg: {value: 7.3, unit: keV}
+  Z_eff: 2.76
+  f_BS: 0.88
+  H98_y2: 1.4
+  beta_N: 0.0385
+
+  P_fus: {value: 2400, unit: MW}
+  P_aux: {value: 66, unit: MW}
+  Q_sci: 36.5
+  P_sep: {value: 125, unit: MW}
+  P_LH: {value: 80, unit: MW}
+  f_rad: 0.77
+  q_wall: {value: 2.4, unit: MW/m^2}
+
+  TBR: 1.15
+  P_th_tot: {value: 2770, unit: MW}
+  P_elec_tot: {value: 1020, unit: MW}
+  P_aux_el: {value: 142, unit: MW}
+  Q_eng: 4.6
+
+  # Wilson et al. table 5 also reports:
+  # radiation_wall_loading: 0.65 MW/m^2
+  # P_sep_over_R: 25 MW/m
+  # C_beta_N: 1.0
+  # C_beta_p: 1.15
+  # f_GW_pedestal: 1.0
+  # P_elec_gross: 1300 MWe
+  # P_e_pumping: 100 MWe
+  # P_e_cryo: 9 MWe
+  # P_e_plant: 30 MWe
+  # overnight_capital_cost: 11.9 billion 2025 USD
+
+relations:
+  include:
+  - Energy confinement time ITER98y2 (cfspopcon)

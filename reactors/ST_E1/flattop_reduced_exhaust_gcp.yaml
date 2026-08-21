@@ -1,0 +1,69 @@
+metadata:
+  id: ST_E1_2026_FLATTOP_REDUCED_EXHAUST_GCP
+  name: ST-E1 flat-top - reduced exhaust GCP
+  organization: Tokamak Energy
+  country: GBR
+  year: 2026
+  doi: 10.1088/1741-4326/ae5f33
+  notes: >-
+    High-density GCP reference flat-top from McNamara et al. (2026), table 9,
+    with reduced scrape-off-layer power loading PSOL/R=25 MW/m. This requires a
+    high core-radiation fraction and leaves only a small margin above the L-H
+    threshold (PSOL/PLH about 1.02).
+  reactor_family: ST-E1
+
+tags:
+- tokamak
+- spherical_tokamak
+- h_mode
+
+variables:
+  # Machine pinned: these are single-valued design points, and leaving them
+  # movable lets the solve trade geometry away instead of naming the conflict.
+  R: {value: 5.0, unit: m, fixed: true}
+  A: {value: 2.3, fixed: true}
+  kappa: {value: 2.42, fixed: true}
+  delta: {value: 0.5, fixed: true}
+  B0: {value: 5.25, unit: T, fixed: true}
+
+  I_p: {value: 13.6, unit: MA, fixed: true}
+  P_fus: {value: 1500, unit: MW}
+  P_aux: {value: 100, unit: MW}
+  Q_sci: 15.0
+  f_BS: 0.86
+  beta_N: 0.0336
+  beta_p: 2.13
+  Z_eff: 3.49
+  f_rad: 0.69
+  q95: 9.95
+  internal_inductivity: 0.42
+  P_LH: {value: 122.5, unit: MW}
+  P_sep: {value: 125, unit: MW}
+  ratio_of_P_SOL_to_P_LH: 1.02
+  P_elec_tot: {value: 450, unit: MW}
+  # Core plasma state, McNamara et al. (2026) table 9 -- the same rows listed
+  # below as comments, under the names FusDB knows them by. Without these the
+  # fusion-power chain has no anchor and the solve walks to a dead plasma.
+  n_la: {value: 1.014e20, unit: m^-3}
+  c_Ar: 0.005
+  c_Xe: 0.00039
+  q0: 2.57
+  q_min: 2.2
+
+  # H98_star: 1.43
+  # H_Petty08_star: 0.78
+  # beta_N_no_wall: 3.23
+  # beta_T_percent: 4.13
+  # f_GW_line_average: 1.25
+  # f_GW_pedestal: 0.98
+  # T_i0: 26.06 keV
+  # T_e0: 23.30 keV
+  # T_i0_over_T_e0: 1.12
+  # P_sep_over_R: 25 MW/m
+
+relations:
+  # ST-E1 publishes its elongation and triangularity directly. Do not let
+  # aspect-ratio-only ST empirical fits compete with those declared values.
+  exclude:
+  - ST elongation vs aspect ratio
+  - ST triangularity vs aspect ratio

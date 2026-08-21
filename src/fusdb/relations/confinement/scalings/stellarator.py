@@ -10,8 +10,7 @@ from fusdb.relation import relation
 @relation(
     name="sudo_et_al_confinement_time",
     tags=("confinement", "stellarator"),
-    outputs="tau_E",
-    h_factor="H_sudo_et_al",
+    outputs="tau_E_scaling",
 )
 def sudo_et_al_confinement_time(
     rmajor: float,
@@ -63,8 +62,7 @@ def sudo_et_al_confinement_time(
 @relation(
     name="gyro_reduced_bohm_confinement_time",
     tags=("confinement", "stellarator"),
-    outputs="tau_E",
-    h_factor="H_gyro_reduced_bohm",
+    outputs="tau_E_scaling",
 )
 def gyro_reduced_bohm_confinement_time(
     b_plasma_toroidal_on_axis: float,
@@ -115,8 +113,7 @@ def gyro_reduced_bohm_confinement_time(
 @relation(
     name="lackner_gottardi_stellarator_confinement_time",
     tags=("confinement", "stellarator"),
-    outputs="tau_E",
-    h_factor="H_lackner_gottardi_stellarator",
+    outputs="tau_E_scaling",
 )
 def lackner_gottardi_stellarator_confinement_time(
     rmajor: float,
@@ -173,8 +170,7 @@ def lackner_gottardi_stellarator_confinement_time(
 @relation(
     name="iss95_stellarator_confinement_time",
     tags=("confinement", "stellarator"),
-    outputs="tau_E",
-    h_factor="H_iss95_stellarator",
+    outputs="tau_E_scaling",
 )
 def iss95_stellarator_confinement_time(
     rminor: float,
@@ -230,8 +226,7 @@ def iss95_stellarator_confinement_time(
 @relation(
     name="iss04_stellarator_confinement_time",
     tags=("confinement", "stellarator"),
-    outputs="tau_E",
-    h_factor="H_iss04_stellarator",
+    outputs="tau_E_scaling",
 )
 def iss04_stellarator_confinement_time(
     rminor: float,
@@ -288,8 +283,7 @@ def iss04_stellarator_confinement_time(
 @relation(
     name="ds03_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_ds03",
+    outputs="tau_E_scaling",
 )
 def ds03_confinement_time(
     I_p: float,

@@ -8,8 +8,7 @@ from fusdb.relation import relation
 @relation(
     name="iter_89p_confinement_time",
     tags=("confinement", "l_mode", "confinement_mode_default"),
-    outputs="tau_E",
-    h_factor="H89_P",
+    outputs="tau_E_scaling",
 )
 def iter_89p_confinement_time(
     I_p: float,
@@ -78,8 +77,7 @@ def iter_89p_confinement_time(
 @relation(
     name="iter_89_0_confinement_time",
     tags=("confinement", "l_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_89_0",
+    outputs="tau_E_scaling",
 )
 def iter_89_0_confinement_time(
     I_p: float,
@@ -153,8 +151,7 @@ def iter_89_0_confinement_time(
 @relation(
     name="iter_h90_p_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_h90_p",
+    outputs="tau_E_scaling",
 )
 def iter_h90_p_confinement_time(
     I_p: float,
@@ -219,8 +216,7 @@ def iter_h90_p_confinement_time(
 @relation(
     name="minimum_of_iter_89p_and_iter_89_0_confinement_time",
     tags=("confinement", "l_mode"),
-    outputs="tau_E",
-    h_factor="H89_P",
+    outputs="tau_E_scaling",
 )
 def minimum_of_iter_89p_and_iter_89_0_confinement_time(
     I_p: float,
@@ -286,8 +282,7 @@ def minimum_of_iter_89p_and_iter_89_0_confinement_time(
 @relation(
     name="iter_h90_p_amended_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_h90_p_amended",
+    outputs="tau_E_scaling",
 )
 def iter_h90_p_amended_confinement_time(
     I_p: float,
@@ -342,8 +337,7 @@ def iter_h90_p_amended_confinement_time(
 @relation(
     name="iter_93h_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_93h",
+    outputs="tau_E_scaling",
 )
 def iter_93h_confinement_time(
     I_p: float,
@@ -408,8 +402,7 @@ def iter_93h_confinement_time(
 @relation(
     name="iter_h97p_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_h97p",
+    outputs="tau_E_scaling",
 )
 def iter_h97p_confinement_time(
     I_p: float,
@@ -475,8 +468,7 @@ def iter_h97p_confinement_time(
 @relation(
     name="iter_h97p_elmy_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_h97p_elmy",
+    outputs="tau_E_scaling",
 )
 def iter_h97p_elmy_confinement_time(
     I_p: float,
@@ -546,8 +538,7 @@ def iter_h97p_elmy_confinement_time(
 @relation(
     name="iter_96p_confinement_time",
     tags=("confinement", "l_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_96p",
+    outputs="tau_E_scaling",
 )
 def iter_96p_confinement_time(
     I_p: float,
@@ -616,8 +607,7 @@ def iter_96p_confinement_time(
 @relation(
     name="iter_pb98py_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_pb98py",
+    outputs="tau_E_scaling",
 )
 def iter_pb98py_confinement_time(
     I_p: float,
@@ -680,8 +670,7 @@ def iter_pb98py_confinement_time(
 @relation(
     name="iter_ipb98y_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_ipb98y",
+    outputs="tau_E_scaling",
 )
 def iter_ipb98y_confinement_time(
     I_p: float,
@@ -758,8 +747,7 @@ def iter_ipb98y_confinement_time(
 @relation(
     name="iter_ipb98y1_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_ipb98y1",
+    outputs="tau_E_scaling",
 )
 def iter_ipb98y1_confinement_time(
     I_p: float,
@@ -835,8 +823,7 @@ def iter_ipb98y1_confinement_time(
 @relation(
     name="tau_E_iter_ipb98y2",
     tags=("confinement", "h_mode", "confinement_mode_default"),
-    outputs="tau_E",
-    h_factor="H98_y2",
+    outputs="tau_E_scaling",
 )
 def tau_E_iter_ipb98y2(
     I_p: float,
@@ -912,10 +899,9 @@ def tau_E_iter_ipb98y2(
 @relation(
     name="Energy confinement time ITER98y2 (cfspopcon)",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def tau_E_iter98y2_cfspopcon(
-    H98_y2: float,
     I_p: float,
     b_plasma_toroidal_on_axis: float,
     n_e_avg: float,
@@ -962,8 +948,7 @@ def tau_E_iter98y2_cfspopcon(
     p_plasma_loss_mw = p_plasma_loss / 1.0e6
     dn19 = n_e_avg / 1.0e19
     return (
-        H98_y2
-        * 0.0562e0
+        0.0562e0
         * pcur**0.93e0
         * b_plasma_toroidal_on_axis**0.15e0
         * dn19**0.41e0
@@ -978,8 +963,7 @@ def tau_E_iter98y2_cfspopcon(
 @relation(
     name="iter_ipb98y2_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H98_y2",
+    outputs="tau_E_scaling",
 )
 def iter_ipb98y2_confinement_time(
     I_p: float,
@@ -1055,8 +1039,7 @@ def iter_ipb98y2_confinement_time(
 @relation(
     name="iter_ipb98y3_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_ipb98y3",
+    outputs="tau_E_scaling",
 )
 def iter_ipb98y3_confinement_time(
     I_p: float,
@@ -1132,8 +1115,7 @@ def iter_ipb98y3_confinement_time(
 @relation(
     name="iter_ipb98y4_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_iter_ipb98y4",
+    outputs="tau_E_scaling",
 )
 def iter_ipb98y4_confinement_time(
     I_p: float,
@@ -1209,8 +1191,7 @@ def iter_ipb98y4_confinement_time(
 @relation(
     name="itpa20_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_itpa20",
+    outputs="tau_E_scaling",
 )
 def itpa20_confinement_time(
     I_p: float,
@@ -1287,8 +1268,7 @@ def itpa20_confinement_time(
 @relation(
     name="itpa20_il_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
-    h_factor="H_itpa20_il",
+    outputs="tau_E_scaling",
 )
 def itpa20_il_confinement_time(
     I_p: float,
@@ -1360,10 +1340,9 @@ def itpa20_il_confinement_time(
 @relation(
     name="cfspopcon_iter89p_confinement_time",
     tags=("confinement", "l_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_iter89p_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1396,8 +1375,7 @@ def cfspopcon_iter89p_confinement_time(
           ``kappa`` and is scheduled to be merged into it.
     """
     return (
-        H98_y2
-        * 0.03812775526676551
+        0.03812775526676551
         * afuel**0.5
         * B0**0.2
         * (I_p / 1.0e6) ** 0.85
@@ -1412,10 +1390,9 @@ def cfspopcon_iter89p_confinement_time(
 @relation(
     name="cfspopcon_iter89p_ka_confinement_time",
     tags=("confinement", "l_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_iter89p_ka_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1443,8 +1420,7 @@ def cfspopcon_iter89p_ka_confinement_time(
         - Regime: L-Mode
     """
     return (
-        H98_y2
-        * 0.03812775526676551
+        0.03812775526676551
         * afuel**0.5
         * B0**0.2
         * (I_p / 1.0e6) ** 0.85
@@ -1459,10 +1435,9 @@ def cfspopcon_iter89p_ka_confinement_time(
 @relation(
     name="cfspopcon_itpa_2018_std5_gls_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_itpa_2018_std5_gls_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1486,8 +1461,7 @@ def cfspopcon_itpa_2018_std5_gls_confinement_time(
         - Regime: H-Mode
     """
     return (
-        H98_y2
-        * 0.042
+        0.042
         * afuel**0.47
         * B0**0.068
         * (I_p / 1.0e6) ** 1.2
@@ -1502,10 +1476,9 @@ def cfspopcon_itpa_2018_std5_gls_confinement_time(
 @relation(
     name="cfspopcon_itpa_2018_std5_ols_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_itpa_2018_std5_ols_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1529,8 +1502,7 @@ def cfspopcon_itpa_2018_std5_ols_confinement_time(
         - Regime: H-Mode
     """
     return (
-        H98_y2
-        * 0.049
+        0.049
         * afuel**0.25
         * B0**0.085
         * (I_p / 1.0e6) ** 1.1
@@ -1545,10 +1517,9 @@ def cfspopcon_itpa_2018_std5_ols_confinement_time(
 @relation(
     name="cfspopcon_itpa_2018_std5_sel1_gls_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_itpa_2018_std5_sel1_gls_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1572,8 +1543,7 @@ def cfspopcon_itpa_2018_std5_sel1_gls_confinement_time(
         - Regime: H-Mode
     """
     return (
-        H98_y2
-        * 0.023
+        0.023
         * afuel**0.33
         * B0 ** (-0.018)
         * (I_p / 1.0e6) ** 1.3
@@ -1588,10 +1558,9 @@ def cfspopcon_itpa_2018_std5_sel1_gls_confinement_time(
 @relation(
     name="cfspopcon_itpa_2018_std5_sel1_ols_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_itpa_2018_std5_sel1_ols_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1615,8 +1584,7 @@ def cfspopcon_itpa_2018_std5_sel1_ols_confinement_time(
         - Regime: H-Mode
     """
     return (
-        H98_y2
-        * 0.045
+        0.045
         * afuel**0.24
         * B0 ** (-0.1)
         * (I_p / 1.0e6) ** 1.3
@@ -1631,10 +1599,9 @@ def cfspopcon_itpa_2018_std5_sel1_ols_confinement_time(
 @relation(
     name="cfspopcon_itpa_2018_std5_sel1_wls_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_itpa_2018_std5_sel1_wls_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1658,8 +1625,7 @@ def cfspopcon_itpa_2018_std5_sel1_wls_confinement_time(
         - Regime: H-Mode
     """
     return (
-        H98_y2
-        * 0.03
+        0.03
         * afuel**0.094
         * B0 ** (-0.069)
         * (I_p / 1.0e6) ** 1.3
@@ -1674,10 +1640,9 @@ def cfspopcon_itpa_2018_std5_sel1_wls_confinement_time(
 @relation(
     name="cfspopcon_itpa_2018_std5_wls_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_itpa_2018_std5_wls_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1701,8 +1666,7 @@ def cfspopcon_itpa_2018_std5_wls_confinement_time(
         - Regime: H-Mode
     """
     return (
-        H98_y2
-        * 0.04
+        0.04
         * afuel**0.25
         * B0**0.11
         * (I_p / 1.0e6) ** 0.99
@@ -1717,10 +1681,9 @@ def cfspopcon_itpa_2018_std5_wls_confinement_time(
 @relation(
     name="cfspopcon_itpa20_il_highz_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_itpa20_il_highz_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1742,8 +1705,7 @@ def cfspopcon_itpa20_il_highz_confinement_time(
         - Regime: H-Mode
     """
     return (
-        H98_y2
-        * 0.189
+        0.189
         * afuel**0.312
         * B0 ** (-0.356)
         * (I_p / 1.0e6) ** 1.485
@@ -1756,10 +1718,9 @@ def cfspopcon_itpa20_il_highz_confinement_time(
 @relation(
     name="cfspopcon_itpa20_il_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_itpa20_il_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1784,8 +1745,7 @@ def cfspopcon_itpa20_il_confinement_time(
         - Regime: H-Mode
     """
     return (
-        H98_y2
-        * 0.067
+        0.067
         * afuel**0.3
         * B0 ** (-0.13)
         * (I_p / 1.0e6) ** 1.29
@@ -1800,10 +1760,9 @@ def cfspopcon_itpa20_il_confinement_time(
 @relation(
     name="cfspopcon_itpa20_std5_confinement_time",
     tags=("confinement", "h_mode"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_itpa20_std5_confinement_time(
-    H98_y2: float,
     afuel: float,
     B0: float,
     I_p: float,
@@ -1829,8 +1788,7 @@ def cfspopcon_itpa20_std5_confinement_time(
         - Regime: H-Mode
     """
     return (
-        H98_y2
-        * 0.053
+        0.053
         * afuel**0.2
         * B0**0.22
         * (I_p / 1.0e6) ** 0.98

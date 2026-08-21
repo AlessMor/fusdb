@@ -1568,7 +1568,18 @@ tau_E:
   - tauE_H98  # OpenPOPCON src/openpopcon.py
   - tauE_H89  # OpenPOPCON src/openpopcon.py
   - τE  # ARC V3A parameter workbook
-  description: Energy confinement time.
+  description: Energy confinement time achieved by the device (W_th / P_loss).
+  default_relation:
+  - Confinement time from scaling
+  domain: (0, inf)
+  abs_tol: 0.005
+tau_E_scaling:
+  default_unit: s
+  description: Energy confinement time predicted by the RAW confinement-time
+    scaling law, before any enhancement factor. The achieved tau_E is
+    H_factor * tau_E_scaling, so H_factor is the ratio of the two and is
+    DERIVED rather than declared. Every scaling relation produces this
+    variable; nothing else does.
   default_relation:
   - tau_E_iter_ipb98y2
   domain: (0, inf)
@@ -1654,17 +1665,6 @@ H89:
   default_unit: dimensionless
   description: H89 confinement enhancement factor.
   abs_tol: 0.001
-H98_y2:
-  aliases:
-  - H98y2  # CFSPOPCON variables.yaml
-  - H_98y2  # SPARC PRD Table 1
-  - H98,y2  # ARC V3A parameter workbook
-  default_unit: dimensionless
-  description: H98(y,2) confinement enhancement factor, applied to the IPB98(y,2)
-    scalings. Composes with the generic H_factor.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
 G89:
   default_unit: dimensionless
   description: G89 gain factor.
@@ -3474,6 +3474,13 @@ temperature_peaking:
   - Electron temperature peaking from peak and average
   - Default electron temperature peaking from ion temperature peaking
 ion_temperature_peaking:  # ion temperature peaking; defaults to temperature_peaking unless set
+  # Mirrors ion_density_peaking: without a default_relation, reactor.py's
+  # _supplied_shape_includes cannot see that this peaking is pinned by supplied
+  # data, so 'Parabolic ion temperature profile' was never auto-selected and T_i
+  # fell back to a FLAT profile -- understating every T_i-driven fusion integral.
+  default_relation:
+  - Ion temperature peaking from peak and average
+  - Default ion temperature peaking from electron temperature peaking
   aliases:
   - Ti(0)/<Ti>  # ARC V3A parameter workbook
   - νTi  # ARC V3A parameter workbook
@@ -3963,10 +3970,67 @@ H_factor:  # external-code alias variable
   - hfact  # PROCESS physics_variables.py
   - hstar  # PROCESS physics_variables.py
   - confinement_time_scalar  # CFSPOPCON variables.yaml
+  - H98_y2
+  - H98y2
+  - H_98y2
+  - H98,y2
+  - H89_P
+  - H_christiansen
+  - H_ds03
+  - H_goldston
+  - H_gyro_reduced_bohm
+  - H_hubbard_lower
+  - H_hubbard_nominal
+  - H_hubbard_upper
+  - H_iss04_stellarator
+  - H_iss95_stellarator
+  - H_iter_89_0
+  - H_iter_93h
+  - H_iter_96p
+  - H_iter_h90_p
+  - H_iter_h90_p_amended
+  - H_iter_h97p
+  - H_iter_h97p_elmy
+  - H_iter_ipb98y
+  - H_iter_ipb98y1
+  - H_iter_ipb98y3
+  - H_iter_ipb98y4
+  - H_iter_pb98py
+  - H_itpa20
+  - H_itpa20_il
+  - H_jaeri
+  - H_kaye
+  - H_kaye_big
+  - H_kaye_goldston
+  - H_lackner_gottardi
+  - H_lackner_gottardi_stellarator
+  - H_lang_high_density
+  - H_menard_nstx
+  - H_menard_nstx_petty08_hybrid
+  - H_merezhkin_muhkovatov
+  - H_mirnov
+  - H_murari
+  - H_neo_alcator
+  - H_neo_kaye
+  - H_nstx_gyro_bohm
+  - H_petty08
+  - H_rebut_lallia
+  - H_riedel_h
+  - H_riedel_l
+  - H_shimomura
+  - H_sudo_et_al
+  - H_t10
+  - H_valovic_elmy
+  - H_ISS04
+  - H_iss04
   default_unit: dimensionless
-  description: Generic multiplier applied to an energy-confinement scaling, whichever
-    one is active. Composes multiplicatively with the scaling-specific H (H98_y2,
-    H89_P, H_<scaling>), which is why it is kept separate from them; default 1.0
+  description: Confinement enhancement factor, the ratio of the achieved tau_E to
+    the raw scaling prediction tau_E_scaling. DERIVED through the relation
+    "Confinement time from scaling" rather than declared, though a reference's
+    published value may be supplied as an ordinary input to seed it. Every
+    published scaling-specific name (H98_y2, H89_P, H_<scaling>) is an alias of
+    this one variable, so the factor applies to whichever scaling produced
+    tau_E_scaling, not to the scaling its declared name refers to. Default 1.0
     makes it a no-op when absent.
   domain: '[0, inf)'
   abs_tol: 0.001
@@ -4117,296 +4181,3 @@ radiated_power_scalar:  # external-code alias variable
 atomic_data:  # external-code alias variable
   default_unit: null
   description: Atomic-data table or handle used by radiation and impurity-charge-state models.
-
-# --- Per-scaling energy-confinement enhancement factors -------------------
-# One H per SCALING (not per relation): implementations of the same scaling
-# share an H, e.g. both IPB98(y,2) ports use H98_y2.  Each is injected as an
-# optional constant by @relation(h_factor=...) and multiplies that scaling's
-# raw fit, alongside the generic H_factor.  Default 1.0 = no enhancement, so
-# an unsupplied H is a no-op and an H supplied for an inactive scaling is
-# simply unused.
-H89_P:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the 9 P scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_christiansen:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the christiansen scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_ds03:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the ds03 scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_goldston:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the goldston scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_gyro_reduced_bohm:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the gyro reduced bohm scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_hubbard_lower:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the hubbard lower scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_hubbard_nominal:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the hubbard nominal scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_hubbard_upper:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the hubbard upper scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iss04_stellarator:
-  aliases:
-  - H_ISS04  # Helios
-  - H_iss04
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iss04 stellarator scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iss95_stellarator:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iss95 stellarator scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_89_0:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter 89 0 scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_93h:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter 93h scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_96p:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter 96p scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_h90_p:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter h90 p scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_h90_p_amended:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter h90 p amended scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_h97p:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter h97p scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_h97p_elmy:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter h97p elmy scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_ipb98y:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter ipb98y scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_ipb98y1:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter ipb98y1 scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_ipb98y3:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter ipb98y3 scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_ipb98y4:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter ipb98y4 scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_iter_pb98py:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the iter pb98py scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_itpa20:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the itpa20 scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_itpa20_il:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the itpa20 il scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_jaeri:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the jaeri scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_kaye:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the kaye scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_kaye_big:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the kaye big scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_kaye_goldston:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the kaye goldston scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_lackner_gottardi:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the lackner gottardi scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_lackner_gottardi_stellarator:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the lackner gottardi stellarator scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_lang_high_density:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the lang high density scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_menard_nstx:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the menard nstx scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_menard_nstx_petty08_hybrid:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the menard nstx petty08 hybrid scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_merezhkin_muhkovatov:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the merezhkin muhkovatov scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_mirnov:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the mirnov scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_murari:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the murari scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_neo_alcator:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the neo alcator scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_neo_kaye:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the neo kaye scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_nstx_gyro_bohm:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the nstx gyro bohm scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_petty08:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the petty08 scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_rebut_lallia:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the rebut lallia scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_riedel_h:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the riedel h scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_riedel_l:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the riedel l scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_shimomura:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the shimomura scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_sudo_et_al:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the sudo et al scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_t10:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the t10 scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
-H_valovic_elmy:
-  default_unit: dimensionless
-  description: Confinement enhancement factor for the valovic elmy scaling.
-  domain: '[0, inf)'
-  abs_tol: 0.001
-  default: 1.0
