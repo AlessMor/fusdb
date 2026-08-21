@@ -3474,6 +3474,13 @@ temperature_peaking:
   - Electron temperature peaking from peak and average
   - Default electron temperature peaking from ion temperature peaking
 ion_temperature_peaking:  # ion temperature peaking; defaults to temperature_peaking unless set
+  # Mirrors ion_density_peaking: without a default_relation, reactor.py's
+  # _supplied_shape_includes cannot see that this peaking is pinned by supplied
+  # data, so 'Parabolic ion temperature profile' was never auto-selected and T_i
+  # fell back to a FLAT profile -- understating every T_i-driven fusion integral.
+  default_relation:
+  - Ion temperature peaking from peak and average
+  - Default ion temperature peaking from electron temperature peaking
   aliases:
   - Ti(0)/<Ti>  # ARC V3A parameter workbook
   - νTi  # ARC V3A parameter workbook

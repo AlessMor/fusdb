@@ -45,6 +45,17 @@ variables:
   # outer_divertor_power_fraction: 0.5
   # divertor_configuration: up-down-symmetric double-null X-point target
 
+  # Machine-level values shared with nominal_popcon.yaml (same device, different
+  # current). A_p and eps are deliberately NOT inherited: A_p = 257 m^2 is
+  # unreachable at any triangularity, and eps 0.26 contradicts the fixed a/R = 0.2554.
+  # Scenario values (T, n, tau_E, W_th, P_alpha, neutron_rate, Q_sci ...) are NOT
+  # inherited -- they belong to the 1133 MW point, not to this one.
+  V_p: {value: 189, unit: m^3, fixed: True}
+  kappa_separatrix: {value: 1.8, fixed: True}
+  max_flattop_duration: {value: 900, unit: s, fixed: True}
+  total_flux_available_from_CS: {value: 215, unit: Wb, fixed: True}
+  P_elec_tot: {value: 400, unit: MW, fixed: True}
+
 relations:
   include:
   - L-H threshold Martin-2008 aspect nominal
