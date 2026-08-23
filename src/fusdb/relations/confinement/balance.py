@@ -47,6 +47,38 @@ def energy_confinement_balance(W_th: float, P_loss: float, tau_E: float) -> Any:
 
 
 @relation(
+    name="Confinement time from scaling",
+    tags=("confinement", "plasma"),
+    outputs="tau_E",
+)
+def confinement_time_from_scaling(tau_E_scaling: Any, H_factor: Any) -> Any:
+    """Achieved confinement time as the raw scaling fit times the H factor.
+
+    Confinement scalings are published as a *raw* fit; what a device achieves is
+    that fit times an enhancement factor H.  Keeping the two on separate
+    variables -- ``tau_E_scaling`` for the fit, ``tau_E`` for the achievement --
+    is what makes H a derived quantity: with ``tau_E`` also constrained by the
+    ``W_th = P_loss * tau_E`` balance above, this relation reports the H the
+    design point actually implies instead of consuming a declared one.
+
+    ``H_factor`` defaults to 1.0 and carries every published scaling-specific
+    name (``H98_y2``, ``H89_P``, ``H_<scaling>``, ``hfact``,
+    ``confinement_time_scalar``) as an alias, so a reactor still declares the H
+    its reference quotes.  A declared H is then an ordinary reconcile input:
+    it seeds the solve and is reported as beyond-tolerance if the point cannot
+    support it.
+
+    Args:
+        tau_E_scaling: Raw confinement-time scaling prediction.
+        H_factor: Confinement enhancement factor.
+
+    Returns:
+        tau_E: Achieved energy confinement time.
+    """
+    return np.asarray(H_factor) * np.asarray(tau_E_scaling)
+
+
+@relation(
     name='Plasma stored energy (cfspopcon)',
     tags=('plasma', 'confinement'),
     outputs='W_th',

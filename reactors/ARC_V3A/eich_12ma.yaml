@@ -45,6 +45,28 @@ variables:
   # outer_divertor_power_fraction: 0.5
   # divertor_configuration: up-down-symmetric double-null X-point target
 
+  # Machine-level values shared with nominal_popcon.yaml (same device, different
+  # current). A_p and eps are deliberately NOT inherited: A_p = 257 m^2 is
+  # unreachable at any triangularity, and eps 0.26 contradicts the fixed a/R = 0.2554.
+  # Scenario values (T, n, tau_E, W_th, P_alpha, neutron_rate, Q_sci ...) are NOT
+  # inherited -- they belong to the 1133 MW point, not to this one.
+  V_p: {value: 189, unit: m^3, fixed: True}
+  kappa_separatrix: {value: 1.8, fixed: True}
+  max_flattop_duration: {value: 900, unit: s, fixed: True}
+  total_flux_available_from_CS: {value: 215, unit: Wb, fixed: True}
+  P_elec_tot: {value: 400, unit: MW, fixed: True}
+
+  # Core plasma state from nominal_popcon.yaml. NOT inherited: P_alpha,
+  # neutron_rate, Q_sci, W_th, tau_E, beta_N, P_ICRF, P_ohmic -- those are
+  # OUTPUTS of the 1133 MW point and contradict this case's declared P_fus.
+  T_e_avg: {value: 11.4, unit: keV}
+  T_i_avg: {value: 10.3, unit: keV}
+  n_e_avg: {value: 2.44e20, unit: m^-3}
+  density_peaking: {value: 1.52, fixed: True}
+  ion_density_peaking: {value: 1.42, fixed: True}
+  ion_to_electron_temp_ratio: {value: 0.9, fixed: True}
+  H98_y2: {value: 0.9, fixed: True}
+
 relations:
   include:
   - L-H threshold Martin-2008 aspect nominal

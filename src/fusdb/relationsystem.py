@@ -1515,6 +1515,14 @@ class CompilePlan:
         for rel in relations:
             if not rel.outputs and rel.op != "==":
                 continue
+            # A checked-only relation determines nothing: it reports a verdict and
+            # never enters the residual, so counting it here would call a variable
+            # structurally determined that no enforced equation can pin.  This is
+            # also what ``solve_block`` already assumes -- it sizes a block by
+            # ``sum(... for rel in rels if rel.enforce)`` -- and the disagreement
+            # made DM hand it blocks it then refused as ``enforced_rows < core_dim``.
+            if not rel.enforce:
+                continue
             cols = [col_of[name] for name in rel_vars(rel) if name in col_of]
             if not cols:
                 continue
@@ -2707,20 +2715,11 @@ class CompilePlan:
         # no seed.  It is determined by the global solve against its block's
         # supplied anchor; the start here is only a numerical initial point, not
         # an invented physical value, so a determined block converges to the
-        # same unique answer regardless.  The magnitude comes from the declared
-        # registry ``nominal`` when present, else from the variable tolerance
-        # scale, which the log transform then explores.
+        # same unique answer regardless.  The magnitude comes from the variable
+        # tolerance scale, which the log transform then explores.  There is
+        # deliberately no per-variable magnitude constant to curate: a start is
+        # not reference data.
         if name in self.unseeded_variables:
-            if spec.nominal is not None:
-                arr = np.asarray(spec.solver_value(spec.nominal, size), dtype=float).reshape(-1)
-                if arr.size:
-                    value = float(arr[min(index or 0, arr.size - 1)])
-                    lb, ub = spec.solver_bounds
-                    if np.isfinite(lb):
-                        value = max(value, float(lb))
-                    if np.isfinite(ub):
-                        value = min(value, float(ub))
-                    return value
             value = float(spec.tolerance_floor(*self.tols_of(name)))
             lb, ub = spec.solver_bounds
             if np.isfinite(lb):
@@ -3321,6 +3320,17 @@ def _propagate_known(
         if not _compute_direct_outputs(system, values, seeded, original, strict, attempted=attempted):
             break
     # Stage 2: solve the determined blocks (2x2 ... N x N) for their cores.
+    # The retry loop is NOT redundant with the topological order of
+    # ``structural_blocks``.  That order is STRUCTURAL; solving a block is
+    # NUMERICAL, and success depends on which VALUES are available, not only on
+    # which blocks precede it -- ``_block_start_from_knowns`` derives the start
+    # from the geometric mean of the known values touching the block, and direct
+    # propagation between attempts enriches that namespace.  So a block that
+    # fails on the first attempt can genuinely succeed on a later one.
+    # MEASURED 2026-08-21: replacing this with a single ordered pass made the
+    # 24-case sweep 1070.8 s -> 1206.1 s (+13%, slower on 23 of 24) and pushed
+    # more inputs beyond tolerance (eich_11ma 4 -> 6, Eos 8 -> 10): the cheaper
+    # seeding produced a worse x0 and the global solve paid for it with interest.
     progress = True
     while progress:
         progress = False
@@ -3622,6 +3632,12 @@ def solve_block(
         producers.pop(unknowns[0], None)
     profile_core = {name for name in core if system.spec_of(name).shape == 1}
     if profile_core and not allow_profile_core:
+        # Substituting the profile's SCALAR AVERAGE here (profile = average x shape,
+        # and _build_profile_specs already carries the average's name) was measured
+        # 2026-08-23: it works -- no verdict changed on any of the 24 cases -- but it
+        # costs 246.9 s -> 259.7 s, because it turns a cheap refusal into an expensive
+        # block attempt that then fails anyway (VSC_FRC 3.2 -> 6.9 s, pilot_rdp
+        # 9.9 -> 14.8 s).  Revisit if block solving ever gets substantially cheaper.
         return None
     scalar_core = [name for name in core if name not in profile_core]
     core_dim = len(scalar_core) + len(profile_core) * system.profile_size
@@ -3641,6 +3657,12 @@ def solve_block(
                 continue
         return system.complete(ns)
 
+    # Row layout OBSERVED, never predicted: ``relation_row_dim`` disagrees with what
+    # ``relation_residual_vector`` actually returns, and an unevaluable relation is
+    # replaced by a 1-row sentinel.  Recording the sizes each call lets the sparsity
+    # pattern be built against the real layout of the probe evaluation.
+    observed_dims: list[list[int]] = [[]]
+
     def residual_from(core_values: Mapping[str, Any]) -> np.ndarray:
         ns = namespace_from(core_values)
         blocks: list[np.ndarray] = []
@@ -3655,6 +3677,7 @@ def solve_block(
                 blocks.append(system.relation_residual_vector(rel, eval_values, safe=True))
             except Exception:
                 blocks.append(np.asarray([1.0e6], dtype=float))
+        observed_dims[0] = [int(block.reshape(-1).size) for block in blocks]
         out = np.concatenate([block.reshape(-1) for block in blocks if block.size]) if blocks else np.empty(0, dtype=float)
         return np.nan_to_num(out, nan=1.0e6, posinf=1.0e6, neginf=-1.0e6)
 
@@ -3678,6 +3701,78 @@ def solve_block(
                     return None
                 elements[i] = start
         starts[name] = elements if name in profile_core else float(elements[0])
+
+    # A structural ``jac_sparsity`` for this block was tried 2026-08-23 and REVERTED.
+    # Rows were assumed to be one block per enforced relation sized by
+    # ``relation_row_dim``, columns the scalar core, with reach taken from
+    # ``_completion_dependency_closure``.  That pattern is INCOMPLETE: ``namespace_from``
+    # also replays this block's own ``producers`` (produced unknowns recomputed from
+    # block relations), so a core column reaches rows the completion closure never
+    # names -- and ``residual_from`` substitutes a 1-row 1e6 sentinel for any relation
+    # it cannot evaluate, so the row layout is not even stable between evaluations.
+    # SciPy then assumes a zero derivative where one exists.  MEASURED: only 1.07x
+    # faster and it BROKE 8 of 24 cases (all five ST-E1 flat-tops True/0 -> False/19,
+    # STEP_2024 True/0 -> False/13, SPARC True/0 -> False/0).  A correct pattern must
+    # union the completion closure WITH the block's producer chain, and must pin the
+    # row layout first.
+    def core_reach(name: str) -> set[str]:
+        """Every variable a core member can move, to a fixpoint.
+
+        Two mechanisms, and the earlier attempt at this used only the first:
+
+        * COMPLETION -- ``namespace_from`` ends in ``complete()``, so a value moves
+          all of its provider descendants (``_completion_dependency_closure``);
+        * this block's own PRODUCERS -- ``namespace_from`` first recomputes every
+          produced unknown from its block relation, so a core member also moves any
+          produced unknown whose relation it appears in, and then that unknown's
+          descendants in turn.
+
+        Conservative: a spurious member only enlarges a colour group, never hides a
+        derivative.  A missing one would hide a real derivative, which is exactly
+        what broke the first attempt.
+        """
+        try:
+            _ancestors, descendants = system._completion_dependency_closure()
+        except Exception:
+            return set()
+        reach = {name}
+        for _ in range(len(producers) + 2):
+            grown = set(reach)
+            for member in tuple(reach):
+                grown |= set(descendants.get(member, ()))
+            for produced, rel in producers.items():
+                rel_names = set(rel.variables) | {
+                    c for c in rel.constant_names if c in system.variable_registry
+                }
+                if grown & rel_names:
+                    grown.add(produced)
+            if grown == reach:
+                break
+            reach = grown
+        return reach
+
+    def block_sparsity(order: list[str]) -> Any:
+        dims = list(observed_dims[0])
+        if not dims or len(dims) != sum(1 for rel in rels if rel.enforce):
+            return None
+        enforced = [rel for rel in rels if rel.enforce]
+        pattern = np.zeros((sum(dims), len(order)), dtype=bool)
+        reach_of = {name: core_reach(name) for name in order}
+        row = 0
+        for rel, dim in zip(enforced, dims):
+            rel_names = set(rel.variables) | {
+                c for c in rel.constant_names if c in system.variable_registry
+            }
+            for col, name in enumerate(order):
+                if rel_names & reach_of[name]:
+                    pattern[row:row + dim, col] = True
+            row += dim
+        if pattern.size == 0:
+            return None
+        density = float(pattern.sum()) / float(pattern.size)
+        # Colouring only pays on a genuinely sparse block; a dense pattern costs the
+        # same evaluations plus the bookkeeping.
+        return pattern if density <= 0.6 and pattern.any() else None
 
     def solve_from(current_starts: Mapping[str, Any]):
         """Solve from one set of starts, returning the solution plumbing."""
@@ -3722,11 +3817,15 @@ def solve_block(
             probe = residual(x0)
             if probe.size < core_dim:
                 return None
+            sparsity = None
+            if not profile_core:
+                sparsity = block_sparsity([name for name, _start, _stop in spans])
             sol = least_squares(
                 residual,
                 x0,
                 bounds=(np.asarray(lower, dtype=float), np.asarray(upper, dtype=float)),
                 method="trf",
+                jac_sparsity=sparsity,
                 x_scale=np.ones_like(x0),
                 max_nfev=200 if profile_core else 80,
                 xtol=1e-10,
@@ -3767,6 +3866,15 @@ def solve_block(
     # common full-rank case without more graph replays; only a rank-deficient
     # result pays for the wider probes that distinguish a flat direction from a
     # nonlinear root with a locally zero derivative.
+    #
+    # KEEPING the converged value instead was tried 2026-08-23 and REVERTED.  It is
+    # verdict-neutral (no success flag or failed-relation count moved on any of the
+    # 24 cases) but it is SLOWER: 246.9 s -> 258.6 s on top of the DM enforce fix.
+    # An earlier "~15% faster" reading was measured against the PRE-fix tree, where
+    # the enforce mismatch was still generating the blocks this rejection threw
+    # away; once that was fixed the saving was already banked and only the cost of
+    # seeding degenerate cores remained.  Run-to-run spread on this sweep is 0.6%
+    # (258.6 / 258.9 / 257.3 s), so the 4.7% is signal.
     jac = np.asarray(sol.jac, dtype=float)
     if jac.ndim != 2 or np.linalg.matrix_rank(jac) < core_dim:
         for name in scalar_core:

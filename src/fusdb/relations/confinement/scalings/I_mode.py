@@ -5,8 +5,7 @@ from fusdb.relation import relation
 @relation(
     name="hubbard_nominal_confinement_time",
     tags=("confinement", "i_mode"),
-    outputs="tau_E",
-    h_factor="H_hubbard_nominal",
+    outputs="tau_E_scaling",
 )
 def hubbard_nominal_confinement_time(
     I_p: float,
@@ -56,8 +55,7 @@ def hubbard_nominal_confinement_time(
 @relation(
     name="hubbard_lower_confinement_time",
     tags=("confinement", "i_mode"),
-    outputs="tau_E",
-    h_factor="H_hubbard_lower",
+    outputs="tau_E_scaling",
 )
 def hubbard_lower_confinement_time(
     I_p: float,
@@ -106,8 +104,7 @@ def hubbard_lower_confinement_time(
 @relation(
     name="hubbard_upper_confinement_time",
     tags=("confinement", "i_mode"),
-    outputs="tau_E",
-    h_factor="H_hubbard_upper",
+    outputs="tau_E_scaling",
 )
 def hubbard_upper_confinement_time(
     I_p: float,
@@ -157,10 +154,9 @@ def hubbard_upper_confinement_time(
 @relation(
     name="cfspopcon_imodey2_confinement_time",
     tags=("confinement", "i_mode", "confinement_mode_default"),
-    outputs="tau_E",
+    outputs="tau_E_scaling",
 )
 def cfspopcon_imodey2_confinement_time(
-    H98_y2: float,
     B0: float,
     I_p: float,
     P_loss: float,
@@ -181,8 +177,7 @@ def cfspopcon_imodey2_confinement_time(
         - Regime: I-Mode
     """
     return (
-        H98_y2
-        * 0.01346
+        0.01346
         * B0**0.768
         * (I_p / 1.0e6) ** 0.685
         * (P_loss / 1.0e6) ** (-0.286)

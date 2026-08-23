@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import functools
 import inspect
 import operator
 from collections.abc import Iterable, Mapping
@@ -823,7 +822,6 @@ class Relation:
         enforce: bool = True,
         constraints: Any = None,
         dependency: str = "dense",
-        h_factor: str | None = None,
     ) -> "Relation":
         """Build a relation from a decorated Python function.
 
@@ -839,8 +837,6 @@ class Relation:
         Returns:
             Relation object.
         """
-        if h_factor is not None:
-            func = _with_h_factor(func, h_factor)
         inputs: list[str] = []
         constants: list[str] = []
         for parameter in inspect.signature(func).parameters.values():
@@ -882,52 +878,6 @@ def is_default_relation(rel: "Relation") -> bool:
     return "default" in set(rel.tags) or str(rel.source_kind).startswith("default")
 
 
-def _with_h_factor(func: Callable[..., Any], h_name: str) -> Callable[..., Any]:
-    """Wrap a confinement scaling so its result is H-enhanced.
-
-    Energy-confinement scalings are published as a *raw* fit; the confinement
-    time a device actually achieves is that fit times an enhancement factor H.
-    Rather than write the multiplication into 50 relation bodies, the scaling
-    declares ``h_factor="H98_y2"`` and this wrapper injects two optional
-    constants and multiplies them in:
-
-    * ``h_name`` -- the H defined against *this particular* scaling
-      (``H98_y2`` for IPB98(y,2), ``H_iter_89p`` for ITER89-P, ...), which is
-      what published design points quote; and
-    * ``H_factor`` -- a generic multiplier that applies whichever scaling is
-      active, matching PROCESS's ``hfact`` and cfspopcon's
-      ``confinement_time_scalar``.
-
-    Both default to 1.0, so they compose multiplicatively and each is a no-op
-    when absent.  Supplying only the generic H enhances any scaling; supplying
-    only the scaling-specific H enhances it exactly where it belongs, and is
-    simply unused if a different scaling wins the provider slot.  Supplying
-    both applies the product.
-
-    Making the conditionality structural like this -- rather than coupling the
-    two with an ``H_factor = H98_y2`` relation -- is deliberate: fusdb activates
-    relations on variable availability, not on which sibling relation won a
-    provider slot, so such a coupling would force a published ``H98_y2`` onto
-    whatever scaling happened to be active.
-    """
-    signature = inspect.signature(func)
-    extra = [
-        inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=1.0, annotation=float)
-        for name in (h_name, "H_factor")
-        if name not in signature.parameters
-    ]
-
-    @functools.wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        scale = 1.0
-        for parameter in extra:
-            scale = scale * kwargs.pop(parameter.name, 1.0)
-        return scale * func(*args, **kwargs)
-
-    wrapper.__signature__ = signature.replace(parameters=[*signature.parameters.values(), *extra])
-    return wrapper
-
-
 def relation(
     _func: Callable[..., Any] | None = None,
     *,
@@ -937,7 +887,6 @@ def relation(
     enforce: bool = True,
     constraints: Any = None,
     dependency: str = "dense",
-    h_factor: str | None = None,
 ) -> Callable[[Callable[..., Any]], Relation] | Relation:
     """Decorate a function as a FusDB relation.
 
@@ -955,7 +904,7 @@ def relation(
     """
 
     def decorator(func: Callable[..., Any]) -> Relation:
-        built = Relation.from_function(func, outputs=outputs, name=name, tags=tags, enforce=enforce, constraints=constraints, dependency=dependency, h_factor=h_factor)
+        built = Relation.from_function(func, outputs=outputs, name=name, tags=tags, enforce=enforce, constraints=constraints, dependency=dependency)
         if built.name in REGISTERED_RELATIONS:
             raise ValueError(f"Duplicate relation {built.name!r}.")
         REGISTERED_RELATIONS[built.name] = built

@@ -2,9 +2,9 @@
 
 For each registered relation this test:
 
-* builds a nominal namespace from registry metadata (scalars at their
-  ``nominal``/domain-derived value, profiles flat at that value, ``rho`` a
-  uniform grid),
+* builds a probe namespace from registry metadata (scalars at their frozen
+  probe point or a domain-derived value, profiles flat at that value, ``rho``
+  a uniform grid),
 * establishes a consistent point (forward evaluation for output relations,
   a one-variable solve for outputless balances),
 * then removes each relation variable in turn and asks ``Relation.solve``
@@ -91,7 +91,7 @@ def _nominal_value(name: str):
     if frozen is not None:
         base = float(frozen)
     else:
-        base = float(spec.nominal) if spec.nominal is not None else _pick_inside(spec.domain[0], spec.domain[1])
+        base = _pick_inside(spec.domain[0], spec.domain[1])
     if spec.shape:
         return np.full(PROFILE_SIZE, base)
     return base

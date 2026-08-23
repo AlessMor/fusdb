@@ -67,9 +67,6 @@ Decorator parameters:
 - `enforce`: make a relation warning-only by setting `enforce=False`
 - `constraints`: relation-local validity constraints
 - `dependency`: dependency hint used for graph reports (`"dense"` by default)
-- `h_factor`: name of a scaling-specific confinement enhancement constant (e.g.
-  `"H98_y2"`); the decorator injects it and the generic `H_factor`, both
-  defaulting to 1.0 and composing multiplicatively
 
 !!! note
     For symbolic inversion to work, keep relation functions SymPy-friendly:
