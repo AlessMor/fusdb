@@ -65,6 +65,15 @@ variables:
   # T_i0_over_T_e0: 1.29
   # P_sep_over_R: 40 MW/m
 
+  # From pilot_rdp.yaml (same machine). NOT inherited: n_e_avg and f_GW --
+  # this case declares its own n_la; nor a, which R and A already determine.
+  T_e_avg: {value: 5.9, unit: keV}
+  H98_y2: 1.4
+  eta_th: 0.472
+  TBR: 1.113
+  q_wall: {value: 1.6, unit: MW/m^2}
+  B_pol_out_mid: {value: 0.74, unit: T}
+
 relations:
   # ST-E1 publishes its elongation and triangularity directly. Do not let
   # aspect-ratio-only ST empirical fits compete with those declared values.
