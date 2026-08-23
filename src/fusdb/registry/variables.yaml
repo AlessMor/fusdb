@@ -178,7 +178,6 @@ delta_95:
   domain: '[-1, 1]'
   abs_tol: 0.001
 V_p:
-  nominal: 100.0
   default_unit: m^3
   aliases:
   - plasma_volume  # CFSPOPCON variables.yaml
@@ -623,7 +622,6 @@ n_e_edge:
   domain: (0, inf)
   abs_tol: 1.0e+18
 T_e:
-  nominal: 5.0
   aliases:
   - T_e_prof
   - electron_temp_profile  # CFSPOPCON variables.yaml
@@ -649,7 +647,6 @@ T0:
   domain: '(0, 300]'
   abs_tol: 0.05
 T_i:
-  nominal: 5.0
   aliases:
   - T_i_prof
   - ion_temp_profile  # CFSPOPCON variables.yaml
@@ -812,7 +809,6 @@ n0:
   domain: (0, inf)
   abs_tol: 1.0e+18
 n_e:
-  nominal: 1.0e20
   aliases:
   - n_e_prof
   - electron_density_profile  # CFSPOPCON variables.yaml
@@ -948,7 +944,6 @@ sudo_margin:
   description: Margin to the Sudo density limit.
   abs_tol: 1.0e+18
 Z_eff:
-  nominal: 1.5
   aliases:
   - zeff  # OpenPOPCON method Zeff
   - z_effective

@@ -77,11 +77,6 @@ class VariableSpec:
     default_relation: tuple[str, ...] = ()
     default: float | str | None = None
     default_requires: str | None = None
-    # Declared order-of-magnitude start (public units) for solver unknowns
-    # with no seed entitlement (block cores).  Purely a numerical initial
-    # point -- a determined block converges to the same answer regardless --
-    # never a value provider; ``None`` falls back to the tolerance floor.
-    nominal: float | None = None
     # Numeric constants precomputed once at construction (pure functions of
     # ``domain``/``solver_domain``); the hot conversion paths read these
     # instead of re-deriving bounds per call.
@@ -471,7 +466,6 @@ class VariableRegistry:
             # only meaningful given a precondition (the He ash fractions need a
             # particle confinement time ``tau_p`` for the balance to pin them).
             default_requires = entry.get("default_requires")
-            nominal = entry.get("nominal")
             average_variable = entry.get("average_variable")
             specs.append(
                 VariableSpec(
@@ -489,7 +483,6 @@ class VariableRegistry:
                     default_relation=tuple(str(item) for item in default_relation),
                     default=default,
                     default_requires=None if default_requires is None else str(default_requires),
-                    nominal=None if nominal is None else float(nominal),
                 )
             )
         return cls(specs, rel_tol_default=rel_tol_default, profile_size_default=profile_size_default)

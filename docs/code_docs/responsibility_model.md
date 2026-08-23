@@ -23,7 +23,7 @@ Related pages:
 | # | Responsibility | Nature | Owner |
 |---|---|---|---|
 | R1 | Identity, canonical naming, alias resolution | shared, immutable | `VariableRegistry.resolve` |
-| R2 | Quantity metadata: unit, shape, physical/solver domains, default tolerances, registry defaults/`nominal`, registry guards | shared, immutable | `VariableSpec` (frozen, slotted, process-wide) |
+| R2 | Quantity metadata: unit, shape, physical/solver domains, default tolerances, registry defaults, registry guards | shared, immutable | `VariableSpec` (frozen, slotted, process-wide) |
 | R3 | Ingestion: unit→canonical conversion, shape coercion, domain/NaN validation | a **boundary event**, not state — happens once per supplied value | `Variable.__post_init__` |
 | R4 | The scenario *declaration*: which names are supplied, with what canonical values, fixed flags, per-run tolerance overrides, profile size, record-local guards | per-run, **immutable once declared** (it defines the problem) | `Variable` (frozen), projected into `RelationSystem.inputs` / `fixed` / `rel_tols` |
 | R5 | Working/solved state evolving under a mode; must support snapshot/restore (popcon) and bulk overwrite | per-run, **mutable** | `RelationSystem.values` (written via `store()`) |
