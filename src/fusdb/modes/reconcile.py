@@ -7,6 +7,8 @@ solve phases, final certification and state mutation policy.
 
 from __future__ import annotations
 
+import os
+
 from collections.abc import Iterable, Mapping
 from typing import Any
 import time
@@ -453,6 +455,7 @@ def run(
                     deadzone=deadzone,
                     metric=movement_metric,
                     norm=movement_norm,
+                    jacobian_refresh=int(os.environ.get("FUSDB_JAC_REFRESH", "0") or 0),
                 )
                 jac_sparsity = plan["sparsity"]
                 jac_sparsity_used = True
@@ -610,6 +613,7 @@ def grouped_jacobian(
     deadzone: bool = True,
     metric: str = "auto",
     norm: str = "l1",
+    jacobian_refresh: int = 0,
 ):
     """Return the grouped two-point-difference Jacobian callable for one stage.
 
@@ -703,7 +707,53 @@ def grouped_jacobian(
                 jacobian[rows_idx, j] = df[rows_idx] / h[j]
         return jacobian
 
-    return jac
+    # Broyden reuse around the exact Jacobian above.
+    #
+    # The SPARSITY is structural and is already built once per compile; the VALUES
+    # are not -- the relations are nonlinear, so the derivative genuinely differs
+    # from point to point and a once-and-for-all numeric Jacobian would be wrong
+    # everywhere but where it was taken.  What CAN be reused is the previous one,
+    # corrected: Broyden's "good" rank-1 update
+    #
+    #     J <- J + ((df - J dx) dx^T) / (dx^T dx)
+    #
+    # costs ONE residual evaluation instead of one per colour group (measured on
+    # SPARC: ~18 groups per Jacobian, 19,894 completion passes and 2.33 M relation
+    # evaluations across the solve, with `jac` at 79% of reconcile).  The update is
+    # exact along dx and merely carries the old curvature elsewhere, so the true
+    # Jacobian is recomputed every ``refresh_every`` calls and whenever the step is
+    # too small to divide by safely.
+    state: dict[str, Any] = {"x": None, "f": None, "J": None, "since": 0}
+    refresh_every = int(jacobian_refresh or 0)
+
+    def jac_reused(x: np.ndarray, *args: Any) -> np.ndarray:
+        if refresh_every <= 1:
+            return jac(x, *args)
+        x = np.asarray(x, dtype=float)
+        prev_x, prev_f, prev_J = state["x"], state["f"], state["J"]
+        f_now = np.asarray(residual_function(x), dtype=float)
+        dx = None if prev_x is None else x - prev_x
+        reusable = (
+            prev_J is not None
+            and dx is not None
+            and float(dx @ dx) > 0.0
+            and state["since"] < refresh_every
+            and prev_f is not None
+            and prev_f.shape == f_now.shape
+            and np.all(np.isfinite(f_now))
+        )
+        if reusable:
+            denom = float(dx @ dx)
+            correction = (f_now - prev_f - prev_J @ dx)[:, None] * dx[None, :] / denom
+            matrix = prev_J + correction
+            state["since"] += 1
+        else:
+            matrix = np.asarray(jac(x, *args), dtype=float)
+            state["since"] = 0
+        state["x"], state["f"], state["J"] = x, f_now, matrix
+        return matrix
+
+    return jac_reused
 
 
 def inputs_beyond_tolerance(system: Any, values: Mapping[str, Any], *, metric: str = "auto") -> list[dict[str, Any]]:
